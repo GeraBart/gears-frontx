@@ -349,7 +349,7 @@ export async function generateProject(
   };
 
   const devDependencies: Record<string, string> = {
-    '@cyberfabric/cli': '0.1.0',
+    '@gears-frontx/cli': '0.1.0',
     '@j178/prek': '0.2.25',
     '@types/lodash': '4.17.20',
     '@types/react': '19.0.8',
