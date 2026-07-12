@@ -599,7 +599,7 @@ This decomposition breaks the FROZEN FrontX DESIGN into 17 work-package features
 
 ### 2.13 [Composed-Template Resolution & Project Provenance](features/composed-provenance/) - HIGH
 
-- [ ] `p1` - **ID**: `cpt-frontx-feature-composed-provenance`
+- [x] `p1` - **ID**: `cpt-frontx-feature-composed-provenance`
 
 - **Purpose**: Resolve manifest-declared composed templates recursively in one operation under a defined collision rule (nearest-declaration-wins, collision reported before any write), scaffold the composition, and write each scaffolded project's provenance record (template identity + version + re-resolvable source-spec).
 
@@ -617,7 +617,7 @@ This decomposition breaks the FROZEN FrontX DESIGN into 17 work-package features
 
 - **Requirements Covered**:
 
-  - [ ] `p1` - `cpt-frontx-fr-cli-composed-template-resolution`
+  - [x] `p1` - `cpt-frontx-fr-cli-composed-template-resolution`
 
 - **Domain Model Entities**:
   - Template
@@ -625,14 +625,14 @@ This decomposition breaks the FROZEN FrontX DESIGN into 17 work-package features
 
 - **Design Components**:
 
-  - [ ] `p1` - `cpt-frontx-component-cli` (shared)
+  - [x] `p1` - `cpt-frontx-component-cli` (shared)
 
 - **API**:
   - `cpt-frontx-contract-project-provenance`
 
 - **Sequences**:
 
-  - [ ] `p1` - `cpt-frontx-seq-composed-project-scaffold` (OWNER)
+  - [x] `p1` - `cpt-frontx-seq-composed-project-scaffold` (OWNER)
 
 - **Data**:
 
@@ -640,7 +640,7 @@ This decomposition breaks the FROZEN FrontX DESIGN into 17 work-package features
 
 ### 2.14 [Upgrade Change-Set Engine](features/upgrade-changeset/) - HIGH
 
-- [ ] `p1` - **ID**: `cpt-frontx-feature-upgrade-changeset`
+- [x] `p1` - **ID**: `cpt-frontx-feature-upgrade-changeset`
 
 - **Purpose**: Provide the single CLI-owned change-set engine that computes a template-version diff against project provenance, presents it for review and approval, applies it non-destructively, and supports rollback — the one reviewable, reversible engine both direct CLI and AI orchestration drive.
 
@@ -660,15 +660,15 @@ This decomposition breaks the FROZEN FrontX DESIGN into 17 work-package features
 
 - **Requirements Covered**:
 
-  - [ ] `p1` - `cpt-frontx-fr-cli-project-upgrade-changeset`
-  - [ ] `p1` - `cpt-frontx-fr-cli-upgrade-review-approval`
+  - [x] `p1` - `cpt-frontx-fr-cli-project-upgrade-changeset`
+  - [x] `p1` - `cpt-frontx-fr-cli-upgrade-review-approval`
 
 - **Domain Model Entities**:
   - ProjectProvenance
 
 - **Design Components**:
 
-  - [ ] `p1` - `cpt-frontx-component-cli` (shared)
+  - [x] `p1` - `cpt-frontx-component-cli` (shared)
 
 - **API**:
   - CLI upgrade command
