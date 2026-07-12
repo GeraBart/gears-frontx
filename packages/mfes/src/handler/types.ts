@@ -8,7 +8,6 @@
  */
 // @cpt-dod:cpt-frontx-dod-mfe-registry-handler-injection:p1
 // @cpt-dod:cpt-frontx-dod-mfe-registry-type-contracts:p1
-// @cpt-dod:cpt-frontx-dod-mfe-isolation-child-bridge-contract:p1
 // @cpt-algo:cpt-frontx-algo-mfe-registry-handler-resolution:p1
 
 import type { MfeEntry, ActionsChain, SharedProperty } from '../types';

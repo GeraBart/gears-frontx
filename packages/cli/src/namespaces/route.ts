@@ -3,7 +3,6 @@
 import type { NamespaceRouteInput, NamespaceRouteResult, Namespace } from './types.js';
 import { NAMESPACE_REGISTRY } from './types.js';
 
-// @cpt-algo:cpt-frontx-algo-cli-scaffolding-namespace-routing:p1
 export function routeNamespaceCommand(input: NamespaceRouteInput): NamespaceRouteResult {
   // @cpt-begin:cpt-frontx-algo-cli-scaffolding-namespace-routing:p1:inst-receive-invocation
   const { namespace, command, args } = input;

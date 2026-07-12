@@ -10,17 +10,7 @@
  * @packageDocumentation
  * @internal
  */
-// @cpt-flow:cpt-frontx-flow-mfe-registry-register-domain:p1
-// @cpt-flow:cpt-frontx-flow-mfe-registry-register-extension:p1
-// @cpt-flow:cpt-frontx-flow-mfe-registry-unregister-extension:p1
-// @cpt-flow:cpt-frontx-flow-mfe-registry-unregister-domain:p1
-// @cpt-flow:cpt-frontx-flow-mfe-registry-execute-chain:p1
-// @cpt-flow:cpt-frontx-flow-mfe-registry-update-shared-property:p1
-// @cpt-flow:cpt-frontx-flow-mfe-registry-query:p2
-// @cpt-algo:cpt-frontx-algo-mfe-registry-gts-package-discovery:p1
 // @cpt-algo:cpt-frontx-algo-mfe-registry-handler-resolution:p1
-// @cpt-algo:cpt-frontx-algo-mfe-registry-domain-implementation-construction:p1
-// @cpt-algo:cpt-frontx-algo-mfe-registry-cross-validate-handlers:p1
 // @cpt-dod:cpt-frontx-dod-mfe-registry-handler-injection:p1
 // @cpt-dod:cpt-frontx-dod-mfe-registry-registry-contract:p1
 
@@ -283,7 +273,6 @@ export class DefaultMfeRegistry extends MfeRegistry {
   /**
    * Register an extension domain.
    */
-  // @cpt-begin:cpt-frontx-flow-mfe-registry-register-domain:p1:inst-1
   registerDomain(
     declaration: ExtensionDomain,
     factory: ExtensionDomainImplementationFactory
@@ -319,7 +308,6 @@ export class DefaultMfeRegistry extends MfeRegistry {
 
     // Step 4: Invoke factory (try/finally for rollback + ctx invalidation).
     // @cpt-begin:cpt-frontx-flow-extension-domain-governance-admission:p1:inst-compose-domain
-    // @cpt-begin:cpt-frontx-algo-mfe-registry-domain-implementation-construction:p1:inst-1
     let implementation;
     try {
       implementation = factory.build(ctx);
@@ -334,7 +322,6 @@ export class DefaultMfeRegistry extends MfeRegistry {
       // — including captured function handles — throws.
       ctx.invalidate();
     }
-    // @cpt-end:cpt-frontx-algo-mfe-registry-domain-implementation-construction:p1:inst-1
     // @cpt-end:cpt-frontx-flow-extension-domain-governance-admission:p1:inst-compose-domain
 
     // Step 5: Cross-validate handlers vs declaration AND strategy/cardinality matrix.
@@ -383,7 +370,6 @@ export class DefaultMfeRegistry extends MfeRegistry {
     // @cpt-end:cpt-frontx-flow-extension-domain-governance-admission:p1:inst-domain-registered
     // @cpt-end:cpt-frontx-state-extension-domain-governance-cardinality:p2:inst-card-t1
   }
-  // @cpt-end:cpt-frontx-flow-mfe-registry-register-domain:p1:inst-1
 
   /**
    * Cross-validate handlers vs declaration AND strategy/cardinality matrix.
@@ -393,7 +379,6 @@ export class DefaultMfeRegistry extends MfeRegistry {
   // @cpt-algo:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1
   // @cpt-state:cpt-frontx-state-extension-domain-governance-cardinality:p2
   // @cpt-dod:cpt-frontx-dod-extension-domain-governance-cardinality-enforcement:p1
-  // @cpt-begin:cpt-frontx-algo-mfe-registry-cross-validate-handlers:p1:inst-1
   // @cpt-begin:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-identify-strategy
   private crossValidateHandlers(
     declaration: ExtensionDomain,
@@ -512,11 +497,9 @@ export class DefaultMfeRegistry extends MfeRegistry {
     // domain accepted — strategy registered as mount executor (implicit; execution continues in registerDomain)
     // @cpt-end:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-accept
   }
-  // @cpt-end:cpt-frontx-algo-mfe-registry-cross-validate-handlers:p1:inst-1
 
   // ─── Execute actions chain ────────────────────────────────────────────────
 
-  // @cpt-begin:cpt-frontx-flow-mfe-registry-execute-chain:p1:inst-1
   // @cpt-begin:cpt-frontx-flow-extension-domain-governance-admission:p1:inst-mount-action
   async executeActionsChain(chain: ActionsChain): Promise<void> {
     const result = await this.mediator.executeActionsChain(chain);
@@ -535,15 +518,12 @@ export class DefaultMfeRegistry extends MfeRegistry {
     // @cpt-end:cpt-frontx-flow-extension-domain-governance-admission:p1:inst-mount-success
   }
   // @cpt-end:cpt-frontx-flow-extension-domain-governance-admission:p1:inst-mount-action
-  // @cpt-end:cpt-frontx-flow-mfe-registry-execute-chain:p1:inst-1
 
   // ─── Shared property ──────────────────────────────────────────────────────
 
-  // @cpt-begin:cpt-frontx-flow-mfe-registry-update-shared-property:p1:inst-1
   updateSharedProperty(propertyId: string, value: unknown): void {
     this.extensionManager.updateSharedProperty(propertyId, value);
   }
-  // @cpt-end:cpt-frontx-flow-mfe-registry-update-shared-property:p1:inst-1
 
   getDomainProperty(domainId: string, propertyTypeId: string): unknown {
     return this.extensionManager.getDomainProperty(domainId, propertyTypeId);
@@ -579,8 +559,6 @@ export class DefaultMfeRegistry extends MfeRegistry {
     return this.extensionManager.getExtensionState(extensionId)?.bridge ?? null;
   }
 
-  // @cpt-begin:cpt-frontx-flow-mfe-registry-register-extension:p1:inst-1
-  // @cpt-begin:cpt-frontx-algo-mfe-registry-gts-package-discovery:p1:inst-1
   async registerExtension(extension: Extension): Promise<void> {
     return this.operationSerializer.serializeOperation(extension.id, async () => {
       await this.extensionManager.registerExtension(extension);
@@ -596,10 +574,7 @@ export class DefaultMfeRegistry extends MfeRegistry {
       }
     });
   }
-  // @cpt-end:cpt-frontx-flow-mfe-registry-register-extension:p1:inst-1
-  // @cpt-end:cpt-frontx-algo-mfe-registry-gts-package-discovery:p1:inst-1
 
-  // @cpt-begin:cpt-frontx-flow-mfe-registry-unregister-extension:p1:inst-1
   async unregisterExtension(extensionId: string): Promise<void> {
     return this.operationSerializer.serializeOperation(extensionId, async () => {
       await this.extensionManager.unregisterExtension(extensionId);
@@ -618,18 +593,14 @@ export class DefaultMfeRegistry extends MfeRegistry {
       }
     });
   }
-  // @cpt-end:cpt-frontx-flow-mfe-registry-unregister-extension:p1:inst-1
 
-  // @cpt-begin:cpt-frontx-flow-mfe-registry-unregister-domain:p1:inst-1
   async unregisterDomain(domainId: string): Promise<void> {
     return this.operationSerializer.serializeOperation(domainId, async () => {
       this.mediator.unregisterAllHandlers(domainId);
       return this.extensionManager.unregisterDomain(domainId);
     });
   }
-  // @cpt-end:cpt-frontx-flow-mfe-registry-unregister-domain:p1:inst-1
 
-  // @cpt-begin:cpt-frontx-flow-mfe-registry-query:p2:inst-1
   getExtension(extensionId: string): Extension | undefined {
     return this.extensionManager.getExtensionState(extensionId)?.extension;
   }
@@ -662,7 +633,6 @@ export class DefaultMfeRegistry extends MfeRegistry {
     }
     return extensions;
   }
-  // @cpt-end:cpt-frontx-flow-mfe-registry-query:p2:inst-1
 
   /**
    * Get domain state for a registered domain.

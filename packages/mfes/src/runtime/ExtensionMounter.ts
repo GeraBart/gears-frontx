@@ -13,7 +13,6 @@
  * @packageDocumentation
  */
 // @cpt-FEATURE:cpt-frontx-feature-mfe-registry:p2
-// @cpt-dod:cpt-frontx-dod-mfe-registry-mount-contracts:p1
 
 /**
  * Abstract per-domain mount facade.
@@ -27,7 +26,6 @@
  * - `attach(element)` from its ref-attach callback
  * - `detach()` from its ref-detach / cleanup callback
  */
-// @cpt-begin:cpt-frontx-dod-mfe-registry-mount-contracts:p1:inst-extension-mounter
 export abstract class ExtensionMounter {
   /**
    * Register `root` as the DOM root under which the mounter places per-extension
@@ -71,4 +69,3 @@ export abstract class ExtensionMounter {
    */
   abstract unmount(extensionId: string): Promise<void>;
 }
-// @cpt-end:cpt-frontx-dod-mfe-registry-mount-contracts:p1:inst-extension-mounter

@@ -6,10 +6,6 @@
  *
  * SDK Layer: L1 (Only peer dependency on axios via RestProtocol)
  */
-// @cpt-dod:cpt-frontx-dod-request-lifecycle-use-api-query:p2
-// @cpt-dod:cpt-frontx-dod-request-lifecycle-use-api-mutation:p2
-// @cpt-flow:cpt-frontx-flow-request-lifecycle-use-api-query:p2
-// @cpt-flow:cpt-frontx-flow-request-lifecycle-use-api-mutation:p2
 
 import {
   ApiProtocol,
@@ -62,13 +58,11 @@ export class RestEndpointProtocol extends ApiProtocol<BasePluginHooks> {
     return {
       key,
       fetch: ({ signal, staleTime } = {}) => {
-        // @cpt-begin:cpt-frontx-flow-request-lifecycle-use-api-query:p2:inst-dedup
         return this.rest.getWithSharedCache<TData>(path, {
           descriptorKey: key,
           signal,
           staleTime: staleTime ?? options?.staleTime,
         });
-        // @cpt-end:cpt-frontx-flow-request-lifecycle-use-api-query:p2:inst-dedup
       },
       ...(options?.staleTime !== undefined && { staleTime: options.staleTime }),
       ...(options?.gcTime !== undefined && { gcTime: options.gcTime }),
@@ -88,13 +82,11 @@ export class RestEndpointProtocol extends ApiProtocol<BasePluginHooks> {
       return {
         key,
         fetch: ({ signal, staleTime } = {}) => {
-          // @cpt-begin:cpt-frontx-flow-request-lifecycle-use-api-query:p2:inst-dedup
           return this.rest.getWithSharedCache<TData>(resolvedPath, {
             descriptorKey: key,
             signal,
             staleTime: staleTime ?? options?.staleTime,
           });
-          // @cpt-end:cpt-frontx-flow-request-lifecycle-use-api-query:p2:inst-dedup
         },
         ...(options?.staleTime !== undefined && { staleTime: options.staleTime }),
         ...(options?.gcTime !== undefined && { gcTime: options.gcTime }),
@@ -112,7 +104,6 @@ export class RestEndpointProtocol extends ApiProtocol<BasePluginHooks> {
     return {
       key,
       fetch: (variables: TVariables, options?: { signal?: AbortSignal }) => {
-        // @cpt-begin:cpt-frontx-flow-request-lifecycle-use-api-mutation:p2:inst-mutation-service-call
         switch (method) {
           case 'DELETE':
             return this.rest.delete<TData, TVariables>(path, variables, {
@@ -131,7 +122,6 @@ export class RestEndpointProtocol extends ApiProtocol<BasePluginHooks> {
               signal: options?.signal,
             });
         }
-        // @cpt-end:cpt-frontx-flow-request-lifecycle-use-api-mutation:p2:inst-mutation-service-call
       },
     };
   }

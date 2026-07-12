@@ -22,10 +22,10 @@
 
 <!-- /toc -->
 
-- [ ] `p1` - **ID**: `cpt-frontx-featstatus-mfe-loading`
+- [x] `p1` - **ID**: `cpt-frontx-featstatus-mfe-loading`
 ## 1. Feature Context
 
-- [ ] `p2` - `cpt-frontx-feature-mfe-loading`
+- [x] `p2` - `cpt-frontx-feature-mfe-loading`
 
 ### 1.1 Overview
 

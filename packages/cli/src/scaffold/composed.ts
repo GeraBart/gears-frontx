@@ -144,7 +144,9 @@ export async function scaffoldComposedProject(
   }
   // @cpt-end:cpt-frontx-flow-composed-provenance-scaffold-composed-project:p1:inst-check-provenance-write-fail
 
-  // inst-activate-kit: stub — kit package not yet available; activation deferred to Pillar 3
+  // @cpt-begin:cpt-frontx-flow-composed-provenance-scaffold-composed-project:p1:inst-activate-kit
+  // Kit activation deferred to Pillar 3 (cyber-pilot-kit-frontx not yet available)
+  // @cpt-end:cpt-frontx-flow-composed-provenance-scaffold-composed-project:p1:inst-activate-kit
 
   // @cpt-begin:cpt-frontx-state-composed-provenance-composition-resolution:p1:inst-transition-resolved-scaffolded
   stateTrace.push(CompositionResolutionState.SCAFFOLDED);

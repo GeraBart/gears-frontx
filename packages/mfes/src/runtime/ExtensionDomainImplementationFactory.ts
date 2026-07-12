@@ -14,7 +14,6 @@
  * @packageDocumentation
  */
 // @cpt-FEATURE:cpt-frontx-feature-mfe-registry:p2
-// @cpt-dod:cpt-frontx-dod-mfe-registry-mount-contracts:p1
 
 import type { DomainContext } from './DomainContext';
 import type { ExtensionDomainImplementation } from './ExtensionDomainImplementation';
@@ -43,7 +42,6 @@ import type { ExtensionDomainImplementation } from './ExtensionDomainImplementat
  * registry.registerDomain(widgetsDomain, new WidgetsDomainFactory());
  * ```
  */
-// @cpt-begin:cpt-frontx-dod-mfe-registry-mount-contracts:p1:inst-factory
 export abstract class ExtensionDomainImplementationFactory {
   /**
    * Build the domain implementation synchronously.
@@ -56,4 +54,3 @@ export abstract class ExtensionDomainImplementationFactory {
    */
   abstract build(ctx: DomainContext): ExtensionDomainImplementation;
 }
-// @cpt-end:cpt-frontx-dod-mfe-registry-mount-contracts:p1:inst-factory

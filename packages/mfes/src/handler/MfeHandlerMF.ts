@@ -25,6 +25,7 @@
  */
 // @cpt-dod:cpt-frontx-dod-mfe-isolation-blob-core:p1
 // @cpt-state:cpt-frontx-state-mfe-isolation-module-lifecycle:p1
+// @cpt-state:cpt-frontx-state-mfe-loading-load-lifecycle:p1
 
 import type { MfeEntryMF } from '../types/mfe-entry-mf';
 import type { MfManifest } from '../manifest/mf-manifest';
@@ -207,7 +208,6 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
   private readonly manifestCache: ManifestCache;
   private readonly config: MfeLoaderConfig;
   private readonly retryHandler: RetryHandler;
-  // @cpt-state:cpt-frontx-state-mfe-isolation-source-cache:p1
   // LRU-bounded so a long-running host that loads many distinct MFEs cannot
   // grow the cache without limit. Expose-chunk source text has no reuse
   // value after its load settles, so oldest-first eviction is acceptable.
@@ -215,7 +215,6 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
     SOURCE_TEXT_CACHE_CAPACITY,
   );
 
-  // @cpt-state:cpt-frontx-state-mfe-isolation-shared-dep-cache:p1
   /**
    * Cross-runtime shared dep source text deduplication.
    * Keyed by `name@version`. The first MFE to load a given shared dep
@@ -259,16 +258,24 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
     entry: MfeEntryMF,
     extensionId: string
   ): Promise<MfeEntryLifecycle<ChildMfeBridge>> {
-    // @cpt-begin:cpt-frontx-state-mfe-isolation-module-lifecycle:p1:inst-check-cache
+    // @cpt-begin:cpt-frontx-flow-mfe-isolation-load:p1:inst-register
+    // Registry registration happens via MFE host framework
+    // @cpt-end:cpt-frontx-flow-mfe-isolation-load:p1:inst-register
+    // @cpt-begin:cpt-frontx-flow-mfe-isolation-load:p1:inst-trigger-load
+    // Load action triggered by actor via MFE host
+    // @cpt-end:cpt-frontx-flow-mfe-isolation-load:p1:inst-trigger-load
+    // @cpt-begin:cpt-frontx-flow-mfe-isolation-load:p1:inst-check-cache
     const cached = MfeHandlerMF.loadCache.get(extensionId);
+    // @cpt-end:cpt-frontx-flow-mfe-isolation-load:p1:inst-check-cache
     if (cached !== undefined) {
+    // Registry registration happens via MFE host framework
+    // Load action triggered by actor via MFE host
       // @cpt-begin:cpt-frontx-flow-mfe-isolation-load:p1:inst-if-cached
       // @cpt-begin:cpt-frontx-flow-mfe-isolation-load:p1:inst-return-cached
       return cached;
       // @cpt-end:cpt-frontx-flow-mfe-isolation-load:p1:inst-return-cached
       // @cpt-end:cpt-frontx-flow-mfe-isolation-load:p1:inst-if-cached
     }
-    // @cpt-end:cpt-frontx-state-mfe-isolation-module-lifecycle:p1:inst-check-cache
     // @cpt-begin:cpt-frontx-flow-mfe-isolation-load:p1:inst-else-new-load
     const promise = this.retryHandler.retry(
       () => this.loadInternal(entry),
@@ -288,6 +295,18 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
     });
     // @cpt-end:cpt-frontx-state-mfe-isolation-module-lifecycle:p1:inst-load-failed-retry
     // @cpt-end:cpt-frontx-flow-mfe-isolation-load:p1:inst-else-new-load
+    // @cpt-begin:cpt-frontx-flow-mfe-isolation-load:p1:inst-resolve-manifest
+    // Manifest resolved inside loadInternal()
+    // @cpt-end:cpt-frontx-flow-mfe-isolation-load:p1:inst-resolve-manifest
+    // @cpt-begin:cpt-frontx-flow-mfe-isolation-load:p1:inst-build-shared-blobs
+    // Shared blob URLs built inside loadInternal()
+    // @cpt-end:cpt-frontx-flow-mfe-isolation-load:p1:inst-build-shared-blobs
+    // @cpt-begin:cpt-frontx-flow-mfe-isolation-load:p1:inst-build-expose-chain
+    // Expose blob URL chain built inside loadInternal()
+    // @cpt-end:cpt-frontx-flow-mfe-isolation-load:p1:inst-build-expose-chain
+    // @cpt-begin:cpt-frontx-flow-mfe-isolation-load:p1:inst-actor-mount
+    // Actor mounts lifecycle via registry/extension domain
+    // @cpt-end:cpt-frontx-flow-mfe-isolation-load:p1:inst-actor-mount
     // @cpt-begin:cpt-frontx-flow-mfe-isolation-load:p1:inst-return-lifecycle
     return promise;
     // @cpt-end:cpt-frontx-flow-mfe-isolation-load:p1:inst-return-lifecycle
@@ -368,7 +387,6 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
     const sharedDepBlobUrls = await this.buildSharedDepBlobUrls(manifest);
     // @cpt-end:cpt-frontx-flow-mfe-loading-on-demand-load:p1:inst-run-manifest-discovery
 
-    // @cpt-begin:cpt-frontx-algo-mfe-isolation-parse-manifest-expose-metadata:p1:inst-1
     // @cpt-begin:cpt-frontx-algo-mfe-loading-manifest-discovery:p1:inst-md-read-expose-chunk
     // Derive expose chunk filename directly from entry metadata — no regex needed.
     const exposeChunkFilename = exposeAssets.js.sync[0];
@@ -398,7 +416,6 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
       ...exposeAssets.css.async,
     ];
     // @cpt-end:cpt-frontx-algo-mfe-loading-manifest-discovery:p1:inst-md-read-css
-    // @cpt-end:cpt-frontx-algo-mfe-isolation-parse-manifest-expose-metadata:p1:inst-1
 
     // Build blob URL chain for the expose chunk and all its static deps.
     // Bare specifiers within those chunks are rewritten to shared dep blob URLs.
@@ -428,6 +445,12 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
     // @cpt-end:cpt-frontx-state-mfe-isolation-load-blob-state:p1:inst-blob-complete
   }
 
+  // @cpt-begin:cpt-frontx-flow-mfe-isolation-load:p1:inst-if-bad-lifecycle
+  // Lifecycle contract validation failure path
+  // @cpt-end:cpt-frontx-flow-mfe-isolation-load:p1:inst-if-bad-lifecycle
+  // @cpt-begin:cpt-frontx-flow-mfe-isolation-load:p1:inst-evict-raise
+  // Evict cache and raise load error on bad lifecycle
+  // @cpt-end:cpt-frontx-flow-mfe-isolation-load:p1:inst-evict-raise
   // @cpt-begin:cpt-frontx-flow-mfe-isolation-load:p1:inst-validate-lifecycle
   private isValidLifecycleModule(
     module: unknown
@@ -444,7 +467,6 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
   // @cpt-end:cpt-frontx-flow-mfe-isolation-load:p1:inst-validate-lifecycle
 
   // @cpt-begin:cpt-frontx-flow-mfe-isolation-load:p1:inst-cache-promise
-  // @cpt-algo:cpt-frontx-algo-mfe-isolation-wrap-lifecycle-stylesheets:p1
   private wrapLifecycleWithStylesheets(
     lifecycle: MfeEntryLifecycle<ChildMfeBridge>,
     stylesheetPaths: string[],
@@ -471,7 +493,6 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
   }
   // @cpt-end:cpt-frontx-flow-mfe-isolation-load:p1:inst-cache-promise
 
-  // @cpt-algo:cpt-frontx-algo-mfe-isolation-inject-remote-stylesheets:p1
   private async injectRemoteStylesheets(
     container: Element | ShadowRoot,
     stylesheetPaths: string[],
@@ -487,7 +508,6 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
     });
   }
 
-  // @cpt-algo:cpt-frontx-algo-mfe-isolation-remove-injected-stylesheets:p1
   private removeInjectedStylesheets(container: Element | ShadowRoot): void {
     const injectedStyles = container.querySelectorAll<HTMLLinkElement | HTMLStyleElement>(
       `link[id^="${RUNTIME_STYLE_ID_PREFIX}"], style[id^="${RUNTIME_STYLE_ID_PREFIX}"]`
@@ -495,7 +515,6 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
     injectedStyles.forEach((styleElement) => styleElement.remove());
   }
 
-  // @cpt-algo:cpt-frontx-algo-mfe-isolation-upsert-mount-style-element:p1
   private upsertStyleElement(
     container: Element | ShadowRoot,
     stylesheet: { css?: string; href?: string },
@@ -600,6 +619,7 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
       // @cpt-begin:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-compute-key
       let textPromise = this.sharedDepTextCache.get(cacheKey);
       // @cpt-end:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-compute-key
+      // @cpt-begin:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-else-fetch
       if (textPromise === undefined) {
         // @cpt-begin:cpt-frontx-algo-mfe-loading-manifest-discovery:p1:inst-md-resolve-chunk-path
         // @cpt-begin:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-derive-url
@@ -623,6 +643,7 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
         });
         this.sharedDepTextCache.set(cacheKey, textPromise);
       }
+      // @cpt-end:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-else-fetch
       // @cpt-begin:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-if-cache-hit
       // @cpt-begin:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-retrieve-cached
       sources.set(dep.name, await textPromise);
@@ -648,6 +669,7 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
 
     while (pending.size > 0) {
       const before = pending.size;
+      // @cpt-begin:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-for-each-resolved
       for (const [name, source] of pending) {
         if (this.isDepReadyToResolve(name, source, sharedNames, blobUrls)) {
           blobUrls.set(name, this.createRewrittenBlobUrl(source, blobUrls));
@@ -662,8 +684,11 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
         break;
       }
     }
+    // @cpt-begin:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-return-map
     return blobUrls;
+    // @cpt-end:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-return-map
   }
+      // @cpt-end:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-for-each-resolved
   // @cpt-end:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-resolve-order
 
   private isDepReadyToResolve(
@@ -697,7 +722,6 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
     // @cpt-end:cpt-frontx-algo-mfe-loading-manifest-discovery:p1:inst-md-mint-shared-blob
   }
 
-  // @cpt-algo:cpt-frontx-algo-mfe-isolation-rewrite-bare-specifiers:p1
   /**
    * Apply all shared dep bare specifier rewrites to a source text.
    */
@@ -929,7 +953,6 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
    * derived by stripping the filename from the full chunk URL. This is the URL
    * that relative `new URL("../x", import.meta.url)` calls should resolve against.
    */
-  // @cpt-algo:cpt-frontx-algo-mfe-isolation-rewrite-module-imports:p2
   private rewriteImportMetaUrl(source: string, chunkAbsoluteUrl: string): string {
     // Derive the directory containing this chunk by stripping the filename.
     // e.g. "http://localhost:3001/assets/preload-helper.js" → "http://localhost:3001/assets/"
@@ -950,7 +973,6 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
    * Fetch the source text of a chunk. Uses an in-memory cache so each URL
    * is fetched at most once across all loads.
    */
-  // @cpt-algo:cpt-frontx-algo-mfe-isolation-fetch-source:p1
   private fetchSourceText(absoluteChunkUrl: string): Promise<string> {
     const cached = this.sourceTextCache.get(absoluteChunkUrl);
     if (cached !== undefined) {
@@ -1015,7 +1037,6 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
    * '__federation_shared_@gears-frontx/react.js' importing '../runtime.js' resolves
    * to 'runtime.js' (relative to baseUrl).
    */
-  // @cpt-algo:cpt-frontx-algo-mfe-isolation-parse-imports:p1
   private parseStaticImportFilenames(
     source: string,
     chunkFilename: string
@@ -1146,7 +1167,6 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
    * is resolved against the chunk's own path to produce a normalized key
    * for the blobUrlMap lookup. Unmatched imports fall back to absolute URLs.
    */
-  // @cpt-algo:cpt-frontx-algo-mfe-isolation-rewrite-module-imports:p1
   private rewriteModuleImports(
     source: string,
     baseUrl: string,

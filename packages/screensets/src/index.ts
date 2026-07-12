@@ -22,7 +22,6 @@
  * ];
  * ```
  */
-// @cpt-dod:cpt-frontx-dod-mfe-registry-layer-constraints:p1
 
 // ============================================================================
 // Layout Domain Enum

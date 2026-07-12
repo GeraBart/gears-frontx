@@ -1,5 +1,3 @@
-// @cpt-dod:cpt-frontx-dod-unit-test-generation-and-agent-verification-project-scaffold:p1
-// @cpt-dod:cpt-frontx-dod-unit-test-generation-and-agent-verification-standard-test-convention:p1
 /**
  * Path-based routing helpers: deciding which project owns a forwarded path,
  * normalizing paths, and rewriting them for each project's Vitest root.

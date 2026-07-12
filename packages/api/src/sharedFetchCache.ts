@@ -4,9 +4,6 @@
  * Stored on globalThis so multiple bundle instances in the same realm can
  * converge on one cache without introducing a direct dependency from L1 to L2/L3.
  */
-// @cpt-dod:cpt-frontx-dod-request-lifecycle-use-api-query:p2
-// @cpt-flow:cpt-frontx-flow-request-lifecycle-use-api-query:p2
-// @cpt-flow:cpt-frontx-flow-request-lifecycle-query-client-lifecycle:p2
 // @cpt-algo:cpt-frontx-algo-api-protocol-surface-shared-cache:p1
 // @cpt-state:cpt-frontx-state-api-protocol-surface-fetch-cache-entry:p1
 // @cpt-dod:cpt-frontx-dod-api-protocol-surface-shared-cache:p1
@@ -67,7 +64,6 @@ type SharedFetchCacheHost = typeof globalThis & {
   [SHARED_FETCH_CACHE_RETAINERS_SYMBOL]?: number;
 };
 
-// @cpt-begin:cpt-frontx-flow-request-lifecycle-query-client-lifecycle:p2:inst-l1-shared-fetch-cache-core
 function resolveSharedFetchCacheRetainers(host: SharedFetchCacheHost): number {
   const retainers = host[SHARED_FETCH_CACHE_RETAINERS_SYMBOL];
   if (typeof retainers !== 'number' || !Number.isFinite(retainers) || retainers < 0) {
@@ -251,11 +247,11 @@ class SharedFetchCacheImpl implements SharedFetchCache {
       !existingEntry.pending &&
       isEntryFresh(existingEntry, requestedStaleTime, now)
     ) {
-      // @cpt-begin:cpt-frontx-flow-request-lifecycle-use-api-query:p2:inst-cache-hit
       // @cpt-begin:cpt-frontx-algo-api-protocol-surface-shared-cache:p1:inst-cache-hit
+      // @cpt-begin:cpt-frontx-algo-api-protocol-surface-shared-cache:p1:inst-return-cached
       return Promise.resolve(existingEntry.data as TData);
+      // @cpt-end:cpt-frontx-algo-api-protocol-surface-shared-cache:p1:inst-return-cached
       // @cpt-end:cpt-frontx-algo-api-protocol-surface-shared-cache:p1:inst-cache-hit
-      // @cpt-end:cpt-frontx-flow-request-lifecycle-use-api-query:p2:inst-cache-hit
     }
 
     if (existingEntry && existingEntry.version === version && existingEntry.pending) {
@@ -263,11 +259,9 @@ class SharedFetchCacheImpl implements SharedFetchCache {
         existingEntry.maxStaleTime,
         requestedStaleTime
       );
-      // @cpt-begin:cpt-frontx-flow-request-lifecycle-use-api-query:p2:inst-dedup
       // @cpt-begin:cpt-frontx-algo-api-protocol-surface-shared-cache:p1:inst-in-flight
       return this.attachConsumer(existingEntry, options?.signal);
       // @cpt-end:cpt-frontx-algo-api-protocol-surface-shared-cache:p1:inst-in-flight
-      // @cpt-end:cpt-frontx-flow-request-lifecycle-use-api-query:p2:inst-dedup
     }
 
     // @cpt-begin:cpt-frontx-algo-api-protocol-surface-shared-cache:p1:inst-start-fetch
@@ -285,6 +279,7 @@ class SharedFetchCacheImpl implements SharedFetchCache {
 
           if (this.entries.get(cacheKey) === entry && (this.versions.get(cacheKey) ?? 0) === version) {
             const staleTime = entry.maxStaleTime;
+            // @cpt-begin:cpt-frontx-algo-api-protocol-surface-shared-cache:p1:inst-check-staletime
             if (staleTime > 0) {
               // @cpt-begin:cpt-frontx-algo-api-protocol-surface-shared-cache:p1:inst-store-cached
               // @cpt-begin:cpt-frontx-state-api-protocol-surface-fetch-cache-entry:p1:inst-t-inflight-cached
@@ -295,24 +290,32 @@ class SharedFetchCacheImpl implements SharedFetchCache {
             } else {
               // @cpt-begin:cpt-frontx-algo-api-protocol-surface-shared-cache:p1:inst-staletime-zero
               // @cpt-begin:cpt-frontx-state-api-protocol-surface-fetch-cache-entry:p1:inst-t-inflight-idle
+              // @cpt-begin:cpt-frontx-algo-api-protocol-surface-shared-cache:p1:inst-remove-after-resolve
               this.entries.delete(cacheKey);
               this.removeAliases(cacheKey);
+              // @cpt-end:cpt-frontx-algo-api-protocol-surface-shared-cache:p1:inst-remove-after-resolve
               // @cpt-end:cpt-frontx-state-api-protocol-surface-fetch-cache-entry:p1:inst-t-inflight-idle
               // @cpt-end:cpt-frontx-algo-api-protocol-surface-shared-cache:p1:inst-staletime-zero
+            // @cpt-end:cpt-frontx-algo-api-protocol-surface-shared-cache:p1:inst-check-staletime
             }
           }
 
           this.cleanupVersion(cacheKey, version);
 
+          // @cpt-begin:cpt-frontx-algo-api-protocol-surface-shared-cache:p1:inst-post-fetch-response-chain
           return data;
+          // @cpt-end:cpt-frontx-algo-api-protocol-surface-shared-cache:p1:inst-post-fetch-response-chain
         })
         .catch((error: unknown) => {
           entry.pending = false;
           if (this.entries.get(cacheKey) === entry) {
-            // @cpt-begin:cpt-frontx-state-api-protocol-surface-fetch-cache-entry:p1:inst-t-inflight-idle-error
+            // @cpt-begin:cpt-frontx-state-api-protocol-surface-fetch-cache-entry:p1:inst-t-inflight-sc
             this.entries.delete(cacheKey);
             this.removeAliases(cacheKey);
-            // @cpt-end:cpt-frontx-state-api-protocol-surface-fetch-cache-entry:p1:inst-t-inflight-idle-error
+            // @cpt-end:cpt-frontx-state-api-protocol-surface-fetch-cache-entry:p1:inst-t-inflight-sc
+            // @cpt-begin:cpt-frontx-state-api-protocol-surface-fetch-cache-entry:p1:inst-t-sc-idle
+            // SC entry eviction on invalidation/expiry
+            // @cpt-end:cpt-frontx-state-api-protocol-surface-fetch-cache-entry:p1:inst-t-sc-idle
           }
           this.cleanupVersion(cacheKey, version);
           throw error;
@@ -523,9 +526,7 @@ class SharedFetchCacheImpl implements SharedFetchCache {
     this.aliasesByPrimaryKey.delete(primaryCacheKey);
   }
 }
-// @cpt-end:cpt-frontx-flow-request-lifecycle-query-client-lifecycle:p2:inst-l1-shared-fetch-cache-core
 
-// @cpt-begin:cpt-frontx-flow-request-lifecycle-query-client-lifecycle:p2:inst-l1-shared-fetch-singleton-wiring
 export function createSharedFetchCache(): SharedFetchCache {
   return new SharedFetchCacheImpl();
 }
@@ -573,7 +574,6 @@ export function releaseSharedFetchCache(): void {
 
   host[SHARED_FETCH_CACHE_RETAINERS_SYMBOL] = retainers - 1;
 }
-// @cpt-end:cpt-frontx-flow-request-lifecycle-query-client-lifecycle:p2:inst-l1-shared-fetch-singleton-wiring
 
 /**
  * Test-only diagnostics for SharedFetchCache bookkeeping state.

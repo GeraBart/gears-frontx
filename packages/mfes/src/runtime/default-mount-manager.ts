@@ -8,8 +8,6 @@
  * @packageDocumentation
  * @internal
  */
-// @cpt-state:cpt-frontx-state-mfe-registry-extension-load:p1
-// @cpt-state:cpt-frontx-state-mfe-registry-extension-mount:p1
 // @cpt-algo:cpt-frontx-algo-extension-domain-governance-mount-execution:p2
 // @cpt-state:cpt-frontx-state-extension-domain-governance-admission:p1
 // @cpt-dod:cpt-frontx-dod-extension-domain-governance-default-deny:p1
@@ -67,7 +65,6 @@ export class DefaultMountManager extends MountManager {
     this.bridgeFactory = config.bridgeFactory;
   }
 
-  // @cpt-begin:cpt-frontx-state-mfe-registry-extension-load:p1:inst-1
   async loadExtension(extensionId: string): Promise<void> {
     const extensionState = this.extensionManager.getExtensionState(extensionId);
     if (!extensionState) {
@@ -106,13 +103,11 @@ export class DefaultMountManager extends MountManager {
       throw error;
     }
   }
-  // @cpt-end:cpt-frontx-state-mfe-registry-extension-load:p1:inst-1
 
   async preloadExtension(extensionId: string): Promise<void> {
     return this.loadExtension(extensionId);
   }
 
-  // @cpt-begin:cpt-frontx-state-mfe-registry-extension-mount:p1:inst-1
   // @cpt-begin:cpt-frontx-state-extension-domain-governance-admission:p1:inst-adm-t5
   async mountExtension(
     extensionId: string,
@@ -205,7 +200,6 @@ export class DefaultMountManager extends MountManager {
     }
   }
   // @cpt-end:cpt-frontx-state-extension-domain-governance-admission:p1:inst-adm-t5
-  // @cpt-end:cpt-frontx-state-mfe-registry-extension-mount:p1:inst-1
 
   async unmountExtension(extensionId: string): Promise<void> {
     const extensionState = this.extensionManager.getExtensionState(extensionId);
