@@ -5,10 +5,7 @@
  * Supports REST, SSE, and mock protocols.
  */
 
-// @cpt-dod:cpt-frontx-dod-api-communication-plugin-types:p1
 // @cpt-dod:cpt-frontx-dod-api-protocol-surface-protocol-dispatch:p1
-// @cpt-algo:cpt-frontx-algo-api-communication-is-mock-plugin:p2
-// @cpt-state:cpt-frontx-state-api-communication-mock-mode:p2
 
 import type { BaseApiService } from './BaseApiService';
 
@@ -75,13 +72,11 @@ export const MOCK_PLUGIN = Symbol.for('frontx:plugin:mock');
  * }
  * ```
  */
-// @cpt-begin:cpt-frontx-algo-api-communication-is-mock-plugin:p2:inst-1
 export function isMockPlugin(plugin: unknown): boolean {
   if (!plugin || typeof plugin !== 'object') return false;
   const constructor = (plugin as object).constructor;
   return MOCK_PLUGIN in constructor;
 }
-// @cpt-end:cpt-frontx-algo-api-communication-is-mock-plugin:p2:inst-1
 
 /**
  * Mock Response Factory Function
@@ -151,7 +146,9 @@ export interface ApiServicesConfig {
  * ```
  */
 // @cpt-flow:cpt-frontx-flow-api-protocol-surface-service-call:p1
-// @cpt-dod:cpt-frontx-dod-api-protocol-surface-protocol-dispatch:p1
+// @cpt-begin:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-invoke-protocol
+// Protocol invocation entry point
+// @cpt-end:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-invoke-protocol
 export abstract class ApiProtocol<TPlugin extends BasePluginHooks = BasePluginHooks> {
   /**
    * Initialize the protocol with configuration.
@@ -440,7 +437,6 @@ export interface RestRequestContext {
 }
 
 // @cpt-FEATURE:cpt-frontx-dod-request-lifecycle-abort-signal:p1
-// @cpt-begin:cpt-frontx-algo-request-lifecycle-request-options:p1:inst-define-options
 /**
  * REST Request Options
  * Per-request options for REST protocol HTTP methods.
@@ -455,7 +451,6 @@ export interface RestRequestOptions {
   /** Whether to include credentials for this specific request (overrides protocol default) */
   withCredentials?: boolean;
 }
-// @cpt-end:cpt-frontx-algo-request-lifecycle-request-options:p1:inst-define-options
 
 /**
  * SSE Connect Context
@@ -662,15 +657,13 @@ export interface SseShortCircuitResponse {
  * @param result - Plugin onRequest result
  * @returns True if result is a REST short-circuit response
  */
-// @cpt-begin:cpt-frontx-algo-api-communication-is-mock-plugin:p2:inst-is-rest-short-circuit
-// @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-detect-sc-rest
+// @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-detect-sc
 export function isRestShortCircuit(
   result: RestRequestContext | RestShortCircuitResponse | undefined
 ): result is RestShortCircuitResponse {
   return result !== undefined && 'shortCircuit' in result && typeof (result as RestShortCircuitResponse).shortCircuit === 'object' && 'status' in (result as RestShortCircuitResponse).shortCircuit;
 }
-// @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-detect-sc-rest
-// @cpt-end:cpt-frontx-algo-api-communication-is-mock-plugin:p2:inst-is-rest-short-circuit
+// @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-detect-sc
 
 /**
  * SSE Short Circuit Type Guard
@@ -679,15 +672,13 @@ export function isRestShortCircuit(
  * @param result - Plugin onConnect result
  * @returns True if result is an SSE short-circuit response
  */
-// @cpt-begin:cpt-frontx-algo-api-communication-is-mock-plugin:p2:inst-is-sse-short-circuit
-// @cpt-begin:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-sse-short-circuit-guard
+// @cpt-begin:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-sse-short-circuit
 export function isSseShortCircuit(
   result: SseConnectContext | SseShortCircuitResponse | undefined
 ): result is SseShortCircuitResponse {
   return result !== undefined && 'shortCircuit' in result && typeof (result as SseShortCircuitResponse).shortCircuit === 'object' && 'close' in (result as SseShortCircuitResponse).shortCircuit;
 }
-// @cpt-end:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-sse-short-circuit-guard
-// @cpt-end:cpt-frontx-algo-api-communication-is-mock-plugin:p2:inst-is-sse-short-circuit
+// @cpt-end:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-sse-short-circuit
 
 // ============================================================================
 // Protocol-Specific Plugin Convenience Classes
@@ -929,7 +920,6 @@ export interface MutationDescriptor<TData, TVariables> {
 // ============================================================================
 
 // @cpt-FEATURE:cpt-frontx-fr-sse-stream-descriptors:p2
-// @cpt-begin:cpt-frontx-fr-sse-stream-descriptors:p2:inst-stream-types
 /**
  * Stream connection status.
  */
@@ -960,7 +950,6 @@ export interface StreamDescriptor<TEvent> {
    */
   disconnect(connectionId: string): void;
 }
-// @cpt-end:cpt-frontx-fr-sse-stream-descriptors:p2:inst-stream-types
 
 /**
  * API Registry Interface

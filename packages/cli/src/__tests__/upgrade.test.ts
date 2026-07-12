@@ -8,6 +8,7 @@ import {
 import { computeChangeSet } from '../upgrade/compute.js';
 import { applyChangeSet } from '../upgrade/apply.js';
 import { rollbackChangeSet } from '../upgrade/rollback.js';
+import type { ChangeSet, ConflictEntry } from '../upgrade/types.js';
 import type { InventoryEntry } from '../inventory/types.js';
 import { InventoryState } from '../inventory/types.js';
 
@@ -55,7 +56,7 @@ describe('upgradeChangeSetReviewApproval (F14 change-set engine flow)', () => {
   it('(a) computes change set and writes no files until approved', async () => {
     const writeFn = vi.fn();
     const removeFn = vi.fn();
-    const presentFn = vi.fn<[any], Promise<'approved' | 'declined'>>().mockResolvedValue('declined');
+    const presentFn = vi.fn<[ChangeSet], Promise<'approved' | 'declined'>>().mockResolvedValue('declined');
 
     const result = await upgradeChangeSetReviewApproval(PROJ_ROOT, '2.0.0', {
       readProvenance: async () => BASE_PROVENANCE,
@@ -212,7 +213,7 @@ describe('upgradeChangeSetReviewApproval (F14 change-set engine flow)', () => {
 
   // (g) Conflict — file affected by both template diff and local modification surfaced before approval
   it('(g) locally modified file conflicting with template diff is surfaced as a conflict', async () => {
-    let capturedChangeSet: any;
+    let capturedChangeSet: ChangeSet | undefined;
 
     await upgradeChangeSetReviewApproval(PROJ_ROOT, '2.0.0', {
       readProvenance: async () => BASE_PROVENANCE,
@@ -232,7 +233,7 @@ describe('upgradeChangeSetReviewApproval (F14 change-set engine flow)', () => {
     });
 
     expect(capturedChangeSet.conflicts.length).toBeGreaterThan(0);
-    const conflict = capturedChangeSet.conflicts.find((c: any) => c.path === 'src/App.tsx');
+    const conflict = capturedChangeSet?.conflicts.find((c: ConflictEntry) => c.path === 'src/App.tsx');
     expect(conflict).toBeDefined();
     expect(conflict.localContent).toBe('locally modified content');
   });

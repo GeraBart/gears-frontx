@@ -7,10 +7,6 @@
  * SDK Layer: L1 (Zero @gears-frontx dependencies)
  */
 
-// @cpt-dod:cpt-frontx-dod-api-communication-registry:p1
-// @cpt-flow:cpt-frontx-flow-api-communication-service-registration:p1
-// @cpt-flow:cpt-frontx-flow-api-communication-global-plugin:p1
-// @cpt-flow:cpt-frontx-flow-api-communication-mock-activation:p2
 
 import type {
   ApiRegistry as IApiRegistry,
@@ -59,7 +55,6 @@ class ApiRegistryImpl implements IApiRegistry {
    * Register an API service by class reference.
    * Service is instantiated immediately.
    */
-  // @cpt-begin:cpt-frontx-flow-api-communication-service-registration:p1:inst-1
   register<T extends BaseApiService>(serviceClass: new () => T): void {
     // Instantiate service
     const service = new serviceClass();
@@ -67,7 +62,6 @@ class ApiRegistryImpl implements IApiRegistry {
     // Store with class as key
     this.services.set(serviceClass, service);
   }
-  // @cpt-end:cpt-frontx-flow-api-communication-service-registration:p1:inst-1
 
   // ============================================================================
   // Initialization
@@ -77,13 +71,11 @@ class ApiRegistryImpl implements IApiRegistry {
    * Initialize the registry with configuration.
    * Services are already instantiated during register().
    */
-  // @cpt-begin:cpt-frontx-dod-api-communication-registry:p1:inst-initialize
   initialize(config?: ApiServicesConfig): void {
     if (config) {
       this.config = { ...DEFAULT_CONFIG, ...config };
     }
   }
-  // @cpt-end:cpt-frontx-dod-api-communication-registry:p1:inst-initialize
 
   // ============================================================================
   // Service Access
@@ -94,7 +86,6 @@ class ApiRegistryImpl implements IApiRegistry {
    * Returns typed service instance.
    * Throws if service is not registered.
    */
-  // @cpt-begin:cpt-frontx-flow-api-communication-service-registration:p1:inst-2
   getService<T extends BaseApiService>(serviceClass: new () => T): T {
     const service = this.services.get(serviceClass);
 
@@ -106,16 +97,13 @@ class ApiRegistryImpl implements IApiRegistry {
 
     return service as T;
   }
-  // @cpt-end:cpt-frontx-flow-api-communication-service-registration:p1:inst-2
 
   /**
    * Check if service is registered.
    */
-  // @cpt-begin:cpt-frontx-flow-api-communication-service-registration:p1:inst-has
   has<T extends BaseApiService>(serviceClass: new () => T): boolean {
     return this.services.has(serviceClass);
   }
-  // @cpt-end:cpt-frontx-flow-api-communication-service-registration:p1:inst-has
 
   /**
    * Get all registered service instances.
@@ -132,11 +120,9 @@ class ApiRegistryImpl implements IApiRegistry {
    * }
    * ```
    */
-  // @cpt-begin:cpt-frontx-flow-api-communication-service-registration:p1:inst-get-all
   getAll(): readonly BaseApiService[] {
     return Array.from(this.services.values());
   }
-  // @cpt-end:cpt-frontx-flow-api-communication-service-registration:p1:inst-get-all
 
   // ============================================================================
   // Configuration
@@ -145,11 +131,9 @@ class ApiRegistryImpl implements IApiRegistry {
   /**
    * Get current configuration.
    */
-  // @cpt-begin:cpt-frontx-dod-api-communication-registry:p1:inst-get-config
   getConfig(): Readonly<ApiServicesConfig> {
     return { ...this.config };
   }
-  // @cpt-end:cpt-frontx-dod-api-communication-registry:p1:inst-get-config
 
   // ============================================================================
   // Protocol Plugin Management
@@ -180,7 +164,6 @@ class ApiRegistryImpl implements IApiRegistry {
    * apiRegistry.plugins.clear(RestProtocol);
    * ```
    */
-  // @cpt-begin:cpt-frontx-flow-api-communication-global-plugin:p1:inst-1
   public readonly plugins = {
     /**
      * Add a plugin for a specific protocol.
@@ -231,7 +214,6 @@ class ApiRegistryImpl implements IApiRegistry {
      */
     clear: protocolPluginRegistry.clear.bind(protocolPluginRegistry),
   };
-  // @cpt-end:cpt-frontx-flow-api-communication-global-plugin:p1:inst-1
 
   // ============================================================================
   // Reset (for testing)
@@ -243,7 +225,6 @@ class ApiRegistryImpl implements IApiRegistry {
    *
    * @internal
    */
-  // @cpt-begin:cpt-frontx-dod-api-communication-registry:p1:inst-reset
   reset(): void {
     // Cleanup all services
     this.services.forEach((service) => {
@@ -256,7 +237,6 @@ class ApiRegistryImpl implements IApiRegistry {
     protocolPluginRegistry.reset();
     this.config = { ...DEFAULT_CONFIG };
   }
-  // @cpt-end:cpt-frontx-dod-api-communication-registry:p1:inst-reset
 }
 
 // ============================================================================

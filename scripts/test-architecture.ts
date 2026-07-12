@@ -154,7 +154,7 @@ function getMonorepoPostChecks(): ArchCheck[] {
 }
 
 /**
- * FrontX ecosystem boundary checks (Phase 10 — full enforcement).
+ * FrontX ecosystem boundary checks (Phase 10/17 — full enforcement).
  *
  * Boundary invariants covered:
  *   cpt-frontx-constraint-mfes-no-type-format-literals     (MFES-1) — ESLint eslint.config.js
@@ -165,6 +165,7 @@ function getMonorepoPostChecks(): ArchCheck[] {
  *   cpt-frontx-constraint-gts-plugin-owns-infra-schemas     (GTS-PLUGIN-1) — dep-cruiser
  *   cpt-frontx-constraint-gts-plugin-excludes-solution-schemas (GTS-PLUGIN-2) — dep-cruiser
  *   cpt-frontx-constraint-api-no-solution-content           (API-1) — dep-cruiser
+ *   cpt-frontx-constraint-cli-template-independence         (CLI-1) — dep-cruiser + grep check below
  */
 function getEcosystemBoundaryChecks(): ArchCheck[] {
   return [
@@ -208,6 +209,22 @@ function getEcosystemBoundaryChecks(): ArchCheck[] {
         'MFES-5 (cpt-frontx-constraint-mfes-opaque-schema-surface): mfes has no JSONSchema shape import',
     },
     // @cpt-end:cpt-frontx-constraint-mfes-opaque-schema-surface:p10:inst-arch-check
+    // @cpt-begin:cpt-frontx-constraint-cli-template-independence:p17:inst-dep-cruiser-check
+    {
+      command:
+        'npx dependency-cruiser packages/cli/src --config .dependency-cruiser.cjs --output-type err-long',
+      description:
+        'CLI-1 (cpt-frontx-constraint-cli-template-independence): cli boundary — no bundled template content dependency',
+    },
+    // @cpt-end:cpt-frontx-constraint-cli-template-independence:p17:inst-dep-cruiser-check
+    // @cpt-begin:cpt-frontx-constraint-cli-template-independence:p17:inst-hardcoded-name-check
+    {
+      command:
+        "bash -c '! grep -rn \"frontx-template-standard\\|@gears-frontx/frontx-template\" packages/cli/src/ --include=\"*.ts\" --exclude-dir=generated | grep -v \"@cpt-\"'",
+      description:
+        'CLI-1 (cpt-frontx-constraint-cli-template-independence): cli sources contain no hardcoded template package names (excluding auto-generated version registry)',
+    },
+    // @cpt-end:cpt-frontx-constraint-cli-template-independence:p17:inst-hardcoded-name-check
   ];
 }
 

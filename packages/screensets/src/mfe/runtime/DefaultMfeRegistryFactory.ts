@@ -10,7 +10,6 @@
  */
 // @cpt-flow:cpt-frontx-flow-mfe-registry-factory-build:p1
 // @cpt-state:cpt-frontx-state-mfe-registry-factory-cache:p1
-// @cpt-dod:cpt-frontx-dod-mfe-registry-factory-cache:p1
 
 import { MfeRegistryFactory, type MfeRegistry, type MfeRegistryConfig } from '@gears-frontx/mfes';
 import { DefaultMfeRegistry } from './DefaultMfeRegistry';

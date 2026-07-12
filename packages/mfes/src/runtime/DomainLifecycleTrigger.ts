@@ -15,7 +15,6 @@
  * @packageDocumentation
  */
 // @cpt-FEATURE:cpt-frontx-feature-mfe-registry:p2
-// @cpt-dod:cpt-frontx-dod-mfe-registry-lifecycle-trigger-contract:p1
 
 /**
  * Abstract per-domain lifecycle trigger facade.

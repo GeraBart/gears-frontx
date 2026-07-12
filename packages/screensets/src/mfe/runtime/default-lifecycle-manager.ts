@@ -1,7 +1,3 @@
-// @cpt-flow:cpt-frontx-flow-mfe-registry-register-domain:p1
-// @cpt-flow:cpt-frontx-flow-mfe-registry-register-extension:p1
-// @cpt-flow:cpt-frontx-flow-mfe-registry-unregister-extension:p1
-// @cpt-flow:cpt-frontx-flow-mfe-registry-unregister-domain:p1
 /**
  * DefaultLifecycleManager - Concrete Lifecycle Manager Implementation
  *
@@ -109,7 +105,6 @@ export class DefaultLifecycleManager extends LifecycleManager {
    * @returns Promise resolving when all hooks have executed
    * @private
    */
-  // @cpt-begin:cpt-frontx-flow-mfe-registry-register-domain:p1:inst-1
   private async triggerLifecycleStageInternal(
     entity: Extension | ExtensionDomain,
     stageId: string
@@ -139,5 +134,4 @@ export class DefaultLifecycleManager extends LifecycleManager {
       }
     }
   }
-  // @cpt-end:cpt-frontx-flow-mfe-registry-register-domain:p1:inst-1
 }

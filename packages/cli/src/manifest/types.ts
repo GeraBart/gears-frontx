@@ -40,7 +40,13 @@ export type ManifestValidationResult =
 
 // State machine states — cpt-frontx-state-template-manifest-validation-lifecycle
 // @cpt-begin:cpt-frontx-state-template-manifest-validation-lifecycle:p1:inst-draft-to-validated
+// @cpt-begin:cpt-frontx-state-template-manifest-validation-lifecycle:p1:inst-draft-to-rejected
+// @cpt-begin:cpt-frontx-state-template-manifest-validation-lifecycle:p1:inst-rejected-to-draft
+// @cpt-begin:cpt-frontx-state-template-manifest-validation-lifecycle:p1:inst-validated-to-published
 export type ManifestValidationState = 'DRAFT' | 'VALIDATED' | 'REJECTED' | 'PUBLISHED';
+// @cpt-end:cpt-frontx-state-template-manifest-validation-lifecycle:p1:inst-validated-to-published
+// @cpt-end:cpt-frontx-state-template-manifest-validation-lifecycle:p1:inst-rejected-to-draft
+// @cpt-end:cpt-frontx-state-template-manifest-validation-lifecycle:p1:inst-draft-to-rejected
 // @cpt-end:cpt-frontx-state-template-manifest-validation-lifecycle:p1:inst-draft-to-validated
 
 // ReadFileFn — injected for testability (no fs calls in core logic)

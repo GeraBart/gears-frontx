@@ -5,8 +5,6 @@ import type { InventoryEntry } from '../inventory/types.js';
 import { readManifestFromContent } from '../manifest/validate-contract.js';
 import type { ConflictCheckFn, ScaffoldResult, WriteFileFn } from './types.js';
 
-// @cpt-flow:cpt-frontx-flow-cli-scaffolding-scaffold-project:p1
-// @cpt-algo:cpt-frontx-algo-cli-scaffolding-project-scaffold:p1
 export async function scaffoldProject(
   templateRef: string,
   targetDir: string,

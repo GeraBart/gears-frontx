@@ -7,8 +7,6 @@
  *
  * @packageDocumentation
  */
-// @cpt-dod:cpt-frontx-dod-mfe-isolation-mfmanifest-type:p1
-// @cpt-dod:cpt-frontx-dod-mfe-registry-mfmanifest-schema-update:p1
 // @cpt-dod:cpt-frontx-dod-mfe-loading-manifest-field-discovery:p1
 
 /**

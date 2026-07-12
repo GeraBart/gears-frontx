@@ -7,17 +7,6 @@
  * SDK Layer: L1 (Only peer dependency on axios)
  */
 
-// @cpt-dod:cpt-frontx-dod-api-communication-rest-protocol:p1
-// @cpt-flow:cpt-frontx-flow-api-communication-rest-request:p1
-// @cpt-algo:cpt-frontx-algo-api-communication-rest-plugin-chain-request:p1
-// @cpt-algo:cpt-frontx-algo-api-communication-rest-plugin-chain-response:p1
-// @cpt-algo:cpt-frontx-algo-api-communication-plugin-ordering:p1
-// @cpt-state:cpt-frontx-state-api-communication-rest-connection:p1
-// @cpt-dod:cpt-frontx-dod-request-lifecycle-abort-signal:p1
-// @cpt-flow:cpt-frontx-flow-request-lifecycle-rest-abort:p1
-// @cpt-algo:cpt-frontx-algo-request-lifecycle-signal-threading:p1
-// @cpt-algo:cpt-frontx-algo-request-lifecycle-cancel-detection:p1
-// @cpt-algo:cpt-frontx-algo-request-lifecycle-request-options:p1
 // @cpt-flow:cpt-frontx-flow-api-protocol-surface-service-call:p1
 // @cpt-algo:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1
 // @cpt-algo:cpt-frontx-algo-api-protocol-surface-shared-cache:p1
@@ -103,7 +92,6 @@ export class RestProtocol extends ApiProtocol<RestPluginHooks> {
    * Instance plugin management namespace
    * Plugins registered here apply only to this RestProtocol instance
    */
-  // @cpt-begin:cpt-frontx-algo-api-communication-plugin-ordering:p1:inst-rest-instance-plugins
   public readonly plugins = {
     /**
      * Add an instance REST plugin
@@ -132,14 +120,11 @@ export class RestProtocol extends ApiProtocol<RestPluginHooks> {
       return Array.from(this._instancePlugins);
     },
   };
-  // @cpt-end:cpt-frontx-algo-api-communication-plugin-ordering:p1:inst-rest-instance-plugins
 
-  // @cpt-begin:cpt-frontx-dod-api-communication-rest-protocol:p1:inst-constructor
   constructor(restConfig: RestProtocolConfig = {}) {
     super();
     this.restConfig = { ...DEFAULT_REST_CONFIG, ...restConfig };
   }
-  // @cpt-end:cpt-frontx-dod-api-communication-rest-protocol:p1:inst-constructor
 
   // ============================================================================
   // Initialization
@@ -148,7 +133,6 @@ export class RestProtocol extends ApiProtocol<RestPluginHooks> {
   /**
    * Initialize the protocol with service configuration.
    */
-  // @cpt-begin:cpt-frontx-state-api-communication-rest-connection:p1:inst-1
   initialize(
     config: Readonly<ApiServiceConfig>,
     getExcludedClasses?: () => ReadonlySet<PluginClass>
@@ -169,12 +153,10 @@ export class RestProtocol extends ApiProtocol<RestPluginHooks> {
       withCredentials: this.restConfig.withCredentials,
     });
   }
-  // @cpt-end:cpt-frontx-state-api-communication-rest-connection:p1:inst-1
 
   /**
    * Cleanup protocol resources.
    */
-  // @cpt-begin:cpt-frontx-state-api-communication-rest-connection:p1:inst-2
   cleanup(): void {
     // Cleanup instance plugins
     this._instancePlugins.forEach((plugin) => {
@@ -185,7 +167,6 @@ export class RestProtocol extends ApiProtocol<RestPluginHooks> {
     this.client = null;
     this.config = null;
   }
-  // @cpt-end:cpt-frontx-state-api-communication-rest-connection:p1:inst-2
 
   /**
    * Test-only hook that replaces the underlying axios `request` dispatcher.
@@ -211,7 +192,6 @@ export class RestProtocol extends ApiProtocol<RestPluginHooks> {
    * Get global plugins from apiRegistry, filtering out excluded classes.
    * @internal
    */
-  // @cpt-begin:cpt-frontx-algo-api-communication-plugin-ordering:p1:inst-1
   private getGlobalPlugins(): readonly RestPluginHooks[] {
     const allGlobalPlugins = protocolPluginRegistry.getAll(RestProtocol);
     const excludedClasses = this.getExcludedClasses();
@@ -236,20 +216,17 @@ export class RestProtocol extends ApiProtocol<RestPluginHooks> {
    * Used by plugin chain execution to get ordered list of plugins.
    * @internal
    */
-  // @cpt-algo:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1
   getPluginsInOrder(): RestPluginHooks[] {
     return [
       ...this.getGlobalPlugins(),
       ...Array.from(this._instancePlugins),
     ];
   }
-  // @cpt-end:cpt-frontx-algo-api-communication-plugin-ordering:p1:inst-1
 
   // ============================================================================
   // HTTP Methods
   // ============================================================================
 
-  // @cpt-begin:cpt-frontx-algo-request-lifecycle-request-options:p1:inst-update-signatures
   /**
    * Perform GET request.
    * @template TResponse - Response type
@@ -274,7 +251,11 @@ export class RestProtocol extends ApiProtocol<RestPluginHooks> {
     // @cpt-end:cpt-frontx-algo-api-protocol-surface-shared-cache:p1:inst-peek-cache
     if (!cache) {
       // @cpt-begin:cpt-frontx-algo-api-protocol-surface-shared-cache:p1:inst-no-cache
+      // @cpt-begin:cpt-frontx-algo-api-protocol-surface-shared-cache:p1:inst-direct-fetch
+      // @cpt-begin:cpt-frontx-algo-api-protocol-surface-shared-cache:p1:inst-direct-return
       return this.get<TResponse>(url, options);
+      // @cpt-end:cpt-frontx-algo-api-protocol-surface-shared-cache:p1:inst-direct-return
+      // @cpt-end:cpt-frontx-algo-api-protocol-surface-shared-cache:p1:inst-direct-fetch
       // @cpt-end:cpt-frontx-algo-api-protocol-surface-shared-cache:p1:inst-no-cache
     }
 
@@ -322,14 +303,14 @@ export class RestProtocol extends ApiProtocol<RestPluginHooks> {
     );
     // @cpt-end:cpt-frontx-algo-api-protocol-surface-shared-cache:p1:inst-getorfetch
 
-    // @cpt-begin:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-post-fetch-response-chain
+    // @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-response-chain
     const finalResponse = await this.executePluginOnResponse(
       sharedEnvelope.responseContext,
       preparedRequest.originalRequestContext
     );
 
     return finalResponse.data as TResponse;
-    // @cpt-end:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-post-fetch-response-chain
+    // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-response-chain
   }
 
   /**
@@ -373,7 +354,6 @@ export class RestProtocol extends ApiProtocol<RestPluginHooks> {
   ): Promise<TResponse> {
     return this.request<TResponse>('DELETE', url, data, options);
   }
-  // @cpt-end:cpt-frontx-algo-request-lifecycle-request-options:p1:inst-update-signatures
 
   // ============================================================================
   // Request Execution
@@ -383,7 +363,6 @@ export class RestProtocol extends ApiProtocol<RestPluginHooks> {
    * Execute an HTTP request with plugin chain.
    * Public entry point - delegates to requestInternal with retryCount: 0.
    */
-  // @cpt-begin:cpt-frontx-algo-request-lifecycle-request-options:p1:inst-forward-to-internal
   private async request<T>(
     method: HttpMethod,
     url: string,
@@ -400,16 +379,11 @@ export class RestProtocol extends ApiProtocol<RestPluginHooks> {
       0
     );
   }
-  // @cpt-end:cpt-frontx-algo-request-lifecycle-request-options:p1:inst-forward-to-internal
 
   /**
    * Internal request execution with retry support.
    * Can be called for initial request or retry.
    */
-  // @cpt-begin:cpt-frontx-flow-api-communication-rest-request:p1:inst-1
-  // @cpt-begin:cpt-frontx-algo-api-communication-rest-plugin-chain-request:p1:inst-1
-  // @cpt-begin:cpt-frontx-algo-api-communication-rest-plugin-chain-response:p1:inst-1
-  // @cpt-begin:cpt-frontx-algo-request-lifecycle-signal-threading:p1:inst-receive-signal
   private async requestInternal<T>(
     method: HttpMethod,
     url: string,
@@ -430,7 +404,12 @@ export class RestProtocol extends ApiProtocol<RestPluginHooks> {
     if (retryCount >= maxDepth) {
       throw new Error(`Max retry depth (${maxDepth}) exceeded`);
     }
+    // @cpt-begin:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-branch-rr
+    // @cpt-begin:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-collect-plugins-rr
+    // Plugin collection happens inside executePluginOnRequest
+    // @cpt-end:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-collect-plugins-rr
     // @cpt-begin:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-build-rr-ctx
+    // @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-build-context
     const requestContext = this.buildRequestContext(
       method,
       url,
@@ -439,6 +418,7 @@ export class RestProtocol extends ApiProtocol<RestPluginHooks> {
       retryHeaders,
       withCredentials
     );
+    // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-build-context
     // @cpt-end:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-build-rr-ctx
 
     let preparedRequest: PreparedRestRequest;
@@ -468,7 +448,8 @@ export class RestProtocol extends ApiProtocol<RestPluginHooks> {
       throw finalResult;
     }
 
-    // @cpt-begin:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-forward-transport
+    // @cpt-begin:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-transport-call
+    // @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-forward-transport
     return this.executePreparedRequest<T>(
       preparedRequest,
       method,
@@ -477,12 +458,10 @@ export class RestProtocol extends ApiProtocol<RestPluginHooks> {
       signal,
       retryCount
     );
-    // @cpt-end:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-forward-transport
+    // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-forward-transport
+    // @cpt-end:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-transport-call
+    // @cpt-end:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-branch-rr
   }
-  // @cpt-end:cpt-frontx-algo-request-lifecycle-signal-threading:p1:inst-receive-signal
-  // @cpt-end:cpt-frontx-flow-api-communication-rest-request:p1:inst-1
-  // @cpt-end:cpt-frontx-algo-api-communication-rest-plugin-chain-request:p1:inst-1
-  // @cpt-end:cpt-frontx-algo-api-communication-rest-plugin-chain-response:p1:inst-1
 
   private async executePreparedRequest<T>(
     preparedRequest: PreparedRestRequest,
@@ -501,10 +480,12 @@ export class RestProtocol extends ApiProtocol<RestPluginHooks> {
       signal,
     };
 
+    // @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-try-transport
     try {
       // Check if a plugin short-circuited (signal is irrelevant when no HTTP call is made)
-      // @cpt-begin:cpt-frontx-flow-request-lifecycle-rest-abort:p1:inst-short-circuit-bypass
-      // @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-sc-response-plugins
+      // @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-have-sc
+      // @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-sc-response-chain
+      // @cpt-begin:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-sc-response-plugins
       if (preparedRequest.shortCircuitResponse) {
         const shortCircuitResponse = preparedRequest.shortCircuitResponse;
 
@@ -514,18 +495,17 @@ export class RestProtocol extends ApiProtocol<RestPluginHooks> {
           requestContext
         );
 
-        // @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-return-sc
+        // @cpt-begin:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-return-sc
         return processedShortCircuit.data as T;
-        // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-return-sc
+        // @cpt-end:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-return-sc
       }
-      // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-sc-response-plugins
-      // @cpt-end:cpt-frontx-flow-request-lifecycle-rest-abort:p1:inst-short-circuit-bypass
+      // @cpt-end:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-sc-response-plugins
+      // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-sc-response-chain
+      // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-have-sc
 
       // Build axios config.
       // IMPORTANT: Use the original relative URL for axios since it already has baseURL configured.
       // Plugin chain receives full URL for mock matching, but axios needs relative URL.
-      // @cpt-begin:cpt-frontx-algo-request-lifecycle-signal-threading:p1:inst-copy-to-axios
-      // @cpt-begin:cpt-frontx-flow-request-lifecycle-rest-abort:p1:inst-axios-signal
       const axiosConfig: AxiosRequestConfig = {
         method,
         url,  // Use original relative URL, not processedContext.url which includes baseURL
@@ -535,37 +515,42 @@ export class RestProtocol extends ApiProtocol<RestPluginHooks> {
         withCredentials: processedContext.withCredentials,
         signal,
       };
-      // @cpt-end:cpt-frontx-flow-request-lifecycle-rest-abort:p1:inst-axios-signal
-      // @cpt-end:cpt-frontx-algo-request-lifecycle-signal-threading:p1:inst-copy-to-axios
 
       // Execute actual HTTP request
-      // @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-transport-call
+      // @cpt-begin:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-transport-call
+      // @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-transport
       const response = await this.client!.request(axiosConfig);
-      // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-transport-call
+      // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-transport
+      // @cpt-end:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-transport-call
 
       // Build response context
-      // @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-wrap-response
+      // @cpt-begin:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-wrap-response
+      // @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-wrap
       const responseContext: ApiResponseContext = {
         status: response.status,
         headers: response.headers as Record<string, string>,
         data: response.data,
       };
-      // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-wrap-response
+      // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-wrap
+      // @cpt-end:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-wrap-response
 
       // Execute onResponse plugin chain (reverse order)
-      // @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-run-response-plugins
+      // @cpt-begin:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-run-response-plugins
+      // @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-response-chain
       const finalResponse = await this.executePluginOnResponse(
         responseContext,
         requestContext
       );
-      // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-run-response-plugins
+      // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-response-chain
+      // @cpt-end:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-run-response-plugins
 
-      // @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-return-rr
+      // @cpt-begin:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-return-rr
       return finalResponse.data as T;
-      // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-return-rr
+      // @cpt-end:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-return-rr
+    // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-try-transport
     } catch (error) {
-      // @cpt-begin:cpt-frontx-algo-request-lifecycle-cancel-detection:p1:inst-check-is-cancel
-      // @cpt-begin:cpt-frontx-flow-request-lifecycle-rest-abort:p1:inst-cancel-skip-plugins
+      // @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-catch-err
+      // @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-check-cancel
       // @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-rethrow-cancel
       // Canceled requests bypass the error plugin chain entirely — they are not retryable
       // and the caller (e.g., TanStack Query on unmount) expects the raw CanceledError.
@@ -573,9 +558,9 @@ export class RestProtocol extends ApiProtocol<RestPluginHooks> {
         throw error;
       }
       // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-rethrow-cancel
-      // @cpt-end:cpt-frontx-flow-request-lifecycle-rest-abort:p1:inst-cancel-skip-plugins
-      // @cpt-end:cpt-frontx-algo-request-lifecycle-cancel-detection:p1:inst-check-is-cancel
+      // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-check-cancel
 
+      // @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-build-error-ctx
       const err = error instanceof Error ? error : new Error(String(error));
       const responseContext = this.extractResponseContext(error);
 
@@ -592,11 +577,19 @@ export class RestProtocol extends ApiProtocol<RestPluginHooks> {
       // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-error-chain
 
       // Check if error was recovered (plugin returned ApiResponseContext)
+      // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-build-error-ctx
+      // @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-error-recovery
       if (this.isApiResponseContext(finalResult)) {
+        // @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-recovered-response
         return this.unwrapResponseData<T>(finalResult, requestContext);
+        // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-recovered-response
       }
 
+      // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-error-recovery
+      // @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-propagate-err
       throw finalResult;
+      // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-propagate-err
+      // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-catch-err
     }
   }
 
@@ -678,13 +671,16 @@ export class RestProtocol extends ApiProtocol<RestPluginHooks> {
    * Plugins execute in FIFO order (global first, then instance).
    * Any plugin can short-circuit by returning { shortCircuit: response }.
    */
-  // @cpt-begin:cpt-frontx-algo-api-communication-rest-plugin-chain-request:p1:inst-execute-on-request
   private async executePluginOnRequest(
     context: ApiRequestContext
   ): Promise<PreparedRestRequest> {
     let currentContext: ApiRequestContext = { ...context };
 
     // Use protocol-level plugins (global + instance)
+    // @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-collect-plugins
+    // getPluginsInOrder() collects global + instance plugins
+    // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-collect-plugins
+    // @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-foreach-plugin
     for (const plugin of this.getPluginsInOrder()) {
       // Set protocol reference for plugins that need it (e.g., RestMockPlugin)
       if ('_protocol' in plugin) {
@@ -692,24 +688,36 @@ export class RestProtocol extends ApiProtocol<RestPluginHooks> {
       }
 
       if (plugin.onRequest) {
-        // @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-run-request-plugins
+        // @cpt-begin:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-run-request-plugins
+        // @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-invoke-onrequest
         const result = await plugin.onRequest(currentContext);
-        // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-run-request-plugins
+        // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-invoke-onrequest
+        // @cpt-end:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-run-request-plugins
 
         // Check if plugin short-circuited
-        // @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-check-short-circuit
+        // @cpt-begin:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-check-short-circuit
+        // @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-detect-sc
         if (isRestShortCircuit(result)) {
           return {
+          // @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-exit-sc
             originalRequestContext: context,
             processedRequestContext: currentContext,
             shortCircuitResponse: result.shortCircuit,
+          // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-exit-sc
+          // @cpt-begin:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-exit-sc
+          // Exit loop; shortcircuit response recorded
+          // @cpt-end:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-exit-sc
           };
         }
-        // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-check-short-circuit
+        // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-detect-sc
+        // @cpt-end:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-check-short-circuit
 
         // Update context
+        // @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-update-ctx
         currentContext = result;
+        // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-update-ctx
       }
+    // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-foreach-plugin
     }
 
     return {
@@ -717,13 +725,11 @@ export class RestProtocol extends ApiProtocol<RestPluginHooks> {
       processedRequestContext: currentContext,
     };
   }
-  // @cpt-end:cpt-frontx-algo-api-communication-rest-plugin-chain-request:p1:inst-execute-on-request
 
   /**
    * Execute onResponse plugin chain.
    * Plugins execute in reverse order (LIFO - onion model).
    */
-  // @cpt-begin:cpt-frontx-algo-api-communication-rest-plugin-chain-response:p1:inst-execute-on-response
   private async executePluginOnResponse(
     context: ApiResponseContext,
     _requestContext: ApiRequestContext
@@ -740,7 +746,6 @@ export class RestProtocol extends ApiProtocol<RestPluginHooks> {
 
     return currentContext;
   }
-  // @cpt-end:cpt-frontx-algo-api-communication-rest-plugin-chain-response:p1:inst-execute-on-response
 
   private isApiResponseContext(value: Error | ApiResponseContext): value is ApiResponseContext {
     return Boolean(value) && typeof value === 'object' && 'status' in value && 'data' in value;
@@ -759,7 +764,6 @@ export class RestProtocol extends ApiProtocol<RestPluginHooks> {
    * Plugins execute in reverse order (LIFO).
    * Plugins can transform error, recover with ApiResponseContext, or retry the request.
    */
-  // @cpt-begin:cpt-frontx-flow-api-communication-rest-request:p1:inst-execute-on-error
   private async executePluginOnError(
     error: Error,
     context: ApiRequestContext,
@@ -827,7 +831,6 @@ export class RestProtocol extends ApiProtocol<RestPluginHooks> {
 
     return currentResult;
   }
-  // @cpt-end:cpt-frontx-flow-api-communication-rest-request:p1:inst-execute-on-error
 
   private async prepareRequest(
     method: HttpMethod,
@@ -837,7 +840,6 @@ export class RestProtocol extends ApiProtocol<RestPluginHooks> {
     retryHeaders?: Record<string, string>,
     withCredentials?: boolean
   ): Promise<PreparedRestRequest> {
-    // @cpt-begin:cpt-frontx-flow-request-lifecycle-rest-abort:p1:inst-build-context-signal
     const requestContext = this.buildRequestContext(
       method,
       url,
@@ -846,7 +848,6 @@ export class RestProtocol extends ApiProtocol<RestPluginHooks> {
       retryHeaders,
       withCredentials
     );
-    // @cpt-end:cpt-frontx-flow-request-lifecycle-rest-abort:p1:inst-build-context-signal
 
     return this.prepareRequestContext(requestContext);
   }
@@ -855,9 +856,7 @@ export class RestProtocol extends ApiProtocol<RestPluginHooks> {
     requestContext: ApiRequestContext
   ): Promise<PreparedRestRequest> {
     // Execute onRequest plugin chain — plugins receive context with signal
-    // @cpt-begin:cpt-frontx-flow-request-lifecycle-rest-abort:p1:inst-plugin-chain-signal
     return this.executePluginOnRequest(requestContext);
-    // @cpt-end:cpt-frontx-flow-request-lifecycle-rest-abort:p1:inst-plugin-chain-signal
   }
 
   private buildRequestContext(

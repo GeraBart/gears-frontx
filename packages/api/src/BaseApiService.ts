@@ -7,11 +7,6 @@
  * SDK Layer: L1 (Only peer dependency on axios)
  */
 
-// @cpt-dod:cpt-frontx-dod-api-communication-base-service:p1
-// @cpt-flow:cpt-frontx-flow-api-communication-service-registration:p1
-// @cpt-flow:cpt-frontx-flow-api-communication-service-cleanup:p1
-// @cpt-flow:cpt-frontx-flow-api-communication-plugin-exclusion:p1
-// @cpt-algo:cpt-frontx-algo-api-communication-plugin-ordering:p1
 
 import type {
   ApiServiceConfig,
@@ -61,7 +56,6 @@ export abstract class BaseApiService {
   /** Registered plugins for framework management (generic storage - not mock-specific) */
   private registeredPluginsMap: Map<ApiProtocol, Set<ApiPluginBase>> = new Map();
 
-  // @cpt-begin:cpt-frontx-flow-api-communication-service-registration:p1:inst-1
   constructor(config: ApiServiceConfig, ...protocols: ApiProtocol[]) {
     this.config = Object.freeze({ ...config });
 
@@ -74,7 +68,6 @@ export abstract class BaseApiService {
       this.protocols.set(protocol.constructor.name, protocol);
     });
   }
-  // @cpt-end:cpt-frontx-flow-api-communication-service-registration:p1:inst-1
 
   // ============================================================================
   // Namespaced Plugin API (Service-Level)
@@ -127,11 +120,9 @@ export abstract class BaseApiService {
      * }
      * ```
      */
-    // @cpt-begin:cpt-frontx-flow-api-communication-plugin-exclusion:p1:inst-1
     exclude: (...pluginClasses: PluginClass[]): void => {
       pluginClasses.forEach((cls) => this.excludedPluginClasses.add(cls));
     },
-    // @cpt-end:cpt-frontx-flow-api-communication-plugin-exclusion:p1:inst-1
 
     /**
      * Get all excluded plugin classes.
@@ -144,11 +135,9 @@ export abstract class BaseApiService {
      * console.log(`${excluded.length} plugin classes excluded`);
      * ```
      */
-    // @cpt-begin:cpt-frontx-flow-api-communication-plugin-exclusion:p1:inst-get-excluded
     getExcluded: (): readonly PluginClass[] => {
       return Array.from(this.excludedPluginClasses);
     },
-    // @cpt-end:cpt-frontx-flow-api-communication-plugin-exclusion:p1:inst-get-excluded
 
     /**
      * Get all service-specific plugins.
@@ -162,11 +151,9 @@ export abstract class BaseApiService {
      * console.log(`${plugins.length} service plugins registered`);
      * ```
      */
-    // @cpt-begin:cpt-frontx-dod-api-communication-base-service:p1:inst-plugins-get-all
     getAll: (): readonly ApiPluginBase[] => {
       return [...this.servicePlugins];
     },
-    // @cpt-end:cpt-frontx-dod-api-communication-base-service:p1:inst-plugins-get-all
 
     /**
      * Get a plugin instance by class reference.
@@ -188,7 +175,6 @@ export abstract class BaseApiService {
      * const auth = service.plugins.getPlugin(AuthPlugin);
      * ```
      */
-    // @cpt-begin:cpt-frontx-dod-api-communication-base-service:p1:inst-plugins-get-plugin
     getPlugin: <T extends ApiPluginBase>(
       pluginClass: new (...args: never[]) => T
     ): T | undefined => {
@@ -200,7 +186,6 @@ export abstract class BaseApiService {
       );
       return servicePlugin as T | undefined;
     },
-    // @cpt-end:cpt-frontx-dod-api-communication-base-service:p1:inst-plugins-get-plugin
   };
 
   // ============================================================================
@@ -215,13 +200,11 @@ export abstract class BaseApiService {
    *
    * @internal
    */
-  // @cpt-begin:cpt-frontx-algo-api-communication-plugin-ordering:p1:inst-merged-in-order
   protected getMergedPluginsInOrder(): readonly ApiPluginBase[] {
     // Return only service plugins
     // Protocol-level global plugins are now queried directly by protocols via apiRegistry
     return [...this.servicePlugins];
   }
-  // @cpt-end:cpt-frontx-algo-api-communication-plugin-ordering:p1:inst-merged-in-order
 
   /**
    * Get excluded plugin classes.
@@ -231,11 +214,9 @@ export abstract class BaseApiService {
    *
    * @internal
    */
-  // @cpt-begin:cpt-frontx-flow-api-communication-plugin-exclusion:p1:inst-get-excluded-classes
   protected getExcludedPluginClasses(): ReadonlySet<PluginClass> {
     return this.excludedPluginClasses;
   }
-  // @cpt-end:cpt-frontx-flow-api-communication-plugin-exclusion:p1:inst-get-excluded-classes
 
   /**
    * Get merged plugins in reverse order.
@@ -245,11 +226,9 @@ export abstract class BaseApiService {
    *
    * @internal
    */
-  // @cpt-begin:cpt-frontx-algo-api-communication-plugin-ordering:p1:inst-merged-reversed
   protected getMergedPluginsReversed(): readonly ApiPluginBase[] {
     return [...this.getMergedPluginsInOrder()].reverse();
   }
-  // @cpt-end:cpt-frontx-algo-api-communication-plugin-ordering:p1:inst-merged-reversed
 
 
   // ============================================================================
@@ -280,7 +259,6 @@ export abstract class BaseApiService {
    * }
    * ```
    */
-  // @cpt-begin:cpt-frontx-flow-api-communication-service-registration:p1:inst-2
   registerPlugin(protocol: ApiProtocol, plugin: ApiPluginBase): void {
     const registered = this.protocols.get(protocol.constructor.name);
     if (registered !== protocol) {
@@ -294,7 +272,6 @@ export abstract class BaseApiService {
     }
     this.registeredPluginsMap.get(protocol)!.add(plugin);
   }
-  // @cpt-end:cpt-frontx-flow-api-communication-service-registration:p1:inst-2
 
   /**
    * Get all registered plugins (GENERIC - returns all plugins).
@@ -317,11 +294,9 @@ export abstract class BaseApiService {
    * }
    * ```
    */
-  // @cpt-begin:cpt-frontx-flow-api-communication-service-registration:p1:inst-get-plugins
   getPlugins(): ReadonlyMap<ApiProtocol, ReadonlySet<ApiPluginBase>> {
     return this.registeredPluginsMap;
   }
-  // @cpt-end:cpt-frontx-flow-api-communication-service-registration:p1:inst-get-plugins
 
   // ============================================================================
   // Protocol Access
@@ -335,7 +310,8 @@ export abstract class BaseApiService {
    * @returns The protocol instance
    * @throws Error if protocol not registered
    */
-  // @cpt-begin:cpt-frontx-dod-api-communication-base-service:p1:inst-protocol-accessor
+  // @cpt-flow:cpt-frontx-flow-api-protocol-surface-service-call:p1
+  // @cpt-begin:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-obtain-protocol
   protected protocol<T extends ApiProtocol>(
     type: new (...args: never[]) => T
   ): T {
@@ -349,7 +325,7 @@ export abstract class BaseApiService {
 
     return protocol as T;
   }
-  // @cpt-end:cpt-frontx-dod-api-communication-base-service:p1:inst-protocol-accessor
+  // @cpt-end:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-obtain-protocol
 
   // ============================================================================
   // Cleanup
@@ -359,11 +335,9 @@ export abstract class BaseApiService {
    * Cleanup service resources.
    * Called when service is destroyed.
    */
-  // @cpt-begin:cpt-frontx-flow-api-communication-service-cleanup:p1:inst-1
   cleanup(): void {
     // Cleanup all protocols
     this.protocols.forEach((protocol) => protocol.cleanup());
     this.protocols.clear();
   }
-  // @cpt-end:cpt-frontx-flow-api-communication-service-cleanup:p1:inst-1
 }

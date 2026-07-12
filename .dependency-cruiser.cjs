@@ -161,6 +161,15 @@ module.exports = {
       comment: 'STUB: cpt-frontx-constraint-api-no-solution-content (API-1)',
     },
 
+    // ============ @gears-frontx/cli BOUNDARY STUB ============
+    {
+      name: 'cli-template-independence',
+      severity: 'warn',
+      from: {},
+      to: {},
+      comment: 'STUB: cpt-frontx-constraint-cli-template-independence (CLI-1)',
+    },
+
     // ============ PILLAR-1 BOUNDARY ENFORCEMENT (Phase 10) ============
 
     // @cpt-begin:cpt-frontx-constraint-mfes-no-type-format-dependency:p10:inst-dep-cruiser-rule
@@ -202,6 +211,18 @@ module.exports = {
       comment: 'cpt-frontx-constraint-api-no-solution-content (API-1): @gears-frontx/api production surface must contain no solution-specific content.',
     },
     // @cpt-end:cpt-frontx-constraint-api-no-solution-content:p10:inst-dep-cruiser-rule
+
+    // ============ PILLAR-2 BOUNDARY ENFORCEMENT (Phase 17) ============
+
+    // @cpt-begin:cpt-frontx-constraint-cli-template-independence:p17:inst-dep-cruiser-rule
+    {
+      name: 'frontx-cli-1-no-bundled-template-content',
+      severity: 'error',
+      from: { path: '^packages/cli/' },
+      to: { path: '^packages/frontx-template-standard/' },
+      comment: 'cpt-frontx-constraint-cli-template-independence (CLI-1): @gears-frontx/cli must have zero dependency on bundled template content/assets/packages. Templates are resolved by source-spec at runtime.',
+    },
+    // @cpt-end:cpt-frontx-constraint-cli-template-independence:p17:inst-dep-cruiser-rule
   ],
   options: {
     doNotFollow: '^node_modules',

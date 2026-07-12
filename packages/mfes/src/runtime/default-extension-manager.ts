@@ -8,11 +8,6 @@
  * @packageDocumentation
  * @internal
  */
-// @cpt-algo:cpt-frontx-algo-mfe-registry-domain-validation:p1
-// @cpt-algo:cpt-frontx-algo-mfe-registry-extension-validation:p1
-// @cpt-algo:cpt-frontx-algo-mfe-registry-shared-property-broadcast:p1
-// @cpt-dod:cpt-frontx-dod-mfe-registry-gts-validation:p1
-// @cpt-dod:cpt-frontx-dod-mfe-registry-shared-property-broadcast:p1
 // @cpt-flow:cpt-frontx-flow-extension-domain-governance-admission:p1
 // @cpt-state:cpt-frontx-state-extension-domain-governance-admission:p1
 // @cpt-dod:cpt-frontx-dod-extension-domain-governance-contract-enforcement:p1
@@ -63,7 +58,6 @@ export class DefaultExtensionManager extends ExtensionManager {
     this.validateEntryType = config.validateEntryType;
   }
 
-  // @cpt-begin:cpt-frontx-algo-mfe-registry-domain-validation:p1:inst-1
   // @cpt-begin:cpt-frontx-flow-extension-domain-governance-admission:p1:inst-register-domain-call
   registerDomain(domain: ExtensionDomain): void {
     try {
@@ -98,7 +92,6 @@ export class DefaultExtensionManager extends ExtensionManager {
     });
   }
   // @cpt-end:cpt-frontx-flow-extension-domain-governance-admission:p1:inst-register-domain-call
-  // @cpt-end:cpt-frontx-algo-mfe-registry-domain-validation:p1:inst-1
 
   async unregisterDomain(domainId: string): Promise<void> {
     const domainState = this.domains.get(domainId);
@@ -119,7 +112,6 @@ export class DefaultExtensionManager extends ExtensionManager {
     this.domains.delete(domainId);
   }
 
-  // @cpt-begin:cpt-frontx-algo-mfe-registry-extension-validation:p1:inst-1
   // @cpt-begin:cpt-frontx-flow-extension-domain-governance-admission:p1:inst-register-extension
   async registerExtension(extension: Extension): Promise<void> {
     this.typeSystem.register(extension);
@@ -206,7 +198,6 @@ export class DefaultExtensionManager extends ExtensionManager {
     // @cpt-end:cpt-frontx-flow-extension-domain-governance-admission:p1:inst-admission-fail
   }
   // @cpt-end:cpt-frontx-flow-extension-domain-governance-admission:p1:inst-register-extension
-  // @cpt-end:cpt-frontx-algo-mfe-registry-extension-validation:p1:inst-1
 
   async unregisterExtension(extensionId: string): Promise<void> {
     const extensionState = this.extensions.get(extensionId);
@@ -255,7 +246,6 @@ export class DefaultExtensionManager extends ExtensionManager {
     return states;
   }
 
-  // @cpt-begin:cpt-frontx-algo-mfe-registry-shared-property-broadcast:p1:inst-1
   updateSharedProperty(propertyId: string, value: unknown): void {
     const matchingDomainStates: ExtensionDomainState[] = [];
     for (const domainState of this.domains.values()) {
@@ -282,7 +272,6 @@ export class DefaultExtensionManager extends ExtensionManager {
       }
     }
   }
-  // @cpt-end:cpt-frontx-algo-mfe-registry-shared-property-broadcast:p1:inst-1
 
   getDomainProperty(domainId: string, propertyTypeId: string): unknown {
     const domainState = this.domains.get(domainId);

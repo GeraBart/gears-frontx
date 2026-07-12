@@ -10,7 +10,6 @@
  * SDK Layer: L1 (Zero @gears-frontx dependencies)
  */
 
-// @cpt-dod:cpt-frontx-dod-api-communication-public-api:p1
 
 // Re-export all types
 export type {

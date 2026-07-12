@@ -184,7 +184,7 @@ The runtime reasons about types solely by identity. It holds a type only as an o
 
 #### Template-agnostic tooling
 
-- [ ] `p2` - **ID**: `cpt-frontx-principle-template-agnostic-tooling`
+- [x] `p2` - **ID**: `cpt-frontx-principle-template-agnostic-tooling`
 
 The lifecycle tooling carries no bundled template or solution content. The CLI resolves the templates it operates on by versioned source-spec at runtime and bundles none, and the AI Tooling Framework ships only base ecosystem capabilities, gaining solution-specific expertise exclusively through extensions bundled with installed templates. Decoupling the tooling from the content it acts on lets templates and tooling evolve and release independently, and keeps a single tool able to serve any conforming template.
 
@@ -192,7 +192,7 @@ The lifecycle tooling carries no bundled template or solution content. The CLI r
 
 #### Default-deny admission
 
-- [ ] `p2` - **ID**: `cpt-frontx-principle-default-deny-admission`
+- [x] `p2` - **ID**: `cpt-frontx-principle-default-deny-admission`
 
 A unit gains nothing until it earns it. Microfrontends and their extensions are admitted into the runtime only after passing type validation and extension-domain contract matching, are placed under the explicit mount-strategy and cardinality rules of the domain they enter, are isolated once loaded, and are granted no access beyond a domain's declared grants. Denying by default and admitting only on an explicit, validated match bounds the blast radius of any independently developed unit running inside a host.
 
@@ -228,7 +228,7 @@ The MFE Runtime defines no solution-specific shared-property identifiers (such a
 
 #### MFES-3 — No specific extension-domain values in the MFE Runtime
 
-- [ ] `p2` - **ID**: `cpt-frontx-constraint-mfes-no-layout-domain-values`
+- [x] `p2` - **ID**: `cpt-frontx-constraint-mfes-no-layout-domain-values`
 
 The MFE Runtime defines no specific extension-domain (layout-domain) values. Which domains exist, what they are named, and what may occupy them are defined by the application, keeping placement vocabulary out of the platform.
 
@@ -268,7 +268,7 @@ The type-system plugin owns no solution-specific schemas. Application- and templ
 
 #### API-1 — No solution-specific content in the API surface
 
-- [ ] `p2` - **ID**: `cpt-frontx-constraint-api-no-solution-content`
+- [x] `p2` - **ID**: `cpt-frontx-constraint-api-no-solution-content`
 
 The API Protocol Surface (`@gears-frontx/api`) contains no solution-specific content — such as concrete endpoints, auth wiring, request stand-ins, or any other application-specific plugin — and ships no application-specific plugin of its own. The surface provides protocol-separated request and stream primitives, a generic plugin extension point, and a short-circuit capability; solution behavior is supplied by consumers through that extension point.
 
@@ -276,7 +276,7 @@ The API Protocol Surface (`@gears-frontx/api`) contains no solution-specific con
 
 #### CLI-1 — Template independence of the CLI
 
-- [ ] `p2` - **ID**: `cpt-frontx-constraint-cli-template-independence`
+- [x] `p2` - **ID**: `cpt-frontx-constraint-cli-template-independence`
 
 The CLI (`@gears-frontx/cli`) has zero dependency on any template. It resolves templates by source-spec at runtime and bundles none, so the command surface is fully decoupled from the content it scaffolds.
 
@@ -408,7 +408,7 @@ The MFE Runtime treats types opaquely and needs a concrete provider to give type
 
 #### API Protocol Surface
 
-- [ ] `p2` - **ID**: `cpt-frontx-component-api-surface`
+- [x] `p2` - **ID**: `cpt-frontx-component-api-surface`
 
 Concrete artifact: `@gears-frontx/api`.
 

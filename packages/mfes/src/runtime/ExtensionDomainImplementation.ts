@@ -13,7 +13,6 @@
  * @packageDocumentation
  */
 // @cpt-FEATURE:cpt-frontx-feature-mfe-registry:p2
-// @cpt-dod:cpt-frontx-dod-mfe-registry-mount-contracts:p1
 
 import type { MountStrategy } from './mount-strategy';
 
@@ -49,7 +48,6 @@ import type { MountStrategy } from './mount-strategy';
  * }
  * ```
  */
-// @cpt-begin:cpt-frontx-dod-mfe-registry-mount-contracts:p1:inst-extension-domain-implementation
 export abstract class ExtensionDomainImplementation {
   /**
    * Return the mount strategy instances captured during construction.
@@ -70,4 +68,3 @@ export abstract class ExtensionDomainImplementation {
     return this.getMountStrategies();
   }
 }
-// @cpt-end:cpt-frontx-dod-mfe-registry-mount-contracts:p1:inst-extension-domain-implementation

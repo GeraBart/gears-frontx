@@ -189,7 +189,7 @@ Functional requirements define WHAT the system must do. Group by feature area or
 
 #### Microfrontend runtime registration and on-demand loading
 
-- [ ] `p1` - **ID**: `cpt-frontx-fr-mfe-runtime-registration`
+- [x] `p1` - **ID**: `cpt-frontx-fr-mfe-runtime-registration`
 
 The system **MUST** allow microfrontends to be registered with a running application and loaded on demand.
 
@@ -199,7 +199,7 @@ The system **MUST** allow microfrontends to be registered with a running applica
 
 #### Multiple microfrontends per extension domain
 
-- [ ] `p1` - **ID**: `cpt-frontx-fr-mfe-multi-occupant-domain`
+- [x] `p1` - **ID**: `cpt-frontx-fr-mfe-multi-occupant-domain`
 
 The system **MUST** allow multiple microfrontends to occupy the same extension domain when that domain permits multiple occupants.
 
@@ -219,7 +219,7 @@ The system **MUST** allow microfrontends to communicate with the host applicatio
 
 #### Microfrontend and extension validation at registration
 
-- [ ] `p1` - **ID**: `cpt-frontx-fr-mfe-type-validation`
+- [x] `p1` - **ID**: `cpt-frontx-fr-mfe-type-validation`
 
 The system **MUST** validate microfrontends and their extensions against type definitions at the time they are registered with the application.
 
@@ -271,7 +271,7 @@ The system **MUST NOT** place an upper limit on the number of microfrontends or 
 
 #### Template install from the source registry by versioned reference
 
-- [ ] `p1` - **ID**: `cpt-frontx-fr-cli-template-install`
+- [x] `p1` - **ID**: `cpt-frontx-fr-cli-template-install`
 
 The system **MUST** allow a developer to install a project template or microfrontend template from the source registry by versioned reference.
 
@@ -281,7 +281,7 @@ The system **MUST** allow a developer to install a project template or microfron
 
 #### List installed templates and their versions
 
-- [ ] `p1` - **ID**: `cpt-frontx-fr-cli-template-list`
+- [x] `p1` - **ID**: `cpt-frontx-fr-cli-template-list`
 
 The system **MUST** allow a developer to list the templates currently installed and their versions.
 
@@ -291,7 +291,7 @@ The system **MUST** allow a developer to list the templates currently installed 
 
 #### Update an installed template locally
 
-- [ ] `p1` - **ID**: `cpt-frontx-fr-cli-template-update-local`
+- [x] `p1` - **ID**: `cpt-frontx-fr-cli-template-update-local`
 
 The system **MUST** allow a developer to update an installed template to a newer version locally. This update **MUST NOT** alter any project that was scaffolded from the template.
 
@@ -311,7 +311,7 @@ The system **MUST** allow a Template Developer to validate a template's structur
 
 #### Scaffold a new project from an installed project template
 
-- [ ] `p1` - **ID**: `cpt-frontx-fr-cli-project-scaffold`
+- [x] `p1` - **ID**: `cpt-frontx-fr-cli-project-scaffold`
 
 The system **MUST** allow a Project Developer to scaffold a new project from an installed project template into a chosen target directory.
 
@@ -321,7 +321,7 @@ The system **MUST** allow a Project Developer to scaffold a new project from an 
 
 #### Scaffold a new microfrontend from a microfrontend template
 
-- [ ] `p1` - **ID**: `cpt-frontx-fr-cli-microfrontend-scaffold`
+- [x] `p1` - **ID**: `cpt-frontx-fr-cli-microfrontend-scaffold`
 
 The system **MUST** allow a Project Developer to scaffold a new microfrontend from an installed microfrontend template into a chosen target directory.
 
@@ -331,7 +331,7 @@ The system **MUST** allow a Project Developer to scaffold a new microfrontend fr
 
 #### Composed-template resolution at project scaffold
 
-- [ ] `p1` - **ID**: `cpt-frontx-fr-cli-composed-template-resolution`
+- [x] `p1` - **ID**: `cpt-frontx-fr-cli-composed-template-resolution`
 
 When a developer scaffolds a project from a project template that references microfrontend templates, the system **MUST** resolve and scaffold those referenced microfrontends as part of the same operation.
 
@@ -341,7 +341,7 @@ When a developer scaffolds a project from a project template that references mic
 
 #### Project upgrade as a reviewable change set
 
-- [ ] `p1` - **ID**: `cpt-frontx-fr-cli-project-upgrade-changeset`
+- [x] `p1` - **ID**: `cpt-frontx-fr-cli-project-upgrade-changeset`
 
 The system **MUST** allow a developer to upgrade an existing project to a newer version of the template it was scaffolded from, with the upgrade applied as a reviewable change set.
 
@@ -351,7 +351,7 @@ The system **MUST** allow a developer to upgrade an existing project to a newer 
 
 #### Review and approval of upgrade changes before they apply
 
-- [ ] `p1` - **ID**: `cpt-frontx-fr-cli-upgrade-review-approval`
+- [x] `p1` - **ID**: `cpt-frontx-fr-cli-upgrade-review-approval`
 
 The system **MUST** allow a developer to review and approve upgrade changes before they apply to project files.
 
@@ -361,7 +361,7 @@ The system **MUST** allow a developer to review and approve upgrade changes befo
 
 #### Two-namespace command organization
 
-- [ ] `p2` - **ID**: `cpt-frontx-fr-cli-two-namespace-commands`
+- [x] `p2` - **ID**: `cpt-frontx-fr-cli-two-namespace-commands`
 
 The system **MUST** organize its commands into two namespaces: one for project-level operations and one for microfrontend-level operations.
 
@@ -437,7 +437,7 @@ The AI Tooling Framework **MUST** ship zero template-specific content; template-
 
 #### Runtime performance
 
-- [ ] `p1` - **ID**: `cpt-frontx-nfr-runtime-performance`
+- [x] `p1` - **ID**: `cpt-frontx-nfr-runtime-performance`
 
 The system **MUST** meet measurable response-time and throughput targets for runtime operations.
 
@@ -467,7 +467,7 @@ The system **MUST** place no architectural upper limit on the number of microfro
 
 #### Security
 
-- [ ] `p1` - **ID**: `cpt-frontx-nfr-security`
+- [x] `p1` - **ID**: `cpt-frontx-nfr-security`
 
 **Threshold**: The platform enforces a default-deny access posture — a microfrontend receives no host state or capability beyond what its extension domain explicitly grants, and no implicit access to other microfrontends; every microfrontend and its extension passes type validation before it is admitted to run. Measured: 100% of admitted microfrontends validated at admission (zero unvalidated executions); zero access paths available to a microfrontend outside its extension domain's declared grants.
 

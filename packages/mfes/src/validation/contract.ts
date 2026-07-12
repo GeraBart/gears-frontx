@@ -6,7 +6,6 @@
  *
  * @packageDocumentation
  */
-// @cpt-algo:cpt-frontx-algo-mfe-registry-contract-matching:p1
 // @cpt-algo:cpt-frontx-algo-extension-domain-governance-contract-matching:p1
 // @cpt-dod:cpt-frontx-dod-extension-domain-governance-contract-enforcement:p1
 // @cpt-dod:cpt-frontx-dod-extension-domain-governance-default-deny:p1
@@ -52,7 +51,6 @@ export const INFRASTRUCTURE_LIFECYCLE_ACTIONS = new Set<string>([
  * 2. domain.extensionsActions ⊆ entry.actions
  * 3. entry.domainActions \ INFRASTRUCTURE_LIFECYCLE_ACTIONS ⊆ domain.actions
  */
-// @cpt-begin:cpt-frontx-algo-mfe-registry-contract-matching:p1:inst-1
 export function validateContract(
   entry: MfeEntry,
   domain: ExtensionDomain
@@ -129,7 +127,6 @@ export function validateContract(
   return { valid: true, errors: [] };
   // @cpt-end:cpt-frontx-algo-extension-domain-governance-contract-matching:p1:inst-cm-valid-return
 }
-// @cpt-end:cpt-frontx-algo-mfe-registry-contract-matching:p1:inst-1
 
 export function formatContractErrors(result: ContractValidationResult): string {
   if (result.valid) {

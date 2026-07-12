@@ -17,7 +17,6 @@
 // @cpt-dod:cpt-frontx-dod-type-substrate-port-port-contract-extraction:p1
 // @cpt-dod:cpt-frontx-dod-type-substrate-port-opaque-boundary:p1
 // @cpt-dod:cpt-frontx-dod-type-substrate-port-validation-delegation:p1
-// @cpt-dod:cpt-frontx-dod-mfe-registry-type-system-plugin:p1
 
 /**
  * Single validation issue from {@link TypeSystemPlugin.validateInstance}.

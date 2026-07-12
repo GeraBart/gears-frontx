@@ -12,10 +12,6 @@
  * @packageDocumentation
  */
 // @cpt-FEATURE:cpt-frontx-feature-mfe-registry:p2
-// @cpt-algo:cpt-frontx-algo-mfe-registry-concurrent-mount-strategy:p1
-// @cpt-algo:cpt-frontx-algo-mfe-registry-optional-mount-strategy:p1
-// @cpt-algo:cpt-frontx-algo-mfe-registry-exclusive-mount-strategy:p1
-// @cpt-dod:cpt-frontx-dod-mfe-registry-mount-contracts:p1
 // @cpt-algo:cpt-frontx-algo-extension-domain-governance-mount-execution:p2
 // @cpt-dod:cpt-frontx-dod-extension-domain-governance-default-deny:p1
 
@@ -40,7 +36,6 @@ export class ConcurrentMountStrategy extends MountStrategy {
     super();
   }
 
-  // @cpt-begin:cpt-frontx-algo-mfe-registry-concurrent-mount-strategy:p1:inst-mount
   // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-match-strategy
   // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-concurrent
   async mount(payload: ActionPayload): Promise<void> {
@@ -60,15 +55,12 @@ export class ConcurrentMountStrategy extends MountStrategy {
   }
   // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-concurrent
   // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-match-strategy
-  // @cpt-end:cpt-frontx-algo-mfe-registry-concurrent-mount-strategy:p1:inst-mount
 
-  // @cpt-begin:cpt-frontx-algo-mfe-registry-concurrent-mount-strategy:p1:inst-unmount
   override async unmount(payload: ActionPayload): Promise<void> {
     const extensionId = payload.subject;
     await this.mounter.unmount(extensionId);
     this.hooks.destroy(extensionId);
   }
-  // @cpt-end:cpt-frontx-algo-mfe-registry-concurrent-mount-strategy:p1:inst-unmount
 }
 
 /**
@@ -94,7 +86,6 @@ export class OptionalMountStrategy extends MountStrategy {
     super();
   }
 
-  // @cpt-begin:cpt-frontx-algo-mfe-registry-optional-mount-strategy:p1:inst-mount
   // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-optional-displace
   async mount(payload: ActionPayload): Promise<void> {
     const subject = payload.subject;
@@ -124,9 +115,7 @@ export class OptionalMountStrategy extends MountStrategy {
     // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-optional-mount
   }
   // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-optional-displace
-  // @cpt-end:cpt-frontx-algo-mfe-registry-optional-mount-strategy:p1:inst-mount
 
-  // @cpt-begin:cpt-frontx-algo-mfe-registry-optional-mount-strategy:p1:inst-unmount
   override async unmount(payload: ActionPayload): Promise<void> {
     const subject = payload.subject;
     const mounted = this.registry.getMountedExtensions(this.domainId);
@@ -138,7 +127,6 @@ export class OptionalMountStrategy extends MountStrategy {
     await this.mounter.unmount(subject);
     this.hooks.destroy(subject);
   }
-  // @cpt-end:cpt-frontx-algo-mfe-registry-optional-mount-strategy:p1:inst-unmount
 }
 
 /**
@@ -159,7 +147,6 @@ export class OptionalMountStrategy extends MountStrategy {
  * Cardinality matrix: REQUIRES `mount_ext`, FORBIDS `unmount_ext` in `declaration.actions`.
  */
 export class ExclusiveMountStrategy extends MountStrategy {
-  // @cpt-begin:cpt-frontx-algo-mfe-registry-exclusive-mount-strategy:p1:inst-ctor
   constructor(
     private readonly mounter: ExtensionMounter,
     private readonly hooks: ContainerHooks,
@@ -168,9 +155,7 @@ export class ExclusiveMountStrategy extends MountStrategy {
   ) {
     super();
   }
-  // @cpt-end:cpt-frontx-algo-mfe-registry-exclusive-mount-strategy:p1:inst-ctor
 
-  // @cpt-begin:cpt-frontx-algo-mfe-registry-exclusive-mount-strategy:p1:inst-mount-idempotent
   // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-exclusive-evict
   async mount(payload: ActionPayload): Promise<void> {
     const subject = payload.subject;
@@ -183,18 +168,14 @@ export class ExclusiveMountStrategy extends MountStrategy {
       return;
     }
     // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-exclusive-idempotent
-    // @cpt-end:cpt-frontx-algo-mfe-registry-exclusive-mount-strategy:p1:inst-mount-idempotent
 
-    // @cpt-begin:cpt-frontx-algo-mfe-registry-exclusive-mount-strategy:p1:inst-mount-evict
     for (const siblingId of mounted) {
       if (siblingId !== subject) {
         await this.mounter.unmount(siblingId);
         this.hooks.destroy(siblingId);
       }
     }
-    // @cpt-end:cpt-frontx-algo-mfe-registry-exclusive-mount-strategy:p1:inst-mount-evict
 
-    // @cpt-begin:cpt-frontx-algo-mfe-registry-exclusive-mount-strategy:p1:inst-mount-create-try
     // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-exclusive-mount
     const container = this.hooks.create(subject);
     try {
@@ -206,7 +187,6 @@ export class ExclusiveMountStrategy extends MountStrategy {
   }
   // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-exclusive-mount
   // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-exclusive-evict
-  // @cpt-end:cpt-frontx-algo-mfe-registry-exclusive-mount-strategy:p1:inst-mount-create-try
 
   // ExclusiveMountStrategy intentionally does NOT implement the optional
   // `unmount` method declared on the MountStrategy base class. Eviction

@@ -67,7 +67,7 @@ This decomposition breaks the FROZEN FrontX DESIGN into 17 work-package features
 - **Requirements Covered**:
 
   - [ ] `p1` - `cpt-frontx-fr-application-type-definitions`
-  - [ ] `p1` - `cpt-frontx-fr-mfe-type-validation`
+  - [x] `p1` - `cpt-frontx-fr-mfe-type-validation`
 
 - **Design Principles Covered**:
 
@@ -121,7 +121,7 @@ This decomposition breaks the FROZEN FrontX DESIGN into 17 work-package features
 
 - **Requirements Covered**:
 
-  - [ ] `p1` - `cpt-frontx-fr-mfe-runtime-registration`
+  - [x] `p1` - `cpt-frontx-fr-mfe-runtime-registration`
   - [ ] `p1` - `cpt-frontx-fr-ui-framework-agnostic`
 
 - **Design Principles Covered**:
@@ -168,7 +168,7 @@ This decomposition breaks the FROZEN FrontX DESIGN into 17 work-package features
 
 - **Requirements Covered**:
 
-  - [ ] `p1` - `cpt-frontx-fr-mfe-type-validation`
+  - [x] `p1` - `cpt-frontx-fr-mfe-type-validation`
   - [ ] `p1` - `cpt-frontx-fr-application-type-definitions`
 
 - **Design Principles Covered**:
@@ -200,7 +200,7 @@ This decomposition breaks the FROZEN FrontX DESIGN into 17 work-package features
 
 ### 2.4 [MFE Discovery & Lazy-Import Loading](features/mfe-loading/) - HIGH
 
-- [ ] `p1` - **ID**: `cpt-frontx-feature-mfe-loading`
+- [x] `p1` - **ID**: `cpt-frontx-feature-mfe-loading`
 
 - **Purpose**: Drive microfrontend discovery from an enriched published manifest (asset base, per-entry backing files, stylesheets, ordered shared deps) and resolve lazy dynamic imports through a runtime ABI that inherits the parent load's shared-dependency bindings — keeping the runtime ABI distinct from the template-bound build and deferring build cost.
 
@@ -217,8 +217,8 @@ This decomposition breaks the FROZEN FrontX DESIGN into 17 work-package features
 
 - **Requirements Covered**:
 
-  - [ ] `p1` - `cpt-frontx-fr-mfe-runtime-registration`
-  - [ ] `p1` - `cpt-frontx-nfr-runtime-performance`
+  - [x] `p1` - `cpt-frontx-fr-mfe-runtime-registration`
+  - [x] `p1` - `cpt-frontx-nfr-runtime-performance`
 
 - **Domain Model Entities**:
   - MfeEntry
@@ -465,7 +465,7 @@ This decomposition breaks the FROZEN FrontX DESIGN into 17 work-package features
 
 ### 2.10 [Template Externalization & Source-Spec Resolution](features/template-resolution/) - HIGH
 
-- [ ] `p1` - **ID**: `cpt-frontx-feature-template-resolution`
+- [x] `p1` - **ID**: `cpt-frontx-feature-template-resolution`
 
 - **Purpose**: Make the CLI (`@gears-frontx/cli`) bundle no template and resolve each template from an external source by versioned source-spec (`host:owner/repo@ref`) at runtime into a tracked local inventory — install, local list, and local update bounded to that inventory, never disturbing scaffolded projects.
 
@@ -486,24 +486,24 @@ This decomposition breaks the FROZEN FrontX DESIGN into 17 work-package features
 
 - **Requirements Covered**:
 
-  - [ ] `p1` - `cpt-frontx-fr-cli-template-install`
-  - [ ] `p1` - `cpt-frontx-fr-cli-template-list`
-  - [ ] `p1` - `cpt-frontx-fr-cli-template-update-local`
+  - [x] `p1` - `cpt-frontx-fr-cli-template-install`
+  - [x] `p1` - `cpt-frontx-fr-cli-template-list`
+  - [x] `p1` - `cpt-frontx-fr-cli-template-update-local`
 
 - **Design Principles Covered**:
 
-  - [ ] `p1` - `cpt-frontx-principle-template-agnostic-tooling`
+  - [x] `p1` - `cpt-frontx-principle-template-agnostic-tooling`
 
 - **Design Constraints Covered**:
 
-  - [ ] `p1` - `cpt-frontx-constraint-cli-template-independence`
+  - [x] `p1` - `cpt-frontx-constraint-cli-template-independence`
 
 - **Domain Model Entities**:
   - Template
 
 - **Design Components**:
 
-  - [ ] `p1` - `cpt-frontx-component-cli` (shared)
+  - [x] `p1` - `cpt-frontx-component-cli` (shared)
 
 - **API**:
   - CLI install/list/update commands
@@ -708,7 +708,7 @@ This decomposition breaks the FROZEN FrontX DESIGN into 17 work-package features
 
 - **Design Principles Covered**:
 
-  - [ ] `p1` - `cpt-frontx-principle-template-agnostic-tooling`
+  - [x] `p1` - `cpt-frontx-principle-template-agnostic-tooling`
 
 - **Design Constraints Covered**:
 

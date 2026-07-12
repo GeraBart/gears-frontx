@@ -1,4 +1,5 @@
 // @cpt-algo:cpt-frontx-algo-template-resolution-parse-spec:p1
+// @cpt-dod:cpt-frontx-dod-template-resolution-spec-parser-rejection:p1
 import type { ParseResult } from './types.js';
 
 export function parseSourceSpec(raw: string): ParseResult {
