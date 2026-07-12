@@ -45,5 +45,42 @@ export type { Namespace, NamespaceRouteInput, NamespaceRouteResult } from './nam
 
 export { scaffoldProject } from './scaffold/project.js';
 export { scaffoldMfe } from './scaffold/mfe.js';
+export { scaffoldComposedProject } from './scaffold/composed.js';
+export type { ComposedScaffoldResult } from './scaffold/composed.js';
 export { ScaffoldState } from './scaffold/state.js';
 export type { ScaffoldResult, WriteFileFn, ConflictCheckFn } from './scaffold/types.js';
+
+export { resolveComposition } from './composition/resolve.js';
+export { CompositionResolutionState } from './composition/state.js';
+export type { CompositionFileEntry, CollisionRecord, CompositionSetResult } from './composition/types.js';
+
+export { writeProvenance } from './provenance/write.js';
+export type { WriteProvenanceResult } from './provenance/write.js';
+export type { ProvenanceRecord, ProvenanceWriteFn } from './provenance/types.js';
+export { PROVENANCE_RELATIVE_PATH, provenancePath } from './provenance/contract.js';
+
+// F14 Upgrade Change-Set Engine (cpt-frontx-dod-upgrade-changeset-single-engine)
+// Both direct CLI invocation and F17 AI-driven orchestration import from these canonical modules.
+export { upgradeChangeSetReviewApproval } from './upgrade/flow.js';
+export type { UpgradeFlowResult, UpgradeFlowDeps } from './upgrade/flow.js';
+export { computeChangeSet } from './upgrade/compute.js';
+export type { ComputeResult } from './upgrade/compute.js';
+export { applyChangeSet } from './upgrade/apply.js';
+export type { ApplyResult } from './upgrade/apply.js';
+export { rollbackChangeSet } from './upgrade/rollback.js';
+export type { RollbackResult } from './upgrade/rollback.js';
+export { ChangeSetLifecycleState } from './upgrade/state.js';
+export type {
+  ChangeKind,
+  CleanEntry,
+  ConflictEntry,
+  ChangeSet,
+  ProjectSnapshot,
+  ReadProvenanceFn,
+  VersionedLookupFn,
+  ReadProjectFileFn,
+  WriteProjectFileFn,
+  RemoveProjectFileFn,
+  WriteProvenanceFn,
+  PresentAndGetApprovalFn,
+} from './upgrade/types.js';
