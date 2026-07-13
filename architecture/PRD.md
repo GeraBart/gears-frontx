@@ -383,7 +383,7 @@ The system **MUST** make FrontX-specific skills available to AI agents working i
 
 #### Template-bundled AI extensions
 
-- [ ] `p1` - **ID**: `cpt-frontx-fr-ai-template-bundle-extensions`
+- [x] `p1` - **ID**: `cpt-frontx-fr-ai-template-bundle-extensions`
 
 The system **MUST** allow a Template Developer to bundle a template with AI extensions — template-specific skills, workflows, guidelines, and reference artifacts — that operate alongside the ecosystem's base AI capabilities.
 
@@ -393,7 +393,7 @@ The system **MUST** allow a Template Developer to bundle a template with AI exte
 
 #### Automatic discovery and activation of template-supplied AI extensions
 
-- [ ] `p1` - **ID**: `cpt-frontx-fr-ai-extension-discovery-activation`
+- [x] `p1` - **ID**: `cpt-frontx-fr-ai-extension-discovery-activation`
 
 When a template is installed in a project, the system **MUST** discover the template's AI extensions and activate them for AI agents working in that project, without the developer needing to wire them up manually.
 
