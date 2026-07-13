@@ -55,6 +55,13 @@ export const skipDirectories = new Set([
   '.turbo',
   '.cache',
   '.next',
+  // Self-contained template (Phase 11 template-move): manages its own test
+  // tooling versions independently now that it is no longer a root workspace.
+  'template-standard',
+  // Bundled scaffold content shipped by the CLI (never installed/run inside
+  // this repo) — same "templates/ is not a live workspace" convention already
+  // used by eslint.config.js's `packages/**/templates/**` ignore.
+  'templates',
 ]);
 
 /**

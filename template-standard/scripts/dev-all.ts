@@ -3,7 +3,7 @@
 /**
  * Dynamic dev:all orchestrator
  *
- * Scans src/mfe_packages/ for MFE packages and automatically starts
+ * Scans src-app/mfe_packages/ for MFE packages and automatically starts
  * all found packages in parallel with the main app.
  *
  * Port discovery: reads each package's package.json preview (or dev) script
@@ -40,7 +40,7 @@ function buildPreviewCommands(mfes: MfeInfo[]): string[] {
 
   // MFE preview only (build already done in the sequential step)
   for (const mfe of mfes) {
-    commands.push(`cd src/mfe_packages/${mfe.name} && npm run preview`);
+    commands.push(`cd src-app/mfe_packages/${mfe.name} && npm run preview`);
   }
 
   return commands;
@@ -74,7 +74,7 @@ async function main() {
   const mfes = getMFEPackages();
 
   if (mfes.length === 0) {
-    console.log('ℹ️  No MFE packages found in src/mfe_packages/');
+    console.log('ℹ️  No MFE packages found in src-app/mfe_packages/');
     console.log('Starting main app only...\n');
   } else {
     console.log(`✅ Found ${mfes.length} MFE package(s):`);

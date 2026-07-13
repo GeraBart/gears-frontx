@@ -118,11 +118,12 @@ const STANDALONE_VITEST_NODE_WORKER_EXEC_ARGV_FN = `function vitestNodeWorkerExe
 // branch below covers that case by interpreting the URL as a plain path.
 const SHARED_SHARED_FILE_PATH = resolveSharedModulePath(import.meta.url);
 const REPO_ROOT = path.dirname(SHARED_SHARED_FILE_PATH);
-const SHARED_SETUP_FILE_PATH = path.join(REPO_ROOT, 'vitest.setup.ts');
+// `vitest.setup.ts` stays at the real repo root (shared ecosystem + template
+// infra, e.g. `packages/api/vitest.config.ts`); this module now lives one
+// level down inside `template-standard/`, so resolve one directory up.
+const SHARED_SETUP_FILE_PATH = path.join(REPO_ROOT, '..', 'vitest.setup.ts');
 const MFE_BASE_FILE_PATH = path.join(
   REPO_ROOT,
-  'packages',
-  'frontx-template-standard',
   'src-app',
   'mfe_packages',
   'vitest.mfe.base.ts',

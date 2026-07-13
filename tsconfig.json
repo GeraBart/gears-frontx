@@ -30,54 +30,33 @@
     "alwaysStrict": true,
     "noImplicitThis": true,
 
-    /* Path aliases */
+    /* Path aliases (ecosystem packages only — template packages carry their
+       own tsconfig in the self-contained template-standard/) */
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./packages/frontx-template-standard/src-app/*"],
-      "@/app/*": ["./packages/frontx-template-standard/src-app/app/*"],
-      "@/mfe_packages/*": ["./packages/frontx-template-standard/src-app/mfe_packages/*"],
-      "@/screensets/*": ["./packages/frontx-template-standard/src-app/screensets/*"],
-      "@gears-frontx/state": ["./packages/frontx-template-standard/packages/state/src/index.ts"],
-      "@gears-frontx/state/*": ["./packages/frontx-template-standard/packages/state/src/*"],
       "@gears-frontx/api": ["./packages/api/src/index.ts"],
       "@gears-frontx/api/*": ["./packages/api/src/*"],
-      "@gears-frontx/i18n": ["./packages/frontx-template-standard/packages/i18n/src/index.ts"],
-      "@gears-frontx/i18n/*": ["./packages/frontx-template-standard/packages/i18n/src/*"],
       "@gears-frontx/gts-plugin": ["./packages/gts-plugin/src/index.ts"],
       "@gears-frontx/gts-plugin/*": ["./packages/gts-plugin/src/*"],
-      "@gears-frontx/frontx-template-standard": ["./packages/frontx-template-standard/src/index.ts"],
-      "@gears-frontx/frontx-template-standard/*": ["./packages/frontx-template-standard/src/*"],
       "@gears-frontx/mfes": ["./packages/mfes/src/index.ts"],
       "@gears-frontx/mfes/*": ["./packages/mfes/src/*"],
       "@gears-frontx/screensets": ["./packages/screensets/src/index.ts"],
       "@gears-frontx/screensets/plugins/gts": [
         "./packages/screensets/src/mfe/plugins/gts/index.ts"
       ],
-      "@gears-frontx/screensets/*": ["./packages/screensets/src/*"],
-      "@gears-frontx/framework": ["./packages/frontx-template-standard/packages/framework/src/index.ts"],
-      "@gears-frontx/framework/*": ["./packages/frontx-template-standard/packages/framework/src/*"],
-      "@gears-frontx/react": ["./packages/frontx-template-standard/packages/react/src/index.ts"],
-      "@gears-frontx/react/*": ["./packages/frontx-template-standard/packages/react/src/*"],
-      "@gears-frontx/studio": ["./packages/frontx-template-standard/packages/studio/src/index.ts"],
-      "@gears-frontx/studio/*": ["./packages/frontx-template-standard/packages/studio/src/*"],
-      "@gears-frontx/auth": ["./packages/frontx-template-standard/packages/auth/src/index.ts"],
-      "@gears-frontx/auth/*": ["./packages/frontx-template-standard/packages/auth/src/*"],
-      "@frontx-test-utils/*": ["./packages/frontx-template-standard/src-app/__test-utils__/*"]
+      "@gears-frontx/screensets/*": ["./packages/screensets/src/*"]
     }
   },
-  // Root type-check covers the host app. Nested MFEs and package test trees run
-  // through their own tsconfig/script entry points (`type-check:mfe`, package `type-check`).
+  // Ecosystem packages only. The host app + template packages (state, i18n,
+  // framework, react, studio, auth) type-check via template-standard's own
+  // tsconfig.app.json / per-package tsconfig.json (Phase 11 template-move).
   "include": [
-    "packages/frontx-template-standard/src-app",
-    "packages/*/src",
-    "packages/frontx-template-standard/packages/*/src"
+    "packages/*/src"
   ],
   "exclude": [
     "packages/*/dist",
     "packages/*/__tests__",
     "packages/*/src/__tests__",
-    "**/__tests__",
-    "packages/frontx-template-standard/src-app/mfe_packages"
-  ],
-  "references": [{ "path": "./tsconfig.node.json" }]
+    "**/__tests__"
+  ]
 }

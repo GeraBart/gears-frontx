@@ -46,3 +46,13 @@ export interface KitSessionResult {
   errors: string[];
   warnings: string[];
 }
+
+/**
+ * Reads the actual shipped body text of a declared kit resource
+ * (cpt-frontx-adr-base-solution-ai-content-split self-validation). For a
+ * `directory` resource, returns one string per file found recursively under
+ * the resource's source path.
+ */
+export interface ResourceBodyReader {
+  read(entry: KitResourceEntry): string[];
+}

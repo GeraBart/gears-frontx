@@ -3,7 +3,7 @@
 ## Package Boundaries (always enforce)
 
 - Ecosystem packages: `mfes`, `gts-plugin`, `api`, `cli`, `cyber-pilot-kit-frontx`
-- Template packages: `frontx-template-standard` and its sub-packages
+- Template packages: the active template (external, source-spec-resolved) and its sub-packages
 - Never add ecosystem→template imports; never add template→ecosystem src-level coupling
 
 ## When adding code to ecosystem packages

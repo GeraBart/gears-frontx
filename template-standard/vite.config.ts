@@ -24,7 +24,7 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './packages/frontx-template-standard/src-app'),
+      '@': path.resolve(__dirname, './src-app'),
     },
     dedupe: ['@gears-frontx/api', '@gears-frontx/framework', '@gears-frontx/react'],
   },

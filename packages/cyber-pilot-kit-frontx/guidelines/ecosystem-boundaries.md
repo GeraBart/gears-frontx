@@ -27,5 +27,5 @@ extension contract defined in F16 (Phase 19).
 
 ## Template Territory
 
-`packages/frontx-template-standard/` and everything under it is template territory.
-No ecosystem package may import from it at the source level.
+The resolved template root (external, out of this repo) and everything under it is
+template territory. No ecosystem package may import from it at the source level.

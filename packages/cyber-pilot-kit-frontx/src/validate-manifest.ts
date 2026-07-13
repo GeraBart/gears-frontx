@@ -1,7 +1,15 @@
 // @cpt-algo:cpt-frontx-algo-ai-kit-packaging-manifest-validation:p1
-import type { KitManifest, ValidationResult, ValidationViolation } from './types.js';
+import type { KitManifest, KitResourceEntry, ResourceBodyReader, ValidationResult, ValidationViolation } from './types.js';
 
 const SOLUTION_TERMS = ['react', 'vue', 'angular', 'svelte', 'template', 'solution', 'screenset', 'studio'];
+
+// Known specific template/solution NAMES that must never appear in shipped
+// base-kit resource BODIES (cpt-frontx-adr-base-solution-ai-content-split).
+// Unlike SOLUTION_TERMS above (generic concept words checked against
+// manifest id/description only), this list targets concrete product names
+// so that legitimate abstract use of words like "template" inside base
+// guidelines/skills is not falsely flagged.
+const SPECIFIC_TEMPLATE_NAMES = ['frontx-template-standard', 'template-standard'];
 
 // @cpt-begin:cpt-frontx-algo-ai-kit-packaging-manifest-validation:p1:inst-check-required-fields
 function checkRequiredFields(manifest: unknown, violations: ValidationViolation[]): manifest is KitManifest {
@@ -105,7 +113,56 @@ function checkSolutionContent(entry: unknown, index: number, violations: Validat
 }
 // @cpt-end:cpt-frontx-algo-ai-kit-packaging-manifest-validation:p1:inst-scan-solution-content
 
-export function validateKitManifest(manifest: unknown): ValidationResult {
+// @cpt-begin:cpt-frontx-algo-ai-kit-packaging-manifest-validation:p1:inst-scan-solution-content
+function findSpecificTemplateName(text: string): string | undefined {
+  return SPECIFIC_TEMPLATE_NAMES.find((name) => {
+    const re = new RegExp(`(?<![a-z0-9])${name}(?![a-z0-9])`, 'i');
+    return re.test(text);
+  });
+}
+
+function checkResourceBodyContent(
+  entry: unknown,
+  index: number,
+  bodyReader: ResourceBodyReader | undefined,
+  violations: ValidationViolation[],
+): void {
+  if (!bodyReader) return;
+  if (typeof entry !== 'object' || entry === null) return;
+  const e = entry as KitResourceEntry;
+
+  let bodies: string[];
+  try {
+    bodies = bodyReader.read(e);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    violations.push({
+      field: `resources[${index}].source`,
+      code: 'RESOURCE_BODY_UNREADABLE',
+      message: `unable to read shipped resource body for "${e.id ?? e.source}": ${msg}`,
+    });
+    return;
+  }
+
+  // @cpt-begin:cpt-frontx-algo-ai-kit-packaging-manifest-validation:p1:inst-if-solution-content
+  for (const body of bodies) {
+    const found = findSpecificTemplateName(body);
+    if (found) {
+      // @cpt-begin:cpt-frontx-algo-ai-kit-packaging-manifest-validation:p1:inst-record-solution-violation
+      violations.push({
+        field: `resources[${index}].source`,
+        code: 'SOLUTION_SPECIFIC_CONTENT',
+        message: `shipped body of resource "${e.id}" names a specific template/solution ("${found}"), which is prohibited by cpt-frontx-adr-base-solution-ai-content-split`,
+      });
+      // @cpt-end:cpt-frontx-algo-ai-kit-packaging-manifest-validation:p1:inst-record-solution-violation
+      break;
+    }
+  }
+  // @cpt-end:cpt-frontx-algo-ai-kit-packaging-manifest-validation:p1:inst-if-solution-content
+}
+// @cpt-end:cpt-frontx-algo-ai-kit-packaging-manifest-validation:p1:inst-scan-solution-content
+
+export function validateKitManifest(manifest: unknown, bodyReader?: ResourceBodyReader): ValidationResult {
   const violations: ValidationViolation[] = [];
 
   if (!checkRequiredFields(manifest, violations)) {
@@ -124,6 +181,7 @@ export function validateKitManifest(manifest: unknown): ValidationResult {
   for (let i = 0; i < m.resources.length; i++) {
     checkEntry(m.resources[i], i, violations);
     checkSolutionContent(m.resources[i], i, violations);
+    checkResourceBodyContent(m.resources[i], i, bodyReader, violations);
   }
 
   // @cpt-begin:cpt-frontx-algo-ai-kit-packaging-manifest-validation:p1:inst-if-violations
