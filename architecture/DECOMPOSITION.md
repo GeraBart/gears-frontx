@@ -734,7 +734,7 @@ This decomposition breaks the FROZEN FrontX DESIGN into 17 work-package features
 
 ### 2.16 [Template AI-Extension Contract & Discovery/Activation](features/template-ai-extensions/) - HIGH
 
-- [ ] `p1` - **ID**: `cpt-frontx-feature-template-ai-extensions`
+- [x] `p1` - **ID**: `cpt-frontx-feature-template-ai-extensions`
 
 - **Purpose**: Define the closed-set extension-bundle contract a template's AI bundle conforms to (skills, workflows, guidelines, reference artifacts as named typed slots) and the generalized scan that discovers conforming installed-template extensions and activates them into the agent-visible capability set under explicit precedence — with no manual wiring; malformed extensions reported and not activated.
 
@@ -753,8 +753,8 @@ This decomposition breaks the FROZEN FrontX DESIGN into 17 work-package features
 
 - **Requirements Covered**:
 
-  - [ ] `p1` - `cpt-frontx-fr-ai-template-bundle-extensions`
-  - [ ] `p1` - `cpt-frontx-fr-ai-extension-discovery-activation`
+  - [x] `p1` - `cpt-frontx-fr-ai-template-bundle-extensions`
+  - [x] `p1` - `cpt-frontx-fr-ai-extension-discovery-activation`
 
 - **Domain Model Entities**:
   - AiExtension

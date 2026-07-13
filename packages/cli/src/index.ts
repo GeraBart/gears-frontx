@@ -18,6 +18,9 @@ export type { InventoryEntry, InventoryError, InventoryResult } from './inventor
 export { installCommand } from './commands/install.js';
 export type { InstallCommandResult } from './commands/install.js';
 
+// F16 cross-pillar edge (F16 <- F10): install-time extension discovery hook
+export type { DiscoveryHookContext, DiscoveryHookResult, ExtensionDiscoveryHook } from './discovery/types.js';
+
 export { listCommand } from './commands/list.js';
 export type { ListEntry } from './commands/list.js';
 
