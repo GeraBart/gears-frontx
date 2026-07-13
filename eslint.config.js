@@ -1,10 +1,12 @@
 /**
- * FrontX ESLint Configuration (Monorepo Root)
+ * FrontX ESLint Configuration (Ecosystem Root)
  *
- * After Phase 11 template-move, packages/cli is deleted.
- * Standalone rules are now inlined directly. Non-Pillar-1 packages live under
- * packages/frontx-template-standard/packages/<name>/ and app source at
- * packages/frontx-template-standard/src-app/.
+ * Covers ONLY the ecosystem packages (mfes, gts-plugin, api, cli,
+ * cyber-pilot-kit-frontx) plus screensets (Pillar-1, not yet migrated).
+ * Non-Pillar-1 packages (state, i18n, framework, react, auth, studio) and the
+ * host app now live in the self-contained top-level `template-standard/`
+ * (see Phase 11 template-move); it ships its own `eslint.config.js` and is
+ * excluded from this config's scope below.
  */
 
 import js from '@eslint/js';
@@ -100,6 +102,7 @@ export default [
       '.husky/**',
       '.artifacts/**', // Sandbox artifacts (gitignored)
       '.agents/**', // Agent infrastructure (gitignored)
+      'template-standard/**', // Self-contained template; ships its own eslint.config.js
     ],
   },
 
@@ -172,9 +175,7 @@ export default [
   //   EXCEPT @gears-frontx/mfes which is the extracted port-contract foundation.
   {
     files: [
-      'packages/frontx-template-standard/packages/state/**/*.ts',
       'packages/api/**/*.ts',
-      'packages/frontx-template-standard/packages/i18n/**/*.ts',
       'packages/screensets/**/*.ts',
     ],
     rules: {
@@ -193,169 +194,6 @@ export default [
               group: ['react', 'react-dom', 'react/*'],
               message:
                 'SDK VIOLATION: SDK packages cannot import React.',
-            },
-            {
-              group: ['@gears-frontx/*/src/**'],
-              message:
-                'MONOREPO VIOLATION: Import from package root, not internal paths.',
-            },
-            {
-              group: ['@/*'],
-              message:
-                'PACKAGE VIOLATION: Use relative imports within packages.',
-            },
-          ],
-        },
-      ],
-    },
-  },
-
-  // Framework package: Allow unknown/object types (wraps SDK with plugin architecture)
-  // Layer enforcement: Framework cannot import @gears-frontx/react or React
-  // BUT keep Flux rules for effects files
-  {
-    files: ['packages/frontx-template-standard/packages/framework/**/*.ts'],
-    ignores: ['**/effects.ts', '**/*Effects.ts', '**/effects/**/*.ts'],
-    rules: {
-      'no-restricted-syntax': 'off',
-      '@typescript-eslint/no-empty-object-type': 'off',
-      '@typescript-eslint/no-restricted-imports': [
-        'error',
-        {
-          patterns: [
-            {
-              group: ['@gears-frontx/react', '@gears-frontx/react/*'],
-              message:
-                'FRAMEWORK VIOLATION: Framework cannot import @gears-frontx/react (circular dependency).',
-            },
-            {
-              group: ['react', 'react-dom', 'react/*'],
-              message:
-                'FRAMEWORK VIOLATION: Framework cannot import React.',
-            },
-            {
-              group: ['@gears-frontx/*/src/**'],
-              message:
-                'MONOREPO VIOLATION: Import from package root, not internal paths.',
-            },
-            {
-              group: ['@/*'],
-              message:
-                'PACKAGE VIOLATION: Use relative imports within packages.',
-            },
-          ],
-        },
-      ],
-    },
-  },
-
-  // Framework effects: Keep Flux rules with layer enforcement
-  {
-    files: ['packages/frontx-template-standard/packages/framework/**/effects.ts', 'packages/frontx-template-standard/packages/framework/**/*Effects.ts'],
-    rules: {
-      '@typescript-eslint/no-empty-object-type': 'off',
-      '@typescript-eslint/no-restricted-imports': [
-        'error',
-        {
-          patterns: [
-            {
-              group: ['@gears-frontx/react', '@gears-frontx/react/*'],
-              message:
-                'FRAMEWORK VIOLATION: Framework cannot import @gears-frontx/react (circular dependency).',
-            },
-            {
-              group: ['react', 'react-dom', 'react/*'],
-              message:
-                'FRAMEWORK VIOLATION: Framework cannot import React.',
-            },
-            {
-              group: ['@gears-frontx/*/src/**'],
-              message:
-                'MONOREPO VIOLATION: Import from package root, not internal paths.',
-            },
-            {
-              group: ['@/*'],
-              message:
-                'PACKAGE VIOLATION: Use relative imports within packages.',
-            },
-          ],
-        },
-      ],
-      // Keep no-restricted-syntax (enforced by frameworkConfig Flux rules)
-    },
-  },
-
-  // Framework action files in effects directory: Allow event emission with layer enforcement
-  {
-    files: [
-      'packages/frontx-template-standard/packages/framework/**/effects/**/*Actions.ts',
-      'packages/frontx-template-standard/packages/framework/**/effects/*Actions.ts',
-      'packages/frontx-template-standard/packages/framework/**/effects/**/actions.ts',
-    ],
-    rules: {
-      'no-restricted-syntax': 'off', // Actions emit events as their primary purpose
-      'no-restricted-imports': 'off', // Action files may import from slices for direct coordination
-      '@typescript-eslint/no-empty-object-type': 'off',
-      '@typescript-eslint/no-restricted-imports': [
-        'error',
-        {
-          patterns: [
-            {
-              group: ['@gears-frontx/react', '@gears-frontx/react/*'],
-              message:
-                'FRAMEWORK VIOLATION: Framework cannot import @gears-frontx/react (circular dependency).',
-            },
-            {
-              group: ['react', 'react-dom', 'react/*'],
-              message:
-                'FRAMEWORK VIOLATION: Framework cannot import React.',
-            },
-            {
-              group: ['@gears-frontx/*/src/**'],
-              message:
-                'MONOREPO VIOLATION: Import from package root, not internal paths.',
-            },
-            {
-              group: ['@/*'],
-              message:
-                'PACKAGE VIOLATION: Use relative imports within packages.',
-            },
-          ],
-        },
-      ],
-    },
-  },
-
-  // React package: Allow unknown types for hook generics
-  // Layer enforcement: React must import from @gears-frontx/framework, not SDK packages directly
-  {
-    files: ['packages/frontx-template-standard/packages/react/**/*.ts', 'packages/frontx-template-standard/packages/react/**/*.tsx'],
-    rules: {
-      'no-restricted-syntax': 'off',
-      '@typescript-eslint/no-empty-object-type': 'off', // Allow empty EventPayloadMap for module augmentation
-      '@typescript-eslint/no-restricted-imports': [
-        'error',
-        {
-          patterns: [
-            {
-              group: ['@gears-frontx/state', '@gears-frontx/state/*'],
-              message:
-                'REACT VIOLATION: Import from @gears-frontx/framework instead.',
-            },
-            {
-              group: ['@gears-frontx/screensets', '@gears-frontx/screensets/*'],
-              message:
-                'REACT VIOLATION: Import from @gears-frontx/framework instead.',
-            },
-            {
-              group: ['@gears-frontx/api', '@gears-frontx/api/*'],
-              message:
-                'REACT VIOLATION: Import from @gears-frontx/framework instead.',
-            },
-            {
-              group: ['@gears-frontx/i18n', '@gears-frontx/i18n/*'],
-              message:
-                'REACT VIOLATION: Import from @gears-frontx/framework instead.',
             },
             {
               group: ['@gears-frontx/*/src/**'],
@@ -424,139 +262,12 @@ export default [
   // API-1 enforced via dep-cruiser rule frontx-api-1-no-solution-content (.dependency-cruiser.cjs).
   // (no ESLint-level changes needed for api boundary enforcement)
 
-  // ============ @gears-frontx/frontx-template-standard ============
-  // Allow unknown/object types: build utilities (mf-gts.ts AST transforms, lazy-import-transform)
-  // use unknown for dynamic module shapes and generic AST node types — architecturally required.
-  {
-    files: ['packages/frontx-template-standard/**/*.ts', 'packages/frontx-template-standard/**/*.tsx'],
-    rules: {
-      'no-restricted-syntax': 'off',
-      '@typescript-eslint/no-empty-object-type': 'off',
-    },
-  },
-
   // CLI package: Allow unknown types for dynamic command handling
   // Inherits monorepo boundary enforcement from catch-all block
   {
     files: ['packages/cli/**/*.ts'],
     rules: {
       'no-restricted-syntax': 'off',
-    },
-  },
-
-  // Layout components: Allow unknown types for API registry type assertions
-  {
-    files: ['packages/frontx-template-standard/src-app/layout/**/*.tsx', 'packages/frontx-template-standard/src-app/layout/**/*.ts'],
-    rules: {
-      'no-restricted-syntax': [
-        'error',
-        // Keep flux/lodash rules but remove TSUnknownKeyword restriction
-        {
-          selector: "CallExpression[callee.name='dispatch'] > MemberExpression[object.name='store']",
-          message: 'FLUX VIOLATION: Components must not call store.dispatch directly. Use actions instead.',
-        },
-      ],
-    },
-  },
-
-  // MFE packages: Each MFE is fully self-contained — no imports from host or other MFEs
-  {
-    files: ['packages/frontx-template-standard/src-app/mfe_packages/**/*.{ts,tsx}'],
-    rules: {
-      '@typescript-eslint/no-restricted-imports': [
-        'error',
-        {
-          patterns: [
-            {
-              group: ['../../app/*', '../../app/**'],
-              message:
-                'MFE VIOLATION: MFE packages cannot import from the host app. MFEs must be self-contained.',
-            },
-            {
-              group: ['../*-mfe/*', '../*-mfe/**', '../_*/*', '../_*/**'],
-              message:
-                'MFE VIOLATION: MFE packages cannot import from other MFE packages. Each MFE must be self-contained.',
-            },
-          ],
-        },
-      ],
-    },
-  },
-
-  // App: Layer enforcement for src/app/** (must use @gears-frontx/react, not L1/L2 packages)
-  {
-    files: ['packages/frontx-template-standard/src-app/app/**/*.{ts,tsx}'],
-    rules: {
-      // Use @typescript-eslint rule to catch TypeScript-specific imports (import type, side-effect imports)
-      '@typescript-eslint/no-restricted-imports': [
-        'error',
-        {
-          patterns: [
-            {
-              group: ['@gears-frontx/framework', '@gears-frontx/framework/*'],
-              message:
-                'LAYER VIOLATION: App-layer code must import from @gears-frontx/react, not directly from @gears-frontx/framework (Layer 2).',
-            },
-            {
-              group: ['@gears-frontx/state', '@gears-frontx/state/*'],
-              message:
-                'LAYER VIOLATION: App-layer code must import from @gears-frontx/react, not directly from @gears-frontx/state (Layer 1).',
-            },
-            {
-              group: ['@gears-frontx/api', '@gears-frontx/api/*'],
-              message:
-                'LAYER VIOLATION: App-layer code must import from @gears-frontx/react, not directly from @gears-frontx/api (Layer 1).',
-            },
-            {
-              group: ['@gears-frontx/i18n', '@gears-frontx/i18n/*'],
-              message:
-                'LAYER VIOLATION: App-layer code must import from @gears-frontx/react, not directly from @gears-frontx/i18n (Layer 1).',
-            },
-            {
-              group: ['@gears-frontx/screensets', '@gears-frontx/screensets/*'],
-              message:
-                'LAYER VIOLATION: App-layer code must import from @gears-frontx/react, not directly from @gears-frontx/screensets (Layer 1).',
-            },
-            // Redux term bans - use FrontX state terms instead
-            {
-              group: ['react-redux'],
-              importNames: ['useDispatch'],
-              message:
-                'REDUX VIOLATION: Do not use useDispatch from react-redux. Use useAppDispatch from @gears-frontx/react instead.',
-            },
-            {
-              group: ['react-redux'],
-              importNames: ['useSelector'],
-              message:
-                'REDUX VIOLATION: Do not use useSelector from react-redux. Use useAppSelector from @gears-frontx/react instead.',
-            },
-          ],
-        },
-      ],
-    },
-  },
-
-  // App: Studio should only be imported via FrontXProvider (auto-detection)
-  // Only App.tsx variants are allowed to import StudioOverlay directly
-  {
-    files: ['packages/frontx-template-standard/src-app/**/*'],
-    ignores: [
-      'packages/frontx-template-standard/src-app/app/App.tsx', // Monorepo demo app - renders StudioOverlay
-      'packages/frontx-template-standard/src-app/app/App.no-uikit.tsx', // --uikit none variant - renders StudioOverlay
-    ],
-    rules: {
-      'no-restricted-imports': [
-        'error',
-        {
-          patterns: [
-            {
-              group: ['@gears-frontx/studio', '@gears-frontx/studio/**'],
-              message:
-                'STUDIO VIOLATION: Studio should not be imported directly in app code. FrontXProvider auto-detects and loads Studio in development mode.',
-            },
-          ],
-        },
-      ],
     },
   },
 

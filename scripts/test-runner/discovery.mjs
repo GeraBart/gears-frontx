@@ -1,9 +1,13 @@
 /**
- * Project discovery for the monorepo test runner.
+ * Project discovery for the ecosystem monorepo test runner.
  *
- * Host app + nested MFEs stay explicit because they are not npm workspaces.
  * Root workspaces are discovered from package.json so `test:unit` packages
  * register automatically and this script cannot drift when new packages land.
+ *
+ * The host app + its nested MFEs are template territory (relocated to the
+ * self-contained `template-standard/` by Phase 11 template-move) and are no
+ * longer discovered here; `template-standard` runs its own tests via its own
+ * package.json `test:unit` script.
  */
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -16,18 +20,7 @@ import { defaultRepoRoot } from './common.mjs';
 export async function loadProjects(repoRoot = defaultRepoRoot) {
   /** @type {import('./common.mjs').Project[]} */
   const projects = [
-    // host-app owns everything under `src/` that isn't claimed by a nested MFE
-    // project below. Keeping `rootPath` at `src` (not `src/app`) closes the gap
-    // where a new host-side folder (for example `src/shared/`) would otherwise
-    // fall outside every project's test discovery.
-    //
-    // `extraRootPaths: ['scripts']` mirrors the root Vitest config, which
-    // includes `scripts/**/*.test.*` alongside `src/**`. Without it, a focused
-    // run like `npm run test:unit -- scripts/foo.test.ts` would match zero
-    // projects and silently fan out across the whole tree.
-    { kind: 'host', name: 'host-app', rootPath: 'src', extraRootPaths: ['scripts'] },
     ...(await discoverWorkspaceProjects({ repoRoot })),
-    ...(await discoverMfeProjects({ repoRoot })),
   ];
 
   return projects;

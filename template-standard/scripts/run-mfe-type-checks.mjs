@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
-const mfeRoot = path.join(repoRoot, 'src/mfe_packages');
+const mfeRoot = path.join(repoRoot, 'src-app/mfe_packages');
 const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 
 // Per-MFE type-check timeout. Type-checking rarely takes more than a couple
@@ -275,7 +275,7 @@ async function main() {
   }
 
   if (projects.length === 0) {
-    console.log('No MFE packages with package.json found under src/mfe_packages.');
+    console.log('No MFE packages with package.json found under src-app/mfe_packages.');
     return;
   }
 

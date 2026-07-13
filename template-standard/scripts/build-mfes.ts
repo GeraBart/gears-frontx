@@ -11,7 +11,7 @@ async function main() {
   const mfes = getMFEPackages();
 
   if (mfes.length === 0) {
-    console.log('ℹ️  No MFE packages found in src/mfe_packages/, skipping MFE build.');
+    console.log('ℹ️  No MFE packages found in src-app/mfe_packages/, skipping MFE build.');
     return;
   }
 

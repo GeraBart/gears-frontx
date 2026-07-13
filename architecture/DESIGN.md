@@ -284,7 +284,7 @@ The CLI (`@gears-frontx/cli`) has zero dependency on any template. It resolves t
 
 #### KIT-1 — Prefixed resource identifiers in the AI Tooling kit
 
-- [ ] `p2` - **ID**: `cpt-frontx-constraint-kit-prefixed-resource-ids`
+- [x] `p2` - **ID**: `cpt-frontx-constraint-kit-prefixed-resource-ids`
 
 Every resource identifier in the AI Tooling kit (`cyber-pilot-kit-frontx`) carries the `frontx_` prefix, so the kit's contributed skills, workflows, and reference artifacts are unambiguously namespaced within a consuming project's Cypilot environment.
 

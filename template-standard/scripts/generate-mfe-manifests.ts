@@ -381,7 +381,7 @@ function parseArgs(argv: string[]): { baseUrl: string | null } {
 
 const { baseUrl } = parseArgs(process.argv.slice(2));
 
-const MFE_PACKAGES_DIR = join(process.cwd(), 'src/mfe_packages');
+const MFE_PACKAGES_DIR = join(process.cwd(), 'src-app/mfe_packages');
 const OUTPUT_FILE = join(process.cwd(), 'public/generated-mfe-manifests.json');
 const MFE_MANIFEST_PATH = 'dist/mfe-manifest.json';
 

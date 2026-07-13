@@ -21,8 +21,9 @@ import {
 } from '../vitest.shared';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = path.resolve(HERE, '..');
-const SETUP_FILE_PATH = path.join(REPO_ROOT, 'vitest.setup.ts');
+// `vitest.setup.ts` stays at the real repo root, two levels up from this file
+// (template-standard/__tests__/ -> template-standard/ -> repo root).
+const SETUP_FILE_PATH = path.join(HERE, '..', '..', 'vitest.setup.ts');
 
 /**
  * Normalize CRLF → LF so byte-compare assertions work across platforms.

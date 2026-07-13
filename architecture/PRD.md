@@ -373,7 +373,7 @@ The system **MUST** organize its commands into two namespaces: one for project-l
 
 #### FrontX-specific skills available to AI agents
 
-- [ ] `p1` - **ID**: `cpt-frontx-fr-ai-frontx-skills`
+- [x] `p1` - **ID**: `cpt-frontx-fr-ai-frontx-skills`
 
 The system **MUST** make FrontX-specific skills available to AI agents working in a FrontX-based project, including creating new microfrontends, validating templates, generating type definitions, and other ecosystem-scoped operations.
 
@@ -413,7 +413,7 @@ The system **MUST** allow a Project Developer to use AI agents to orchestrate te
 
 #### Ecosystem-knowledge artifacts available at session start
 
-- [ ] `p1` - **ID**: `cpt-frontx-fr-ai-session-start-knowledge`
+- [x] `p1` - **ID**: `cpt-frontx-fr-ai-session-start-knowledge`
 
 The system **MUST** make ecosystem-knowledge artifacts — rules, examples, guidelines, and reference artifacts — available to AI agents at session start, with no training step required.
 
@@ -423,7 +423,7 @@ The system **MUST** make ecosystem-knowledge artifacts — rules, examples, guid
 
 #### AI Tooling Framework is template-agnostic
 
-- [ ] `p1` - **ID**: `cpt-frontx-fr-ai-tooling-template-agnostic`
+- [x] `p1` - **ID**: `cpt-frontx-fr-ai-tooling-template-agnostic`
 
 The AI Tooling Framework **MUST** ship zero template-specific content; template-specific AI capabilities **MUST** arrive exclusively via template bundles.
 

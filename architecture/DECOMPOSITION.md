@@ -683,7 +683,7 @@ This decomposition breaks the FROZEN FrontX DESIGN into 17 work-package features
 
 ### 2.15 [AI Tooling Kit Packaging & Base Content](features/ai-kit-packaging/) - HIGH
 
-- [ ] `p1` - **ID**: `cpt-frontx-feature-ai-kit-packaging`
+- [x] `p1` - **ID**: `cpt-frontx-feature-ai-kit-packaging`
 
 - **Purpose**: Ship the AI Tooling Framework as a Cypilot kit (`cyber-pilot-kit-frontx`) with a declarative manifest, every resource identifier `frontx_`-prefixed, carrying solution-agnostic base ecosystem capabilities (skills, workflows, guidelines, reference artifacts) available to agents at session start — and no solution-specific content.
 
@@ -702,9 +702,9 @@ This decomposition breaks the FROZEN FrontX DESIGN into 17 work-package features
 
 - **Requirements Covered**:
 
-  - [ ] `p1` - `cpt-frontx-fr-ai-session-start-knowledge`
-  - [ ] `p1` - `cpt-frontx-fr-ai-frontx-skills`
-  - [ ] `p1` - `cpt-frontx-fr-ai-tooling-template-agnostic`
+  - [x] `p1` - `cpt-frontx-fr-ai-session-start-knowledge`
+  - [x] `p1` - `cpt-frontx-fr-ai-frontx-skills`
+  - [x] `p1` - `cpt-frontx-fr-ai-tooling-template-agnostic`
 
 - **Design Principles Covered**:
 
@@ -712,7 +712,7 @@ This decomposition breaks the FROZEN FrontX DESIGN into 17 work-package features
 
 - **Design Constraints Covered**:
 
-  - [ ] `p1` - `cpt-frontx-constraint-kit-prefixed-resource-ids`
+  - [x] `p1` - `cpt-frontx-constraint-kit-prefixed-resource-ids`
 
 - **Domain Model Entities**:
   - Kit

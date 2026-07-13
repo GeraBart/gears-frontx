@@ -2,7 +2,8 @@
 
 /**
  * FrontX Architecture Validation Script (Monorepo)
- * Self-contained after Phase 11 template-move (packages/cli deleted).
+ * Self-contained after Phase 11 template-move (template relocated to
+ * top-level template-standard/; packages/cli preserved as the greenfield CLI).
  */
 
 import { execSync } from 'child_process';

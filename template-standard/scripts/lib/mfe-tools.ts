@@ -14,7 +14,7 @@ import { dirname, join } from 'path';
 // trusted executable), even though these scripts are dev-only.
 export const NODE_BIN_DIR = dirname(process.execPath);
 
-export const MFE_PACKAGES_DIR = join(process.cwd(), 'src/mfe_packages');
+export const MFE_PACKAGES_DIR = join(process.cwd(), 'src-app/mfe_packages');
 
 // Packages to skip (shared libraries, hidden dirs)
 const EXCLUDED_PACKAGES = new Set(['shared']);
@@ -24,7 +24,7 @@ export interface MfeInfo {
   port: number;
 }
 
-/** Scan src/mfe_packages/ and extract port from each package's scripts. */
+/** Scan src-app/mfe_packages/ and extract port from each package's scripts. */
 export function getMFEPackages(): MfeInfo[] {
   if (!existsSync(MFE_PACKAGES_DIR)) {
     return [];

@@ -20,10 +20,10 @@
 
 <!-- /toc -->
 
-- [ ] `p1` - **ID**: `cpt-frontx-featstatus-ai-kit-packaging`
+- [x] `p1` - **ID**: `cpt-frontx-featstatus-ai-kit-packaging`
 ## 1. Feature Context
 
-- [ ] `p2` - `cpt-frontx-feature-ai-kit-packaging`
+- [x] `p2` - `cpt-frontx-feature-ai-kit-packaging`
 
 ### 1.1 Overview
 

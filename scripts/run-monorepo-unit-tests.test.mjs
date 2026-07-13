@@ -676,56 +676,17 @@ describe('discoverWorkspaceProjects + loadProjects (end-to-end discovery)', () =
     expect(api.workspace).toBe('@fixture/api');
   });
 
-  it('loadProjects always prepends the host project with extra scripts root', async () => {
-    // `scripts/` is covered by the root Vitest config alongside `src/**`, so
-    // the host project has to advertise it via `extraRootPaths` for path-
-    // based inference to route scripts/*.test.* to host-app instead of
-    // falling through to the all-projects fan-out.
-    const [host] = await loadProjects(fixtureRoot);
-    expect(host).toEqual({
-      kind: 'host',
-      name: 'host-app',
-      rootPath: 'src',
-      extraRootPaths: ['scripts'],
-    });
-  });
-
-  it('loadProjects composes host + workspaces + MFEs in that order', async () => {
+  it('loadProjects composes ecosystem workspace projects only (no host/MFE)', async () => {
+    // Phase 11 template-move relocated the host app + its nested MFEs to the
+    // self-contained `template-standard/` (which runs its own tests via its
+    // own package.json). The ecosystem-side runner discovers workspace
+    // packages only; `discoverMfeProjects` remains available as a generic
+    // utility (see its own dedicated fixture tests above) but is no longer
+    // composed into `loadProjects`.
     const result = await loadProjects(fixtureRoot);
     expect(result.map((project) => `${project.kind}:${project.name}`)).toEqual([
-      'host:host-app',
       'workspace:api',
-      'mfe:demo-mfe',
     ]);
-  });
-
-  it('loadProjects picks up new MFEs dynamically (G4.1 regression guard)', async () => {
-    // Drop a second MFE into the fixture after initial setup; the dynamic
-    // discovery path MUST pick it up without a code change. This is the
-    // behavior the hard-coded MFE list couldn't offer.
-    await mkdir(path.join(fixtureRoot, 'src', 'mfe_packages', 'fresh-mfe'), {
-      recursive: true,
-    });
-    await writeFile(
-      path.join(fixtureRoot, 'src', 'mfe_packages', 'fresh-mfe', 'package.json'),
-      JSON.stringify({
-        name: '@fixture/fresh-mfe',
-        scripts: { 'test:unit': 'vitest --run' },
-      }),
-    );
-
-    try {
-      const result = await loadProjects(fixtureRoot);
-      const mfeNames = result
-        .filter((project) => project.kind === 'mfe')
-        .map((project) => project.name);
-      expect(mfeNames).toEqual(['demo-mfe', 'fresh-mfe']);
-    } finally {
-      await rm(path.join(fixtureRoot, 'src', 'mfe_packages', 'fresh-mfe'), {
-        recursive: true,
-        force: true,
-      });
-    }
   });
 });
 

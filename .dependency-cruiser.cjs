@@ -1,13 +1,19 @@
 /**
- * FrontX Dependency Cruiser Configuration (Monorepo Root)
+ * FrontX Dependency Cruiser Configuration (Ecosystem Root)
  *
- * Contains the complete dependency rules for the FrontX monorepo:
- * - Universal rules (no-circular, screenset isolation, flux architecture)
- * - Monorepo-specific package boundary rules
+ * Contains the dependency rules for the FrontX ecosystem packages (mfes,
+ * gts-plugin, api, cli, cyber-pilot-kit-frontx) plus screensets (Pillar-1,
+ * not yet migrated).
  *
- * Note: After Phase 11 template-move, non-Pillar-1 packages live under
- * packages/frontx-template-standard/packages/<name>/ and the root
- * application source lives under packages/frontx-template-standard/src-app/.
+ * The non-Pillar-1 packages (state, i18n, framework, react, auth, studio)
+ * and the host app now live in the self-contained top-level
+ * `template-standard/` (Phase 11 template-move); its template-internal
+ * layering/isolation rules moved into its own `.dependency-cruiser.cjs`.
+ * Once template-standard is no longer an npm workspace of this repo,
+ * ecosystem packages have no module-resolution path into it at all — the
+ * forbid rules below enforce that boundary generically (by shape, not by
+ * naming the template's path), so they keep working if the template's
+ * location or identity changes.
  */
 
 module.exports = {
@@ -19,84 +25,6 @@ module.exports = {
       from: { path: '^(?!.*node_modules)' },
       to: { circular: true },
       comment: 'Circular dependencies create tight coupling and make code harder to reason about.',
-    },
-
-    // ============ L4 SCREENSET: ISOLATION RULES ============
-    {
-      name: 'no-cross-mfe-imports',
-      severity: 'error',
-      from: { path: '^packages/frontx-template-standard/src-app/mfe_packages/([^/]+)/' },
-      to: {
-        path: '^packages/frontx-template-standard/src-app/mfe_packages/[^/]+/',
-        pathNot: [
-          '^packages/frontx-template-standard/src-app/mfe_packages/$1/',
-          '^packages/frontx-template-standard/src-app/mfe_packages/shared/',
-        ],
-      },
-      comment: 'MFE packages must not import from other MFE packages (vertical slice isolation).',
-    },
-    {
-      name: 'no-circular-screenset-deps',
-      severity: 'warn',
-      from: { path: '^packages/frontx-template-standard/src-app/screensets/([^/]+)/' },
-      to: {
-        path: '^packages/frontx-template-standard/src-app/screensets/$1/',
-        circular: true,
-      },
-      comment: 'Avoid circular dependencies within screenset modules.',
-    },
-
-    // ============ L4 SCREENSET: FLUX ARCHITECTURE RULES ============
-    {
-      name: 'flux-no-actions-in-effects-folder',
-      severity: 'error',
-      from: { path: '/effects/' },
-      to: { path: '/actions/' },
-      comment: 'FLUX VIOLATION: Effects folder cannot import from actions folder.',
-    },
-    {
-      name: 'flux-no-effects-in-actions-folder',
-      severity: 'error',
-      from: { path: '/actions/' },
-      to: { path: '/effects/' },
-      comment: 'FLUX VIOLATION: Actions folder cannot import from effects folder.',
-    },
-
-    // ============ MONOREPO PACKAGE RULES ============
-    {
-      name: 'no-internal-package-imports',
-      severity: 'error',
-      from: { path: '^packages/frontx-template-standard/src-app/' },
-      to: { path: '^packages/[^/]+/src/' },
-      comment: 'MONOREPO VIOLATION: App cannot import package internals. Use package root exports.'
-    },
-    {
-      name: 'sdk-no-framework-import',
-      severity: 'error',
-      from: { path: '^packages/(screensets|api)/|^packages/frontx-template-standard/packages/(state|i18n)/' },
-      to: { path: '^packages/frontx-template-standard/packages/(framework|react)/' },
-      comment: 'SDK VIOLATION: SDK packages (L1) cannot import from Framework (L2) or React (L3) layers.'
-    },
-    {
-      name: 'framework-no-react',
-      severity: 'error',
-      from: { path: '^packages/frontx-template-standard/packages/framework/' },
-      to: { path: '^packages/frontx-template-standard/packages/react/' },
-      comment: 'LAYER VIOLATION: Framework (L2) cannot import React (L3).'
-    },
-    {
-      name: 'react-no-sdk',
-      severity: 'error',
-      from: { path: '^packages/frontx-template-standard/packages/react/' },
-      to: { path: '^packages/(screensets|api)/|^packages/frontx-template-standard/packages/(state|i18n)/' },
-      comment: 'LAYER VIOLATION: React (L3) cannot import SDK (L1) directly. Use @gears-frontx/framework re-exports.'
-    },
-    {
-      name: 'packages-no-src-import',
-      severity: 'error',
-      from: { path: '^packages/' },
-      to: { path: '^packages/frontx-template-standard/src-app/' },
-      comment: 'PACKAGE VIOLATION: Packages cannot import from app src-app/. Packages must be self-contained.'
     },
 
     // ============ @gears-frontx/mfes BOUNDARY STUBS ============
@@ -197,7 +125,7 @@ module.exports = {
       name: 'frontx-gts-plugin-2-no-solution-schemas',
       severity: 'error',
       from: { path: '^packages/gts-plugin/' },
-      to: { path: '^packages/frontx-template-standard/' },
+      to: { path: '^(?!packages/|node_modules/|internal/|scripts/).+' },
       comment: 'cpt-frontx-constraint-gts-plugin-excludes-solution-schemas (GTS-PLUGIN-2): @gears-frontx/gts-plugin must not import solution-specific schemas.',
     },
     // @cpt-end:cpt-frontx-constraint-gts-plugin-excludes-solution-schemas:p10:inst-dep-cruiser-rule
@@ -206,8 +134,8 @@ module.exports = {
     {
       name: 'frontx-api-1-no-solution-content',
       severity: 'error',
-      from: { path: '^packages/api/', pathNot: '__tests__' },
-      to: { path: '^packages/frontx-template-standard/' },
+      from: { path: '^packages/api/src/', pathNot: '__tests__' },
+      to: { path: '^(?!packages/|node_modules/|internal/|scripts/).+' },
       comment: 'cpt-frontx-constraint-api-no-solution-content (API-1): @gears-frontx/api production surface must contain no solution-specific content.',
     },
     // @cpt-end:cpt-frontx-constraint-api-no-solution-content:p10:inst-dep-cruiser-rule
@@ -219,7 +147,7 @@ module.exports = {
       name: 'frontx-cli-1-no-bundled-template-content',
       severity: 'error',
       from: { path: '^packages/cli/' },
-      to: { path: '^packages/frontx-template-standard/' },
+      to: { path: '^(?!packages/|node_modules/|internal/|scripts/).+' },
       comment: 'cpt-frontx-constraint-cli-template-independence (CLI-1): @gears-frontx/cli must have zero dependency on bundled template content/assets/packages. Templates are resolved by source-spec at runtime.',
     },
     // @cpt-end:cpt-frontx-constraint-cli-template-independence:p17:inst-dep-cruiser-rule
