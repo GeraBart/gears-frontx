@@ -3,25 +3,17 @@
 // @cpt-dod:cpt-frontx-dod-ai-upgrade-orchestration-flow-complete:p1
 // @cpt-dod:cpt-frontx-dod-ai-upgrade-orchestration-gate-enforced:p1
 // @cpt-dod:cpt-frontx-dod-ai-upgrade-orchestration-single-engine:p1
+//
+// PLAN CORRECTION (2026-07-14) — REOPENED: no import from the CLI package,
+// no linking of `computeChangeSet`/`applyChangeSet`. `invokeUpgradeCommand` is
+// a test double for the `frontx upgrade` COMMAND/INVOCATION SURFACE: it
+// receives a callback that this orchestration layer uses to enrich the raw
+// change set and return a review decision, mirroring exactly how a real
+// process-boundary adapter (spawning the `frontx` CLI, parsing its JSON
+// output) would be wired without ever importing the CLI package.
 import { describe, it, expect, vi } from 'vitest';
-import { computeChangeSet, applyChangeSet, InventoryState, type InventoryEntry } from '@gears-frontx/cli';
 import { orchestrateAiDrivenUpgrade, type OrchestrationDeps } from '../orchestrate.js';
-import type { ProvenanceRecord } from '../types.js';
-
-function makeEntry(
-  name: string,
-  version: string,
-  files: Array<{ path: string; content: string }>,
-): InventoryEntry {
-  const manifest = { name, version, kind: 'project-template', files };
-  return {
-    name,
-    source: `local:${name}`,
-    ref: version,
-    status: InventoryState.INSTALLED,
-    content: JSON.stringify(manifest),
-  };
-}
+import type { ChangeSet, InvokeUpgradeCommandFn, ProvenanceRecord, ReviewDecision } from '../types.js';
 
 const PROJ_ROOT = '/proj';
 
@@ -31,90 +23,130 @@ const PROVENANCE: ProvenanceRecord = {
   sourceSpec: 'local:my-template',
 };
 
-const BASELINE = makeEntry('my-template', '1.0.0', [{ path: 'src/App.tsx', content: 'v1 content' }]);
-const TARGET = makeEntry('my-template', '2.0.0', [{ path: 'src/App.tsx', content: 'v2 content' }]);
+const RESOLVABLE_CHANGESET: ChangeSet = {
+  templateIdentity: 'my-template',
+  baselineVersion: '1.0.0',
+  targetVersion: '2.0.0',
+  clean: [{ kind: 'modify', path: 'src/App.tsx', content: 'v2 content' }],
+  conflicts: [],
+};
 
-function makeLookup(entries: InventoryEntry[]) {
-  return (name: string, version: string) => entries.find((e) => e.name === name && e.ref === version);
+// Test double for the `frontx upgrade` command/invocation surface. Mirrors
+// the real command's contract: it computes (or fails to compute) a change
+// set, hands it to `onChangeSet` for review, and applies only on 'approved'.
+function makeCommandInvoker(options: {
+  resolvable?: boolean;
+  applyFails?: boolean;
+  changeSet?: ChangeSet;
+}): { invoke: InvokeUpgradeCommandFn; appliedSpy: ReturnType<typeof vi.fn> } {
+  const appliedSpy = vi.fn();
+  const invoke: InvokeUpgradeCommandFn = async (_projectRoot, _targetVersion, onChangeSet) => {
+    if (options.resolvable === false) {
+      return { ok: false, status: 'resolution-failed', message: 'Target template not found in local inventory.' };
+    }
+    const decision: ReviewDecision = await onChangeSet(options.changeSet ?? RESOLVABLE_CHANGESET);
+    if (decision === 'approved') {
+      if (options.applyFails) {
+        return { ok: false, status: 'apply-failed', message: 'Could not write project files.' };
+      }
+      appliedSpy();
+      return { ok: true, status: 'applied' };
+    }
+    return { ok: true, status: 'declined' };
+  };
+  return { invoke, appliedSpy };
 }
 
 function baseDeps(overrides: Partial<OrchestrationDeps> = {}): OrchestrationDeps {
+  const { invoke } = makeCommandInvoker({});
   return {
     readProvenance: vi.fn().mockResolvedValue(PROVENANCE),
-    computeChangeSet,
-    applyChangeSet,
-    lookupByVersion: makeLookup([BASELINE, TARGET]),
-    readProjectFile: vi.fn().mockResolvedValue(null),
-    writeProjectFile: vi.fn().mockResolvedValue(undefined),
-    removeProjectFile: vi.fn().mockResolvedValue(undefined),
-    writeProvenance: vi.fn().mockResolvedValue(undefined),
+    invokeUpgradeCommand: invoke,
     presentEnrichedReview: vi.fn().mockResolvedValue('declined'),
     ...overrides,
   };
 }
 
-describe('orchestrateAiDrivenUpgrade (F17 — drives the SINGLE F14 engine, never a second one)', () => {
+describe('orchestrateAiDrivenUpgrade (F17 — drives the SINGLE F14 engine through its command surface, never a second one)', () => {
   // inst-request-upgrade / inst-read-provenance / inst-check-provenance / inst-provenance-missing
-  it('returns provenance-missing and performs no engine invocation when provenance is absent', async () => {
-    const computeSpy = vi.fn();
-    const deps = baseDeps({ readProvenance: vi.fn().mockResolvedValue(null), computeChangeSet: computeSpy });
+  it('returns provenance-missing and never invokes the command surface when provenance is absent', async () => {
+    const { invoke } = makeCommandInvoker({});
+    const invokeSpy = vi.fn(invoke);
+    const deps = baseDeps({ readProvenance: vi.fn().mockResolvedValue(null), invokeUpgradeCommand: invokeSpy });
     const result = await orchestrateAiDrivenUpgrade(PROJ_ROOT, '2.0.0', deps);
     expect(result.status).toBe('provenance-missing');
-    expect(computeSpy).not.toHaveBeenCalled();
+    expect(invokeSpy).not.toHaveBeenCalled();
   });
 
   // inst-invoke-enrichment / inst-check-changeset / inst-empty-changeset
-  it('returns empty-changeset and presents no review when the engine change set is empty/unresolvable', async () => {
+  it('returns empty-changeset and presents no review when the command surface cannot resolve the change set', async () => {
+    const { invoke } = makeCommandInvoker({ resolvable: false });
     const presentSpy = vi.fn();
-    const deps = baseDeps({
-      lookupByVersion: makeLookup([BASELINE]), // target not resolvable
-      presentEnrichedReview: presentSpy,
-    });
+    const deps = baseDeps({ invokeUpgradeCommand: invoke, presentEnrichedReview: presentSpy });
     const result = await orchestrateAiDrivenUpgrade(PROJ_ROOT, '9.9.9', deps);
     expect(result.status).toBe('empty-changeset');
     expect(presentSpy).not.toHaveBeenCalled();
   });
 
+  // inst-invoke-enrichment / inst-check-changeset / inst-empty-changeset — resolved but empty change set
+  it('returns empty-changeset when the resolved change set has no clean/conflict entries', async () => {
+    const emptyChangeSet: ChangeSet = { ...RESOLVABLE_CHANGESET, clean: [], conflicts: [] };
+    const { invoke } = makeCommandInvoker({ changeSet: emptyChangeSet });
+    const presentSpy = vi.fn();
+    const deps = baseDeps({ invokeUpgradeCommand: invoke, presentEnrichedReview: presentSpy });
+    const result = await orchestrateAiDrivenUpgrade(PROJ_ROOT, '1.0.0', deps);
+    expect(result.status).toBe('empty-changeset');
+    expect(presentSpy).not.toHaveBeenCalled();
+  });
+
   // inst-present-review / inst-gate-approve / inst-engine-apply / inst-update-provenance / inst-return-applied
-  it('approval triggers the F14 engine apply and updates provenance to the newer version', async () => {
-    const writeProjectFile = vi.fn().mockResolvedValue(undefined);
-    const writeProvenance = vi.fn().mockResolvedValue(undefined);
+  it('approval triggers the command surface\'s engine apply exactly once', async () => {
+    const { invoke, appliedSpy } = makeCommandInvoker({});
     const deps = baseDeps({
+      invokeUpgradeCommand: invoke,
       presentEnrichedReview: vi.fn().mockResolvedValue('approved'),
-      writeProjectFile,
-      writeProvenance,
     });
     const result = await orchestrateAiDrivenUpgrade(PROJ_ROOT, '2.0.0', deps);
     expect(result.status).toBe('applied');
-    expect(writeProjectFile).toHaveBeenCalled();
-    expect(writeProvenance).toHaveBeenCalled();
-    const [, provenanceContent] = writeProvenance.mock.calls[0] as [string, string];
-    expect(JSON.parse(provenanceContent).scaffoldedFromVersion).toBe('2.0.0');
+    expect(appliedSpy).toHaveBeenCalledTimes(1);
+    if (result.status === 'applied') {
+      expect(result.reviewPackage.impactAnalysis.entries.length).toBeGreaterThan(0);
+    }
+  });
+
+  // inst-gate-approve / apply-failed path
+  it('surfaces apply-failed from the command surface without treating it as applied', async () => {
+    const { invoke, appliedSpy } = makeCommandInvoker({ applyFails: true });
+    const deps = baseDeps({
+      invokeUpgradeCommand: invoke,
+      presentEnrichedReview: vi.fn().mockResolvedValue('approved'),
+    });
+    const result = await orchestrateAiDrivenUpgrade(PROJ_ROOT, '2.0.0', deps);
+    expect(result.status).toBe('apply-failed');
+    expect(appliedSpy).not.toHaveBeenCalled();
   });
 
   // inst-gate-decline / inst-no-write / inst-return-declined — the review gate stands unconditionally
-  it('decline writes no project files and leaves provenance unchanged', async () => {
-    const writeProjectFile = vi.fn();
-    const removeProjectFile = vi.fn();
-    const writeProvenance = vi.fn();
+  it('decline never triggers the command surface\'s engine apply', async () => {
+    const { invoke, appliedSpy } = makeCommandInvoker({});
     const deps = baseDeps({
+      invokeUpgradeCommand: invoke,
       presentEnrichedReview: vi.fn().mockResolvedValue('declined'),
-      writeProjectFile,
-      removeProjectFile,
-      writeProvenance,
     });
     const result = await orchestrateAiDrivenUpgrade(PROJ_ROOT, '2.0.0', deps);
     expect(result.status).toBe('declined');
-    expect(writeProjectFile).not.toHaveBeenCalled();
-    expect(removeProjectFile).not.toHaveBeenCalled();
-    expect(writeProvenance).not.toHaveBeenCalled();
+    expect(appliedSpy).not.toHaveBeenCalled();
   });
 
-  // Single-engine invariant: the exact @gears-frontx/cli functions are the ones driven
-  it('drives the exact @gears-frontx/cli computeChangeSet/applyChangeSet functions (no reimplementation)', async () => {
-    const deps = baseDeps({ presentEnrichedReview: vi.fn().mockResolvedValue('approved') });
-    expect(deps.computeChangeSet).toBe(computeChangeSet);
-    expect(deps.applyChangeSet).toBe(applyChangeSet);
+  // Single-engine / command-surface invariant: driven exactly once, never a second implementation
+  it('drives the injected command surface exactly once per upgrade (no reimplementation, no duplicate invocation)', async () => {
+    const { invoke } = makeCommandInvoker({});
+    const invokeSpy = vi.fn(invoke);
+    const deps = baseDeps({
+      invokeUpgradeCommand: invokeSpy,
+      presentEnrichedReview: vi.fn().mockResolvedValue('approved'),
+    });
     await orchestrateAiDrivenUpgrade(PROJ_ROOT, '2.0.0', deps);
+    expect(invokeSpy).toHaveBeenCalledTimes(1);
   });
 });

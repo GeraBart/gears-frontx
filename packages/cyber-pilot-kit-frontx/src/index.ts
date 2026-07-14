@@ -41,22 +41,32 @@ export {
 export type { PrePublishValidationResult } from './extensions/discover-and-activate.js';
 
 // F17 AI-Driven Upgrade Orchestration
+// PLAN CORRECTION (2026-07-14) — REOPENED: no export here names or re-exports
+// anything from the CLI package; the engine is reached only through the
+// injected `InvokeUpgradeCommandFn` (the `frontx upgrade` command surface).
 export {
   computeChangeImpact,
   computeDownstreamEffects,
   enrichUpgradeChangeSet,
 } from './upgrade-orchestration/enrich.js';
-export type { EnrichmentDeps } from './upgrade-orchestration/enrich.js';
 export { OrchestrationLifecycleState } from './upgrade-orchestration/state.js';
 export type { OrchestrationLifecycleStateValue } from './upgrade-orchestration/state.js';
 export { orchestrateAiDrivenUpgrade } from './upgrade-orchestration/orchestrate.js';
 export type { OrchestrationDeps, OrchestrationResult } from './upgrade-orchestration/orchestrate.js';
 export type {
+  ChangeSet,
+  ChangeKind,
+  CleanEntry,
+  ConflictEntry,
+  ProvenanceRecord,
   ChangeImpactAnalysis,
   ChangeImpactEntry,
   DownstreamEffectAssessment,
   EnrichedReviewPackage,
   EnrichmentResult,
+  InvokeUpgradeCommandFn,
   PresentEnrichedReviewFn,
+  ReadProvenanceFn,
   ReviewDecision,
+  UpgradeCommandJsonResult,
 } from './upgrade-orchestration/types.js';

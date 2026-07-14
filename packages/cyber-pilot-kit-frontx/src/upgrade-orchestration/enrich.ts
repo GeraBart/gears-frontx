@@ -1,25 +1,16 @@
 // @cpt-algo:cpt-frontx-algo-ai-upgrade-orchestration-enrich:p1
 // @cpt-dod:cpt-frontx-dod-ai-upgrade-orchestration-flow-complete:p1
 // @cpt-dod:cpt-frontx-dod-ai-upgrade-orchestration-single-engine:p1
-import type {
-  ChangeSet,
-  ChangeImpactAnalysis,
-  ChangeImpactEntry,
-  DownstreamEffectAssessment,
-  EnrichmentResult,
-  ProvenanceRecord,
-  ComputeChangeSetFn,
-  VersionedLookupFn,
-  ReadProjectFileFn,
-} from './types.js';
-
-export interface EnrichmentDeps {
-  // Invokes the SINGLE F14 change-set engine — never a second implementation
-  // (cpt-frontx-dod-ai-upgrade-orchestration-single-engine).
-  computeChangeSet: ComputeChangeSetFn;
-  lookupByVersion: VersionedLookupFn;
-  readProjectFile: ReadProjectFileFn;
-}
+//
+// PLAN CORRECTION (2026-07-14) — REOPENED: this module no longer invokes the
+// F14 engine directly (that would require importing the CLI package,
+// forbidden by DESIGN §3.4 / ADR-0027). The engine is invoked, through the
+// `frontx upgrade` command/invocation surface, by `orchestrate.ts`
+// (inst-extract-provenance / inst-invoke-engine), which passes the raw
+// change set the command surface computed into this module's pure
+// enrichment step (inst-receive-changeset onward) — a plain function with no
+// engine dependency of its own.
+import type { ChangeSet, ChangeImpactAnalysis, ChangeImpactEntry, DownstreamEffectAssessment, EnrichmentResult } from './types.js';
 
 // @cpt-begin:cpt-frontx-algo-ai-upgrade-orchestration-enrich:p1:inst-impact-analysis
 /**
@@ -59,55 +50,29 @@ export function computeDownstreamEffects(changeSet: ChangeSet): DownstreamEffect
 }
 // @cpt-end:cpt-frontx-algo-ai-upgrade-orchestration-enrich:p1:inst-downstream-assess
 
-// @cpt-begin:cpt-frontx-algo-ai-upgrade-orchestration-enrich:p1:inst-extract-provenance
 /**
- * Drives the single F14 CLI change-set engine and enriches its output with
- * change-impact analysis and downstream-effect assessment
- * (cpt-frontx-algo-ai-upgrade-orchestration-enrich).
+ * Enriches an already-computed change set (received from the `frontx
+ * upgrade` command surface, cpt-frontx-algo-ai-upgrade-orchestration-enrich
+ * `inst-receive-changeset`) with change-impact analysis and downstream-effect
+ * assessment. Contains no engine logic of its own — it is a pure function
+ * over the change set the SINGLE F14 engine produced
+ * (cpt-frontx-dod-ai-upgrade-orchestration-single-engine).
  */
-export async function enrichUpgradeChangeSet(
-  projectRoot: string,
-  provenance: ProvenanceRecord,
-  targetVersion: string,
-  deps: EnrichmentDeps,
-): Promise<EnrichmentResult> {
-  // Provenance was already read by the caller (flow inst-read-provenance) — reuse
-  // it here rather than re-reading, and hand it to the engine's own compute step.
-  const { templateIdentity, scaffoldedFromVersion } = provenance;
-  // @cpt-end:cpt-frontx-algo-ai-upgrade-orchestration-enrich:p1:inst-extract-provenance
-
-  // @cpt-begin:cpt-frontx-algo-ai-upgrade-orchestration-enrich:p1:inst-invoke-engine
-  const computeResult = await deps.computeChangeSet(projectRoot, targetVersion, {
-    readProvenance: async () => provenance,
-    lookupByVersion: deps.lookupByVersion,
-    readProjectFile: deps.readProjectFile,
-  });
-  // @cpt-end:cpt-frontx-algo-ai-upgrade-orchestration-enrich:p1:inst-invoke-engine
-
-  // @cpt-begin:cpt-frontx-algo-ai-upgrade-orchestration-enrich:p1:inst-receive-changeset
+export function enrichUpgradeChangeSet(changeSet: ChangeSet): EnrichmentResult {
   // @cpt-begin:cpt-frontx-algo-ai-upgrade-orchestration-enrich:p1:inst-check-empty
-  if (!computeResult.ok) {
-    // @cpt-begin:cpt-frontx-algo-ai-upgrade-orchestration-enrich:p1:inst-empty-signal
-    return { status: 'empty' };
-    // @cpt-end:cpt-frontx-algo-ai-upgrade-orchestration-enrich:p1:inst-empty-signal
-  }
-
-  const { changeSet } = computeResult;
   if (changeSet.clean.length === 0 && changeSet.conflicts.length === 0) {
     // @cpt-begin:cpt-frontx-algo-ai-upgrade-orchestration-enrich:p1:inst-empty-signal
     return { status: 'empty' };
     // @cpt-end:cpt-frontx-algo-ai-upgrade-orchestration-enrich:p1:inst-empty-signal
   }
   // @cpt-end:cpt-frontx-algo-ai-upgrade-orchestration-enrich:p1:inst-check-empty
-  // @cpt-end:cpt-frontx-algo-ai-upgrade-orchestration-enrich:p1:inst-receive-changeset
 
-  // Extracted values are used only to select the engine invocation above; kept
-  // referenced for observability at the call boundary.
-  void templateIdentity;
-  void scaffoldedFromVersion;
-
+  // @cpt-begin:cpt-frontx-algo-ai-upgrade-orchestration-enrich:p1:inst-impact-analysis
   const impactAnalysis = computeChangeImpact(changeSet);
+  // @cpt-end:cpt-frontx-algo-ai-upgrade-orchestration-enrich:p1:inst-impact-analysis
+  // @cpt-begin:cpt-frontx-algo-ai-upgrade-orchestration-enrich:p1:inst-downstream-assess
   const downstreamAssessment = computeDownstreamEffects(changeSet);
+  // @cpt-end:cpt-frontx-algo-ai-upgrade-orchestration-enrich:p1:inst-downstream-assess
 
   // @cpt-begin:cpt-frontx-algo-ai-upgrade-orchestration-enrich:p1:inst-combine-results
   const enriched = { changeSet, impactAnalysis, downstreamAssessment };
