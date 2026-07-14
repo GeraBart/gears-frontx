@@ -27,9 +27,9 @@ function makeEntry(
   return { name, source: `github:acme/${name}@v1.0.0`, ref: 'v1.0.0', status: InventoryState.INSTALLED, content: manifest };
 }
 
-const noConflict = vi.fn<[string], Promise<boolean>>().mockResolvedValue(false);
-const withConflict = vi.fn<[string], Promise<boolean>>().mockResolvedValue(true);
-const noWrite = vi.fn<[string, string], Promise<void>>().mockResolvedValue(undefined);
+const noConflict = vi.fn<(path: string) => Promise<boolean>>().mockResolvedValue(false);
+const withConflict = vi.fn<(path: string) => Promise<boolean>>().mockResolvedValue(true);
+const noWrite = vi.fn<(path: string, content: string) => Promise<void>>().mockResolvedValue(undefined);
 
 describe('NAMESPACE_REGISTRY — namespace surface (cpt-frontx-interface-cli)', () => {
   // (a) project-level and microfrontend-level namespaces are the two first-class namespaces
