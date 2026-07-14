@@ -142,10 +142,15 @@ module.exports = {
     // ============ PILLAR-2 BOUNDARY ENFORCEMENT (Phase 17) ============
 
     // @cpt-begin:cpt-frontx-constraint-cli-template-independence:p17:inst-dep-cruiser-rule
+    // Scoped to SHIPPED source only (packages/cli/src, excluding the
+    // auto-generated version registry). packages/cli/templates/ and
+    // packages/cli/template-sources/ are fixture/scratch dirs (NOT shipped —
+    // package.json "files": ["dist"]) that legitimately contain template
+    // names/content; they must never trip the CLI-1 boundary check.
     {
       name: 'frontx-cli-1-no-bundled-template-content',
       severity: 'error',
-      from: { path: '^packages/cli/' },
+      from: { path: '^packages/cli/src/', pathNot: '^packages/cli/src/generated/' },
       to: { path: '^(?!packages/|node_modules/|internal/|scripts/).+' },
       comment: 'cpt-frontx-constraint-cli-template-independence (CLI-1): @gears-frontx/cli must have zero dependency on bundled template content/assets/packages. Templates are resolved by source-spec at runtime.',
     },
@@ -155,7 +160,7 @@ module.exports = {
     doNotFollow: '^node_modules',
     exclude: {
       dynamic: true,
-      path: 'packages/.*/dist|node_modules|packages/mfes/mfes',
+      path: 'packages/.*/dist|node_modules|packages/mfes/mfes|packages/cli/templates|packages/cli/template-sources',
     },
   },
 };
