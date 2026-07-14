@@ -61,8 +61,8 @@
   "license": "Apache-2.0",
   "dependencies": {
     "@gears-frontx/frontx-template-standard": "0.3.0-alpha.0",
-    "@gears-frontx/gts-plugin": "0.3.0-alpha.0",
-    "@gears-frontx/mfes": "0.3.0-alpha.0",
+    "@gears-frontx/gts-plugin": "file:../../../packages/gts-plugin",
+    "@gears-frontx/mfes": "file:../../../packages/mfes",
     "@globaltypesystem/gts-ts": "^0.3.0"
   }
 }

@@ -39,12 +39,7 @@
       "@gears-frontx/gts-plugin": ["./packages/gts-plugin/src/index.ts"],
       "@gears-frontx/gts-plugin/*": ["./packages/gts-plugin/src/*"],
       "@gears-frontx/mfes": ["./packages/mfes/src/index.ts"],
-      "@gears-frontx/mfes/*": ["./packages/mfes/src/*"],
-      "@gears-frontx/screensets": ["./packages/screensets/src/index.ts"],
-      "@gears-frontx/screensets/plugins/gts": [
-        "./packages/screensets/src/mfe/plugins/gts/index.ts"
-      ],
-      "@gears-frontx/screensets/*": ["./packages/screensets/src/*"]
+      "@gears-frontx/mfes/*": ["./packages/mfes/src/*"]
     }
   },
   // Ecosystem packages only. The host app + template packages (state, i18n,

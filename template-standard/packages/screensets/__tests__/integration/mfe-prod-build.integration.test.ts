@@ -19,8 +19,11 @@ import { MfeHandlerMF } from '../../src/mfe/handler/mf-handler';
 
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = join(__dirname, '..', '..', '..', '..');
-const BLANK_MFE_ROOT = join(REPO_ROOT, 'template-standard', 'src-app', 'mfe_packages', '_blank-mfe');
+// Phase 11: screensets now lives at template-standard/packages/screensets/ (one
+// level deeper than its pre-relocation packages/screensets/), so 4 levels up
+// from __dirname resolves to template-standard/ directly, not the repo root.
+const TEMPLATE_ROOT = join(__dirname, '..', '..', '..', '..');
+const BLANK_MFE_ROOT = join(TEMPLATE_ROOT, 'src-app', 'mfe_packages', '_blank-mfe');
 /** Root of the build output; chunk paths in manifests are relative to this. */
 const DIST_DIR = join(BLANK_MFE_ROOT, 'dist');
 /** Raw @module-federation/vite output — used for expose chunk verification */

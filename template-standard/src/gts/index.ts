@@ -12,7 +12,7 @@
  * @packageDocumentation
  */
 
-import type { JSONSchema } from '@gears-frontx/screensets';
+import type { JSONSchema } from '@gears-frontx/gts-plugin';
 import themeSchemaJson from './schemas/theme.v1.json';
 import languageSchemaJson from './schemas/language.v1.json';
 import extensionScreenSchemaJson from './schemas/extension_screen.v1.json';
