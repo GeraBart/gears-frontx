@@ -39,3 +39,24 @@ export {
   discoverAndActivateForInstalledTemplate,
 } from './extensions/discover-and-activate.js';
 export type { PrePublishValidationResult } from './extensions/discover-and-activate.js';
+
+// F17 AI-Driven Upgrade Orchestration
+export {
+  computeChangeImpact,
+  computeDownstreamEffects,
+  enrichUpgradeChangeSet,
+} from './upgrade-orchestration/enrich.js';
+export type { EnrichmentDeps } from './upgrade-orchestration/enrich.js';
+export { OrchestrationLifecycleState } from './upgrade-orchestration/state.js';
+export type { OrchestrationLifecycleStateValue } from './upgrade-orchestration/state.js';
+export { orchestrateAiDrivenUpgrade } from './upgrade-orchestration/orchestrate.js';
+export type { OrchestrationDeps, OrchestrationResult } from './upgrade-orchestration/orchestrate.js';
+export type {
+  ChangeImpactAnalysis,
+  ChangeImpactEntry,
+  DownstreamEffectAssessment,
+  EnrichedReviewPackage,
+  EnrichmentResult,
+  PresentEnrichedReviewFn,
+  ReviewDecision,
+} from './upgrade-orchestration/types.js';

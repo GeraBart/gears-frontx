@@ -461,7 +461,7 @@ Project Developers and the AI agents acting for them need to drive the full temp
 
 #### AI Tooling Framework
 
-- [ ] `p2` - **ID**: `cpt-frontx-component-ai-tooling-kit`
+- [x] `p2` - **ID**: `cpt-frontx-component-ai-tooling-kit`
 
 Concrete artifact: `cyber-pilot-kit-frontx` (a Cypilot kit).
 
