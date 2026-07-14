@@ -56,7 +56,9 @@ describe('upgradeChangeSetReviewApproval (F14 change-set engine flow)', () => {
   it('(a) computes change set and writes no files until approved', async () => {
     const writeFn = vi.fn();
     const removeFn = vi.fn();
-    const presentFn = vi.fn<[ChangeSet], Promise<'approved' | 'declined'>>().mockResolvedValue('declined');
+    const presentFn = vi
+      .fn<(changeSet: ChangeSet) => Promise<'approved' | 'declined'>>()
+      .mockResolvedValue('declined');
 
     const result = await upgradeChangeSetReviewApproval(PROJ_ROOT, '2.0.0', {
       readProvenance: async () => BASE_PROVENANCE,
@@ -232,9 +234,10 @@ describe('upgradeChangeSetReviewApproval (F14 change-set engine flow)', () => {
       },
     });
 
-    expect(capturedChangeSet.conflicts.length).toBeGreaterThan(0);
-    const conflict = capturedChangeSet?.conflicts.find((c: ConflictEntry) => c.path === 'src/App.tsx');
+    expect(capturedChangeSet).toBeDefined();
+    expect(capturedChangeSet!.conflicts.length).toBeGreaterThan(0);
+    const conflict = capturedChangeSet!.conflicts.find((c: ConflictEntry) => c.path === 'src/App.tsx');
     expect(conflict).toBeDefined();
-    expect(conflict.localContent).toBe('locally modified content');
+    expect(conflict!.localContent).toBe('locally modified content');
   });
 });
