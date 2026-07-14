@@ -155,6 +155,55 @@ module.exports = {
       comment: 'cpt-frontx-constraint-cli-template-independence (CLI-1): @gears-frontx/cli must have zero dependency on bundled template content/assets/packages. Templates are resolved by source-spec at runtime.',
     },
     // @cpt-end:cpt-frontx-constraint-cli-template-independence:p17:inst-dep-cruiser-rule
+
+    // ============ PILLAR-3 BOUNDARY ENFORCEMENT (Phase 20) ============
+
+    // @cpt-begin:cpt-frontx-adr-ai-driven-upgrade-orchestration:p20:inst-dep-cruiser-rule
+    // DESIGN §3.4: "the inter-package dependency graph is intentionally
+    // minimal. The single intra-ecosystem package dependency is the MFE
+    // Runtime's consumption of the Type System plugin... The API Protocol
+    // Surface, the CLI, and the AI Tooling Framework hold no intra-ecosystem
+    // package dependencies. Coordination between the AI Tooling Framework
+    // and the CLI is an orchestration relationship over the CLI's command
+    // surface, not a compile-time package dependency." (ADR-0027
+    // cpt-frontx-adr-ai-driven-upgrade-orchestration). These two rules
+    // together enforce that the ONLY intra-ecosystem package edge is
+    // @gears-frontx/mfes -> @gears-frontx/gts-plugin — in particular they
+    // forbid @gears-frontx/cyber-pilot-kit-frontx -> @gears-frontx/cli
+    // (reopened after a prior run shipped that edge).
+    {
+      name: 'frontx-single-intra-ecosystem-edge-api-standalone',
+      severity: 'error',
+      from: { path: '^packages/api/src/' },
+      to: { path: '^packages/(mfes|gts-plugin|cli|cyber-pilot-kit-frontx)/' },
+      comment:
+        'cpt-frontx-adr-ai-driven-upgrade-orchestration: @gears-frontx/api holds no intra-ecosystem package dependency.',
+    },
+    {
+      name: 'frontx-single-intra-ecosystem-edge-cli-standalone',
+      severity: 'error',
+      from: { path: '^packages/cli/src/' },
+      to: { path: '^packages/(mfes|gts-plugin|api|cyber-pilot-kit-frontx)/' },
+      comment:
+        'cpt-frontx-adr-ai-driven-upgrade-orchestration: @gears-frontx/cli holds no intra-ecosystem package dependency.',
+    },
+    {
+      name: 'frontx-single-intra-ecosystem-edge-kit-standalone',
+      severity: 'error',
+      from: { path: '^packages/cyber-pilot-kit-frontx/src/' },
+      to: { path: '^packages/(mfes|gts-plugin|api|cli)/' },
+      comment:
+        'cpt-frontx-adr-ai-driven-upgrade-orchestration: @gears-frontx/cyber-pilot-kit-frontx holds no intra-ecosystem package dependency — in particular no @gears-frontx/cli edge; it coordinates with the CLI only over its command/invocation surface.',
+    },
+    {
+      name: 'frontx-single-intra-ecosystem-edge-mfes-gts-plugin-only',
+      severity: 'error',
+      from: { path: '^packages/mfes/src/' },
+      to: { path: '^packages/(api|cli|cyber-pilot-kit-frontx)/' },
+      comment:
+        'cpt-frontx-adr-ai-driven-upgrade-orchestration: the only intra-ecosystem package edge is @gears-frontx/mfes -> @gears-frontx/gts-plugin (via the type-substrate port); @gears-frontx/mfes must not depend on @gears-frontx/api, @gears-frontx/cli, or @gears-frontx/cyber-pilot-kit-frontx.',
+    },
+    // @cpt-end:cpt-frontx-adr-ai-driven-upgrade-orchestration:p20:inst-dep-cruiser-rule
   ],
   options: {
     doNotFollow: '^node_modules',

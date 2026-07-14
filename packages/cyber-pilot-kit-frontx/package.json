@@ -27,14 +27,11 @@
     "test": "npm run test:unit",
     "test:unit": "vitest --run --passWithNoTests=false"
   },
-  "dependencies": {
-    "@gears-frontx/cli": "0.2.0-alpha.0"
-  },
   "devDependencies": {
     "@vitest/coverage-v8": "4.1.4",
     "tsup": "^8.0.0",
     "typescript": "^5.4.2",
-    "vitest": "^3.2.4"
+    "vitest": "4.1.4"
   },
   "publishConfig": {
     "access": "public"

@@ -3,40 +3,37 @@
 // @cpt-dod:cpt-frontx-dod-ai-upgrade-orchestration-flow-complete:p1
 // @cpt-dod:cpt-frontx-dod-ai-upgrade-orchestration-gate-enforced:p1
 // @cpt-dod:cpt-frontx-dod-ai-upgrade-orchestration-single-engine:p1
+//
+// PLAN CORRECTION (2026-07-14) — REOPENED: this module MUST NOT import
+// the CLI package and MUST NOT link the F14 engine's `computeChangeSet`/
+// `applyChangeSet` exports. It drives the SINGLE engine strictly through the
+// injected `invokeUpgradeCommand` — the `frontx upgrade` COMMAND/INVOCATION
+// SURFACE (`InvokeUpgradeCommandFn`) — never a compile-time package
+// dependency (DESIGN §3.4; ADR-0027 `cpt-frontx-adr-ai-driven-upgrade-orchestration`).
 import { enrichUpgradeChangeSet } from './enrich.js';
 import { OrchestrationLifecycleState, type OrchestrationLifecycleStateValue } from './state.js';
 import type {
-  ApplyChangeSetFn,
-  ComputeChangeSetFn,
+  ChangeSet,
   EnrichedReviewPackage,
+  InvokeUpgradeCommandFn,
   PresentEnrichedReviewFn,
-  ProjectSnapshot,
-  ReadProjectFileFn,
   ReadProvenanceFn,
-  RemoveProjectFileFn,
-  VersionedLookupFn,
-  WriteProjectFileFn,
-  WriteProvenanceFn,
+  ReviewDecision,
 } from './types.js';
 
-// All dependencies are injected. `computeChangeSet` and `applyChangeSet` MUST be
-// the exact F14 engine functions exported by `@gears-frontx/cli` — this layer
-// orchestrates and enriches that single engine, it never reimplements it
+// All dependencies are injected. `invokeUpgradeCommand` MUST drive the F14
+// engine strictly through the `frontx upgrade` command/invocation surface —
+// this layer orchestrates and enriches that single engine, it never
+// reimplements it and never imports it as a package
 // (cpt-frontx-dod-ai-upgrade-orchestration-single-engine).
 export interface OrchestrationDeps {
   readProvenance: ReadProvenanceFn;
-  computeChangeSet: ComputeChangeSetFn;
-  applyChangeSet: ApplyChangeSetFn;
-  lookupByVersion: VersionedLookupFn;
-  readProjectFile: ReadProjectFileFn;
-  writeProjectFile: WriteProjectFileFn;
-  removeProjectFile: RemoveProjectFileFn;
-  writeProvenance: WriteProvenanceFn;
+  invokeUpgradeCommand: InvokeUpgradeCommandFn;
   presentEnrichedReview: PresentEnrichedReviewFn;
 }
 
 export type OrchestrationResult =
-  | { status: 'applied'; targetVersion: string; snapshot: ProjectSnapshot; reviewPackage: EnrichedReviewPackage }
+  | { status: 'applied'; targetVersion: string; reviewPackage: EnrichedReviewPackage }
   | { status: 'declined'; reviewPackage: EnrichedReviewPackage }
   | { status: 'provenance-missing'; message: string }
   | { status: 'empty-changeset' }
@@ -45,10 +42,10 @@ export type OrchestrationResult =
 // @cpt-begin:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-request-upgrade
 /**
  * AI-driven upgrade orchestration: reads project provenance, drives the SINGLE
- * F14 CLI change-set engine, enriches its output with change-impact analysis
- * and downstream-effect assessment, enforces an unconditional review gate
- * before any apply, and applies or declines
- * (cpt-frontx-flow-ai-upgrade-orchestration-upgrade).
+ * F14 CLI change-set engine through its `frontx upgrade` command surface,
+ * enriches its output with change-impact analysis and downstream-effect
+ * assessment, enforces an unconditional review gate before any apply, and
+ * applies or declines (cpt-frontx-flow-ai-upgrade-orchestration-upgrade).
  */
 export async function orchestrateAiDrivenUpgrade(
   projectRoot: string,
@@ -74,54 +71,71 @@ export async function orchestrateAiDrivenUpgrade(
   }
   // @cpt-end:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-check-provenance
 
+  // @cpt-begin:cpt-frontx-algo-ai-upgrade-orchestration-enrich:p1:inst-extract-provenance
+  // Provenance is read once, here, by the orchestration layer itself — the
+  // command surface receives only projectRoot/targetVersion and resolves its
+  // own provenance internally when computing the change set.
+  const { templateIdentity, scaffoldedFromVersion } = provenance;
+  void templateIdentity;
+  void scaffoldedFromVersion;
+  // @cpt-end:cpt-frontx-algo-ai-upgrade-orchestration-enrich:p1:inst-extract-provenance
+
+  let reviewPackage: EnrichedReviewPackage | undefined;
+  let sawEmptyChangeSet = false;
+
   // @cpt-begin:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-invoke-enrichment
-  const enrichment = await enrichUpgradeChangeSet(projectRoot, provenance, targetVersion, {
-    computeChangeSet: deps.computeChangeSet,
-    lookupByVersion: deps.lookupByVersion,
-    readProjectFile: deps.readProjectFile,
+  // @cpt-begin:cpt-frontx-algo-ai-upgrade-orchestration-enrich:p1:inst-invoke-engine
+  const commandResult = await deps.invokeUpgradeCommand(projectRoot, targetVersion, async (changeSet: ChangeSet) => {
+    // @cpt-end:cpt-frontx-algo-ai-upgrade-orchestration-enrich:p1:inst-invoke-engine
+    // @cpt-begin:cpt-frontx-algo-ai-upgrade-orchestration-enrich:p1:inst-receive-changeset
+    const enrichment = enrichUpgradeChangeSet(changeSet);
+    // @cpt-end:cpt-frontx-algo-ai-upgrade-orchestration-enrich:p1:inst-receive-changeset
+
+    if (enrichment.status === 'empty') {
+      sawEmptyChangeSet = true;
+      // The command surface still requires a decision; declining is a safe
+      // no-op signal — the empty-changeset short-circuit below is what the
+      // caller actually observes.
+      return 'declined' satisfies ReviewDecision;
+    }
+
+    reviewPackage = enrichment.package;
+
+    // @cpt-begin:cpt-frontx-state-ai-upgrade-orchestration-lifecycle:p1:inst-to-analyzed
+    lifecycleState = OrchestrationLifecycleState.ANALYZED;
+    // @cpt-end:cpt-frontx-state-ai-upgrade-orchestration-lifecycle:p1:inst-to-analyzed
+
+    // @cpt-begin:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-present-review
+    const decision = await deps.presentEnrichedReview(reviewPackage);
+    // @cpt-end:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-present-review
+
+    // @cpt-begin:cpt-frontx-state-ai-upgrade-orchestration-lifecycle:p1:inst-to-reviewed
+    lifecycleState = OrchestrationLifecycleState.REVIEWED;
+    // @cpt-end:cpt-frontx-state-ai-upgrade-orchestration-lifecycle:p1:inst-to-reviewed
+
+    return decision;
   });
   // @cpt-end:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-invoke-enrichment
 
   // @cpt-begin:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-check-changeset
-  if (enrichment.status === 'empty') {
+  if (sawEmptyChangeSet || !reviewPackage) {
     // @cpt-begin:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-empty-changeset
     return { status: 'empty-changeset' };
     // @cpt-end:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-empty-changeset
   }
   // @cpt-end:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-check-changeset
 
-  // @cpt-begin:cpt-frontx-state-ai-upgrade-orchestration-lifecycle:p1:inst-to-analyzed
-  lifecycleState = OrchestrationLifecycleState.ANALYZED;
-  // @cpt-end:cpt-frontx-state-ai-upgrade-orchestration-lifecycle:p1:inst-to-analyzed
-
-  const reviewPackage = enrichment.package;
-
-  // @cpt-begin:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-present-review
-  const decision = await deps.presentEnrichedReview(reviewPackage);
-  // @cpt-end:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-present-review
-
-  // @cpt-begin:cpt-frontx-state-ai-upgrade-orchestration-lifecycle:p1:inst-to-reviewed
-  lifecycleState = OrchestrationLifecycleState.REVIEWED;
-  // @cpt-end:cpt-frontx-state-ai-upgrade-orchestration-lifecycle:p1:inst-to-reviewed
-
   // @cpt-begin:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-gate-approve
-  if (decision === 'approved') {
+  if (commandResult.status === 'applied') {
     // @cpt-begin:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-engine-apply
-    const applyResult = await deps.applyChangeSet(reviewPackage.changeSet, projectRoot, provenance, {
-      readProjectFile: deps.readProjectFile,
-      writeProjectFile: deps.writeProjectFile,
-      removeProjectFile: deps.removeProjectFile,
-      writeProvenance: deps.writeProvenance,
-    });
+    // The engine apply step (writing project files non-destructively) is
+    // triggered by the command surface itself, strictly after the developer
+    // approval this orchestration layer returned above — never before it.
     // @cpt-end:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-engine-apply
 
-    if (!applyResult.ok) {
-      return { status: 'apply-failed', message: applyResult.message };
-    }
-
     // @cpt-begin:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-update-provenance
-    // Provenance is updated to the newer template version inside applyChangeSet
-    // (the F14 engine) — cpt-frontx-dod-ai-upgrade-orchestration-single-engine.
+    // Provenance is updated to the newer template version inside the engine's
+    // apply step, behind the command surface — cpt-frontx-dod-ai-upgrade-orchestration-single-engine.
     // @cpt-end:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-update-provenance
 
     // @cpt-begin:cpt-frontx-state-ai-upgrade-orchestration-lifecycle:p1:inst-to-applied
@@ -129,15 +143,20 @@ export async function orchestrateAiDrivenUpgrade(
     // @cpt-end:cpt-frontx-state-ai-upgrade-orchestration-lifecycle:p1:inst-to-applied
 
     // @cpt-begin:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-return-applied
-    return { status: 'applied', targetVersion, snapshot: applyResult.snapshot, reviewPackage };
+    return { status: 'applied', targetVersion, reviewPackage };
     // @cpt-end:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-return-applied
   }
   // @cpt-end:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-gate-approve
 
+  if (commandResult.status === 'apply-failed') {
+    return { status: 'apply-failed', message: commandResult.message ?? 'Engine apply failed.' };
+  }
+
   // @cpt-begin:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-gate-decline
   // @cpt-begin:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-no-write
-  // Decline or flagged incompatibility: no engine apply is invoked, so no
-  // project files are written and the project remains at its current version.
+  // Decline or flagged incompatibility: the command surface's engine apply
+  // step was never triggered, so no project files are written and the
+  // project remains at its current version.
   // @cpt-end:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-no-write
 
   // @cpt-begin:cpt-frontx-state-ai-upgrade-orchestration-lifecycle:p1:inst-to-declined
