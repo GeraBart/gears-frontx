@@ -403,7 +403,7 @@ When a template is installed in a project, the system **MUST** discover the temp
 
 #### AI-driven project-upgrade orchestration
 
-- [ ] `p1` - **ID**: `cpt-frontx-fr-ai-upgrade-orchestration`
+- [x] `p1` - **ID**: `cpt-frontx-fr-ai-upgrade-orchestration`
 
 The system **MUST** allow a Project Developer to use AI agents to orchestrate template upgrades — analysing the change, applying the upgrade, and validating downstream effects — through AI-driven workflows that may include review gates, migration analyses, and downstream impact assessments.
 

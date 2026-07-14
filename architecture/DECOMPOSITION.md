@@ -719,7 +719,7 @@ This decomposition breaks the FROZEN FrontX DESIGN into 17 work-package features
 
 - **Design Components**:
 
-  - [ ] `p1` - `cpt-frontx-component-ai-tooling-kit` (shared)
+  - [x] `p1` - `cpt-frontx-component-ai-tooling-kit` (shared)
 
 - **API**:
   - `cpt-frontx-interface-ai-tooling-framework`
@@ -761,7 +761,7 @@ This decomposition breaks the FROZEN FrontX DESIGN into 17 work-package features
 
 - **Design Components**:
 
-  - [ ] `p1` - `cpt-frontx-component-ai-tooling-kit` (shared)
+  - [x] `p1` - `cpt-frontx-component-ai-tooling-kit` (shared)
 
 - **API**:
   - N/A
@@ -776,7 +776,7 @@ This decomposition breaks the FROZEN FrontX DESIGN into 17 work-package features
 
 ### 2.17 [AI-Driven Upgrade Orchestration](features/ai-upgrade-orchestration/) - HIGH
 
-- [ ] `p1` - **ID**: `cpt-frontx-feature-ai-upgrade-orchestration`
+- [x] `p1` - **ID**: `cpt-frontx-feature-ai-upgrade-orchestration`
 
 - **Purpose**: Orchestrate AI-driven template upgrades over the single CLI change-set engine — reading project provenance, invoking and enriching the engine with change-impact analysis, review gates, and downstream-effect assessment, while applying the identical change set the direct CLI path would.
 
@@ -794,7 +794,7 @@ This decomposition breaks the FROZEN FrontX DESIGN into 17 work-package features
 
 - **Requirements Covered**:
 
-  - [ ] `p1` - `cpt-frontx-fr-ai-upgrade-orchestration`
+  - [x] `p1` - `cpt-frontx-fr-ai-upgrade-orchestration`
 
 - **Domain Model Entities**:
   - ProjectProvenance
@@ -802,7 +802,7 @@ This decomposition breaks the FROZEN FrontX DESIGN into 17 work-package features
 
 - **Design Components**:
 
-  - [ ] `p1` - `cpt-frontx-component-ai-tooling-kit` (shared)
+  - [x] `p1` - `cpt-frontx-component-ai-tooling-kit` (shared)
 
 - **API**:
   - N/A
