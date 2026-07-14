@@ -2,8 +2,7 @@
  * FrontX Dependency Cruiser Configuration (Ecosystem Root)
  *
  * Contains the dependency rules for the FrontX ecosystem packages (mfes,
- * gts-plugin, api, cli, cyber-pilot-kit-frontx) plus screensets (Pillar-1,
- * not yet migrated).
+ * gts-plugin, api, cli, cyber-pilot-kit-frontx).
  *
  * The non-Pillar-1 packages (state, i18n, framework, react, auth, studio)
  * and the host app now live in the self-contained top-level

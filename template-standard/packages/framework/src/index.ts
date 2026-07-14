@@ -370,10 +370,6 @@ export {
   RestEndpointProtocol,
   SseProtocol,
   SseStreamProtocol,
-  // Protocol-specific mock plugins (replaces generic MockPlugin)
-  RestMockPlugin,
-  SseMockPlugin,
-  MockEventSource,
   // Plugin base classes
   ApiPluginBase,
   ApiPlugin,
@@ -418,9 +414,6 @@ export type {
   EventSourceLike,
   RestShortCircuitResponse,
   SseShortCircuitResponse,
-  RestMockConfig,
-  SseMockConfig,
-  SseMockEvent,
   // Endpoint descriptor types (consumed by useApiQuery / useApiMutation at L3)
   EndpointOptions,
   EndpointDescriptor,
@@ -430,6 +423,18 @@ export type {
   StreamDescriptor,
   StreamStatus,
 } from '@gears-frontx/api';
+// Protocol-specific mock plugins (relocated from @gears-frontx/api to the
+// template in Phase 9's mock separation; @gears-frontx/api ships no mocks).
+export {
+  RestMockPlugin,
+  SseMockPlugin,
+  MockEventSource,
+} from '@gears-frontx/frontx-template-standard';
+export type {
+  RestMockConfig,
+  SseMockConfig,
+  SseMockEvent,
+} from '@gears-frontx/frontx-template-standard';
 
 
 // NOTE: AccountsApiService, ACCOUNTS_DOMAIN, and account types (ApiUser, UserRole, etc.)
