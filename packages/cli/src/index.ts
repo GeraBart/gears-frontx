@@ -63,7 +63,13 @@ export type { ProvenanceRecord, ProvenanceWriteFn } from './provenance/types.js'
 export { PROVENANCE_RELATIVE_PATH, provenancePath } from './provenance/contract.js';
 
 // F14 Upgrade Change-Set Engine (cpt-frontx-dod-upgrade-changeset-single-engine)
-// Both direct CLI invocation and F17 AI-driven orchestration import from these canonical modules.
+// There is exactly ONE engine. Direct CLI invocation uses these canonical
+// modules internally. F17 AI-driven orchestration does NOT import these
+// modules or take a compile-time package dependency on this package for its
+// engine access — it reaches this same engine only through the `frontx
+// upgrade` command/invocation surface (`upgradeCommand`, ./commands/upgrade.js),
+// per DESIGN §3.4 ("orchestrates ... through its command surface ... NOT by
+// linking its engine").
 export { upgradeChangeSetReviewApproval } from './upgrade/flow.js';
 export type { UpgradeFlowResult, UpgradeFlowDeps } from './upgrade/flow.js';
 export { computeChangeSet } from './upgrade/compute.js';
@@ -87,3 +93,8 @@ export type {
   WriteProvenanceFn,
   PresentAndGetApprovalFn,
 } from './upgrade/types.js';
+
+// F14 command/invocation surface — the ONLY integration path F17 (and any
+// other external artifact) should use to drive the change-set engine.
+export { upgradeCommand } from './commands/upgrade.js';
+export type { UpgradeCommandResult } from './commands/upgrade.js';
