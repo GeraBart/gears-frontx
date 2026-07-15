@@ -49,7 +49,7 @@ This feature details the host–MFE dispatch mechanism and the child-facing brid
 
 - **PRD**: [PRD.md](../../PRD.md)
 - **Design**: [DESIGN.md](../../DESIGN.md)
-- **ADRs**: `cpt-frontx-adr-actions-chains-mediator`, `cpt-frontx-adr-parent-child-bridge`
+- **ADRs**: `cpt-frontx-adr-action-dispatch-and-chaining`, `cpt-frontx-adr-child-mfe-host-access`
 - **Dependencies**: `cpt-frontx-feature-mfe-registry`
 
 ## 2. Actor Flows (CDSL)

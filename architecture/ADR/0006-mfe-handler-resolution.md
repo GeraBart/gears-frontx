@@ -3,7 +3,7 @@ status: accepted
 date: 2026-06-05
 ---
 
-# Resolve MFE Handlers in the Registry by Declared Base Type, Not by Handler Self-Selection
+# MFE Handler Resolution
 
 
 <!-- toc -->
@@ -23,7 +23,7 @@ date: 2026-06-05
 
 <!-- /toc -->
 
-**ID**: `cpt-frontx-adr-handler-abstraction-registry-resolution`
+**ID**: `cpt-frontx-adr-mfe-handler-resolution`
 ## Context and Problem Statement
 
 The MFE Runtime loads microfrontends whose bundles are produced by different build and packaging technologies, so loading itself is technology-specific and must be delegated to an extensible set of loaders ("handlers"). For any given microfrontend entry, exactly one handler must be chosen, and that choice must respect a type hierarchy without the runtime embedding knowledge of any concrete type format. Where should the authority to match an entry to a handler live — inside each handler, or inside the runtime — and how should a handler declare the entries it is able to load?
@@ -89,9 +89,9 @@ A table maps concrete entry types to handlers.
 
 ## More Information
 
-The present concrete instantiation of the handler abstraction is the abstract `MfeHandler` class (`packages/screensets/src/mfe/handler/types.ts`), which declares `handledBaseTypeId`, `priority`, the `bridgeFactory` it provides, and `load(entry, extensionId)`; its documented resolution rule is that the registry matches entries using `typeSystem.isTypeOf(entryTypeId, handledBaseTypeId)` rather than the handler choosing itself. The shipped default handler is the Module Federation handler `MfeHandlerMF` (`packages/screensets/src/mfe/handler/mf-handler.ts`), constructed at priority `0`. The handler's live loading path is manifest-driven and is decided separately in `cpt-frontx-adr-mf-manifest-discovery`; a `remoteEntry` expose-map parser that exists alongside the default handler serves unit tests only and is not part of the live loading path. The opaque type-substrate port that the injected type system satisfies is decided in `cpt-frontx-adr-type-system-plugin-opaque-schema`, and the runtime surface that exposes the handler-bearing registry is decided in `cpt-frontx-adr-mfe-registry-facade`.
+The present concrete instantiation of the handler abstraction is the abstract `MfeHandler` class (`packages/screensets/src/mfe/handler/types.ts`), which declares `handledBaseTypeId`, `priority`, the `bridgeFactory` it provides, and `load(entry, extensionId)`; its documented resolution rule is that the registry matches entries using `typeSystem.isTypeOf(entryTypeId, handledBaseTypeId)` rather than the handler choosing itself. The shipped default handler is the Module Federation handler `MfeHandlerMF` (`packages/screensets/src/mfe/handler/mf-handler.ts`), constructed at priority `0`. The handler's live loading path is manifest-driven and is decided separately in `cpt-frontx-adr-mfe-asset-discovery`; a `remoteEntry` expose-map parser that exists alongside the default handler serves unit tests only and is not part of the live loading path. The opaque type-substrate port that the injected type system satisfies is decided in `cpt-frontx-adr-runtime-type-system-coupling`, and the runtime surface that exposes the handler-bearing registry is decided in `cpt-frontx-adr-mfe-runtime-public-surface`.
 
-**Scope of impact.** Applies to how the runtime matches a registered microfrontend entry to a loader and to the abstract surface every handler implements. It does not decide how any specific handler loads or isolates a bundle, nor the choice of type-system provider (decided in `cpt-frontx-adr-gts-default-type-system`).
+**Scope of impact.** Applies to how the runtime matches a registered microfrontend entry to a loader and to the abstract surface every handler implements. It does not decide how any specific handler loads or isolates a bundle, nor the choice of type-system provider (decided in `cpt-frontx-adr-default-type-substrate-provider`).
 
 **Review trigger.** Revisit if a requirement emerges for an entry to be served by more than one handler simultaneously, or for handler selection to depend on entry detail that the type hierarchy cannot express.
 

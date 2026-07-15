@@ -16,6 +16,14 @@
   "files": [
     "dist"
   ],
+  "peerDependencies": {
+    "@gears-frontx/gts-plugin": "^0.3.0-alpha.0"
+  },
+  "peerDependenciesMeta": {
+    "@gears-frontx/gts-plugin": {
+      "optional": true
+    }
+  },
   "scripts": {
     "build": "tsup",
     "type-check": "tsc --noEmit",

@@ -3,7 +3,7 @@ status: accepted
 date: 2026-06-05
 ---
 
-# Protocol-Separated, Solution-Agnostic API Surface
+# API Surface Organization
 
 
 <!-- toc -->
@@ -23,7 +23,7 @@ date: 2026-06-05
 
 <!-- /toc -->
 
-**ID**: `cpt-frontx-adr-protocol-separated-api`
+**ID**: `cpt-frontx-adr-api-surface-organization`
 ## Context and Problem Statement
 
 Composed applications and their microfrontends issue both request/response calls and long-lived streaming calls to back-end services, and these two interaction shapes have different lifecycles, plugin hooks, and cancellation semantics. The API Protocol Surface (`cpt-frontx-component-api-surface`) must expose a single, stable surface that serves both shapes while remaining a dependency-light, reusable Core Framework unit that no single application or solution can specialise. How should the surface organise request/response versus streaming communication, and how should it admit application-specific behaviour, so that one neutral abstraction serves every consumer without binding the surface to any one solution?

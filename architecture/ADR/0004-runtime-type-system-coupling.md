@@ -3,7 +3,7 @@ status: proposed
 date: 2026-06-04
 ---
 
-# Treat Type Identifiers as Opaque and Delegate Schema Operations to an Injected Type-System Plugin
+# The Runtime's Coupling to the Type System
 
 
 <!-- toc -->
@@ -23,7 +23,7 @@ date: 2026-06-04
 
 <!-- /toc -->
 
-**ID**: `cpt-frontx-adr-type-system-plugin-opaque-schema`
+**ID**: `cpt-frontx-adr-runtime-type-system-coupling`
 ## Context and Problem Statement
 
 The MFE Runtime must validate microfrontends and their extensions against type definitions and reason about type hierarchy, yet it must stay independent of any single type-definition specification so that any conforming type system can be composed against it. This requires deciding how much of a type definition the runtime is allowed to see: whether it reasons about types by their structural schema shape or solely by identity. How should the runtime's relationship to type definitions be shaped so that it carries no concrete type-format knowledge while still admitting only valid units?
@@ -46,7 +46,7 @@ The MFE Runtime must validate microfrontends and their extensions against type d
 
 Chosen option: **opaque schema surface with delegation to an injected plugin**, because it is the only option that keeps the runtime free of any concrete type-format knowledge while still admitting only valid units. The runtime reasons about types solely by identity and routes all schema, validation, and type-of operations through an injected provider port (`packages/screensets/src/mfe/plugins/types.ts`, the `TypeSystemPlugin` contract documented as treating type identifiers as opaque strings and delegating all type-identifier understanding to the plugin). The registry holds that provider as its read-only `typeSystem` (`packages/screensets/src/mfe/runtime/MfeRegistry.ts`) and performs no schema interpretation itself. The runtime's view of a schema is therefore an opaque surface that exposes only a stable identifier; the concrete schema shape lives behind the port. This is the MFES-5 boundary (`cpt-frontx-constraint-mfes-opaque-schema-surface`).
 
-As a consequence of treating identifiers as opaque, the grammar of those identifiers is also the provider's concern: deriving structure from a type identifier — for example extracting a package from an entity identifier (`packages/screensets/src/mfe/gts/extract-package.ts`) — is type-system grammar and is owned by the type-system plugin rather than the runtime surface. This Q9 placement is reaffirmed in `cpt-frontx-adr-gts-default-type-system`.
+As a consequence of treating identifiers as opaque, the grammar of those identifiers is also the provider's concern: deriving structure from a type identifier — for example extracting a package from an entity identifier (`packages/screensets/src/mfe/gts/extract-package.ts`) — is type-system grammar and is owned by the type-system plugin rather than the runtime surface. This Q9 placement is reaffirmed in `cpt-frontx-adr-default-type-substrate-provider`.
 
 ### Consequences
 
@@ -91,7 +91,7 @@ The runtime hardcodes one type-definition specification and reasons about types 
 
 ## More Information
 
-The injected provider port is defined as the `TypeSystemPlugin` contract in `packages/screensets/src/mfe/plugins/types.ts`; the runtime holds an instance as the registry's read-only `typeSystem` and delegates validation, schema lookup, and type-of resolution to it. The opaque-surface decision is the boundary `cpt-frontx-constraint-mfes-opaque-schema-surface`; the choice of which concrete provider satisfies the port, and the schemas that provider owns, are decided in `cpt-frontx-adr-gts-default-type-system`.
+The injected provider port is defined as the `TypeSystemPlugin` contract in `packages/screensets/src/mfe/plugins/types.ts`; the runtime holds an instance as the registry's read-only `typeSystem` and delegates validation, schema lookup, and type-of resolution to it. The opaque-surface decision is the boundary `cpt-frontx-constraint-mfes-opaque-schema-surface`; the choice of which concrete provider satisfies the port, and the schemas that provider owns, are decided in `cpt-frontx-adr-default-type-substrate-provider`.
 
 **Scope of impact.** Applies to what the runtime may know about a type definition and how it obtains type judgments. It does not decide the concrete provider, the concrete schema representation behind the port, or how microfrontends are loaded, mounted, or isolated.
 

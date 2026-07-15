@@ -26,6 +26,7 @@
     "build:packages:cli": "npm run build --workspace=@gears-frontx/cli",
     "lint:deps": "node scripts/check-test-dependency-versions.mjs",
     "lint": "npm run lint:deps && eslint . --max-warnings 0",
+    "policy:version-check": "node scripts/ecosystem-version-policy.mjs",
     "type-check": "npm run type-check:all",
     "type-check:host": "tsc --noEmit",
     "type-check:all": "npm run type-check:host && npm run type-check:packages && npm run type-check:packages:test",

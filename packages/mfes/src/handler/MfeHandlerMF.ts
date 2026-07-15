@@ -188,7 +188,7 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
    * against the same `MfeEntry` definition (sibling extensions sharing an
    * `entry.id`) populate DISTINCT cache entries — distinct blob URL chains,
    * distinct module evaluations, distinct module-scope state — per ADR-0004
-   * (`cpt-frontx-adr-blob-url-mfe-isolation`) + ADR-0020
+   * (`cpt-frontx-adr-mfe-load-isolation`) + ADR-0020
    * (`cpt-frontx-adr-mfe-state-lifecycle-boundary`) isolation invariant.
    * Sibling isolation is the handler's responsibility, not the MFE author's.
    *

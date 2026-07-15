@@ -3,7 +3,7 @@ status: proposed
 date: 2026-06-05
 ---
 
-# Template Externalization and Runtime Resolution
+# Template Acquisition and Location
 
 <!-- toc -->
 
@@ -22,7 +22,7 @@ date: 2026-06-05
 
 <!-- /toc -->
 
-**ID**: `cpt-frontx-adr-template-externalization-resolution`
+**ID**: `cpt-frontx-adr-template-acquisition-and-location`
 
 ## Context and Problem Statement
 
@@ -47,7 +47,7 @@ The CLI (`cpt-frontx-component-cli`, the `@gears-frontx/cli` package) drives the
 
 Chosen option: **Externalized templates resolved by source-spec at runtime, with a tracked local inventory**, because it is the only option that satisfies both the separation-of-concerns driver and the independent-versioning driver while still giving the developer a visible, updatable inventory. The command surface declares no dependency on any template and bundles none, so it is fully decoupled from the content it scaffolds; this is the design constraint **CLI-1** (`cpt-frontx-constraint-cli-template-independence`) that this decision establishes and the externalization realizes. Templates are acquired by a versioned source-spec at runtime and materialized into a tracked local inventory, which makes acquisition reproducible and the inventory listable and updatable. The bundled option fails the separation and independent-versioning drivers outright; the no-inventory option satisfies separation but forfeits inventory visibility and local update, and re-fetches content the developer cannot inspect or pin locally.
 
-Resolution of a versioned reference is performed by a single resolver that is shared with the namespace architecture: the local template inventory and the project-level and microfrontend-level template namespaces resolve references through that one resolver, decided in `cpt-frontx-adr-two-namespace-architecture`. Updating an installed template in the local inventory is bounded to the inventory alone: a local template update does not alter any scaffolded project. Applying a newer template version to an existing project is a separate, reviewable operation decided by the upgrade change-set engine (`cpt-frontx-adr-upgrade-changeset-engine`); local template update and project upgrade are distinct concerns and this decision keeps them separate.
+Resolution of a versioned reference is performed by a single resolver that is shared with the namespace architecture: the local template inventory and the project-level and microfrontend-level template namespaces resolve references through that one resolver, decided in `cpt-frontx-adr-cli-command-organization`. Updating an installed template in the local inventory is bounded to the inventory alone: a local template update does not alter any scaffolded project. Applying a newer template version to an existing project is a separate, reviewable operation decided by the upgrade change-set engine (`cpt-frontx-adr-project-upgrade-mechanism`); local template update and project upgrade are distinct concerns and this decision keeps them separate.
 
 ### Consequences
 
@@ -95,7 +95,7 @@ The tool resolves and fetches a template from its source on each scaffold, holdi
 
 ## More Information
 
-This decision establishes the **CLI-1** design constraint (`cpt-frontx-constraint-cli-template-independence`) for the `@gears-frontx/cli` package and is the resolution mechanism that constraint links. The versioned-reference form a developer supplies is decided in `cpt-frontx-adr-source-spec-syntax`. The single shared resolver and the two template namespaces by kind are decided in `cpt-frontx-adr-two-namespace-architecture`. The separate, reviewable application of a newer template version to an existing project is decided in `cpt-frontx-adr-upgrade-changeset-engine`. These are non-binding pointers to related decisions and do not form part of this decision's durable identity.
+This decision establishes the **CLI-1** design constraint (`cpt-frontx-constraint-cli-template-independence`) for the `@gears-frontx/cli` package and is the resolution mechanism that constraint links. The versioned-reference form a developer supplies is decided in `cpt-frontx-adr-source-spec-syntax`. The single shared resolver and the two template namespaces by kind are decided in `cpt-frontx-adr-cli-command-organization`. The separate, reviewable application of a newer template version to an existing project is decided in `cpt-frontx-adr-project-upgrade-mechanism`. These are non-binding pointers to related decisions and do not form part of this decision's durable identity.
 
 Applicability of the remaining checklist categories: **PERF** — Not applicable, because this is local developer tooling with no throughput or latency budget on the decision. **SEC** — Not applicable, because the decision introduces no secret material and no authentication surface; reachability of an external source is an availability note, not a security control. **REL** — Not applicable, because there is no service availability target; the tool runs locally and on demand. **DATA** — Not applicable, because no persistent database or schema is defined here; the local inventory's shape is a design-document concern, not this decision. **OPS** — Not applicable, because there are no runbooks or operational procedures for a local command tool. **MAINT** — addressed: separating the command surface from template content reduces coupling and lets each evolve independently. **UX** — addressed implicitly: a single predictable command surface with a listable inventory. **BIZ** — Not applicable, because product requirements are stated in the PRD and only cited here by ID.
 

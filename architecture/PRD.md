@@ -249,7 +249,7 @@ The system **MUST** allow an application built on the platform to use any UI fra
 
 #### Versioned platform evolution with compatibility commitments
 
-- [ ] `p1` - **ID**: `cpt-frontx-fr-versioned-platform-evolution`
+- [x] `p1` - **ID**: `cpt-frontx-fr-versioned-platform-evolution`
 
 The system **MUST** evolve through versioned releases under semantic-versioning discipline. The system **MUST** isolate breaking changes from consuming applications through versioning and compatibility commitments.
 
@@ -259,7 +259,7 @@ The system **MUST** evolve through versioned releases under semantic-versioning 
 
 #### No architectural ceiling on application complexity
 
-- [ ] `p2` - **ID**: `cpt-frontx-fr-no-architectural-ceiling`
+- [x] `p2` - **ID**: `cpt-frontx-fr-no-architectural-ceiling`
 
 The system **MUST NOT** place an upper limit on the number of microfrontends or type definitions an application integrates, beyond the thresholds stated in the non-functional requirements.
 
@@ -447,7 +447,7 @@ The system **MUST** meet measurable response-time and throughput targets for run
 
 #### Evolvability
 
-- [ ] `p1` - **ID**: `cpt-frontx-nfr-evolvability`
+- [x] `p1` - **ID**: `cpt-frontx-nfr-evolvability`
 
 The system **MUST** evolve through versioned releases without forcing consumers to upgrade in lockstep.
 
@@ -457,7 +457,7 @@ The system **MUST** evolve through versioned releases without forcing consumers 
 
 #### Scaling without an architectural ceiling
 
-- [ ] `p1` - **ID**: `cpt-frontx-nfr-scalability-ceiling`
+- [x] `p1` - **ID**: `cpt-frontx-nfr-scalability-ceiling`
 
 The system **MUST** place no architectural upper limit on the number of microfrontends or type definitions an application can integrate.
 

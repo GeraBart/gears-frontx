@@ -83,7 +83,7 @@ Architecture review confirms each concern's responsibilities stay within its bou
 
 The present concrete instantiation of the Core Framework concerns is `@gears-frontx/mfes` (runtime), `@gears-frontx/gts-plugin` (type-system provider), and `@gears-frontx/api` (protocol surface); this mapping is descriptive and non-binding. The boundary constraints governing these concerns are defined in DESIGN §2.2; the CLI and AI-tooling boundary rules (`cpt-frontx-constraint-cli-template-independence`, `cpt-frontx-constraint-kit-prefixed-resource-ids`) belong to other pillars and are outside this decision's scope.
 
-**Scope of impact.** This decision governs only the partition of the Core Framework into runtime, type-system provider, and protocol surface, and the boundary constraints between them. It does not decide the internal structure of any concern, the concrete type-definition specification (a separate decision), or distribution and versioning (decided in `cpt-frontx-adr-matched-version-artifact-distribution`).
+**Scope of impact.** This decision governs only the partition of the Core Framework into runtime, type-system provider, and protocol surface, and the boundary constraints between them. It does not decide the internal structure of any concern, the concrete type-definition specification (a separate decision), or distribution and versioning (decided in `cpt-frontx-adr-artifact-versioning-and-distribution`).
 
 **Review trigger.** Revisit if a requirement emerges for the runtime to depend directly on a single canonical type-system format, which would remove the rationale for the opaque-port boundary.
 

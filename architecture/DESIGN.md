@@ -40,7 +40,7 @@ status: final
 
 ### 1.1 Architectural Vision
 
-The FrontX ecosystem is delivered as a set of independently published, independently versioned artifacts, each owning a single concern and integrating with the others only through narrow, explicit contracts. These artifacts are organized into three co-equal pillars: a **Core Framework** of npm packages (the MFE Runtime `@gears-frontx/mfes`, the Type System plugin `@gears-frontx/gts-plugin`, and the API Protocol Surface `@gears-frontx/api`), a **CLI** (`@gears-frontx/cli`) that drives the template and project lifecycle, and an **AI Tooling Framework** (`cyber-pilot-kit-frontx`) that delivers ecosystem fluency to AI agents. Per-concern independent versioning, governed by a matched major/minor distribution policy, lets each artifact evolve on its own cadence while consuming applications upgrade on theirs rather than in lockstep (`cpt-frontx-fr-versioned-platform-evolution`, `cpt-frontx-nfr-evolvability`).
+The FrontX ecosystem is delivered as a set of independently published, independently versioned artifacts, each owning a single concern and integrating with the others only through narrow, explicit contracts. These artifacts are organized into three co-equal pillars: a **Core Framework** of npm packages (the MFE Runtime `@gears-frontx/mfes`, the Type System plugin `@gears-frontx/gts-plugin`, and the API Protocol Surface `@gears-frontx/api`), a **CLI** (`@gears-frontx/cli`) that drives the template and project lifecycle, and an **AI Tooling Framework** (`cyber-pilot-kit-frontx`) that delivers ecosystem fluency to AI agents. Per-concern independent versioning lets each artifact evolve on its own semver line and cadence while consuming applications upgrade on theirs rather than in lockstep; the one compile-time coupling edge (`mfes → gts-plugin`) is bounded by a satisfiable semver range rather than a matched version number (`cpt-frontx-fr-versioned-platform-evolution`, `cpt-frontx-nfr-evolvability`).
 
 The technical approach centers on an agnostic, narrowly contracted substrate. The Core Framework reasons about microfrontends, type identifiers, and extension domains through injected ports and opaque identifiers rather than concrete formats or solution vocabulary, so an application composes against a stable surface regardless of its UI stack, type-definition specification, or layout vocabulary (`cpt-frontx-fr-ui-framework-agnostic`, `cpt-frontx-fr-mfe-runtime-registration`). The runtime admits units only after type validation, places them into governed extension domains under explicit cardinality and admission rules, mediates host-microfrontend communication through a narrow capability bridge, and isolates loaded units - realizing a default-deny security posture (`cpt-frontx-fr-mfe-type-validation`, `cpt-frontx-nfr-security`). The CLI resolves templates by versioned source-spec at runtime and bundles none, keeping the command surface fully decoupled from the content it scaffolds and applying project upgrades as reviewable, non-destructive change sets (`cpt-frontx-fr-cli-template-install`, `cpt-frontx-fr-cli-project-upgrade-changeset`). The AI Tooling Framework ships only base ecosystem capabilities and gains template-specific expertise through bundled extensions discovered and activated automatically (`cpt-frontx-fr-ai-frontx-skills`, `cpt-frontx-fr-ai-extension-discovery-activation`).
 
@@ -54,30 +54,30 @@ Requirements that significantly influence architecture decisions. Each driver be
 
 | Requirement | Design Response |
 |-------------|-----------------|
-| `cpt-frontx-fr-mfe-runtime-registration` | MFE Runtime registers units through the abstract `MfeRegistry` facade and loads them on demand via the resolved handler, decided in `cpt-frontx-adr-mfe-registry-facade` and `cpt-frontx-adr-handler-abstraction-registry-resolution`; manifest-based discovery (`cpt-frontx-adr-mf-manifest-discovery`) and lazy-import ABI separation (`cpt-frontx-adr-lazy-import-abi`) support on-demand loading. |
-| `cpt-frontx-fr-mfe-multi-occupant-domain` | Extension-domain occupancy is governed by mount strategies and cardinality rules (`cpt-frontx-adr-mount-strategies-cardinality`) that admit multiple occupants where a domain permits, with admission gated by contract matching (`cpt-frontx-adr-domain-extension-contract-matching`). |
-| `cpt-frontx-fr-mfe-host-communication` | Host-microfrontend communication is routed through the actions-chains mediator (`cpt-frontx-adr-actions-chains-mediator`) over a narrow parent-child capability bridge (`cpt-frontx-adr-parent-child-bridge`). |
-| `cpt-frontx-fr-mfe-type-validation` | Units and extensions are validated against type definitions at registration through the opaque type-substrate port (`cpt-frontx-adr-type-system-plugin-opaque-schema`), its default provider (`cpt-frontx-adr-gts-default-type-system`), and contract matching (`cpt-frontx-adr-domain-extension-contract-matching`). |
-| `cpt-frontx-fr-application-type-definitions` | Applications register their own and additional runtime type definitions through the type-substrate port the runtime exposes opaquely (`cpt-frontx-adr-type-system-plugin-opaque-schema`). |
+| `cpt-frontx-fr-mfe-runtime-registration` | MFE Runtime registers units through the abstract `MfeRegistry` facade and loads them on demand via the resolved handler, decided in `cpt-frontx-adr-mfe-runtime-public-surface` and `cpt-frontx-adr-mfe-handler-resolution`; manifest-based discovery (`cpt-frontx-adr-mfe-asset-discovery`) and lazy-import ABI separation (`cpt-frontx-adr-lazy-import-resolution`) support on-demand loading. |
+| `cpt-frontx-fr-mfe-multi-occupant-domain` | Extension-domain occupancy is governed by mount strategies and cardinality rules (`cpt-frontx-adr-extension-domain-occupancy`) that admit multiple occupants where a domain permits, with admission gated by contract matching (`cpt-frontx-adr-domain-extension-compatibility`). |
+| `cpt-frontx-fr-mfe-host-communication` | Host-microfrontend communication is routed through the actions-chains mediator (`cpt-frontx-adr-action-dispatch-and-chaining`) over a narrow parent-child capability bridge (`cpt-frontx-adr-child-mfe-host-access`). |
+| `cpt-frontx-fr-mfe-type-validation` | Units and extensions are validated against type definitions at registration through the opaque type-substrate port (`cpt-frontx-adr-runtime-type-system-coupling`), its default provider (`cpt-frontx-adr-default-type-substrate-provider`), and contract matching (`cpt-frontx-adr-domain-extension-compatibility`). |
+| `cpt-frontx-fr-application-type-definitions` | Applications register their own and additional runtime type definitions through the type-substrate port the runtime exposes opaquely (`cpt-frontx-adr-runtime-type-system-coupling`). |
 | `cpt-frontx-fr-ui-framework-agnostic` | Core-package boundaries keep the runtime free of UI-framework coupling, leaving UI-stack choice to applications and microfrontends (`cpt-frontx-adr-core-package-boundaries`). |
-| `cpt-frontx-fr-versioned-platform-evolution` | The matched-version artifact-distribution policy isolates breaking changes behind semantic versioning across the published artifacts (`cpt-frontx-adr-matched-version-artifact-distribution`). |
-| `cpt-frontx-fr-no-architectural-ceiling` | The same distribution and boundary policy imposes no architectural cap on integrated units, governing growth by performance thresholds rather than structure (`cpt-frontx-adr-matched-version-artifact-distribution`). |
-| `cpt-frontx-fr-cli-template-install` | The CLI resolves and installs templates by versioned source-spec at runtime (`cpt-frontx-adr-template-externalization-resolution`, `cpt-frontx-adr-source-spec-syntax`). |
-| `cpt-frontx-fr-cli-template-list` | Template inventory and versions are reported from the externalized, source-spec-resolved template store (`cpt-frontx-adr-template-externalization-resolution`). |
-| `cpt-frontx-fr-cli-template-update-local` | Local template updates operate on the externalized template store without touching scaffolded projects (`cpt-frontx-adr-template-externalization-resolution`). |
+| `cpt-frontx-fr-versioned-platform-evolution` | The per-concern independent artifact-distribution policy isolates breaking changes behind semantic versioning, bounding each breaking change to a single artifact's own major-version line (`cpt-frontx-adr-artifact-versioning-and-distribution`). |
+| `cpt-frontx-fr-no-architectural-ceiling` | The same distribution and boundary policy imposes no architectural cap on integrated units, governing growth by performance thresholds rather than structure (`cpt-frontx-adr-artifact-versioning-and-distribution`). |
+| `cpt-frontx-fr-cli-template-install` | The CLI resolves and installs templates by versioned source-spec at runtime (`cpt-frontx-adr-template-acquisition-and-location`, `cpt-frontx-adr-source-spec-syntax`). |
+| `cpt-frontx-fr-cli-template-list` | Template inventory and versions are reported from the externalized, source-spec-resolved template store (`cpt-frontx-adr-template-acquisition-and-location`). |
+| `cpt-frontx-fr-cli-template-update-local` | Local template updates operate on the externalized template store without touching scaffolded projects (`cpt-frontx-adr-template-acquisition-and-location`). |
 | `cpt-frontx-fr-cli-template-validate-prepublish` | Pre-publish structure validation runs against the template manifest publication contract (`cpt-frontx-adr-template-manifest-contract`). |
-| `cpt-frontx-fr-cli-project-scaffold` | Project scaffolding is driven from the project-level command namespace (`cpt-frontx-adr-two-namespace-architecture`). |
-| `cpt-frontx-fr-cli-microfrontend-scaffold` | Microfrontend scaffolding is driven from the microfrontend-level command namespace sharing one resolver (`cpt-frontx-adr-two-namespace-architecture`). |
+| `cpt-frontx-fr-cli-project-scaffold` | Project scaffolding is driven from the project-level command namespace (`cpt-frontx-adr-cli-command-organization`). |
+| `cpt-frontx-fr-cli-microfrontend-scaffold` | Microfrontend scaffolding is driven from the microfrontend-level command namespace sharing one resolver (`cpt-frontx-adr-cli-command-organization`). |
 | `cpt-frontx-fr-cli-composed-template-resolution` | Referenced microfrontend templates are resolved recursively in one operation under a defined collision rule (`cpt-frontx-adr-composed-template-resolution`). |
-| `cpt-frontx-fr-cli-project-upgrade-changeset` | Upgrades apply as reviewable, non-destructive change sets recorded against project provenance (`cpt-frontx-adr-upgrade-changeset-engine`, `cpt-frontx-adr-project-provenance-record`). |
-| `cpt-frontx-fr-cli-upgrade-review-approval` | The change-set engine gates application of changes behind explicit review and approval (`cpt-frontx-adr-upgrade-changeset-engine`). |
-| `cpt-frontx-fr-cli-two-namespace-commands` | The command surface is organized into project-level and microfrontend-level namespaces (`cpt-frontx-adr-two-namespace-architecture`). |
-| `cpt-frontx-fr-ai-frontx-skills` | Base FrontX skills are delivered by the AI Tooling kit, with base content kept solution-agnostic (`cpt-frontx-adr-base-solution-ai-content-split`). |
+| `cpt-frontx-fr-cli-project-upgrade-changeset` | Upgrades apply as reviewable, non-destructive change sets recorded against project provenance (`cpt-frontx-adr-project-upgrade-mechanism`, `cpt-frontx-adr-project-provenance-record`). |
+| `cpt-frontx-fr-cli-upgrade-review-approval` | The change-set engine gates application of changes behind explicit review and approval (`cpt-frontx-adr-project-upgrade-mechanism`). |
+| `cpt-frontx-fr-cli-two-namespace-commands` | The command surface is organized into project-level and microfrontend-level namespaces (`cpt-frontx-adr-cli-command-organization`). |
+| `cpt-frontx-fr-ai-frontx-skills` | Base FrontX skills are delivered by the AI Tooling kit, with base content kept solution-agnostic (`cpt-frontx-adr-solution-ai-content-placement`). |
 | `cpt-frontx-fr-ai-template-bundle-extensions` | Templates carry AI bundles conforming to the template AI extension contract (`cpt-frontx-adr-template-ai-extension-contract`). |
 | `cpt-frontx-fr-ai-extension-discovery-activation` | Installed-template extensions are discovered and activated without manual wiring (`cpt-frontx-adr-extension-discovery-activation`). |
 | `cpt-frontx-fr-ai-upgrade-orchestration` | AI-driven upgrade workflows orchestrate and enrich the CLI change-set engine (`cpt-frontx-adr-ai-driven-upgrade-orchestration`). |
-| `cpt-frontx-fr-ai-session-start-knowledge` | Ecosystem-knowledge artifacts are packaged as a Cypilot kit available at session start (`cpt-frontx-adr-kit-packaging-cyber-pilot-kit-frontx`). |
-| `cpt-frontx-fr-ai-tooling-template-agnostic` | The framework ships no solution-specific AI content; such content arrives only via template bundles (`cpt-frontx-adr-base-solution-ai-content-split`). |
+| `cpt-frontx-fr-ai-session-start-knowledge` | Ecosystem-knowledge artifacts are packaged as a Cypilot kit available at session start (`cpt-frontx-adr-ai-tooling-framework-packaging`). |
+| `cpt-frontx-fr-ai-tooling-template-agnostic` | The framework ships no solution-specific AI content; such content arrives only via template bundles (`cpt-frontx-adr-solution-ai-content-placement`). |
 
 #### NFR Allocation
 
@@ -85,10 +85,10 @@ This table maps non-functional requirements from the PRD to specific design/arch
 
 | NFR ID | NFR Summary | Allocated To | Design Response | Verification Approach |
 |--------|-------------|--------------|-----------------|-----------------------|
-| `cpt-frontx-nfr-runtime-performance` | Runtime response-time and throughput targets | MFE Runtime; API Protocol Surface | Lazy-import ABI separation defers template-bound build cost from the runtime ABI (`cpt-frontx-adr-lazy-import-abi`); the realm-shared, retainer-counted fetch cache and plugin short-circuit reuse in-flight and cached results across independently bundled units (`cpt-frontx-adr-short-circuit-and-shared-fetch-cache`). | Performance benchmarks asserting the PRD p95 registration, on-demand-load, and registration-throughput thresholds. |
-| `cpt-frontx-nfr-evolvability` | Versioned releases without lockstep upgrades | Matched-version distribution policy across all artifacts | Independently published, per-concern versioned artifacts whose major/minor versions are kept matched while patch/pre-release may diverge, isolating breaking changes behind versioning and a deprecation cycle (`cpt-frontx-adr-matched-version-artifact-distribution`). | CI version-policy check asserting matched major/minor across published artifacts and a deprecation cycle before any removal. |
-| `cpt-frontx-nfr-scalability-ceiling` | No architectural cap on integrated units | Matched-version distribution policy; runtime boundaries | The distribution and boundary architecture imposes no structural ceiling, so integration scales to the PRD operational floors governed only by performance thresholds (`cpt-frontx-adr-matched-version-artifact-distribution`). | Load test registering the PRD operational floors of microfrontends and type definitions against one application without architectural failure. |
-| `cpt-frontx-nfr-security` | Default-deny posture; validated admission | MFE Runtime isolation, contract matching, type validation | Loaded units are isolated at runtime (`cpt-frontx-adr-blob-url-mfe-isolation`); every unit and extension passes contract matching and type validation before admission (`cpt-frontx-adr-domain-extension-contract-matching`, `cpt-frontx-adr-type-system-plugin-opaque-schema`), granting no access beyond a domain's declared grants. | Admission audit asserting 100% of admitted units validated and zero access paths outside an extension domain's declared grants. |
+| `cpt-frontx-nfr-runtime-performance` | Runtime response-time and throughput targets | MFE Runtime; API Protocol Surface | Lazy-import ABI separation defers template-bound build cost from the runtime ABI (`cpt-frontx-adr-lazy-import-resolution`); the realm-shared, retainer-counted fetch cache and plugin short-circuit reuse in-flight and cached results across independently bundled units (`cpt-frontx-adr-api-transport-bypass-and-fetch-sharing`). | Performance benchmarks asserting the PRD p95 registration, on-demand-load, and registration-throughput thresholds. |
+| `cpt-frontx-nfr-evolvability` | Versioned releases without lockstep upgrades | Per-concern independent versioning across all artifacts | Independently published, per-concern versioned artifacts, each on its own semver line and cadence; a breaking change is bounded to that artifact's own major version, and cross-artifact compatibility on the single coupled edge (`mfes → gts-plugin`) is expressed as a satisfiable semver range rather than a matched version number (`cpt-frontx-adr-artifact-versioning-and-distribution`). | Per-artifact semver discipline; a compatibility check asserting the `mfes → gts-plugin` range is satisfiable and not exact-pinned (no duplicate-runtime skew); a registry-side deprecation cycle (published notice + minimum window) before any removal. |
+| `cpt-frontx-nfr-scalability-ceiling` | No architectural cap on integrated units | Per-concern independent versioning; runtime boundaries | The distribution and boundary architecture imposes no structural ceiling, so integration scales to the PRD operational floors governed only by performance thresholds (`cpt-frontx-adr-artifact-versioning-and-distribution`). | Load test registering the PRD operational floors of microfrontends and type definitions against one application without architectural failure. |
+| `cpt-frontx-nfr-security` | Default-deny posture; validated admission | MFE Runtime isolation, contract matching, type validation | Loaded units are isolated at runtime (`cpt-frontx-adr-mfe-load-isolation`); every unit and extension passes contract matching and type validation before admission (`cpt-frontx-adr-domain-extension-compatibility`, `cpt-frontx-adr-runtime-type-system-coupling`), granting no access beyond a domain's declared grants. | Admission audit asserting 100% of admitted units validated and zero access paths outside an extension domain's declared grants. |
 
 #### Architecture Decision Records
 
@@ -96,41 +96,41 @@ The ecosystem's architecture is shaped by the following decision records, groupe
 
 Foundational:
 
-* `cpt-frontx-adr-matched-version-artifact-distribution` — Distributes the ecosystem as independently published, per-concern, independently versioned artifacts.
+* `cpt-frontx-adr-artifact-versioning-and-distribution` — Distributes the ecosystem as independently published, per-concern, independently versioned artifacts.
 * `cpt-frontx-adr-core-package-boundaries` — Partitions the Core Framework into boundary-governed concerns (runtime, type-system provider, protocol surface).
 
 Pillar 1 — Core Framework:
 
-* `cpt-frontx-adr-mfe-registry-facade` — Exposes microfrontend registration and loading through an abstract registry facade.
-* `cpt-frontx-adr-type-system-plugin-opaque-schema` — Keeps the runtime's schema surface opaque, with format-specific shape behind the type-system plugin.
-* `cpt-frontx-adr-gts-default-type-system` — Supplies the ecosystem's default type system as an injectable provider of the runtime's type-substrate port.
-* `cpt-frontx-adr-handler-abstraction-registry-resolution` — Abstracts the microfrontend handler and resolves it through the registry.
-* `cpt-frontx-adr-actions-chains-mediator` — Routes host–microfrontend communication through an actions-chains mediator.
-* `cpt-frontx-adr-parent-child-bridge` — Defines a narrow parent–child capability bridge between host and microfrontend.
-* `cpt-frontx-adr-mount-strategies-cardinality` — Governs extension-domain occupancy through mount strategies and cardinality rules.
-* `cpt-frontx-adr-domain-extension-contract-matching` — Admits extensions into domains by contract matching.
-* `cpt-frontx-adr-blob-url-mfe-isolation` — Isolates loaded microfrontends at runtime.
-* `cpt-frontx-adr-lazy-import-abi` — Separates the runtime ABI from the template-bound build through lazy import.
-* `cpt-frontx-adr-mf-manifest-discovery` — Discovers microfrontends through their manifest contract.
-* `cpt-frontx-adr-protocol-separated-api` — Separates request/response and streaming behind a common protocol surface.
-* `cpt-frontx-adr-short-circuit-and-shared-fetch-cache` — Provides a plugin short-circuit and a realm-shared fetch cache.
+* `cpt-frontx-adr-mfe-runtime-public-surface` — Exposes microfrontend registration and loading through an abstract registry facade.
+* `cpt-frontx-adr-runtime-type-system-coupling` — Keeps the runtime's schema surface opaque, with format-specific shape behind the type-system plugin.
+* `cpt-frontx-adr-default-type-substrate-provider` — Supplies the ecosystem's default type system as an injectable provider of the runtime's type-substrate port.
+* `cpt-frontx-adr-mfe-handler-resolution` — Abstracts the microfrontend handler and resolves it through the registry.
+* `cpt-frontx-adr-action-dispatch-and-chaining` — Routes host–microfrontend communication through an actions-chains mediator.
+* `cpt-frontx-adr-child-mfe-host-access` — Defines a narrow parent–child capability bridge between host and microfrontend.
+* `cpt-frontx-adr-extension-domain-occupancy` — Governs extension-domain occupancy through mount strategies and cardinality rules.
+* `cpt-frontx-adr-domain-extension-compatibility` — Admits extensions into domains by contract matching.
+* `cpt-frontx-adr-mfe-load-isolation` — Isolates loaded microfrontends at runtime.
+* `cpt-frontx-adr-lazy-import-resolution` — Separates the runtime ABI from the template-bound build through lazy import.
+* `cpt-frontx-adr-mfe-asset-discovery` — Discovers microfrontends through their manifest contract.
+* `cpt-frontx-adr-api-surface-organization` — Separates request/response and streaming behind a common protocol surface.
+* `cpt-frontx-adr-api-transport-bypass-and-fetch-sharing` — Provides a plugin short-circuit and a realm-shared fetch cache.
 
 Pillar 2 — CLI:
 
-* `cpt-frontx-adr-template-externalization-resolution` — Externalizes templates and resolves them by source-spec at runtime.
+* `cpt-frontx-adr-template-acquisition-and-location` — Externalizes templates and resolves them by source-spec at runtime.
 * `cpt-frontx-adr-source-spec-syntax` — Defines the versioned source-spec syntax for template acquisition.
 * `cpt-frontx-adr-template-manifest-contract` — Defines the template manifest publication contract.
 * `cpt-frontx-adr-project-provenance-record` — Records project provenance for scaffolded projects.
 * `cpt-frontx-adr-composed-template-resolution` — Resolves composed templates with a defined collision rule.
-* `cpt-frontx-adr-upgrade-changeset-engine` — Applies project upgrades as reviewable, non-destructive change sets.
-* `cpt-frontx-adr-two-namespace-architecture` — Organizes the command surface into project-level and microfrontend-level namespaces.
+* `cpt-frontx-adr-project-upgrade-mechanism` — Applies project upgrades as reviewable, non-destructive change sets.
+* `cpt-frontx-adr-cli-command-organization` — Organizes the command surface into project-level and microfrontend-level namespaces.
 
 Pillar 3 — AI Tooling:
 
-* `cpt-frontx-adr-kit-packaging-cyber-pilot-kit-frontx` — Packages base AI capabilities as a Cypilot kit with prefixed resource identifiers.
+* `cpt-frontx-adr-ai-tooling-framework-packaging` — Packages base AI capabilities as a Cypilot kit with prefixed resource identifiers.
 * `cpt-frontx-adr-template-ai-extension-contract` — Defines the extension contract a template's AI bundle conforms to.
 * `cpt-frontx-adr-extension-discovery-activation` — Discovers and activates installed-template AI extensions without manual wiring.
-* `cpt-frontx-adr-base-solution-ai-content-split` — Separates base ecosystem AI content from solution-specific content.
+* `cpt-frontx-adr-solution-ai-content-placement` — Separates base ecosystem AI content from solution-specific content.
 * `cpt-frontx-adr-ai-driven-upgrade-orchestration` — Orchestrates AI-driven template upgrades over the CLI change-set engine.
 
 ### 1.3 Architecture Layers
@@ -180,7 +180,7 @@ The Core Framework stays agnostic to UI-framework choice, type-system format, an
 
 The runtime reasons about types solely by identity. It holds a type only as an opaque identifier and delegates every schema operation — shape, validation, and hierarchy resolution — to an injected type-system provider, never reading the concrete schema shape itself. Keeping the substrate opaque confines all format-specific knowledge to a single replaceable provider, so the runtime stays independent of any one type-definition specification and a different provider can be composed in without touching the runtime.
 
-**ADRs**: `cpt-frontx-adr-type-system-plugin-opaque-schema`, `cpt-frontx-adr-gts-default-type-system`
+**ADRs**: `cpt-frontx-adr-runtime-type-system-coupling`, `cpt-frontx-adr-default-type-substrate-provider`
 
 #### Template-agnostic tooling
 
@@ -188,7 +188,7 @@ The runtime reasons about types solely by identity. It holds a type only as an o
 
 The lifecycle tooling carries no bundled template or solution content. The CLI resolves the templates it operates on by versioned source-spec at runtime and bundles none, and the AI Tooling Framework ships only base ecosystem capabilities, gaining solution-specific expertise exclusively through extensions bundled with installed templates. Decoupling the tooling from the content it acts on lets templates and tooling evolve and release independently, and keeps a single tool able to serve any conforming template.
 
-**ADRs**: `cpt-frontx-adr-template-externalization-resolution`, `cpt-frontx-adr-base-solution-ai-content-split`
+**ADRs**: `cpt-frontx-adr-template-acquisition-and-location`, `cpt-frontx-adr-solution-ai-content-placement`
 
 #### Default-deny admission
 
@@ -196,15 +196,15 @@ The lifecycle tooling carries no bundled template or solution content. The CLI r
 
 A unit gains nothing until it earns it. Microfrontends and their extensions are admitted into the runtime only after passing type validation and extension-domain contract matching, are placed under the explicit mount-strategy and cardinality rules of the domain they enter, are isolated once loaded, and are granted no access beyond a domain's declared grants. Denying by default and admitting only on an explicit, validated match bounds the blast radius of any independently developed unit running inside a host.
 
-**ADRs**: `cpt-frontx-adr-domain-extension-contract-matching`, `cpt-frontx-adr-type-system-plugin-opaque-schema`, `cpt-frontx-adr-blob-url-mfe-isolation`
+**ADRs**: `cpt-frontx-adr-domain-extension-compatibility`, `cpt-frontx-adr-runtime-type-system-coupling`, `cpt-frontx-adr-mfe-load-isolation`
 
 #### Per-concern independent versioning
 
-- [ ] `p2` - **ID**: `cpt-frontx-principle-per-concern-versioning`
+- [x] `p2` - **ID**: `cpt-frontx-principle-per-concern-versioning`
 
-Each concern is published as its own artifact and versioned on its own cadence, with major and minor versions kept matched across the artifacts while patch and pre-release may diverge. Consuming applications adopt new versions on their own schedule rather than in lockstep, breaking changes are isolated behind semantic versioning and a deprecation cycle, and no single artifact's release pace constrains another's. This is what lets the ecosystem evolve continuously without forcing a coordinated platform-wide upgrade.
+Each concern is published as its own artifact and versioned on its own semver line and cadence; a breaking change bumps only that artifact's own major version, and no single artifact's release pace constrains another's. Consuming applications adopt new versions on their own schedule rather than in lockstep. The one compile-time coupling edge, `mfes → gts-plugin`, is not held to a matched version number: `mfes` declares a satisfiable semver range (peer/caret) on `gts-plugin`, so version skew is resolved by ranges rather than lockstep. Breaking changes are isolated behind semantic versioning and a registry-side deprecation cycle (a published notice and a minimum window elapse before any removal). This is what lets the ecosystem evolve continuously without forcing a coordinated platform-wide upgrade.
 
-**ADRs**: `cpt-frontx-adr-matched-version-artifact-distribution`, `cpt-frontx-adr-core-package-boundaries`
+**ADRs**: `cpt-frontx-adr-artifact-versioning-and-distribution`, `cpt-frontx-adr-core-package-boundaries`
 
 ### 2.2 Constraints
 
@@ -248,7 +248,7 @@ The MFE Runtime declares no dependency on any concrete type-system-format implem
 
 The runtime's schema surface is opaque, exposing only a stable identifier. Format-specific schema shape and validation live in the type-system plugin, so the runtime reasons about types solely by identity.
 
-**ADRs**: `cpt-frontx-adr-type-system-plugin-opaque-schema`
+**ADRs**: `cpt-frontx-adr-runtime-type-system-coupling`
 
 #### GTS-PLUGIN-1 — Type-system plugin owns infrastructure schemas
 
@@ -256,7 +256,7 @@ The runtime's schema surface is opaque, exposing only a stable identifier. Forma
 
 The type-system plugin (`@gears-frontx/gts-plugin`) owns the ecosystem's infrastructure schemas and the default lifecycle instances, registering them as the concrete provider behind the runtime's opaque type-substrate port.
 
-**ADRs**: `cpt-frontx-adr-gts-default-type-system`
+**ADRs**: `cpt-frontx-adr-default-type-substrate-provider`
 
 #### GTS-PLUGIN-2 — Type-system plugin excludes solution schemas
 
@@ -264,7 +264,7 @@ The type-system plugin (`@gears-frontx/gts-plugin`) owns the ecosystem's infrast
 
 The type-system plugin owns no solution-specific schemas. Application- and template-specific type definitions are registered by their owners at runtime, keeping the plugin scoped to infrastructure concerns.
 
-**ADRs**: `cpt-frontx-adr-gts-default-type-system`
+**ADRs**: `cpt-frontx-adr-default-type-substrate-provider`
 
 #### API-1 — No solution-specific content in the API surface
 
@@ -272,7 +272,7 @@ The type-system plugin owns no solution-specific schemas. Application- and templ
 
 The API Protocol Surface (`@gears-frontx/api`) contains no solution-specific content — such as concrete endpoints, auth wiring, request stand-ins, or any other application-specific plugin — and ships no application-specific plugin of its own. The surface provides protocol-separated request and stream primitives, a generic plugin extension point, and a short-circuit capability; solution behavior is supplied by consumers through that extension point.
 
-**ADRs**: `cpt-frontx-adr-protocol-separated-api`
+**ADRs**: `cpt-frontx-adr-api-surface-organization`
 
 #### CLI-1 — Template independence of the CLI
 
@@ -280,7 +280,7 @@ The API Protocol Surface (`@gears-frontx/api`) contains no solution-specific con
 
 The CLI (`@gears-frontx/cli`) has zero dependency on any template. It resolves templates by source-spec at runtime and bundles none, so the command surface is fully decoupled from the content it scaffolds.
 
-**ADRs**: `cpt-frontx-adr-template-externalization-resolution`
+**ADRs**: `cpt-frontx-adr-template-acquisition-and-location`
 
 #### KIT-1 — Prefixed resource identifiers in the AI Tooling kit
 
@@ -288,7 +288,7 @@ The CLI (`@gears-frontx/cli`) has zero dependency on any template. It resolves t
 
 Every resource identifier in the AI Tooling kit (`cyber-pilot-kit-frontx`) carries the `frontx_` prefix, so the kit's contributed skills, workflows, and reference artifacts are unambiguously namespaced within a consuming project's Cypilot environment.
 
-**ADRs**: `cpt-frontx-adr-kit-packaging-cyber-pilot-kit-frontx`
+**ADRs**: `cpt-frontx-adr-ai-tooling-framework-packaging`
 
 ## 3. Technical Architecture
 
@@ -311,7 +311,7 @@ The ecosystem's core entities span the three pillars: the runtime substrate's re
 | Template | An externally hosted, versioned scaffolding unit resolved by source-spec at runtime and bundled into no tool; a project template may compose microfrontend templates by reference. | Target — template repository content; format owned by `cpt-frontx-adr-source-spec-syntax` |
 | TemplateManifest | The descriptor every publishable template exposes in a defined shape, produced at pre-publish validation and consumed at install and scaffold. | Target — manifest file; shape owned by `cpt-frontx-adr-template-manifest-contract` |
 | ProjectProvenance | The record written into a scaffolded project capturing the originating template and template version, so a later upgrade can determine what to apply. | Target — provenance record; shape owned by `cpt-frontx-adr-project-provenance-record` |
-| Kit | The AI Tooling delivery unit — a Cypilot kit carrying base ecosystem capabilities, every resource identifier prefixed for unambiguous namespacing. | Target — Cypilot kit resources; shape owned by `cpt-frontx-adr-kit-packaging-cyber-pilot-kit-frontx` |
+| Kit | The AI Tooling delivery unit — a Cypilot kit carrying base ecosystem capabilities, every resource identifier prefixed for unambiguous namespacing. | Target — Cypilot kit resources; shape owned by `cpt-frontx-adr-ai-tooling-framework-packaging` |
 | AiExtension | A template-bundled AI capability conforming to the extension contract, discovered and activated in a consuming project without manual wiring. | Target — extension bundle; shape owned by `cpt-frontx-adr-template-ai-extension-contract` |
 
 **Relationships**:
@@ -487,7 +487,7 @@ AI agents working in a FrontX project need ecosystem fluency from session start 
 
 ### 3.3 API Contracts
 
-This section documents the ecosystem's public interfaces and external integration contracts by shape, stability, and owning decision record. Full request/response specifications and endpoint enumerations are owned by downstream FEATURE specs and the interfaces' own declarations, not inlined here (INT-DESIGN-NO-001). The API Protocol Surface (`@gears-frontx/api`) is intentionally below this altitude — it maps to no public interface and is anchored only by `cpt-frontx-adr-protocol-separated-api` and `cpt-frontx-adr-short-circuit-and-shared-fetch-cache`; no `interface` ID is introduced for it.
+This section documents the ecosystem's public interfaces and external integration contracts by shape, stability, and owning decision record. Full request/response specifications and endpoint enumerations are owned by downstream FEATURE specs and the interfaces' own declarations, not inlined here (INT-DESIGN-NO-001). The API Protocol Surface (`@gears-frontx/api`) is intentionally below this altitude — it maps to no public interface and is anchored only by `cpt-frontx-adr-api-surface-organization` and `cpt-frontx-adr-api-transport-bypass-and-fetch-sharing`; no `interface` ID is introduced for it.
 
 #### MFE Runtime interface
 
@@ -496,8 +496,8 @@ Covers `cpt-frontx-interface-mfe-runtime` (PRD §7.1).
 - **Technology**: TypeScript library API — `@gears-frontx/mfes`
 - **Location**: public entry of `@gears-frontx/mfes` (TypeScript declarations)
 - **Shape**: the registry facade for microfrontend registration and on-demand loading, extension-domain governance under mount-strategy and cardinality rules, and the mediated host–microfrontend communication surface — exposed while reasoning about types only by opaque identity.
-- **Stability**: unstable; incompatible changes to the public surface require a major version bump under the matched-version distribution policy, with minor and patch preserving compatibility.
-- **ADRs**: `cpt-frontx-adr-core-package-boundaries`, `cpt-frontx-adr-mfe-registry-facade`
+- **Stability**: unstable; incompatible changes to the public surface require a major version bump under the per-concern independent versioning policy, with minor and patch preserving compatibility.
+- **ADRs**: `cpt-frontx-adr-core-package-boundaries`, `cpt-frontx-adr-mfe-runtime-public-surface`
 
 #### Type System interface
 
@@ -506,8 +506,8 @@ Covers `cpt-frontx-interface-type-system` (PRD §7.1).
 - **Technology**: TypeScript library API — `@gears-frontx/gts-plugin` implementing the runtime's type-substrate port
 - **Location**: public entry of `@gears-frontx/gts-plugin` (TypeScript declarations)
 - **Shape**: the injectable provider of the runtime's opaque type-substrate port — schema validation, type-of resolution, and the infrastructure schemas and default lifecycle instances — letting an application register additional type definitions at runtime.
-- **Stability**: unstable; incompatible changes to the public surface require a major version bump under the matched-version distribution policy.
-- **ADRs**: `cpt-frontx-adr-core-package-boundaries`, `cpt-frontx-adr-type-system-plugin-opaque-schema`, `cpt-frontx-adr-gts-default-type-system`
+- **Stability**: unstable; incompatible changes to the public surface require a major version bump under the per-concern independent versioning policy.
+- **ADRs**: `cpt-frontx-adr-core-package-boundaries`, `cpt-frontx-adr-runtime-type-system-coupling`, `cpt-frontx-adr-default-type-substrate-provider`
 
 #### CLI interface
 
@@ -516,8 +516,8 @@ Covers `cpt-frontx-interface-cli` (PRD §7.1).
 - **Technology**: command-line interface — `@gears-frontx/cli`
 - **Location**: command surface of `@gears-frontx/cli`
 - **Shape**: the command surface that drives the template and project lifecycle — install, list, update, and pre-publish validation of templates; project and microfrontend scaffolding with composed-template resolution; provenance recording; and reviewable change-set upgrades — organized into project-level and microfrontend-level namespaces sharing one resolver.
-- **Stability**: unstable; incompatible changes to the command surface require a major version bump under the matched-version distribution policy.
-- **ADRs**: `cpt-frontx-adr-matched-version-artifact-distribution`, `cpt-frontx-adr-two-namespace-architecture`
+- **Stability**: unstable; incompatible changes to the command surface require a major version bump under the per-concern independent versioning policy.
+- **ADRs**: `cpt-frontx-adr-artifact-versioning-and-distribution`, `cpt-frontx-adr-cli-command-organization`
 
 #### AI Tooling Framework interface
 
@@ -526,18 +526,18 @@ Covers `cpt-frontx-interface-ai-tooling-framework` (PRD §7.1).
 - **Technology**: Cypilot kit — `cyber-pilot-kit-frontx`
 - **Location**: kit resources of `cyber-pilot-kit-frontx`, installed through the Cypilot CLI integration
 - **Shape**: the base ecosystem capabilities available to agents at session start, the discovery-and-activation surface for template-bundled AI extensions, and the AI workflow surface that orchestrates and enriches the CLI change-set engine — shipping no solution-specific content of its own.
-- **Stability**: unstable; incompatible changes to the public surface require a major version bump under the matched-version distribution policy.
-- **ADRs**: `cpt-frontx-adr-matched-version-artifact-distribution`, `cpt-frontx-adr-kit-packaging-cyber-pilot-kit-frontx`
+- **Stability**: unstable; incompatible changes to the public surface require a major version bump under the per-concern independent versioning policy.
+- **ADRs**: `cpt-frontx-adr-artifact-versioning-and-distribution`, `cpt-frontx-adr-ai-tooling-framework-packaging`
 
 #### External integration contracts
 
 The integration contracts below complement the interfaces above. Each is referenced by its PRD ID with its shape, stability, and owning decision record; the concrete contract shapes are owned by those ADRs and the §3.1 entities, not specified inline here (INT-DESIGN-NO-001).
 
-- **Source-spec** (`cpt-frontx-contract-source-spec`): a versioned reference that identifies a template on the source registry, resolved generically by the CLI without prescribing a fixed syntax at requirement altitude. Stability: compatible across minor and patch versions; breaking changes follow `cpt-frontx-nfr-evolvability`. **ADRs**: `cpt-frontx-adr-template-externalization-resolution`, `cpt-frontx-adr-source-spec-syntax`.
-- **Template manifest** (`cpt-frontx-contract-template-manifest`): the descriptor every template publishes in a defined shape, produced when a template is validated for publication and consumed when it is installed or scaffolded. Stability: versioned with the platform; non-backward-compatible changes follow `cpt-frontx-nfr-evolvability`. **ADRs**: `cpt-frontx-adr-mf-manifest-discovery`, `cpt-frontx-adr-template-manifest-contract`.
+- **Source-spec** (`cpt-frontx-contract-source-spec`): a versioned reference that identifies a template on the source registry, resolved generically by the CLI without prescribing a fixed syntax at requirement altitude. Stability: compatible across minor and patch versions; breaking changes follow `cpt-frontx-nfr-evolvability`. **ADRs**: `cpt-frontx-adr-template-acquisition-and-location`, `cpt-frontx-adr-source-spec-syntax`.
+- **Template manifest** (`cpt-frontx-contract-template-manifest`): the descriptor every template publishes in a defined shape, produced when a template is validated for publication and consumed when it is installed or scaffolded. Stability: versioned with the platform; non-backward-compatible changes follow `cpt-frontx-nfr-evolvability`. **ADRs**: `cpt-frontx-adr-mfe-asset-discovery`, `cpt-frontx-adr-template-manifest-contract`.
 - **Project provenance** (`cpt-frontx-contract-project-provenance`): the record written into each scaffolded project capturing the originating template and version so a later upgrade can determine what to apply. Stability: readable across versions; non-backward-compatible changes follow `cpt-frontx-nfr-evolvability`. **ADRs**: `cpt-frontx-adr-project-provenance-record`.
-- **Kit-installation** (`cpt-frontx-contract-kit-installation`): the path by which the AI Tooling Framework is installed into a consuming project through the Cypilot CLI integration, making its skills and activated template extensions available to agents. Stability: compatible across minor and patch versions; breaking changes follow `cpt-frontx-nfr-evolvability`. **ADRs**: `cpt-frontx-adr-kit-packaging-cyber-pilot-kit-frontx`.
-- **Package-registry distribution** (`cpt-frontx-contract-package-registry-distribution`): the publish-and-install path for the ecosystem's packages on the package registry, consumed by applications through their chosen package manager. Stability: semantic versioning under the matched-version distribution policy. **ADRs**: `cpt-frontx-adr-matched-version-artifact-distribution`.
+- **Kit-installation** (`cpt-frontx-contract-kit-installation`): the path by which the AI Tooling Framework is installed into a consuming project through the Cypilot CLI integration, making its skills and activated template extensions available to agents. Stability: compatible across minor and patch versions; breaking changes follow `cpt-frontx-nfr-evolvability`. **ADRs**: `cpt-frontx-adr-ai-tooling-framework-packaging`.
+- **Package-registry distribution** (`cpt-frontx-contract-package-registry-distribution`): the publish-and-install path for the ecosystem's packages on the package registry, consumed by applications through their chosen package manager. Stability: semantic versioning under the per-concern independent versioning policy. **ADRs**: `cpt-frontx-adr-artifact-versioning-and-distribution`.
 
 ### 3.4 Internal Dependencies
 
@@ -545,9 +545,9 @@ The ecosystem's artifacts integrate only through narrow, explicit contracts; the
 
 | Dependency Module | Interface Used | Purpose |
 |-------------------|----------------|---------|
-| `@gears-frontx/mfes` → `@gears-frontx/gts-plugin` | type-substrate port (plugin interface, injected at registry construction) | The runtime reasons about types only by opaque identity and delegates all schema, validation, and hierarchy resolution to the injected provider (`cpt-frontx-adr-type-system-plugin-opaque-schema`, `cpt-frontx-adr-gts-default-type-system`). |
+| `@gears-frontx/mfes` → `@gears-frontx/gts-plugin` | type-substrate port (plugin interface, injected at registry construction) | The runtime reasons about types only by opaque identity and delegates all schema, validation, and hierarchy resolution to the injected provider (`cpt-frontx-adr-runtime-type-system-coupling`, `cpt-frontx-adr-default-type-substrate-provider`). |
 | `@gears-frontx/api` | none (intra-ecosystem) | Standalone Core Framework surface consumed directly by applications and microfrontends; holds no dependency on any other ecosystem package. |
-| `@gears-frontx/cli` | none (intra-ecosystem) | Standalone; operates on externally resolved templates that target the Core Framework, with no compile-time coupling to any ecosystem package (`cpt-frontx-adr-template-externalization-resolution`). |
+| `@gears-frontx/cli` | none (intra-ecosystem) | Standalone; operates on externally resolved templates that target the Core Framework, with no compile-time coupling to any ecosystem package (`cpt-frontx-adr-template-acquisition-and-location`). |
 | `cyber-pilot-kit-frontx` | CLI command surface (orchestration, not a package dependency) | Standalone delivery unit; orchestrates and enriches the CLI's change-set engine through its command surface rather than linking to it (`cpt-frontx-adr-ai-driven-upgrade-orchestration`). |
 
 **Dependency Rules**:
@@ -570,31 +570,31 @@ The ecosystem depends on a small set of external systems and third-party librari
 
 | Dependency Module | Interface Used | Purpose | Owning Component |
 |-------------------|----------------|---------|------------------|
-| Module Federation runtime | module-federation load/share API | Loads independently built microfrontends on demand and shares runtime singletons, behind the lazy-import ABI separation that keeps the runtime ABI distinct from the template-bound build (`cpt-frontx-adr-lazy-import-abi`, `cpt-frontx-adr-mf-manifest-discovery`). | `@gears-frontx/mfes` |
+| Module Federation runtime | module-federation load/share API | Loads independently built microfrontends on demand and shares runtime singletons, behind the lazy-import ABI separation that keeps the runtime ABI distinct from the template-bound build (`cpt-frontx-adr-lazy-import-resolution`, `cpt-frontx-adr-mfe-asset-discovery`). | `@gears-frontx/mfes` |
 
 #### Transport library (API peer)
 
 | Dependency Module | Interface Used | Purpose | Owning Component |
 |-------------------|----------------|---------|------------------|
-| axios | HTTP transport client | Provides the request/response transport behind the protocol-separated surface; declared as a peer dependency so the surface carries no hard runtime coupling to a specific transport (`cpt-frontx-adr-protocol-separated-api`). | `@gears-frontx/api` |
+| axios | HTTP transport client | Provides the request/response transport behind the protocol-separated surface; declared as a peer dependency so the surface carries no hard runtime coupling to a specific transport (`cpt-frontx-adr-api-surface-organization`). | `@gears-frontx/api` |
 
 #### GitHub source registry
 
 | Dependency Module | Interface Used | Purpose | Owning Component |
 |-------------------|----------------|---------|------------------|
-| GitHub source registry (`cpt-frontx-actor-github`) | versioned source-spec fetch | Hosts the project and microfrontend templates and the AI Tooling Framework; the CLI resolves and fetches them by versioned source-spec at runtime (`cpt-frontx-adr-template-externalization-resolution`, `cpt-frontx-adr-source-spec-syntax`). | `@gears-frontx/cli` (and the Cypilot integration for the kit) |
+| GitHub source registry (`cpt-frontx-actor-github`) | versioned source-spec fetch | Hosts the project and microfrontend templates and the AI Tooling Framework; the CLI resolves and fetches them by versioned source-spec at runtime (`cpt-frontx-adr-template-acquisition-and-location`, `cpt-frontx-adr-source-spec-syntax`). | `@gears-frontx/cli` (and the Cypilot integration for the kit) |
 
 #### npm package registry
 
 | Dependency Module | Interface Used | Purpose | Owning Component |
 |-------------------|----------------|---------|------------------|
-| npm package registry (`cpt-frontx-actor-package-registry`) | package publish/install | Distributes the ecosystem's published packages under the matched-version distribution policy; applications install from it with their chosen package manager (`cpt-frontx-adr-matched-version-artifact-distribution`). | all published packages (distribution channel) |
+| npm package registry (`cpt-frontx-actor-package-registry`) | package publish/install | Distributes the ecosystem's published packages under the per-concern independent versioning policy; applications install from it with their chosen package manager (`cpt-frontx-adr-artifact-versioning-and-distribution`). | all published packages (distribution channel) |
 
 #### Cypilot CLI / kit system
 
 | Dependency Module | Interface Used | Purpose | Owning Component |
 |-------------------|----------------|---------|------------------|
-| Cypilot CLI / kit system (`cpt-frontx-actor-cypilot-cli`) | kit installation and resource discovery | Installs the AI Tooling Framework into a consuming project and surfaces its prefixed resources to agents at session start (`cpt-frontx-adr-kit-packaging-cyber-pilot-kit-frontx`). | `cyber-pilot-kit-frontx` |
+| Cypilot CLI / kit system (`cpt-frontx-actor-cypilot-cli`) | kit installation and resource discovery | Installs the AI Tooling Framework into a consuming project and surfaces its prefixed resources to agents at session start (`cpt-frontx-adr-ai-tooling-framework-packaging`). | `cyber-pilot-kit-frontx` |
 
 **Dependency Rules**:
 - No circular dependencies between components and external systems.
@@ -635,7 +635,7 @@ sequenceDiagram
     end
 ```
 
-**Description**: A registered microfrontend is admitted only after type validation and extension-domain contract matching both succeed and the domain's cardinality permits the occupant; it is then loaded on demand and mounted in isolation under the domain's mount strategy (`cpt-frontx-adr-mfe-registry-facade`, `cpt-frontx-adr-handler-abstraction-registry-resolution`, `cpt-frontx-adr-type-system-plugin-opaque-schema`, `cpt-frontx-adr-domain-extension-contract-matching`, `cpt-frontx-adr-mount-strategies-cardinality`, `cpt-frontx-adr-blob-url-mfe-isolation`). On validation failure the runtime rejects the unit and it is not placed into its extension domain, realizing the default-deny admission posture.
+**Description**: A registered microfrontend is admitted only after type validation and extension-domain contract matching both succeed and the domain's cardinality permits the occupant; it is then loaded on demand and mounted in isolation under the domain's mount strategy (`cpt-frontx-adr-mfe-runtime-public-surface`, `cpt-frontx-adr-mfe-handler-resolution`, `cpt-frontx-adr-runtime-type-system-coupling`, `cpt-frontx-adr-domain-extension-compatibility`, `cpt-frontx-adr-extension-domain-occupancy`, `cpt-frontx-adr-mfe-load-isolation`). On validation failure the runtime rejects the unit and it is not placed into its extension domain, realizing the default-deny admission posture.
 
 #### Composed-project scaffold
 
@@ -666,7 +666,7 @@ sequenceDiagram
     end
 ```
 
-**Description**: The CLI installs a project template by versioned source-spec, resolves its composed microfrontend templates recursively in one operation under a defined collision rule, scaffolds the project and its microfrontends, records project provenance, and the AI Tooling Framework activates base and template-bundled capabilities (`cpt-frontx-adr-template-externalization-resolution`, `cpt-frontx-adr-source-spec-syntax`, `cpt-frontx-adr-composed-template-resolution`, `cpt-frontx-adr-two-namespace-architecture`, `cpt-frontx-adr-project-provenance-record`, `cpt-frontx-adr-extension-discovery-activation`). If the source registry is unreachable or a composition collision is detected, the CLI reports the failure and aborts before writing any files.
+**Description**: The CLI installs a project template by versioned source-spec, resolves its composed microfrontend templates recursively in one operation under a defined collision rule, scaffolds the project and its microfrontends, records project provenance, and the AI Tooling Framework activates base and template-bundled capabilities (`cpt-frontx-adr-template-acquisition-and-location`, `cpt-frontx-adr-source-spec-syntax`, `cpt-frontx-adr-composed-template-resolution`, `cpt-frontx-adr-cli-command-organization`, `cpt-frontx-adr-project-provenance-record`, `cpt-frontx-adr-extension-discovery-activation`). If the source registry is unreachable or a composition collision is detected, the CLI reports the failure and aborts before writing any files.
 
 #### AI-driven template upgrade
 
@@ -697,7 +697,7 @@ sequenceDiagram
     end
 ```
 
-**Description**: An AI agent reads project provenance, orchestrates and enriches the CLI's single change-set engine to analyze the version transition, and presents a reviewable change set with downstream-impact assessment; the engine applies the approved set non-destructively and updates provenance (`cpt-frontx-adr-ai-driven-upgrade-orchestration`, `cpt-frontx-adr-upgrade-changeset-engine`, `cpt-frontx-adr-project-provenance-record`). If the developer declines or impact assessment flags incompatibilities, no files are written and the project remains at its current version.
+**Description**: An AI agent reads project provenance, orchestrates and enriches the CLI's single change-set engine to analyze the version transition, and presents a reviewable change set with downstream-impact assessment; the engine applies the approved set non-destructively and updates provenance (`cpt-frontx-adr-ai-driven-upgrade-orchestration`, `cpt-frontx-adr-project-upgrade-mechanism`, `cpt-frontx-adr-project-provenance-record`). If the developer declines or impact assessment flags incompatibilities, no files are written and the project remains at its current version.
 
 #### Template AI-extension discovery and activation
 
@@ -727,7 +727,7 @@ sequenceDiagram
     end
 ```
 
-**Description**: A Template Developer bundles an AI extension conforming to the extension contract and publishes the template; on install, the AI Tooling Framework discovers the bundled extension and activates its capabilities for agents without manual wiring (`cpt-frontx-adr-template-ai-extension-contract`, `cpt-frontx-adr-extension-discovery-activation`, `cpt-frontx-adr-base-solution-ai-content-split`). A malformed extension is reported as a structural error and is not activated, keeping the agent surface to conforming extensions only.
+**Description**: A Template Developer bundles an AI extension conforming to the extension contract and publishes the template; on install, the AI Tooling Framework discovers the bundled extension and activates its capabilities for agents without manual wiring (`cpt-frontx-adr-template-ai-extension-contract`, `cpt-frontx-adr-extension-discovery-activation`, `cpt-frontx-adr-solution-ai-content-placement`). A malformed extension is reported as a structural error and is not activated, keeping the agent surface to conforming extensions only.
 
 ### 3.7 Database schemas & tables
 
@@ -737,8 +737,8 @@ Not applicable because the ecosystem persists no databases; provenance and manif
 
 The ecosystem has no server-side runtime to deploy; its artifacts are distributed as published units and consumed within the consuming application's own build and runtime. Two distribution channels carry the artifacts:
 
-- **Package registry (npm-compatible)** — the Core Framework packages and the CLI are published to the npm package registry (`cpt-frontx-actor-package-registry`) under the matched-version distribution policy and installed by applications with their chosen package manager (`cpt-frontx-adr-matched-version-artifact-distribution`).
-- **GitHub source registry (tarball/source)** — templates, composed microfrontend templates, and the AI Tooling Framework are hosted on the GitHub source registry (`cpt-frontx-actor-github`) and acquired by versioned source-spec at install and upgrade time; the AI Tooling Framework is additionally installed into a consuming project through the Cypilot CLI integration (`cpt-frontx-actor-cypilot-cli`) (`cpt-frontx-adr-template-externalization-resolution`, `cpt-frontx-adr-kit-packaging-cyber-pilot-kit-frontx`).
+- **Package registry (npm-compatible)** — the Core Framework packages and the CLI are published to the npm package registry (`cpt-frontx-actor-package-registry`) under the per-concern independent versioning policy and installed by applications with their chosen package manager (`cpt-frontx-adr-artifact-versioning-and-distribution`).
+- **GitHub source registry (tarball/source)** — templates, composed microfrontend templates, and the AI Tooling Framework are hosted on the GitHub source registry (`cpt-frontx-actor-github`) and acquired by versioned source-spec at install and upgrade time; the AI Tooling Framework is additionally installed into a consuming project through the Cypilot CLI integration (`cpt-frontx-actor-cypilot-cli`) (`cpt-frontx-adr-template-acquisition-and-location`, `cpt-frontx-adr-ai-tooling-framework-packaging`).
 
 The runtime topology is therefore wholly in-browser within the composed application: the host loads independently published microfrontends on demand, and there is no separate server tier owned by the ecosystem.
 
@@ -750,16 +750,16 @@ The technology choices recorded in §1.3 align with the §2.2 boundary constrain
 
 - **Language and type discipline** — TypeScript across the Core Framework and CLI supports the opaque type-substrate boundary (the runtime carries only type identity; format-specific shape lives in the plugin) and gives applications a typed integration surface, aligning with the agnostic-core and opaque-type-substrate principles (MFES-1, MFES-5).
 - **UI-framework freedom** — the runtime mandates no UI framework, so applications and microfrontends choose React, Vue, Svelte, or vanilla JavaScript; this aligns with `cpt-frontx-fr-ui-framework-agnostic` and keeps the Presentation layer outside the platform's constraints.
-- **Module Federation + lazy import** — on-demand microfrontend loading and ABI separation align with the runtime-performance NFR by deferring template-bound build cost from the runtime ABI (`cpt-frontx-adr-lazy-import-abi`, `cpt-frontx-nfr-runtime-performance`).
+- **Module Federation + lazy import** — on-demand microfrontend loading and ABI separation align with the runtime-performance NFR by deferring template-bound build cost from the runtime ABI (`cpt-frontx-adr-lazy-import-resolution`, `cpt-frontx-nfr-runtime-performance`).
 - **Transport as a peer dependency** — keeping axios a peer dependency of the API Protocol Surface aligns with API-1 (no hard runtime transport coupling) and lets applications control their transport version.
 - **Concrete type system confined to one provider** — the GTS specification lives only in the Type System plugin, aligning with MFES-4 and the per-concern-versioning principle so the runtime can be composed with any conforming provider.
-- **Distribution via npm + GitHub source registry** — aligns with the matched-version distribution policy and the template-agnostic-tooling principle (`cpt-frontx-adr-matched-version-artifact-distribution`, `cpt-frontx-adr-template-externalization-resolution`).
+- **Distribution via npm + GitHub source registry** — aligns with the per-concern independent versioning policy and the template-agnostic-tooling principle (`cpt-frontx-adr-artifact-versioning-and-distribution`, `cpt-frontx-adr-template-acquisition-and-location`).
 
 **Technology risks**: dependence on the Module Federation runtime and the GTS specification concentrates external-evolution risk in two components; both are isolated behind a single owning component (the runtime and the plugin respectively) and a port/manifest boundary, so an upgrade or replacement is contained to that component rather than rippling across the ecosystem. These choices are maintainable long-term because each external coupling is owned by exactly one component and crossed only through a narrow contract (§3.4, §3.5).
 
 ### Capacity and NFR thresholds
 
-Capacity is governed by performance thresholds rather than a structural ceiling: the architecture places no architectural cap on the number of microfrontends or type definitions an application integrates (`cpt-frontx-fr-no-architectural-ceiling`, `cpt-frontx-nfr-scalability-ceiling`), and growth is bounded only by the runtime-performance targets in `cpt-frontx-nfr-runtime-performance`. The capacity-planning approach is to validate the PRD operational floors (microfrontends and type definitions registered against a single application) under load, asserting the p95 registration, on-demand-load, and registration-throughput thresholds the PRD specifies; the realm-shared, retainer-counted fetch cache and plugin short-circuit bound redundant fetch cost across independently bundled units (`cpt-frontx-adr-short-circuit-and-shared-fetch-cache`). The evolvability budget is the matched major/minor distribution policy with a deprecation cycle before any removal (`cpt-frontx-nfr-evolvability`).
+Capacity is governed by performance thresholds rather than a structural ceiling: the architecture places no architectural cap on the number of microfrontends or type definitions an application integrates (`cpt-frontx-fr-no-architectural-ceiling`, `cpt-frontx-nfr-scalability-ceiling`), and growth is bounded only by the runtime-performance targets in `cpt-frontx-nfr-runtime-performance`. The capacity-planning approach is to validate the PRD operational floors (microfrontends and type definitions registered against a single application) under load, asserting the p95 registration, on-demand-load, and registration-throughput thresholds the PRD specifies; the realm-shared, retainer-counted fetch cache and plugin short-circuit bound redundant fetch cost across independently bundled units (`cpt-frontx-adr-api-transport-bypass-and-fetch-sharing`). The evolvability budget is per-concern independent versioning with a registry-side deprecation cycle before any removal (`cpt-frontx-nfr-evolvability`).
 
 **Cost and budgets — Not applicable**: the ecosystem operates no hosted server infrastructure of its own (§3.8), so there is no per-component infrastructure cost budget, capacity reservation, or cost-optimization strategy to allocate; runtime cost is borne within the consuming application's own infrastructure and is out of scope for this architecture.
 
@@ -768,7 +768,7 @@ Capacity is governed by performance thresholds rather than a structural ceiling:
 - **Data architecture (DATA)** — Not applicable: no databases or data stores; the only durable artifacts are file-based provenance records and manifests (§3.7).
 - **Infrastructure / operations (OPS)** — Not applicable: the ecosystem deploys no server-side runtime and ships no infrastructure code; distribution is via the package and source registries (§3.8).
 - **Security (SEC)** — addressed at architecture altitude by the default-deny admission posture, runtime isolation, and validated admission (`cpt-frontx-nfr-security`, §2.1); no secrets appear in this document (SEC-DESIGN-NO-001).
-- **Reliability (REL)** — addressed for the lifecycle path by the non-destructive, reviewable, recoverable change-set engine (`cpt-frontx-adr-upgrade-changeset-engine`); the in-browser runtime owns no separate availability tier.
+- **Reliability (REL)** — addressed for the lifecycle path by the non-destructive, reviewable, recoverable change-set engine (`cpt-frontx-adr-project-upgrade-mechanism`); the in-browser runtime owns no separate availability tier.
 
 ## 5. Traceability
 

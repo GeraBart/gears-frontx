@@ -32,11 +32,11 @@
 
 ### 1.1 Overview
 
-Organizes the CLI command surface of `@gears-frontx/cli` into a project-level namespace and a microfrontend-level namespace that share one resolver, and drives project and microfrontend scaffolding from those namespaces. The namespace organization is the CLI's public interface (`cpt-frontx-interface-cli`). All CDSL behavior is target (GREENFIELD — grounded in `cpt-frontx-adr-two-namespace-architecture` and DESIGN §3.3).
+Organizes the CLI command surface of `@gears-frontx/cli` into a project-level namespace and a microfrontend-level namespace that share one resolver, and drives project and microfrontend scaffolding from those namespaces. The namespace organization is the CLI's public interface (`cpt-frontx-interface-cli`). All CDSL behavior is target (GREENFIELD — grounded in `cpt-frontx-adr-cli-command-organization` and DESIGN §3.3).
 
 ### 1.2 Purpose
 
-This feature realizes the two-namespace command surface decided in `cpt-frontx-adr-two-namespace-architecture`. It covers the organization of the command surface into project-level and microfrontend-level namespaces, routing of both namespaces through the one shared resolver decided in `cpt-frontx-adr-template-externalization-resolution`, and the scaffolding operations invoked from each namespace. The command surface shape defines `cpt-frontx-interface-cli` and its stability is governed by `cpt-frontx-adr-matched-version-artifact-distribution`.
+This feature realizes the two-namespace command surface decided in `cpt-frontx-adr-cli-command-organization`. It covers the organization of the command surface into project-level and microfrontend-level namespaces, routing of both namespaces through the one shared resolver decided in `cpt-frontx-adr-template-acquisition-and-location`, and the scaffolding operations invoked from each namespace. The command surface shape defines `cpt-frontx-interface-cli` and its stability is governed by `cpt-frontx-adr-artifact-versioning-and-distribution`.
 
 **Requirements**: `cpt-frontx-fr-cli-two-namespace-commands`, `cpt-frontx-fr-cli-project-scaffold`, `cpt-frontx-fr-cli-microfrontend-scaffold`
 
@@ -251,4 +251,4 @@ The system **MUST** scaffold a microfrontend from a resolved microfrontend templ
 - [ ] A developer can scaffold a microfrontend by invoking the microfrontend-level namespace scaffold command with a valid template reference and target directory. (`target`)
 - [ ] Scaffold is aborted with notification when the template reference cannot be resolved from the local inventory. (`target`)
 - [ ] Scaffold is aborted with notification when the target directory contains conflicting content. (`target`)
-- [ ] The namespace boundary is part of `cpt-frontx-interface-cli`; an incompatible change to the surface requires a major version bump per `cpt-frontx-adr-matched-version-artifact-distribution`. (`target`)
+- [ ] The namespace boundary is part of `cpt-frontx-interface-cli`; an incompatible change to the surface requires a major version bump per `cpt-frontx-adr-artifact-versioning-and-distribution`. (`target`)

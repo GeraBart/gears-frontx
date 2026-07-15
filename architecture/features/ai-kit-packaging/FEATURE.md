@@ -116,7 +116,7 @@ Internal system functions and procedures that do not interact with actors direct
    5. [x] - `p1` - Confirm `type` is one of `file` or `directory` - `inst-check-type-enum`
 5. [x] - `p1` - **[target]** Scan the manifest resource set for any entry whose `id` or `description` names a known solution or template-specific concept (solution-agnostic-base enforcement for `cyber-pilot-kit-frontx`) - `inst-scan-solution-content`
 6. [x] - `p1` - **IF** any solution-specific entry is detected - `inst-if-solution-content`
-   1. [x] - `p1` - Record violation: base kit contains solution-specific content, which is prohibited by `cpt-frontx-adr-base-solution-ai-content-split` - `inst-record-solution-violation`
+   1. [x] - `p1` - Record violation: base kit contains solution-specific content, which is prohibited by `cpt-frontx-adr-solution-ai-content-placement` - `inst-record-solution-violation`
 7. [x] - `p1` - **IF** any violations were recorded - `inst-if-violations`
    1. [x] - `p1` - **RETURN** FAIL with the complete violation list - `inst-return-fail`
 8. [x] - `p1` - **RETURN** PASS - `inst-return-pass`

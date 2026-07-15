@@ -3,7 +3,7 @@ status: accepted
 date: 2026-06-04
 ---
 
-# Supply a GTS-Backed Default Provider for the Runtime's Type-Substrate Port
+# The Default Type-Substrate Provider
 
 
 <!-- toc -->
@@ -23,7 +23,7 @@ date: 2026-06-04
 
 <!-- /toc -->
 
-**ID**: `cpt-frontx-adr-gts-default-type-system`
+**ID**: `cpt-frontx-adr-default-type-substrate-provider`
 ## Context and Problem Statement
 
 The MFE Runtime reasons about types only by identity and delegates all schema, validation, and hierarchy operations to an injected provider of its type-substrate port. For the ecosystem to admit and validate microfrontends out of the box, that port needs a concrete provider that gives type identifiers meaning and that supplies the ecosystem's infrastructure type definitions. How should the ecosystem's default type-substrate provider be shaped so that it gives the runtime working type judgments, is ready to use immediately, and confines the concrete type-definition specification to a single component?
@@ -46,7 +46,7 @@ The MFE Runtime reasons about types only by identity and delegates all schema, v
 
 Chosen option: **a GTS-backed default provider shipped with the ecosystem**, because it is the only option that makes the ecosystem ready to validate microfrontends out of the box while confining the concrete type-definition specification to one component. The provider implements the runtime's type-substrate port over the Global Type System toolkit (`@globaltypesystem/gts-ts`) and, at construction, loads and registers the ecosystem infrastructure schemas and the default lifecycle-stage instances, validating those instances before it is considered ready (`packages/screensets/src/mfe/plugins/gts/index.ts`; the infrastructure schema and instance set is loaded from `packages/screensets/src/mfe/gts/loader.ts`). It answers the runtime's type-of questions over GTS type derivation and exposes a ready-to-use default instance. It owns the ecosystem infrastructure schemas only (`cpt-frontx-constraint-gts-plugin-owns-infra-schemas`); solution-specific schemas are registered by their owners at runtime and are excluded from it (`cpt-frontx-constraint-gts-plugin-excludes-solution-schemas`).
 
-Consistent with `cpt-frontx-adr-type-system-plugin-opaque-schema`, the grammar of type identifiers is owned here, not by the runtime surface: deriving a package from an entity identifier (`packages/screensets/src/mfe/gts/extract-package.ts`) is GTS grammar and belongs to this provider, reaffirming the Q9 placement.
+Consistent with `cpt-frontx-adr-runtime-type-system-coupling`, the grammar of type identifiers is owned here, not by the runtime surface: deriving a package from an entity identifier (`packages/screensets/src/mfe/gts/extract-package.ts`) is GTS grammar and belongs to this provider, reaffirming the Q9 placement.
 
 ### Consequences
 
@@ -93,7 +93,7 @@ The ecosystem ships a small bespoke validator instead of an established toolkit.
 
 The present concrete instantiation of the default provider is `@gears-frontx/gts-plugin`, which implements the type-substrate port over `@globaltypesystem/gts-ts` and is exposed as a ready-to-use default instance. At construction it loads the ecosystem infrastructure schemas and the default lifecycle-stage instances from `packages/screensets/src/mfe/gts/loader.ts` and registers them; the specific membership and size of that infrastructure set is descriptive and non-binding, and may change as the ecosystem's infrastructure schemas evolve without altering this decision. Solution-specific and application-derived type definitions are registered by their owners at runtime and are not part of this provider.
 
-**Scope of impact.** Applies to the ecosystem's default type-substrate provider, the schemas it owns, and the placement of type-identifier grammar. It does not decide the runtime's opaque view of types (decided in `cpt-frontx-adr-type-system-plugin-opaque-schema`), the runtime's public surface, or how solution authors structure their own schemas.
+**Scope of impact.** Applies to the ecosystem's default type-substrate provider, the schemas it owns, and the placement of type-identifier grammar. It does not decide the runtime's opaque view of types (decided in `cpt-frontx-adr-runtime-type-system-coupling`), the runtime's public surface, or how solution authors structure their own schemas.
 
 **Review trigger.** Revisit if the Global Type System specification ceases to satisfy the ecosystem's type-validation needs, or if a requirement emerges for the ecosystem to ship without any default provider.
 

@@ -9,33 +9,34 @@
   - [1.3 Actors](#13-actors)
   - [1.4 References](#14-references)
 - [2. Actor Flows (CDSL)](#2-actor-flows-cdsl)
-  - [Version-Policy CI Check](#version-policy-ci-check)
-  - [Consumer Upgrade-on-Own-Schedule](#consumer-upgrade-on-own-schedule)
+  - [Independent Per-Concern Publication](#independent-per-concern-publication)
+  - [Consumer Independent Upgrade](#consumer-independent-upgrade)
 - [3. Processes / Business Logic (CDSL)](#3-processes--business-logic-cdsl)
-  - [Matched Major/Minor Version-Policy Check](#matched-majorminor-version-policy-check)
-  - [Deprecation-Cycle Gate](#deprecation-cycle-gate)
+  - [Coupled-Edge Compatibility Check](#coupled-edge-compatibility-check)
+  - [Registry-Side Deprecation Cycle](#registry-side-deprecation-cycle)
 - [4. States (CDSL)](#4-states-cdsl)
-  - [Artifact Release Lifecycle State Machine](#artifact-release-lifecycle-state-machine)
+  - [Registry Version Availability State Machine](#registry-version-availability-state-machine)
 - [5. Definitions of Done](#5-definitions-of-done)
-  - [Version-Policy CI Check Is Enforced at Publication](#version-policy-ci-check-is-enforced-at-publication)
-  - [Deprecation Cycle Is Enforced Before Removal](#deprecation-cycle-is-enforced-before-removal)
+  - [Each Artifact Publishes on Its Own Semver Line](#each-artifact-publishes-on-its-own-semver-line)
+  - [Coupled-Edge Compatibility Is Range-Based, Not Pinned](#coupled-edge-compatibility-is-range-based-not-pinned)
+  - [Deprecation Cycle Is Enforced Registry-Side Before Removal](#deprecation-cycle-is-enforced-registry-side-before-removal)
   - [Consumer Upgrade Does Not Require Lockstep Updates](#consumer-upgrade-does-not-require-lockstep-updates)
 - [6. Acceptance Criteria](#6-acceptance-criteria)
 
 <!-- /toc -->
 
-- [ ] `p1` - **ID**: `cpt-frontx-featstatus-ecosystem-distribution`
+- [x] `p1` - **ID**: `cpt-frontx-featstatus-ecosystem-distribution`
 ## 1. Feature Context
 
-- [ ] `p2` - `cpt-frontx-feature-ecosystem-distribution`
+- [x] `p2` - `cpt-frontx-feature-ecosystem-distribution`
 
 ### 1.1 Overview
 
-This is a cross-cutting versioning and distribution policy with no single component. It establishes the matched-version, per-concern artifact distribution policy by which each FrontX artifact is independently published and versioned, with major and minor versions kept matched across the ecosystem while patch and pre-release may diverge, isolating breaking changes behind semantic versioning and a deprecation cycle so consumers can upgrade on their own schedule without facing an architectural ceiling.
+This is a cross-cutting versioning and distribution policy with no single component. It establishes per-concern **independent** versioning: each FrontX artifact is published and versioned on its own semver line and cadence, a breaking change increments only that artifact's own major version, and the single compile-time coupling edge (`@gears-frontx/mfes → @gears-frontx/gts-plugin`) is bounded by a satisfiable semver range rather than a matched version number. Deprecation and removal are registry-side operations (npm deprecate plus a minimum window) — there is no in-package lifecycle-state field.
 
 ### 1.2 Purpose
 
-This feature exists to deliver a predictable, compatibility-bounded upgrade path across the FrontX ecosystem — one concern per artifact, versioned on its own cadence — so that a breaking change in one artifact does not compel consumers of unrelated artifacts to upgrade in lockstep, and so the ecosystem imposes no ceiling on the number of concerns it distributes.
+This feature exists to deliver a predictable, compatibility-bounded upgrade path across the FrontX ecosystem — one concern per artifact, versioned on its own cadence — so that a breaking change in one artifact does not compel consumers of unrelated artifacts to upgrade in lockstep, and so the ecosystem imposes no ceiling on the number of concerns it distributes. Cross-artifact skew is solved by semver ranges on the one coupled edge, not by lockstep or a matched version number.
 
 **Requirements**: `cpt-frontx-fr-versioned-platform-evolution`, `cpt-frontx-fr-no-architectural-ceiling`, `cpt-frontx-nfr-evolvability`, `cpt-frontx-nfr-scalability-ceiling`
 
@@ -47,7 +48,7 @@ This feature exists to deliver a predictable, compatibility-bounded upgrade path
 |-------|-----------------|
 | N/A | N/A |
 
-Not applicable — there is no actor-facing usecase for this cross-cutting policy; the flows model a CI version-policy check plus a consumer upgrade-on-own-schedule path.
+Not applicable — there is no actor-facing usecase for this cross-cutting policy; the flows model an independent per-concern publication path plus a consumer independent-upgrade path.
 
 ### 1.4 References
 
@@ -58,159 +59,172 @@ Not applicable — there is no actor-facing usecase for this cross-cutting polic
 
 ## 2. Actor Flows (CDSL)
 
-Note: there is no actor-facing PRD usecase for this cross-cutting policy. The flows below model the version-policy CI check and the consumer upgrade-on-own-schedule path.
+Note: there is no actor-facing PRD usecase for this cross-cutting policy. The flows below model the independent per-concern publication path and the consumer independent-upgrade path. They trace to the per-concern independent versioning mechanism described in DESIGN (`cpt-frontx-principle-per-concern-versioning`, DESIGN §"Per-concern independent versioning"; ecosystem overview, DESIGN §"Ecosystem"; `cpt-frontx-nfr-evolvability` verification).
 
-### Version-Policy CI Check
+### Independent Per-Concern Publication
 
-- [ ] `p1` - **ID**: `cpt-frontx-flow-ecosystem-distribution-version-policy-ci-check`
+- [x] `p1` - **ID**: `cpt-frontx-flow-ecosystem-distribution-independent-publication`
 
-**Actor**: CI pipeline
+**Actor**: Release pipeline
 
 **Success Scenarios**:
-- All published artifacts have matched major/minor versions; artifact is cleared for publication.
+- The artifact is published on its own semver line; a breaking change increments only that artifact's own major version, requiring no sibling artifact version change. (DESIGN: "a breaking change bumps only that artifact's own major version, and no single artifact's release pace constrains another's".)
 
 **Error Scenarios**:
-- Major or minor version mismatch detected across ecosystem artifacts; publication is blocked.
+- The artifact is `@gears-frontx/mfes` and its declared dependency on `@gears-frontx/gts-plugin` is an exact pin or an unsatisfiable range; publication is blocked. (DESIGN: the coupled edge is "bounded by a satisfiable semver range rather than a matched version number".)
 
 **Steps**:
-1. [ ] - `p1` - CI pipeline triggers a version-policy check for the artifact scheduled for release - `inst-vpc-trigger`
-2. [ ] - `p1` - Retrieve the candidate artifact's major and minor version from the release manifest - `inst-vpc-get-version`
-3. [ ] - `p1` - Invoke the matched major/minor version-policy check algorithm against all sibling artifacts in the published ecosystem - `inst-vpc-invoke-check`
-4. [ ] - `p1` - **IF** the version-policy check returns FAIL: - `inst-vpc-if-mismatch`
-   1. [ ] - `p1` - Block the release and report the conflicting artifact names and their version numbers - `inst-vpc-block`
-   2. [ ] - `p1` - **RETURN** FAIL with mismatch report - `inst-vpc-return-fail`
-5. [ ] - `p1` - Confirm that the artifact's release lifecycle state is not REMOVED - `inst-vpc-check-state`
-6. [ ] - `p1` - **RETURN** PASS; artifact is cleared for publication - `inst-vpc-return-pass`
+1. [x] - `p1` - Release pipeline triggers publication for a single artifact on its own semver line - `inst-pub-trigger`
+2. [x] - `p1` - Determine the change class (major / minor / patch) for this artifact independently of any sibling artifact's version - `inst-pub-classify`
+3. [x] - `p1` - **IF** the artifact is `@gears-frontx/mfes` (the consumer side of the one coupled edge): - `inst-pub-if-mfes`
+   1. [x] - `p1` - Invoke the coupled-edge compatibility check against its declared range on `@gears-frontx/gts-plugin` - `inst-pub-invoke-edge-check`
+   2. [x] - `p1` - **IF** the compatibility check returns FAIL: - `inst-pub-if-edge-fail`
+      1. [x] - `p1` - Block publication and report the offending range (exact-pinned or unsatisfiable) - `inst-pub-block`
+      2. [x] - `p1` - **RETURN** FAIL with the range report - `inst-pub-return-fail`
+4. [x] - `p1` - Publish the artifact to the package registry on its own version line without requiring any sibling artifact's version to change - `inst-pub-publish`
+5. [x] - `p1` - **RETURN** PASS; artifact is published independently - `inst-pub-return-pass`
 
-### Consumer Upgrade-on-Own-Schedule
+### Consumer Independent Upgrade
 
-- [ ] `p1` - **ID**: `cpt-frontx-flow-ecosystem-distribution-consumer-upgrade`
+- [x] `p1` - **ID**: `cpt-frontx-flow-ecosystem-distribution-consumer-upgrade`
 
 **Actor**: Consuming project (CI pipeline or developer tooling)
 
 **Success Scenarios**:
-- Consumer adopts the new version of one artifact without upgrading unrelated artifacts; application installs and resolves dependencies correctly.
+- Consumer adopts the new version of one artifact without upgrading unrelated artifacts; the application installs and resolves dependencies correctly. (DESIGN: "Consuming applications adopt new versions on their own schedule rather than in lockstep".)
 
 **Error Scenarios**:
-- Consumer requests a REMOVED artifact; upgrade is blocked with a deprecation notice referencing the last supported version.
+- Consumer requests a version the registry reports as deprecated; the install surfaces the registry deprecation warning and the recommended supported version. (DESIGN: "a registry-side deprecation cycle (a published notice and a minimum window elapse before any removal)".)
 
 **Steps**:
-1. [ ] - `p1` - Consuming project requests a version update for one specific FrontX artifact via the package registry - `inst-cu-request`
-2. [ ] - `p1` - Resolve the requested artifact version against the package registry - `inst-cu-resolve`
-3. [ ] - `p1` - **IF** the requested artifact has lifecycle state REMOVED: - `inst-cu-if-removed`
-   1. [ ] - `p1` - Return a deprecation notice referencing the last published version before removal - `inst-cu-deprecation-notice`
-   2. [ ] - `p1` - **RETURN** FAIL — artifact is no longer available - `inst-cu-return-removed`
-4. [ ] - `p1` - **IF** the requested artifact has lifecycle state DEPRECATED: - `inst-cu-if-deprecated`
-   1. [ ] - `p1` - Emit a deprecation warning with the announced end-of-life schedule (target) - `inst-cu-warn-deprecated`
-5. [ ] - `p1` - Verify that no other FrontX artifact in the consuming project's dependency set has a conflicting major or minor version with the requested artifact - `inst-cu-check-compat`
-6. [ ] - `p1` - **IF** a major or minor version conflict is detected: - `inst-cu-if-conflict`
-   1. [ ] - `p1` - Report which existing dependency conflicts and the conflicting version range - `inst-cu-report-conflict`
-   2. [ ] - `p1` - **RETURN** FAIL with conflict report - `inst-cu-return-conflict`
-7. [ ] - `p1` - Install the requested artifact version without requiring updates to any other FrontX artifact - `inst-cu-install`
-8. [ ] - `p1` - **RETURN** PASS — consumer has adopted the new version on their own schedule - `inst-cu-return-pass`
+1. [x] - `p1` - Consuming project requests a version update for one specific FrontX artifact via the package registry - `inst-cu-request`
+2. [x] - `p1` - Resolve the requested artifact version against the package registry - `inst-cu-resolve`
+3. [x] - `p1` - **IF** the registry reports the requested version as deprecated (an `npm deprecate` notice is present): - `inst-cu-if-deprecated`
+   1. [x] - `p1` - Surface the registry deprecation warning, including the notice text and the recommended supported version - `inst-cu-warn-deprecated`
+4. [x] - `p1` - **IF** the requested artifact is `@gears-frontx/mfes` or `@gears-frontx/gts-plugin` (the one coupled edge): - `inst-cu-if-coupled`
+   1. [x] - `p1` - Verify the resolved `mfes` version's declared peer range on `gts-plugin` is satisfied by the `gts-plugin` version present in the project - `inst-cu-check-edge`
+   2. [x] - `p1` - **IF** the peer range is not satisfied: - `inst-cu-if-edge-conflict`
+      1. [x] - `p1` - Report the unsatisfied peer range and the `gts-plugin` version present - `inst-cu-report-conflict`
+      2. [x] - `p1` - **RETURN** FAIL with the peer-range conflict report - `inst-cu-return-conflict`
+5. [x] - `p1` - Install the requested artifact version without requiring updates to any other FrontX artifact - `inst-cu-install`
+6. [x] - `p1` - **RETURN** PASS — consumer has adopted the new version on their own schedule - `inst-cu-return-pass`
 
 ## 3. Processes / Business Logic (CDSL)
 
-### Matched Major/Minor Version-Policy Check
+### Coupled-Edge Compatibility Check
 
-- [ ] `p1` - **ID**: `cpt-frontx-algo-ecosystem-distribution-version-policy-check`
+- [x] `p1` - **ID**: `cpt-frontx-algo-ecosystem-distribution-edge-compatibility-check`
 
-**Input**: Candidate artifact name and its candidate major/minor version being evaluated for release or adoption.
+Traces to DESIGN `cpt-frontx-nfr-evolvability` verification: "a compatibility check asserting the `mfes → gts-plugin` range is satisfiable and not exact-pinned (no duplicate-runtime skew)", and to the principle's statement that `mfes` "declares a satisfiable semver range (peer/caret) on `gts-plugin`, so version skew is resolved by ranges rather than lockstep".
 
-**Output**: PASS if all sibling artifacts have a matching major/minor version; FAIL with the list of conflicting artifact names and their current versions otherwise.
+**Input**: The version range `@gears-frontx/mfes` declares on its `@gears-frontx/gts-plugin` peer dependency, and the set of `gts-plugin` versions published on the registry.
 
-**Steps**:
-1. [ ] - `p1` - Retrieve the published major and minor versions for all sibling artifacts in the ecosystem from the package registry - `inst-vpa-retrieve`
-2. [ ] - `p1` - Extract the major version and minor version from the candidate artifact's version string - `inst-vpa-extract`
-3. [ ] - `p1` - **FOR EACH** sibling artifact in the published set: - `inst-vpa-foreach`
-   1. [ ] - `p1` - Compare the sibling's major version against the candidate's major version - `inst-vpa-cmp-major`
-   2. [ ] - `p1` - **IF** the major versions differ: - `inst-vpa-if-major`
-      1. [ ] - `p1` - Record the sibling as a mismatch, noting its name, its current version, and the candidate's version - `inst-vpa-record-major`
-   3. [ ] - `p1` - Compare the sibling's minor version against the candidate's minor version - `inst-vpa-cmp-minor`
-   4. [ ] - `p1` - **IF** the minor versions differ: - `inst-vpa-if-minor`
-      1. [ ] - `p1` - Record the sibling as a mismatch, noting its name, its current version, and the candidate's version - `inst-vpa-record-minor`
-4. [ ] - `p1` - **IF** any mismatches were recorded: - `inst-vpa-if-fail`
-   1. [ ] - `p1` - **RETURN** FAIL with the complete list of conflicting artifact names and version strings - `inst-vpa-return-fail`
-5. [ ] - `p1` - **RETURN** PASS — candidate artifact's major and minor version matches all sibling artifacts - `inst-vpa-return-pass`
-
-### Deprecation-Cycle Gate
-
-- [ ] `p2` - **ID**: `cpt-frontx-algo-ecosystem-distribution-deprecation-gate`
-
-**Input**: Artifact name and its current release lifecycle state.
-
-**Output**: PASS if the deprecation-cycle requirements are satisfied and the artifact may transition to REMOVED; FAIL with the unsatisfied gate condition otherwise.
+**Output**: PASS if the declared range is a satisfiable, non-exact semver range; FAIL with the reason otherwise.
 
 **Steps**:
-1. [ ] - `p2` - Load the artifact's deprecation record, including the date it entered DEPRECATED state and the contents of its published deprecation notice (target) - `inst-dep-load`
-2. [ ] - `p2` - Verify that a deprecation notice was published to the package registry changelog before or at the point the artifact entered DEPRECATED state - `inst-dep-verify-notice`
-3. [ ] - `p2` - **IF** the deprecation notice is absent: - `inst-dep-if-no-notice`
-   1. [ ] - `p2` - **RETURN** FAIL — deprecation-cycle gate not satisfied; a published notice is required before removal - `inst-dep-return-no-notice`
-4. [ ] - `p2` - Verify that the minimum deprecation window has elapsed since the artifact entered DEPRECATED state (target — window duration to be specified by release policy) - `inst-dep-verify-window`
-5. [ ] - `p2` - **IF** the minimum deprecation window has not elapsed: - `inst-dep-if-window`
-   1. [ ] - `p2` - **RETURN** FAIL — deprecation-cycle gate not satisfied; the minimum window has not elapsed - `inst-dep-return-window`
-6. [ ] - `p2` - **RETURN** PASS — deprecation-cycle gate satisfied; artifact may transition to REMOVED - `inst-dep-return-pass`
+1. [x] - `p1` - Read the peer-dependency range `mfes` declares on `gts-plugin` from the release manifest - `inst-edge-read-range`
+2. [x] - `p1` - **IF** the declared range is an exact pin (a single version with no range operator): - `inst-edge-if-pinned`
+   1. [x] - `p1` - **RETURN** FAIL — an exact pin forces duplicate-runtime skew; a caret/range is required - `inst-edge-return-pinned`
+3. [x] - `p1` - Resolve the declared range against the `gts-plugin` versions published on the registry - `inst-edge-resolve`
+4. [x] - `p1` - **IF** no published `gts-plugin` version satisfies the declared range: - `inst-edge-if-unsat`
+   1. [x] - `p1` - **RETURN** FAIL — the declared range is unsatisfiable against published `gts-plugin` versions - `inst-edge-return-unsat`
+5. [x] - `p1` - **RETURN** PASS — the declared range is satisfiable and not exact-pinned - `inst-edge-return-pass`
+
+### Registry-Side Deprecation Cycle
+
+- [x] `p2` - **ID**: `cpt-frontx-algo-ecosystem-distribution-deprecation-gate`
+
+Traces to DESIGN `cpt-frontx-nfr-evolvability` verification and the principle: "a registry-side deprecation cycle (published notice + minimum window) before any removal". There is no in-package lifecycle-state field; the cycle is realized entirely through registry metadata.
+
+**Input**: The artifact version proposed for removal, and its registry deprecation metadata.
+
+**Output**: PASS if the registry-side deprecation cycle is satisfied and the version may be removed; FAIL with the unsatisfied condition otherwise.
+
+**Steps**:
+1. [x] - `p2` - Read the version's registry deprecation metadata: the `npm deprecate` notice and the date it was applied - `inst-dep-read`
+2. [x] - `p2` - **IF** no deprecation notice is present on the registry for the version: - `inst-dep-if-no-notice`
+   1. [x] - `p2` - **RETURN** FAIL — a published `npm deprecate` notice is required before removal - `inst-dep-return-no-notice`
+3. [x] - `p2` - Compute the elapsed time since the deprecation notice was applied - `inst-dep-elapsed`
+4. [x] - `p2` - **IF** the minimum deprecation window (defined by release policy) has not elapsed: - `inst-dep-if-window`
+   1. [x] - `p2` - **RETURN** FAIL — the minimum deprecation window has not elapsed - `inst-dep-return-window`
+5. [x] - `p2` - **RETURN** PASS — registry-side deprecation cycle satisfied; the version may be removed - `inst-dep-return-pass`
 
 ## 4. States (CDSL)
 
-### Artifact Release Lifecycle State Machine
+### Registry Version Availability State Machine
 
-- [ ] `p1` - **ID**: `cpt-frontx-state-ecosystem-distribution-artifact-lifecycle`
+- [x] `p2` - **ID**: `cpt-frontx-state-ecosystem-distribution-registry-version-availability`
 
-**States**: DRAFT, PUBLISHED, DEPRECATED, REMOVED
+This state machine models the availability of a single published artifact **version** as recorded on the package registry (dist-tags plus `npm deprecate` metadata). It is registry-side and descriptive — there is NO in-package lifecycle-state field. It traces to DESIGN's registry-side deprecation cycle: `cpt-frontx-nfr-evolvability` verification and the principle ("a registry-side deprecation cycle (a published notice and a minimum window elapse before any removal)").
 
-**Initial State**: DRAFT
+**States**: ACTIVE, DEPRECATED, REMOVED
+
+**Initial State**: ACTIVE
 
 **Transitions**:
-1. [ ] - `p1` - **FROM** DRAFT **TO** PUBLISHED **WHEN** the artifact passes the matched major/minor version-policy CI check and is successfully pushed to the package registry (target) - `inst-al-draft-to-published`
-2. [ ] - `p1` - **FROM** PUBLISHED **TO** DEPRECATED **WHEN** a deprecation notice is published to the changelog announcing the artifact's scheduled end-of-life (target) - `inst-al-published-to-deprecated`
-3. [ ] - `p1` - **FROM** DEPRECATED **TO** REMOVED **WHEN** the deprecation-cycle gate is satisfied — notice published and minimum deprecation window elapsed (target) - `inst-al-deprecated-to-removed`
+1. [x] - `p2` - **FROM** ACTIVE **TO** DEPRECATED **WHEN** an `npm deprecate` notice is published against the version on the registry - `inst-rva-active-to-deprecated`
+2. [x] - `p2` - **FROM** DEPRECATED **TO** REMOVED **WHEN** the registry-side deprecation-cycle gate passes — notice present and the minimum deprecation window elapsed - `inst-rva-deprecated-to-removed`
 
 ## 5. Definitions of Done
 
-### Version-Policy CI Check Is Enforced at Publication
+### Each Artifact Publishes on Its Own Semver Line
 
-- [ ] `p1` - **ID**: `cpt-frontx-dod-ecosystem-distribution-version-policy-enforced`
+- [x] `p1` - **ID**: `cpt-frontx-dod-ecosystem-distribution-independent-publication`
 
-The system MUST enforce the matched major/minor version-policy check as an automated CI gate that blocks publication of any artifact whose candidate major or minor version does not match the rest of the published ecosystem.
+The system **MUST** publish each FrontX artifact on its own independent semver line and cadence, such that a breaking change increments only that artifact's own major version and requires no version change to any sibling artifact.
 
 **Implements**:
-- `cpt-frontx-flow-ecosystem-distribution-version-policy-ci-check`
-- `cpt-frontx-algo-ecosystem-distribution-version-policy-check`
+- `cpt-frontx-flow-ecosystem-distribution-independent-publication`
 
-**Constraints**: None applicable — no DESIGN constraint bounds the internal CI tooling selection for this gate.
+**Constraints**: None applicable — no DESIGN constraint bounds the internal release tooling for this policy.
 
 **Touches**:
-- Package registry (npm-compatible) — artifact publication gate
-- CI pipeline — version-policy check step
+- Package registry (npm-compatible) — per-artifact publication
+- Release pipeline — per-artifact version line
 - `cpt-frontx-nfr-evolvability`, `cpt-frontx-nfr-scalability-ceiling`
 
-### Deprecation Cycle Is Enforced Before Removal
+### Coupled-Edge Compatibility Is Range-Based, Not Pinned
 
-- [ ] `p1` - **ID**: `cpt-frontx-dod-ecosystem-distribution-deprecation-cycle-enforced`
+- [x] `p1` - **ID**: `cpt-frontx-dod-ecosystem-distribution-edge-compatibility`
 
-The system MUST require that an artifact satisfy the deprecation-cycle gate — a published deprecation notice and an elapsed minimum deprecation window — before its lifecycle state may transition to REMOVED, ensuring consumers have advance notice and adequate time to migrate.
+The system **MUST** assert, at publication of `@gears-frontx/mfes`, that its declared dependency on `@gears-frontx/gts-plugin` is a satisfiable semver range (peer/caret) and not an exact pin, so that cross-artifact skew on the one coupled edge is resolved by ranges rather than lockstep and no duplicate `gts-plugin` runtime is forced.
 
 **Implements**:
-- `cpt-frontx-algo-ecosystem-distribution-deprecation-gate`
-- `cpt-frontx-state-ecosystem-distribution-artifact-lifecycle`
+- `cpt-frontx-flow-ecosystem-distribution-independent-publication`
+- `cpt-frontx-algo-ecosystem-distribution-edge-compatibility-check`
 
 **Constraints**: None applicable.
 
 **Touches**:
-- Package registry changelog — deprecation notice publication
-- Artifact release lifecycle state machine
+- Package registry — `mfes` manifest `peerDependencies`
+- `cpt-frontx-nfr-evolvability`
+
+### Deprecation Cycle Is Enforced Registry-Side Before Removal
+
+- [x] `p1` - **ID**: `cpt-frontx-dod-ecosystem-distribution-deprecation-cycle-enforced`
+
+The system **MUST** require that a published artifact version carry a registry-side deprecation notice (via `npm deprecate`) and that a minimum deprecation window elapse before that version is removed. There is NO in-package lifecycle-state field; deprecation and removal are registry operations, ensuring consumers get advance notice and adequate time to migrate.
+
+**Implements**:
+- `cpt-frontx-algo-ecosystem-distribution-deprecation-gate`
+- `cpt-frontx-state-ecosystem-distribution-registry-version-availability`
+
+**Constraints**: None applicable.
+
+**Touches**:
+- Package registry deprecation metadata — `npm deprecate` notice
+- Registry version availability state machine
 - `cpt-frontx-nfr-evolvability`, `cpt-frontx-nfr-scalability-ceiling`
 
 ### Consumer Upgrade Does Not Require Lockstep Updates
 
-- [ ] `p1` - **ID**: `cpt-frontx-dod-ecosystem-distribution-independent-upgrade`
+- [x] `p1` - **ID**: `cpt-frontx-dod-ecosystem-distribution-independent-upgrade`
 
-The system MUST allow a consuming project to adopt a new version of exactly one FrontX artifact without being required to simultaneously upgrade any other FrontX artifact, so long as the version-policy check passes for the adopted artifact.
+The system **MUST** allow a consuming project to adopt a new version of exactly one FrontX artifact without being required to simultaneously upgrade any other FrontX artifact, subject only to the `mfes → gts-plugin` peer range resolving on the one coupled edge.
 
 **Implements**:
 - `cpt-frontx-flow-ecosystem-distribution-consumer-upgrade`
-- `cpt-frontx-algo-ecosystem-distribution-version-policy-check`
+- `cpt-frontx-algo-ecosystem-distribution-edge-compatibility-check`
 
 **Constraints**: None applicable.
 
@@ -220,9 +234,8 @@ The system MUST allow a consuming project to adopt a new version of exactly one 
 
 ## 6. Acceptance Criteria
 
-- [ ] The matched major/minor version-policy CI check blocks publication when any sibling artifact has a differing major or minor version.
-- [ ] An artifact in DEPRECATED state cannot transition to REMOVED until a deprecation notice has been published and the minimum deprecation window has elapsed.
-- [ ] A consuming project can adopt a new patch or pre-release version of one FrontX artifact without changing any other FrontX artifact's version.
-- [ ] A consuming project can adopt a new minor version of one FrontX artifact when the matched minor version-policy check passes.
-- [ ] The artifact release lifecycle follows the DRAFT → PUBLISHED → DEPRECATED → REMOVED sequence; no transition skips a state.
-- [ ] No architectural ceiling is imposed: adding or retiring an artifact requires no version amendment to any other artifact.
+- [x] Publishing a breaking change to one artifact increments only that artifact's own major version and requires no version change to any sibling artifact.
+- [x] Publication of `@gears-frontx/mfes` is blocked when its declared dependency on `@gears-frontx/gts-plugin` is an exact pin or an unsatisfiable range.
+- [x] A consuming project can adopt a new patch, minor, or major version of one FrontX artifact without changing any other FrontX artifact, provided the `mfes → gts-plugin` peer range resolves.
+- [x] A version cannot be removed from the registry until an `npm deprecate` notice has been published and the minimum deprecation window has elapsed.
+- [x] No architectural ceiling is imposed: adding or retiring an artifact requires no version amendment to any other artifact.

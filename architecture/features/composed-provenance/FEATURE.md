@@ -80,7 +80,7 @@ This feature realizes the manifest-declared recursive composition decided in `cp
 **Steps**:
 
 1. [x] - `p1` - Developer issues a scaffold command to `cpt-frontx-actor-cypilot-cli`, supplying a versioned source-spec for the project template - `inst-issue-scaffold`
-2. [x] - `p1` - CLI resolves the project template from `cpt-frontx-actor-github` using the shared resolver (`cpt-frontx-adr-template-externalization-resolution`) with the supplied source-spec - `inst-resolve-root-template`
+2. [x] - `p1` - CLI resolves the project template from `cpt-frontx-actor-github` using the shared resolver (`cpt-frontx-adr-template-acquisition-and-location`) with the supplied source-spec - `inst-resolve-root-template`
 3. [x] - `p1` - **IF** the source registry is unreachable - `inst-check-registry-reach`
    1. [x] - `p1` - CLI reports the registry failure to the developer and **RETURN** (no files written) - `inst-abort-registry`
 4. [x] - `p1` - CLI reads the resolved project template's manifest to obtain its declared composition of microfrontend templates - `inst-read-manifest`
@@ -115,7 +115,7 @@ This feature realizes the manifest-declared recursive composition decided in `cp
    1. [x] - `p1` - **RETURN** the current template's own content as its sole contribution to the composition set - `inst-return-leaf`
 6. [x] - `p1` - Initialize an accumulating composition set for this node, seeded with the current template's own content - `inst-init-accumulator`
 7. [x] - `p1` - **FOR EACH** declared template reference in the composition list, in declaration order - `inst-foreach-ref`
-   1. [x] - `p1` - Resolve the referenced template from the source registry through the shared resolver (`cpt-frontx-adr-template-externalization-resolution`) - `inst-resolve-ref`
+   1. [x] - `p1` - Resolve the referenced template from the source registry through the shared resolver (`cpt-frontx-adr-template-acquisition-and-location`) - `inst-resolve-ref`
    2. [x] - `p1` - **IF** the resolution fails - `inst-check-resolve-fail`
       1. [x] - `p1` - **RETURN** a resolution error naming the unresolvable reference; do not write any files - `inst-return-resolve-error`
    3. [x] - `p1` - Recurse: invoke this algorithm with the resolved template's manifest, the updated visited set, and the declared-depth counter incremented by one - `inst-recurse`

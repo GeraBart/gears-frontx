@@ -23,7 +23,7 @@ const shippedManifest: KitManifest = {
   ],
 };
 
-describe('kit self-validation — shipped resource BODY scan (cpt-frontx-adr-base-solution-ai-content-split)', () => {
+describe('kit self-validation — shipped resource BODY scan (cpt-frontx-adr-solution-ai-content-placement)', () => {
   // inst-scan-solution-content — real on-disk shipped content, no bodyReader (baseline, id/description only)
   it('manifest id/description-only scan (no bodyReader) → PASS on shipped manifest', () => {
     const result = validateKitManifest(shippedManifest);

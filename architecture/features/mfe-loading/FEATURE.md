@@ -49,7 +49,7 @@ The MFE Runtime must locate a microfrontend's chunks without parsing bundler-emi
 
 - **PRD**: [PRD.md](../../PRD.md)
 - **Design**: [DESIGN.md](../../DESIGN.md)
-- **ADRs**: `cpt-frontx-adr-mf-manifest-discovery`, `cpt-frontx-adr-lazy-import-abi`
+- **ADRs**: `cpt-frontx-adr-mfe-asset-discovery`, `cpt-frontx-adr-lazy-import-resolution`
 - **Component**: `cpt-frontx-component-mfe-runtime` (shared with F4, F6, F7, F8)
 - **Dependencies**: `cpt-frontx-feature-mfe-registry` (F4)
 
@@ -167,7 +167,7 @@ The system **MUST** derive every locating fact needed for a microfrontend load e
 
 **Addresses**:
 - `cpt-frontx-fr-mfe-runtime-registration`
-- `cpt-frontx-adr-mf-manifest-discovery`
+- `cpt-frontx-adr-mfe-asset-discovery`
 
 **Constraints**: none owned — contract `template-manifest` is defined by F11 and consumed here
 
@@ -187,7 +187,7 @@ The system **MUST** resolve every `__frontx_lazy(path)` call emitted by the buil
 **Addresses**:
 - `cpt-frontx-fr-mfe-runtime-registration`
 - `cpt-frontx-nfr-runtime-performance` — lazy deferral keeps the eager working set small; per-load inheritance avoids duplicating shared dependencies
-- `cpt-frontx-adr-lazy-import-abi`
+- `cpt-frontx-adr-lazy-import-resolution`
 
 **Touches**:
 - Entities: `MfeEntry`

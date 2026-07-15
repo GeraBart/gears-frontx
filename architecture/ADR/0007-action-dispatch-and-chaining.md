@@ -3,7 +3,7 @@ status: accepted
 date: 2026-06-05
 ---
 
-# Route Host–MFE Actions Through a Mediator Keyed by Target and Action Type with Recursive Chain Execution
+# Host–MFE Action Dispatch and Chaining
 
 
 <!-- toc -->
@@ -23,7 +23,7 @@ date: 2026-06-05
 
 <!-- /toc -->
 
-**ID**: `cpt-frontx-adr-actions-chains-mediator`
+**ID**: `cpt-frontx-adr-action-dispatch-and-chaining`
 ## Context and Problem Statement
 
 Microfrontends and the host application coordinate by dispatching actions to targets — extension domains and the extensions mounted in them — where sender and receiver are independently developed and hold no direct reference to one another. A single dispatched action frequently triggers a sequence with conditional follow-ups (continue on success, divert on failure) and must complete within a bounded time, while targets may be registered and torn down at any moment. What dispatch mechanism routes an action to the right handler, supports compositional sequencing with branching and timeouts, and permits actions to reach a child runtime's own domains — all without coupling senders to receivers?
@@ -91,9 +91,9 @@ A sender holds a direct reference to its target and invokes it.
 
 ## More Information
 
-The present concrete instantiation is `DefaultActionsChainsMediator` (`packages/screensets/src/mfe/mediator/actions-chains-mediator.ts`): a `actionHandlers` map of `targetId → (actionTypeId → handler)`, a `catchAllHandlers` map consulted as the fallback tier in `resolveHandler`, recursive `executeChainRecursive` that follows `chain.next` on success and `chain.fallback` on failure, `executeWithTimeout` applied to both whole-chain and per-action bounds, and a `pendingActions` map that blocks `unregisterAllHandlers` for a target while actions are still in flight. Action admission is delegated to the injected type system (`typeSystem.register(action)`) so the mediator embeds no type-format knowledge. The catch-all tier is the seam used by the parent–child bridge for forwarding to a child runtime's domains, decided in `cpt-frontx-adr-parent-child-bridge`.
+The present concrete instantiation is `DefaultActionsChainsMediator` (`packages/screensets/src/mfe/mediator/actions-chains-mediator.ts`): a `actionHandlers` map of `targetId → (actionTypeId → handler)`, a `catchAllHandlers` map consulted as the fallback tier in `resolveHandler`, recursive `executeChainRecursive` that follows `chain.next` on success and `chain.fallback` on failure, `executeWithTimeout` applied to both whole-chain and per-action bounds, and a `pendingActions` map that blocks `unregisterAllHandlers` for a target while actions are still in flight. Action admission is delegated to the injected type system (`typeSystem.register(action)`) so the mediator embeds no type-format knowledge. The catch-all tier is the seam used by the parent–child bridge for forwarding to a child runtime's domains, decided in `cpt-frontx-adr-child-mfe-host-access`.
 
-**Scope of impact.** Applies to how actions are routed and how chains execute between the host and microfrontends, including forwarding to child runtimes. It does not decide the shape of the runtime's public surface (decided in `cpt-frontx-adr-mfe-registry-facade`) or how the type system validates an action's payload (decided in `cpt-frontx-adr-type-system-plugin-opaque-schema`).
+**Scope of impact.** Applies to how actions are routed and how chains execute between the host and microfrontends, including forwarding to child runtimes. It does not decide the shape of the runtime's public surface (decided in `cpt-frontx-adr-mfe-runtime-public-surface`) or how the type system validates an action's payload (decided in `cpt-frontx-adr-runtime-type-system-coupling`).
 
 **Review trigger.** Revisit if a requirement emerges for an action to be delivered to multiple handlers concurrently, or for chain control flow richer than success/fallback branching (for example parallel fan-out or compensation across targets).
 

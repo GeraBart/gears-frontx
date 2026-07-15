@@ -3,7 +3,7 @@ status: accepted
 date: 2026-06-05
 ---
 
-# Plugin Short-Circuit and Realm-Shared Fetch Cache
+# API Transport Bypass and Fetch Sharing
 
 
 <!-- toc -->
@@ -23,7 +23,7 @@ date: 2026-06-05
 
 <!-- /toc -->
 
-**ID**: `cpt-frontx-adr-short-circuit-and-shared-fetch-cache`
+**ID**: `cpt-frontx-adr-api-transport-bypass-and-fetch-sharing`
 ## Context and Problem Statement
 
 Independently bundled microfrontends running in the same browser realm frequently issue identical or overlapping fetches, and many cross-cutting plugins need to return a response without performing a network round trip. The API Protocol Surface (`cpt-frontx-component-api-surface`) must let a plugin supply a response in place of a network call, and must let independently bundled units converge on shared in-flight and completed fetch results — without taking a runtime dependency on any caching or state-management library, and while meeting the runtime performance targets in `cpt-frontx-nfr-runtime-performance`. How should the surface let a plugin bypass transport, and how should it share fetch results across separately bundled units in one realm?

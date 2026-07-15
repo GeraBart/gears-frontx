@@ -3,7 +3,7 @@ status: proposed
 date: 2026-06-04
 ---
 
-# Two-Namespace Command Architecture by Template Kind
+# CLI Command Organization
 
 
 <!-- toc -->
@@ -23,7 +23,7 @@ date: 2026-06-04
 
 <!-- /toc -->
 
-**ID**: `cpt-frontx-adr-two-namespace-architecture`
+**ID**: `cpt-frontx-adr-cli-command-organization`
 ## Context and Problem Statement
 
 The product supports two first-class kinds of template: project templates and microfrontend templates. The CLI (`cpt-frontx-component-cli`, the `@gears-frontx/cli` package) drives the full lifecycle of both — scaffolding a project from a project template (`cpt-frontx-fr-cli-project-scaffold`) and scaffolding a microfrontend from a microfrontend template (`cpt-frontx-fr-cli-microfrontend-scaffold`) — and must present that lifecycle as a command surface developers can navigate. The product requires commands organized into a project-level namespace and a microfrontend-level namespace (`cpt-frontx-fr-cli-two-namespace-commands`). How should the command surface be shaped so a developer finds the right command by the kind of work they are doing, and how should the two kinds relate to the single mechanism that resolves a template reference to its source?
@@ -46,9 +46,9 @@ The product supports two first-class kinds of template: project templates and mi
 
 Chosen option: **Two namespaces by template kind, over one shared resolver**, because it is the only option that makes the two template kinds first-class in the surface, keeps each kind's commands cohesive, and presents a single governed public interface — while still resolving references through one mechanism. Commands are organized into a project-level namespace and a microfrontend-level namespace; that organization is the shape of the CLI's public command surface.
 
-Crucially, the two namespaces share **ONE** resolver: the single shared resolver decided in `cpt-frontx-adr-template-externalization-resolution` resolves a template reference to its source for both the project-level and the microfrontend-level namespace. The namespace split is a surface-organization decision for navigability and cohesion; it is not a split in resolution mechanism. The flat option fails navigability and cohesion and hides the two-kind distinction; the one-binary-per-kind option fragments the public interface into two programs and pressures the surface toward two divergent resolution paths, working against the one-resolver driver.
+Crucially, the two namespaces share **ONE** resolver: the single shared resolver decided in `cpt-frontx-adr-template-acquisition-and-location` resolves a template reference to its source for both the project-level and the microfrontend-level namespace. The namespace split is a surface-organization decision for navigability and cohesion; it is not a split in resolution mechanism. The flat option fails navigability and cohesion and hides the two-kind distinction; the one-binary-per-kind option fragments the public interface into two programs and pressures the surface toward two divergent resolution paths, working against the one-resolver driver.
 
-The command surface this organization defines is the CLI's public interface (`cpt-frontx-interface-cli`), and its stability is governed by the matched-version artifact-distribution policy decided in `cpt-frontx-adr-matched-version-artifact-distribution`: an incompatible change to the command surface requires a major version bump, while minor and patch versions preserve backward compatibility. The scope of this decision is the organization and public-interface shape of the command surface and its relationship to the shared resolver. It does not decide what each individual command does, nor the resolver's own design (that is `cpt-frontx-adr-template-externalization-resolution`), nor the versioning policy itself (that is `cpt-frontx-adr-matched-version-artifact-distribution`).
+The command surface this organization defines is the CLI's public interface (`cpt-frontx-interface-cli`), and its stability is governed by the matched-version artifact-distribution policy decided in `cpt-frontx-adr-artifact-versioning-and-distribution`: an incompatible change to the command surface requires a major version bump, while minor and patch versions preserve backward compatibility. The scope of this decision is the organization and public-interface shape of the command surface and its relationship to the shared resolver. It does not decide what each individual command does, nor the resolver's own design (that is `cpt-frontx-adr-template-acquisition-and-location`), nor the versioning policy itself (that is `cpt-frontx-adr-artifact-versioning-and-distribution`).
 
 ### Consequences
 
@@ -94,7 +94,7 @@ The project lifecycle and the microfrontend lifecycle ship as two separate progr
 
 ## More Information
 
-The single shared resolver both namespaces use is decided in `cpt-frontx-adr-template-externalization-resolution`. The version policy that governs the public command surface's compatibility is decided in `cpt-frontx-adr-matched-version-artifact-distribution`. These are non-binding pointers to related decisions and are not part of this decision's durable identity.
+The single shared resolver both namespaces use is decided in `cpt-frontx-adr-template-acquisition-and-location`. The version policy that governs the public command surface's compatibility is decided in `cpt-frontx-adr-artifact-versioning-and-distribution`. These are non-binding pointers to related decisions and are not part of this decision's durable identity.
 
 Integration treatment (INT): the namespace organization is the shape of the CLI's public interface (`cpt-frontx-interface-cli`). **Interface stability and versioning** — the surface is governed by the matched-version policy: an incompatible change to the command surface requires a major version bump; minor and patch releases preserve backward compatibility (INT-ADR-001). **Contract changes (INT-ADR-002)** — because the namespace boundary is part of the public interface, a change to it is a public-interface change subject to the same compatibility policy; consumers (developers and the AI agents acting for them) are notified through the version bump, and backward compatibility within a major version is the consumer guarantee. There is no separate network protocol or wire format to version here, so protocol-change items are Not applicable.
 

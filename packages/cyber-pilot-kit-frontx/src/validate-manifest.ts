@@ -4,7 +4,7 @@ import type { KitManifest, KitResourceEntry, ResourceBodyReader, ValidationResul
 const SOLUTION_TERMS = ['react', 'vue', 'angular', 'svelte', 'template', 'solution', 'screenset', 'studio'];
 
 // Known specific template/solution NAMES that must never appear in shipped
-// base-kit resource BODIES (cpt-frontx-adr-base-solution-ai-content-split).
+// base-kit resource BODIES (cpt-frontx-adr-solution-ai-content-placement).
 // Unlike SOLUTION_TERMS above (generic concept words checked against
 // manifest id/description only), this list targets concrete product names
 // so that legitimate abstract use of words like "template" inside base
@@ -105,7 +105,7 @@ function checkSolutionContent(entry: unknown, index: number, violations: Validat
     violations.push({
       field: `resources[${index}].id`,
       code: 'SOLUTION_SPECIFIC_CONTENT',
-      message: `resource id or description "${id}" appears to contain solution-specific content ("${found}"), which is prohibited by cpt-frontx-adr-base-solution-ai-content-split`,
+      message: `resource id or description "${id}" appears to contain solution-specific content ("${found}"), which is prohibited by cpt-frontx-adr-solution-ai-content-placement`,
     });
     // @cpt-end:cpt-frontx-algo-ai-kit-packaging-manifest-validation:p1:inst-record-solution-violation
   }
@@ -152,7 +152,7 @@ function checkResourceBodyContent(
       violations.push({
         field: `resources[${index}].source`,
         code: 'SOLUTION_SPECIFIC_CONTENT',
-        message: `shipped body of resource "${e.id}" names a specific template/solution ("${found}"), which is prohibited by cpt-frontx-adr-base-solution-ai-content-split`,
+        message: `shipped body of resource "${e.id}" names a specific template/solution ("${found}"), which is prohibited by cpt-frontx-adr-solution-ai-content-placement`,
       });
       // @cpt-end:cpt-frontx-algo-ai-kit-packaging-manifest-validation:p1:inst-record-solution-violation
       break;

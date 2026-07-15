@@ -53,8 +53,8 @@ The registry façade gives host applications a stable contract for registering e
 
 - **PRD**: [PRD.md](../../PRD.md)
 - **Design**: [DESIGN.md](../../DESIGN.md)
-- **ADR 0003**: [ADR/0003-mfe-registry-facade.md](../../ADR/0003-mfe-registry-facade.md)
-- **ADR 0006**: [ADR/0006-handler-abstraction-registry-resolution.md](../../ADR/0006-handler-abstraction-registry-resolution.md)
+- **ADR 0003**: [ADR/0003-mfe-runtime-public-surface.md](../../ADR/0003-mfe-runtime-public-surface.md)
+- **ADR 0006**: [ADR/0006-mfe-handler-resolution.md](../../ADR/0006-mfe-handler-resolution.md)
 - **Dependencies**: `cpt-frontx-feature-type-substrate-port`
 
 ## 2. Actor Flows (CDSL)
