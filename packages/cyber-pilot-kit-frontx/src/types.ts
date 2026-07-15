@@ -49,7 +49,7 @@ export interface KitSessionResult {
 
 /**
  * Reads the actual shipped body text of a declared kit resource
- * (cpt-frontx-adr-base-solution-ai-content-split self-validation). For a
+ * (cpt-frontx-adr-solution-ai-content-placement self-validation). For a
  * `directory` resource, returns one string per file found recursively under
  * the resource's source path.
  */

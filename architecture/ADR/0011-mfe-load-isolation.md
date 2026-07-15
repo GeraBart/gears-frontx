@@ -3,7 +3,7 @@ status: accepted
 date: 2026-06-05
 ---
 
-# Isolate Each Loaded Microfrontend in Its Own Module Graph Behind an Audited Trust Kernel
+# MFE Load Isolation
 
 
 <!-- toc -->
@@ -23,7 +23,7 @@ date: 2026-06-05
 
 <!-- /toc -->
 
-**ID**: `cpt-frontx-adr-blob-url-mfe-isolation`
+**ID**: `cpt-frontx-adr-mfe-load-isolation`
 ## Context and Problem Statement
 
 The runtime admits independently developed microfrontends — potentially authored by different teams or vendors — and evaluates their code inside the host. Without deliberate isolation, two microfrontends could share a single module instance and silently couple through it, and the small set of dynamic-code primitives an isolation mechanism requires (dynamic import of inline content, dynamic construction of matchers over specifiers) are exactly the primitives that, if used carelessly elsewhere, become an arbitrary-code-execution surface. How should the runtime evaluate a loaded microfrontend so that each load is an isolated module instance, and how should the dangerous primitives the mechanism depends on be contained so the trust surface stays small and auditable?
@@ -92,7 +92,7 @@ The same per-load isolation, but backing references are revoked as soon as each 
 
 The present concrete instantiation isolates each load by building a per-load graph of inline-content module URLs for the whole dependency chain in `packages/screensets/src/mfe/handler/mf-handler.ts`, keyed by the extension instance identity (`extensionId`) so distinct instances get distinct evaluations and a re-load of the same instance reuses its cached graph; the inline-content URLs are not revoked, because modules with top-level await keep evaluating after the import resolves. The audited trust kernel `packages/screensets/src/mfe/handler/mf-dynamic-module-ops.ts` is the sole site of dynamic `import()` of inline content and of specifier-matcher construction; each export documents why its pattern is safe, the import primitive guards that its input is a scheme-prefixed inline-content URL, and a custom lint rule keeps these primitives out of every other file. The specific mechanism names, the keying field, and the inline-content scheme are descriptive of the current instantiation and non-binding; the durable decision is per-instance isolated module graphs with retained backing references and a single audited dynamic-code trust kernel.
 
-**Scope of impact.** Applies to how a loaded microfrontend's code is evaluated in isolation and how the dynamic-code primitives that mechanism needs are contained. It does not decide how a microfrontend is matched into a domain (decided in `cpt-frontx-adr-domain-extension-contract-matching`) or how a domain's occupancy is governed (decided in `cpt-frontx-adr-mount-strategies-cardinality`); those decide admission compatibility and placement, while this decides runtime code isolation and the trust surface.
+**Scope of impact.** Applies to how a loaded microfrontend's code is evaluated in isolation and how the dynamic-code primitives that mechanism needs are contained. It does not decide how a microfrontend is matched into a domain (decided in `cpt-frontx-adr-domain-extension-compatibility`) or how a domain's occupancy is governed (decided in `cpt-frontx-adr-extension-domain-occupancy`); those decide admission compatibility and placement, while this decides runtime code isolation and the trust surface.
 
 **Review trigger.** Revisit if a runtime mechanism for reclaiming per-instance backing references without breaking post-resolution evaluation becomes available, if a new dynamic-code primitive must be admitted to the trust kernel, or if the inputs reaching the trust kernel could cease to be bounded and author-declared.
 

@@ -3,7 +3,7 @@ status: proposed
 date: 2026-06-04
 ---
 
-# Distribute the Ecosystem as Independently Versioned, Per-Concern Artifacts
+# Artifact Versioning and Distribution Across the Ecosystem
 
 
 <!-- toc -->
@@ -23,7 +23,7 @@ date: 2026-06-04
 
 <!-- /toc -->
 
-**ID**: `cpt-frontx-adr-matched-version-artifact-distribution`
+**ID**: `cpt-frontx-adr-artifact-versioning-and-distribution`
 ## Context and Problem Statement
 
 The FrontX ecosystem delivers several distinct concerns — a microfrontend runtime, a type-system provider, a protocol surface, a command-line lifecycle tool, and an AI-tooling capability set — to consumers who adopt some of those concerns without others. The ecosystem needs a distribution and versioning model that lets each concern evolve and ship on its own terms while giving consumers a predictable, compatibility-bounded upgrade path. How should the ecosystem be packaged and versioned so that the evolution of one concern does not force unrelated consumers to upgrade in lockstep, and so that the set of distributed concerns can grow or shrink over time without re-versioning the whole?
@@ -81,6 +81,8 @@ Each published artifact carries its own semantic version and changelog, and a br
 * Bad, because a shared version number still couples release timing and forces version increments on concerns that did not change.
 
 ## More Information
+
+The `matched-version` token in this ADR's ID (`cpt-frontx-adr-artifact-versioning-and-distribution`) and filename is a legacy label retained only for cross-reference stability across the artifact set; it does not describe the decision. The decision is per-concern **independent** versioning — no matched major/minor requirement across artifacts. The single compile-time coupling edge, `@gears-frontx/mfes` → `@gears-frontx/gts-plugin`, is bounded by a satisfiable semver range (peer/caret) rather than a matched version number, so version skew is resolved by ranges, not lockstep.
 
 The present concrete instantiation of this pattern is four npm packages (`@gears-frontx/mfes`, `@gears-frontx/gts-plugin`, `@gears-frontx/api`, `@gears-frontx/cli`) distributed through the package registry, plus one Cypilot kit (`cyber-pilot-kit-frontx`) distributed through the Cypilot kit system. This set is descriptive and non-binding: adding or removing an artifact requires no amendment to this decision, because the decision names the distribution pattern, not its instantiation. The package-registry distribution touchpoint is traced as `cpt-frontx-contract-package-registry-distribution`.
 

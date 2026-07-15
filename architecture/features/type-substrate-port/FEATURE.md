@@ -57,7 +57,7 @@ The MFE Runtime must validate microfrontends and their extensions against type d
 
 - **PRD**: [PRD.md](../../PRD.md)
 - **Design**: [DESIGN.md](../../DESIGN.md)
-- **ADRs**: `cpt-frontx-adr-type-system-plugin-opaque-schema`, `cpt-frontx-adr-core-package-boundaries`
+- **ADRs**: `cpt-frontx-adr-runtime-type-system-coupling`, `cpt-frontx-adr-core-package-boundaries`
 - **Dependencies**: None
 
 ## 2. Actor Flows (CDSL)

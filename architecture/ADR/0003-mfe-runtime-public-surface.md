@@ -3,7 +3,7 @@ status: accepted
 date: 2026-06-04
 ---
 
-# Expose the MFE Runtime Through an Abstract Registry Facade with Factory Injection
+# The MFE Runtime's Public Access Surface
 
 
 <!-- toc -->
@@ -23,7 +23,7 @@ date: 2026-06-04
 
 <!-- /toc -->
 
-**ID**: `cpt-frontx-adr-mfe-registry-facade`
+**ID**: `cpt-frontx-adr-mfe-runtime-public-surface`
 ## Context and Problem Statement
 
 The MFE Runtime registers microfrontends and their extension domains, loads them on demand, mediates their communication with the host, and admits them only after type validation. Consumers — host applications and the microfrontends they compose — need a stable way to obtain and use this runtime, while the runtime's internal coordination machinery (mount management, action mediation, bridge wiring) must remain free to evolve. The runtime also needs a concrete type-system provider supplied to it at construction. How should the runtime's public surface be shaped so that consumers depend on a stable contract, the concrete implementation stays substitutable, and the type-system provider is injected at the single point where the runtime is created?
@@ -89,9 +89,9 @@ Registration and loading are standalone functions over a hidden global runtime i
 
 ## More Information
 
-The present concrete instantiation of the runtime is `@gears-frontx/mfes`; the contract is the abstract `MfeRegistry` and instances are built through `mfeRegistryFactory.build({ typeSystem })`. The factory itself is also an abstract contract (`packages/screensets/src/mfe/runtime/MfeRegistryFactory.ts`, which declares `build(config): MfeRegistry` and holds no knowledge of any concrete implementation), and the concrete implementation that satisfies the registry contract (`packages/screensets/src/mfe/runtime/DefaultMfeRegistry.ts`) is internal. This decision governs only the shape of the runtime's public surface and its construction; the internal coordination mechanisms it encapsulates (the actions-chains mediator, mount strategies, and the parent–child bridge) are decided in their own records, and the opaque type-substrate port the injected provider satisfies is decided in `cpt-frontx-adr-type-system-plugin-opaque-schema`.
+The present concrete instantiation of the runtime is `@gears-frontx/mfes`; the contract is the abstract `MfeRegistry` and instances are built through `mfeRegistryFactory.build({ typeSystem })`. The factory itself is also an abstract contract (`packages/screensets/src/mfe/runtime/MfeRegistryFactory.ts`, which declares `build(config): MfeRegistry` and holds no knowledge of any concrete implementation), and the concrete implementation that satisfies the registry contract (`packages/screensets/src/mfe/runtime/DefaultMfeRegistry.ts`) is internal. This decision governs only the shape of the runtime's public surface and its construction; the internal coordination mechanisms it encapsulates (the actions-chains mediator, mount strategies, and the parent–child bridge) are decided in their own records, and the opaque type-substrate port the injected provider satisfies is decided in `cpt-frontx-adr-runtime-type-system-coupling`.
 
-**Scope of impact.** Applies to the runtime's public surface and the way consumers obtain a runtime instance. It does not decide the internal structure of the concrete implementation, the choice of type-system provider (decided in `cpt-frontx-adr-gts-default-type-system`), or how microfrontend code is loaded and isolated.
+**Scope of impact.** Applies to the runtime's public surface and the way consumers obtain a runtime instance. It does not decide the internal structure of the concrete implementation, the choice of type-system provider (decided in `cpt-frontx-adr-default-type-substrate-provider`), or how microfrontend code is loaded and isolated.
 
 **Review trigger.** Revisit if a requirement emerges for consumers to operate the runtime's internal coordination components directly, which would remove the rationale for a single narrow facade.
 

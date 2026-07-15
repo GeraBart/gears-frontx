@@ -3,7 +3,7 @@ status: proposed
 date: 2026-06-05
 ---
 
-# Packaging the AI Tooling Framework as a Cypilot Kit
+# AI Tooling Framework Packaging
 
 
 <!-- toc -->
@@ -23,7 +23,7 @@ date: 2026-06-05
 
 <!-- /toc -->
 
-**ID**: `cpt-frontx-adr-kit-packaging-cyber-pilot-kit-frontx`
+**ID**: `cpt-frontx-adr-ai-tooling-framework-packaging`
 ## Context and Problem Statement
 
 The AI Tooling Framework (`cpt-frontx-component-ai-tooling-kit`, packaged as `cyber-pilot-kit-frontx`) must reach a consuming project so that AI agents working in that project gain the framework's skills and ecosystem-knowledge artifacts at session start (`cpt-frontx-fr-ai-session-start-knowledge`). Delivery flows through the AI-tooling command-line integration (`cpt-frontx-actor-cypilot-cli`) as the installation contract requires (`cpt-frontx-contract-kit-installation`), and the framework exposes a single versioned public surface (`cpt-frontx-interface-ai-tooling-framework`). What packaging and distribution form should the framework take so that it installs through that integration, presents one governed public surface, and carries no template-specific content of its own?
@@ -47,7 +47,7 @@ The AI Tooling Framework (`cpt-frontx-component-ai-tooling-kit`, packaged as `cy
 
 Chosen option: **Cypilot kit**, because it is the only option that installs through the CLI integration the contract defines, presents one declaratively-described public surface, and reuses the existing declarative install substrate instead of duplicating it. The framework ships as a kit whose `manifest.toml` enumerates exactly the resources to install and their destinations; every resource identifier carries the `frontx_` prefix (KIT-1) so the framework's resources cannot collide with another kit installed in the same project. The package is distributed as a GitHub tarball and installed and updated through the Cypilot CLI, and the kit as a whole IS the framework's delivered public surface (`cpt-frontx-interface-ai-tooling-framework`).
 
-The kit's public surface is a library boundary whose stability is governed by the matched-version artifact-distribution policy decided in `cpt-frontx-adr-matched-version-artifact-distribution`: an incompatible change to the surface requires a major version bump, while minor and patch versions preserve backward compatibility. The scope of this decision is the framework's packaging form, its resource-identity rule, and its distribution and install path; it does not decide the shape of any template-carried AI extension (that is `cpt-frontx-adr-template-ai-extension-contract`) nor how installed extensions are discovered (that is `cpt-frontx-adr-extension-discovery-activation`). The bespoke-package option fragments the install path away from the CLI integration and reimplements a declarative install mechanism that already exists; the in-repo-scaffolding option gives no separately versioned surface and no clean update path, so the framework's capabilities could not evolve and be re-delivered independently of each project.
+The kit's public surface is a library boundary whose stability is governed by the matched-version artifact-distribution policy decided in `cpt-frontx-adr-artifact-versioning-and-distribution`: an incompatible change to the surface requires a major version bump, while minor and patch versions preserve backward compatibility. The scope of this decision is the framework's packaging form, its resource-identity rule, and its distribution and install path; it does not decide the shape of any template-carried AI extension (that is `cpt-frontx-adr-template-ai-extension-contract`) nor how installed extensions are discovered (that is `cpt-frontx-adr-extension-discovery-activation`). The bespoke-package option fragments the install path away from the CLI integration and reimplements a declarative install mechanism that already exists; the in-repo-scaffolding option gives no separately versioned surface and no clean update path, so the framework's capabilities could not evolve and be re-delivered independently of each project.
 
 ### Consequences
 
@@ -94,7 +94,7 @@ The framework's capabilities are copied into each project at scaffold time, with
 
 ## More Information
 
-The kit-installation substrate this decision rides on is the declarative kit manifest defined by `.cypilot/.core/schemas/kit-manifest.schema.json` (only declared resources install, each at its declared `default_path` or a user-overridden path) and the `[kits.*]` registration in `.cypilot/config/core.toml` (each kit records its `path`, `version`, and tarball `source`); the `.cypilot/config/kits/sdlc/` kit is a working exemplar of this packaging. These are neutral substrate citations and are not part of this decision's durable identity. KIT-1's `frontx_` prefix maps to the `resource.id` field of the kit-manifest schema, layered above that field's general identifier pattern. The matched-version policy that governs the kit's public-surface compatibility is decided in `cpt-frontx-adr-matched-version-artifact-distribution` — a non-binding pointer to a related decision.
+The kit-installation substrate this decision rides on is the declarative kit manifest defined by `.cypilot/.core/schemas/kit-manifest.schema.json` (only declared resources install, each at its declared `default_path` or a user-overridden path) and the `[kits.*]` registration in `.cypilot/config/core.toml` (each kit records its `path`, `version`, and tarball `source`); the `.cypilot/config/kits/sdlc/` kit is a working exemplar of this packaging. These are neutral substrate citations and are not part of this decision's durable identity. KIT-1's `frontx_` prefix maps to the `resource.id` field of the kit-manifest schema, layered above that field's general identifier pattern. The matched-version policy that governs the kit's public-surface compatibility is decided in `cpt-frontx-adr-artifact-versioning-and-distribution` — a non-binding pointer to a related decision.
 
 Integration treatment (INT): the kit installation is the integration contract (`cpt-frontx-contract-kit-installation`), required from the consuming side and serviced through the CLI integration. **Interface stability and versioning (INT-ADR-001)** — the kit's public surface is `cpt-frontx-interface-ai-tooling-framework`; an incompatible change to it requires a major version bump, while minor and patch versions preserve backward compatibility, governed by the matched-version policy. **Contract changes (INT-ADR-002)** — the installation contract remains backward-compatible across minor and patch versions; an incompatible change to it is a public-interface change subject to the same compatibility policy, and consumers are notified through the version bump. There is no wire protocol to version here.
 

@@ -83,6 +83,16 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Edge-compatibility check (independent publication)
+        # F1 Ecosystem Distribution & Versioning Policy — per-concern
+        # INDEPENDENT versioning (cpt-frontx-flow-ecosystem-distribution-independent-publication,
+        # cpt-frontx-algo-ecosystem-distribution-edge-compatibility-check):
+        # each artifact publishes on its own semver line; NO matched-version
+        # gate. Blocks publication only of @gears-frontx/mfes, and only when
+        # its declared @gears-frontx/gts-plugin range is an exact pin or is
+        # unsatisfiable against the published gts-plugin version(s).
+        run: npm run policy:version-check
+
       - name: Build all packages
         run: npm run build:packages
 

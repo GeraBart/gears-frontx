@@ -23,7 +23,7 @@ function collectFilesRecursive(dir: string): string[] {
  * disk — either the single file, or every file recursively under a
  * directory resource. Used by the kit's self-validation to scan shipped
  * resource BODIES (not just manifest id/description) for solution-specific
- * content, per `cpt-frontx-adr-base-solution-ai-content-split`.
+ * content, per `cpt-frontx-adr-solution-ai-content-placement`.
  */
 export function createFsResourceBodyReader(kitRoot: string): ResourceBodyReader {
   return {

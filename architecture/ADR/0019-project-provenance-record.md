@@ -91,7 +91,7 @@ The project records nothing; upgrade asks the developer or infers origin from co
 
 ## More Information
 
-This decision fixes what provenance captures and where it lives at decision altitude; the exact field layout and storage filename belong to the DESIGN document. The source-spec shape the record stores is decided in `cpt-frontx-adr-source-spec-syntax`; the upgrade that reads the record and applies a change set is decided in `cpt-frontx-adr-upgrade-changeset-engine`. These are non-binding pointers and do not form part of this decision's durable identity.
+This decision fixes what provenance captures and where it lives at decision altitude; the exact field layout and storage filename belong to the DESIGN document. The source-spec shape the record stores is decided in `cpt-frontx-adr-source-spec-syntax`; the upgrade that reads the record and applies a change set is decided in `cpt-frontx-adr-project-upgrade-mechanism`. These are non-binding pointers and do not form part of this decision's durable identity.
 
 Integration analysis (**INT**): provenance is a library-provided internal contract (`cpt-frontx-contract-project-provenance`) — written by the scaffold operation and read by the upgrade operation, both within the CLI; it names no external party. Its producer is scaffold; its consumer is upgrade. Version-compatibility intent is forward-looking: provenance records remain readable across versions, and the record's shape evolves additively so that records written by an earlier scaffold remain readable by a later upgrade; any change to the shape that is not backward-compatible follows the platform evolvability requirement.
 

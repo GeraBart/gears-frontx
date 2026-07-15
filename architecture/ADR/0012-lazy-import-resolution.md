@@ -3,7 +3,7 @@ status: proposed
 date: 2026-06-04
 ---
 
-# Resolve Lazy Dynamic Imports Through a Runtime ABI That Inherits the Parent Load's Shared-Dependency Bindings
+# Lazy Dynamic Import Resolution
 
 
 <!-- toc -->
@@ -23,7 +23,7 @@ date: 2026-06-04
 
 <!-- /toc -->
 
-**ID**: `cpt-frontx-adr-lazy-import-abi`
+**ID**: `cpt-frontx-adr-lazy-import-resolution`
 ## Context and Problem Statement
 
 The runtime loads each microfrontend as an isolated module graph, fetching its chunks and minting per-load module references so distinct loads never share a module instance, and rewriting each chunk's bare dependency specifiers to the per-load references built for that load's shared dependencies. A microfrontend that code-splits also contains lazy chunks reached through dynamic imports that resolve only when first exercised, and those lazy chunks carry the same bare dependency specifiers as the eager chunks. How should a lazy chunk be resolved at the moment it is first needed so that it joins the same isolated graph — and inherits the same shared-dependency bindings — as the parent load that owns it, rather than resolving against the origin with unrewritten specifiers and thereby evaluating a second, divergent copy of those dependencies?
@@ -95,9 +95,9 @@ Code is split lazily at build time, but at runtime every lazy chunk is folded in
 
 ## More Information
 
-The present concrete instantiation expresses the ABI as the named `__frontx_lazy` call. A build-time AST rewrite in the `frontxMfGts` Vite plugin converts each statically resolvable dynamic `import('<rel>')` in a compiled chunk into a `__frontx_lazy('<rel>')` call at the `renderChunk` stage (after bundling, so code-splitting is preserved), and rejects a non-statically-resolvable argument with a build-time diagnostic. At load time the runtime injects a per-load loader stub that re-exports `__frontx_lazy` bound to that load's resolver; the stub reaches the host-side resolver table through a single narrow `resolve(id, path)` entry point, and the resolver funnels the lazy reference back into the same load's blob-URL chain so it inherits the load's `sharedDepBlobUrls`. Sibling loads receive distinct resolvers so a lazy reference routes back to the load that owns it. The specific contract name, the bundler hook, and the per-load reference mechanism are descriptive of the current instantiation and non-binding; the durable decision is a runtime-resolved lazy-import ABI whose per-load resolution inherits the parent load's shared-dependency bindings, with the build-time emission of the ABI owned as a consumer-side contract obligation. This decision composes with `cpt-frontx-adr-blob-url-mfe-isolation`, which decides the per-load isolated module graph this ABI extends to lazy chunks.
+The present concrete instantiation expresses the ABI as the named `__frontx_lazy` call. A build-time AST rewrite in the `frontxMfGts` Vite plugin converts each statically resolvable dynamic `import('<rel>')` in a compiled chunk into a `__frontx_lazy('<rel>')` call at the `renderChunk` stage (after bundling, so code-splitting is preserved), and rejects a non-statically-resolvable argument with a build-time diagnostic. At load time the runtime injects a per-load loader stub that re-exports `__frontx_lazy` bound to that load's resolver; the stub reaches the host-side resolver table through a single narrow `resolve(id, path)` entry point, and the resolver funnels the lazy reference back into the same load's blob-URL chain so it inherits the load's `sharedDepBlobUrls`. Sibling loads receive distinct resolvers so a lazy reference routes back to the load that owns it. The specific contract name, the bundler hook, and the per-load reference mechanism are descriptive of the current instantiation and non-binding; the durable decision is a runtime-resolved lazy-import ABI whose per-load resolution inherits the parent load's shared-dependency bindings, with the build-time emission of the ABI owned as a consumer-side contract obligation. This decision composes with `cpt-frontx-adr-mfe-load-isolation`, which decides the per-load isolated module graph this ABI extends to lazy chunks.
 
-**Scope of impact.** Decides how a lazily reached chunk is resolved into its parent load's isolated graph and shared-dependency bindings, and where the runtime/build responsibility boundary falls for that mechanism. It does not decide how the parent load's isolated graph or shared-dependency bindings are built in the first place (decided in `cpt-frontx-adr-blob-url-mfe-isolation`), nor how a microfrontend is discovered and located for loading (decided in `cpt-frontx-adr-mf-manifest-discovery`).
+**Scope of impact.** Decides how a lazily reached chunk is resolved into its parent load's isolated graph and shared-dependency bindings, and where the runtime/build responsibility boundary falls for that mechanism. It does not decide how the parent load's isolated graph or shared-dependency bindings are built in the first place (decided in `cpt-frontx-adr-mfe-load-isolation`), nor how a microfrontend is discovered and located for loading (decided in `cpt-frontx-adr-mfe-asset-discovery`).
 
 **Review trigger.** Revisit if a runtime mechanism makes a lazily fetched chunk inherit a parent load's dependency bindings without a named ABI, if the constraint that lazy references be statically resolvable becomes untenable for conforming microfrontends, or if the runtime/build ownership boundary must shift.
 
@@ -106,10 +106,10 @@ The present concrete instantiation expresses the ABI as the named `__frontx_lazy
 * ARCH — applicable and addressed above (a runtime resolution contract affecting every code-split microfrontend and a deliberate runtime/build ownership boundary, hard to reverse once chunks and the runtime depend on the ABI).
 * ARCH-ADR-008 (supersession) — Not applicable because this is a standalone, forward-looking decision with no live superseded record to link.
 * PERF — applicable and addressed above (PERF-ADR-001/002): the latency-relevant trade-off is preserving deferred resolution so the eager working set stays small while a singleton shared dependency is not duplicated across the lazy boundary; this anchors `cpt-frontx-nfr-runtime-performance`, whose on-demand-load target the ABI serves. Verification is the runtime test that a lazy reference reuses the parent load's bindings and the build check rejecting non-resolvable references; no separate load-test harness is mandated by this decision.
-* SEC — Not applicable as a primary concern: the trust-surface and code-admission decision is made in `cpt-frontx-adr-blob-url-mfe-isolation`; this decision adds no new dynamic-code primitive and constrains the ABI argument to statically resolvable references.
+* SEC — Not applicable as a primary concern: the trust-surface and code-admission decision is made in `cpt-frontx-adr-mfe-load-isolation`; this decision adds no new dynamic-code primitive and constrains the ABI argument to statically resolvable references.
 * REL — Not applicable because it governs module resolution within a load, not service availability or fault tolerance.
 * DATA — Not applicable because no persistent data store or schema is involved.
-* INT — Not applicable as a primary concern: the ABI is an internal runtime/build contract, not an external integration boundary; the external integration boundary is decided in `cpt-frontx-adr-mf-manifest-discovery`.
+* INT — Not applicable as a primary concern: the ABI is an internal runtime/build contract, not an external integration boundary; the external integration boundary is decided in `cpt-frontx-adr-mfe-asset-discovery`.
 * OPS — Not applicable because no deployed-service operational procedure is governed by this decision.
 
 ## Traceability

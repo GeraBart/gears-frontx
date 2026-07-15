@@ -3,7 +3,7 @@ status: accepted
 date: 2026-06-05
 ---
 
-# Govern Extension-Domain Occupancy with Composable Mount Strategies and a Cardinality Matrix
+# Extension-Domain Occupancy
 
 
 <!-- toc -->
@@ -23,7 +23,7 @@ date: 2026-06-05
 
 <!-- /toc -->
 
-**ID**: `cpt-frontx-adr-mount-strategies-cardinality`
+**ID**: `cpt-frontx-adr-extension-domain-occupancy`
 ## Context and Problem Statement
 
 An extension domain is a governed placement slot into which microfrontends are mounted, and different domains need fundamentally different occupancy semantics: some hold many occupants side by side, some hold at most one with an explicit way to empty the slot, and some hold exactly one that is swapped pre-emptively with no explicit teardown. The runtime must let a domain author pick the occupancy semantics for a domain while guaranteeing the domain's declared lifecycle actions are consistent with the chosen semantics. How should the runtime model occupancy so that a domain author selects a well-defined behavior and the runtime rejects domains whose declared actions are incompatible with that behavior?
@@ -93,7 +93,7 @@ Each domain supplies mount/unmount handlers directly with no shared abstraction 
 
 The present concrete instantiation ships three strategy classes — `ConcurrentMountStrategy`, `OptionalMountStrategy`, and `ExclusiveMountStrategy` — in `packages/screensets/src/mfe/runtime/mount-strategies.ts`, composed by a domain inside its `ExtensionDomainImplementationFactory.build(ctx)`. The cardinality matrix is applied by `crossValidateHandlers` in `packages/screensets/src/mfe/runtime/DefaultMfeRegistry.ts`: the concurrent and optional strategies require both a mount and an unmount lifecycle action in the domain's declaration, the exclusive strategy requires a mount action and forbids an explicit unmount action, and any unrecognized strategy is rejected. The specific class names and the present matrix rows are descriptive of the current instantiation and non-binding; the durable decision is the strategy-plus-matrix model.
 
-**Scope of impact.** Applies to how an extension domain's occupancy behavior is selected and how its declared lifecycle actions are validated at registration. It does not decide how an extension's entry is matched for compatibility with a domain (decided in `cpt-frontx-adr-domain-extension-contract-matching`), nor how a microfrontend bundle is loaded or isolated (decided in `cpt-frontx-adr-blob-url-mfe-isolation`).
+**Scope of impact.** Applies to how an extension domain's occupancy behavior is selected and how its declared lifecycle actions are validated at registration. It does not decide how an extension's entry is matched for compatibility with a domain (decided in `cpt-frontx-adr-domain-extension-compatibility`), nor how a microfrontend bundle is loaded or isolated (decided in `cpt-frontx-adr-mfe-load-isolation`).
 
 **Review trigger.** Revisit if an extension domain requires an occupancy behavior that none of the named strategies expresses, or if the action–behavior consistency rule needs to vary by domain beyond a fixed per-strategy matrix row.
 
@@ -101,7 +101,7 @@ The present concrete instantiation ships three strategy classes — `ConcurrentM
 
 * ARCH — applicable and addressed above (a runtime placement decision affecting every extension domain and the microfrontends that occupy it, and hard to reverse once domains depend on the strategy catalog).
 * ARCH-ADR-008 (supersession) — Not applicable because this is a new, standalone decision that replaces no prior record.
-* SEC — Not applicable because occupancy selection and cardinality validation introduce no secret, credential, authorization, or admission-trust mechanism; arbitrary-code admission and isolation are decided in `cpt-frontx-adr-blob-url-mfe-isolation`.
+* SEC — Not applicable because occupancy selection and cardinality validation introduce no secret, credential, authorization, or admission-trust mechanism; arbitrary-code admission and isolation are decided in `cpt-frontx-adr-mfe-load-isolation`.
 * PERF — Not applicable because this is a behavior-selection and admission-validation decision, not a runtime-performance decision.
 * REL — Not applicable because it governs occupancy semantics and registration validation, not runtime availability or fault tolerance.
 * DATA — Not applicable because no persistent data store or schema is involved.

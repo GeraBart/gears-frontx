@@ -423,15 +423,17 @@ This decomposition breaks the FROZEN FrontX DESIGN into 17 work-package features
 
 ### 2.9 [Ecosystem Distribution & Versioning Policy](features/ecosystem-distribution/) - MEDIUM
 
-- [ ] `p2` - **ID**: `cpt-frontx-feature-ecosystem-distribution`
+- [x] `p2` - **ID**: `cpt-frontx-feature-ecosystem-distribution`
 
-- **Purpose**: Establish the matched-version, per-concern artifact distribution policy — independently published, independently versioned artifacts whose major/minor stay matched while patch/pre-release diverge, isolating breaking changes behind semver + a deprecation cycle, and imposing no architectural ceiling on integrated units.
+- **Purpose**: Establish the per-concern independent versioning policy — each artifact published and versioned on its own semver line and cadence, a breaking change bounded to that one artifact's major version, cross-artifact compatibility on the single coupled edge (`mfes → gts-plugin`) expressed as a satisfiable semver range rather than a matched version, isolating breaking changes behind semver plus a registry-side deprecation cycle, and imposing no architectural ceiling on integrated units.
 
 - **Depends On**: None
 
 - **Scope**:
-  - Matched major/minor version-policy enforcement across published artifacts.
-  - Deprecation-cycle gate before removal.
+  - Per-concern independent semver publication (each artifact on its own line/cadence; a breaking change bounded to that artifact's own major version).
+  - Compatibility check on the `mfes → gts-plugin` coupled edge (declared semver range satisfiable and not exact-pinned — no duplicate-runtime skew), not a matched-version assertion.
+  - Consumer independent upgrade (adopt one artifact without upgrading others).
+  - Registry-side deprecation cycle before removal (published notice + minimum window; no in-package lifecycle state).
   - npm + GitHub-source distribution channels.
   - The no-architectural-ceiling guarantee (growth governed by performance thresholds, not structure).
 
@@ -441,14 +443,14 @@ This decomposition breaks the FROZEN FrontX DESIGN into 17 work-package features
 
 - **Requirements Covered**:
 
-  - [ ] `p2` - `cpt-frontx-fr-versioned-platform-evolution`
-  - [ ] `p2` - `cpt-frontx-fr-no-architectural-ceiling`
-  - [ ] `p2` - `cpt-frontx-nfr-evolvability`
-  - [ ] `p2` - `cpt-frontx-nfr-scalability-ceiling`
+  - [x] `p2` - `cpt-frontx-fr-versioned-platform-evolution`
+  - [x] `p2` - `cpt-frontx-fr-no-architectural-ceiling`
+  - [x] `p2` - `cpt-frontx-nfr-evolvability`
+  - [x] `p2` - `cpt-frontx-nfr-scalability-ceiling`
 
 - **Design Principles Covered**:
 
-  - [ ] `p2` - `cpt-frontx-principle-per-concern-versioning`
+  - [x] `p2` - `cpt-frontx-principle-per-concern-versioning`
 
 - **Domain Model Entities**:
   - N/A

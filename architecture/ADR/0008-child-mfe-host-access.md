@@ -3,7 +3,7 @@ status: accepted
 date: 2026-06-05
 ---
 
-# Give Child Microfrontends a Narrow Capability Bridge that Delegates to the Registry
+# Child MFE Access to the Host
 
 
 <!-- toc -->
@@ -23,7 +23,7 @@ date: 2026-06-05
 
 <!-- /toc -->
 
-**ID**: `cpt-frontx-adr-parent-child-bridge`
+**ID**: `cpt-frontx-adr-child-mfe-host-access`
 ## Context and Problem Statement
 
 A child microfrontend runs isolated from the host yet must still interact with it: execute actions chains, read and subscribe to shared properties, and register handlers for actions targeted at itself. Handing the child a reference to the host runtime would couple child code to runtime internals and widen the surface a child can reach. What should the host give a child so the child gains exactly the capabilities it needs to participate — and nothing more — while the host retains a matching handle to manage and dispose the child instance?
@@ -89,9 +89,9 @@ Child and host exchange serialized messages over a transport, with no typed capa
 
 ## More Information
 
-The present concrete instantiation is the abstract `ChildMfeBridge` (`packages/screensets/src/mfe/handler/types.ts`), which exposes `executeActionsChain`, `subscribeToProperty`, `getProperty`, and `registerActionHandler`; its concrete implementation `ChildMfeBridgeImpl` (`packages/screensets/src/mfe/bridge/ChildMfeBridge.ts`) delegates `executeActionsChain` to an injected registry callback and `registerActionHandler` to a mediator-registration callback, while its transport and wiring methods are not part of the abstract surface. The matching abstract `ParentMfeBridge` (`packages/screensets/src/mfe/handler/types.ts`) exposes only `instanceId` and `dispose()`. Forwarding of actions to a child's own domains is carried by the mediator's catch-all tier through `ChildDomainForwardingHandler` (`packages/screensets/src/mfe/bridge/ChildDomainForwardingHandler.ts`), and the routing that tier participates in is decided in `cpt-frontx-adr-actions-chains-mediator`.
+The present concrete instantiation is the abstract `ChildMfeBridge` (`packages/screensets/src/mfe/handler/types.ts`), which exposes `executeActionsChain`, `subscribeToProperty`, `getProperty`, and `registerActionHandler`; its concrete implementation `ChildMfeBridgeImpl` (`packages/screensets/src/mfe/bridge/ChildMfeBridge.ts`) delegates `executeActionsChain` to an injected registry callback and `registerActionHandler` to a mediator-registration callback, while its transport and wiring methods are not part of the abstract surface. The matching abstract `ParentMfeBridge` (`packages/screensets/src/mfe/handler/types.ts`) exposes only `instanceId` and `dispose()`. Forwarding of actions to a child's own domains is carried by the mediator's catch-all tier through `ChildDomainForwardingHandler` (`packages/screensets/src/mfe/bridge/ChildDomainForwardingHandler.ts`), and the routing that tier participates in is decided in `cpt-frontx-adr-action-dispatch-and-chaining`.
 
-**Scope of impact.** Applies to the capability surface a child microfrontend receives and the parent handle the host retains. It does not decide how a bundle is loaded or isolated, nor how the mediator routes actions internally (decided in `cpt-frontx-adr-actions-chains-mediator`).
+**Scope of impact.** Applies to the capability surface a child microfrontend receives and the parent handle the host retains. It does not decide how a bundle is loaded or isolated, nor how the mediator routes actions internally (decided in `cpt-frontx-adr-action-dispatch-and-chaining`).
 
 **Review trigger.** Revisit if a child requires a participation capability that cannot be expressed as a delegating method on the bridge, or if the host needs richer lifecycle control than instance identity and disposal.
 

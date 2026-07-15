@@ -3,7 +3,7 @@ status: proposed
 date: 2026-06-04
 ---
 
-# Upgrade Change-Set Engine: A Single CLI-Owned, Reviewable, Reversible Engine
+# The Project Upgrade Mechanism
 
 
 <!-- toc -->
@@ -23,7 +23,7 @@ date: 2026-06-04
 
 <!-- /toc -->
 
-**ID**: `cpt-frontx-adr-upgrade-changeset-engine`
+**ID**: `cpt-frontx-adr-project-upgrade-mechanism`
 ## Context and Problem Statement
 
 A project scaffolded from a template at one version must be able to adopt a newer version of that template without the developer hand-editing files or risking unreviewed changes (`cpt-frontx-fr-cli-project-upgrade-changeset`), and no modification may reach the project's files without the developer's explicit approval (`cpt-frontx-fr-cli-upgrade-review-approval`). This requires a mechanism that computes the difference between the project's current template version and a newer one, expresses it as something a human can examine and approve, and applies it without destroying work in progress. Two design questions follow: what is the unit of this mechanism (a diff-and-apply engine over template versions), and where does it live relative to the AI-driven upgrade workflow that a developer's agent uses to analyse and enrich the change (`cpt-frontx-usecase-ai-driven-template-upgrade`)?
@@ -49,7 +49,7 @@ Chosen option: **Single change-set engine in the CLI; AI orchestrates and enrich
 
 The boundary with AI is explicit: the single change-set engine lives in the **CLI**, and the AI-driven upgrade orchestration decided in `cpt-frontx-adr-ai-driven-upgrade-orchestration` **invokes and enriches** that engine — running alongside it, not subordinating or replacing it. The AI workflow contributes change analysis and downstream-impact assessment around the engine's change set; it does not compute or apply the change set itself. This keeps the engine usable without AI and guarantees the change a developer reviews is exactly the change the engine applies. The split-engines option fails the one-authoritative-computation and no-fork drivers and risks the reviewed change diverging from the applied change; the AI-only option fails the engine-independent-of-AI driver by making every upgrade require an agent.
 
-The scope of this decision is the upgrade engine's unit and ownership and its reviewability, non-destructiveness, and reversibility. It does not decide the AI orchestration workflow's own shape (that is `cpt-frontx-adr-ai-driven-upgrade-orchestration`), nor how a template reference resolves to a version (that is `cpt-frontx-adr-template-externalization-resolution`), nor the local-update path that refreshes an installed template without touching a project.
+The scope of this decision is the upgrade engine's unit and ownership and its reviewability, non-destructiveness, and reversibility. It does not decide the AI orchestration workflow's own shape (that is `cpt-frontx-adr-ai-driven-upgrade-orchestration`), nor how a template reference resolves to a version (that is `cpt-frontx-adr-template-acquisition-and-location`), nor the local-update path that refreshes an installed template without touching a project.
 
 ### Consequences
 
@@ -94,7 +94,7 @@ The diff-and-apply capability lives entirely in the AI workflow; the CLI exposes
 
 ## More Information
 
-The AI-driven upgrade orchestration that invokes and enriches this engine is decided in `cpt-frontx-adr-ai-driven-upgrade-orchestration`; that decision sits alongside, not above, this one. Resolution of a template reference to a target version is performed by the shared resolver decided in `cpt-frontx-adr-template-externalization-resolution`. These are non-binding pointers to related decisions and are not part of this decision's durable identity.
+The AI-driven upgrade orchestration that invokes and enriches this engine is decided in `cpt-frontx-adr-ai-driven-upgrade-orchestration`; that decision sits alongside, not above, this one. Resolution of a template reference to a target version is performed by the shared resolver decided in `cpt-frontx-adr-template-acquisition-and-location`. These are non-binding pointers to related decisions and are not part of this decision's durable identity.
 
 Reliability treatment (REL): the change-set model is the engine's reliability design. **Failure modes** — a target version that cannot be resolved, or a change the engine cannot apply cleanly, surfaces during computation or review, before any project file is written; the project stays at its current version. **Non-destructive apply** — application is gated behind explicit approval and writes only the approved change set. **Recovery / rollback** — an applied change set is reversible to the pre-upgrade state, so an unwanted upgrade is recoverable at the change-set level. **Single point of failure** — the single engine is deliberately the one authoritative computation; its reliability properties are proven once and apply to every invoker (the Confirmation defines those checks). **Operational readiness (REL-ADR-002)**: rollback strategy is the change-set reversal above; service-oriented items — deployment complexity, monitoring, alerting, runbooks, SLA — are Not applicable, because this is a local developer command with no running service, no availability target, and no operational on-call surface.
 

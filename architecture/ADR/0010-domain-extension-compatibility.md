@@ -3,7 +3,7 @@ status: accepted
 date: 2026-06-05
 ---
 
-# Admit Extensions into Domains by Subset-Rule Contract Matching
+# Domain–Extension Compatibility
 
 
 <!-- toc -->
@@ -23,7 +23,7 @@ date: 2026-06-05
 
 <!-- /toc -->
 
-**ID**: `cpt-frontx-adr-domain-extension-contract-matching`
+**ID**: `cpt-frontx-adr-domain-extension-compatibility`
 ## Context and Problem Statement
 
 An extension domain is a governed slot, and binding an extension's entry into a domain creates a two-way dependency: the entry needs certain capabilities and shared properties from the domain, and the domain needs certain capabilities from any entry it admits. Admitting an entry whose capability and property expectations do not line up with the domain would defer a structural mismatch to the moment a user interacts with it. How should the runtime decide whether a given entry is compatible with a given domain, so that an incompatible binding is rejected deterministically at admission rather than failing later?
@@ -92,7 +92,7 @@ An entry is admitted only when its capability and property sets exactly equal th
 
 The present concrete instantiation is `validateContract` in `packages/screensets/src/mfe/validation/contract.ts`, which applies three rules — an entry's required properties must be contained in the domain's shared properties; the domain's required extension capabilities must be contained in the entry's supported capabilities; and the entry's required domain capabilities, excluding the runtime-wired lifecycle actions held in `INFRASTRUCTURE_LIFECYCLE_ACTIONS`, must be contained in the domain's capabilities — returning a result that names each unsatisfied rule. The specific field names and the present membership of the exemption set are descriptive of the current instantiation and non-binding; the durable decision is subset-rule matching with a scoped infrastructure-lifecycle exemption.
 
-**Scope of impact.** Applies to how the runtime decides whether a given extension entry may be bound into a given domain. It does not decide how a domain selects its occupancy behavior or how its declared actions are cardinality-validated (decided in `cpt-frontx-adr-mount-strategies-cardinality`), nor how type identifiers themselves are validated by the type-system provider — matching consumes already-resolved identifiers opaquely.
+**Scope of impact.** Applies to how the runtime decides whether a given extension entry may be bound into a given domain. It does not decide how a domain selects its occupancy behavior or how its declared actions are cardinality-validated (decided in `cpt-frontx-adr-extension-domain-occupancy`), nor how type identifiers themselves are validated by the type-system provider — matching consumes already-resolved identifiers opaquely.
 
 **Review trigger.** Revisit if a new compatibility dimension beyond properties and the two capability directions is needed, or if the infrastructure-lifecycle-action exemption needs to cover categories beyond the runtime-wired lifecycle actions.
 
@@ -100,7 +100,7 @@ The present concrete instantiation is `validateContract` in `packages/screensets
 
 * ARCH — applicable and addressed above (a runtime admission decision affecting every extension–domain binding, and hard to reverse once entries and domains declare against these rules).
 * ARCH-ADR-008 (supersession) — Not applicable because this is a new, standalone decision that replaces no prior record.
-* SEC — Not applicable because contract matching validates structural capability and property compatibility, not admission trust or code isolation; arbitrary-code admission and isolation are decided in `cpt-frontx-adr-blob-url-mfe-isolation`.
+* SEC — Not applicable because contract matching validates structural capability and property compatibility, not admission trust or code isolation; arbitrary-code admission and isolation are decided in `cpt-frontx-adr-mfe-load-isolation`.
 * PERF — Not applicable because this is a compatibility-decision rule, not a runtime-performance decision.
 * REL — Not applicable because it governs admission compatibility, not runtime availability or fault tolerance.
 * DATA — Not applicable because no persistent data store or schema is involved.

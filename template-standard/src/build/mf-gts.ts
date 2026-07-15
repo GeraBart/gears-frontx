@@ -764,7 +764,7 @@ function transformLazyImports(
         `'${chunkFileName}'. Lazy-import paths MUST be string literals, ` +
         `constant template literals, or constant string concatenation so the ` +
         `vendor MFE's runtime can resolve them through the per-load blob URL ` +
-        `chain. See architecture/ADR/0022-lazy-import-abi.md.`,
+        `chain. See architecture/ADR/0012-lazy-import-resolution.md.`,
       node.start
     );
   }
