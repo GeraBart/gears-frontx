@@ -8,7 +8,7 @@
  * - Extension screen schema defines the required presentation structure
  *
  * These tests live at L2 (framework) because the derived schemas encode
- * application-level decisions. The core GTS type system at L1 (@gears-frontx/screensets)
+ * application-level decisions. The core GTS type system at L1 (@gears-frontx/mfes)
  * only knows about the base shared_property schema — it does not constrain
  * which specific themes or languages are valid.
  *
@@ -16,9 +16,9 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { GtsPlugin } from '@gears-frontx/screensets/plugins/gts';
-import { FRONTX_SHARED_PROPERTY_THEME, FRONTX_SHARED_PROPERTY_LANGUAGE } from '@gears-frontx/screensets';
-import type { JSONSchema } from '@gears-frontx/screensets';
+import { GtsPlugin } from '@gears-frontx/gts-plugin';
+import { FRONTX_SHARED_PROPERTY_THEME, FRONTX_SHARED_PROPERTY_LANGUAGE } from '../../../src/mfe/constants';
+import type { JSONSchema } from '@gears-frontx/gts-plugin';
 import { themeSchema, languageSchema, extensionScreenSchema } from '../../../src/gts';
 
 /**

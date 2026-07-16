@@ -147,3 +147,39 @@ export {
   rewriteBareSpecifier,
   importBlobModule,
 } from './handler/mf-dynamic-module-ops';
+
+// Default registry — concrete facade implementation (Stage 1 extraction)
+export { DefaultMfeRegistry } from './runtime/DefaultMfeRegistry';
+export { DefaultMfeRegistryFactory } from './runtime/DefaultMfeRegistryFactory';
+
+// Lifecycle manager — abstract contract and default implementation
+// (aliased: distinct from mount-manager's ActionChainExecutor, which also carries ChainExecutionOptions)
+export { LifecycleManager } from './runtime/lifecycle-manager';
+export type { ActionChainExecutor as LifecycleActionChainExecutor } from './runtime/lifecycle-manager';
+export { DefaultLifecycleManager } from './runtime/default-lifecycle-manager';
+
+// Runtime bridge factory — default implementation
+export { DefaultRuntimeBridgeFactory } from './runtime/default-runtime-bridge-factory';
+
+// Extension mounter — default implementation
+export { DefaultExtensionMounter } from './runtime/DefaultExtensionMounter';
+
+// Domain lifecycle trigger — default implementation
+export { DefaultDomainLifecycleTrigger } from './runtime/DefaultDomainLifecycleTrigger';
+
+// Operation serializer — concurrency control for registry operations
+export { OperationSerializer } from './runtime/operation-serializer';
+
+// Extension lifecycle action handler — load_ext handler wiring
+export { LoadExtHandler } from './runtime/extension-lifecycle-action-handler';
+export type { LifecycleActionPayload } from './runtime/extension-lifecycle-action-handler';
+
+// Runtime coordination — default WeakMap-based implementation
+export { WeakMapRuntimeCoordinator } from './runtime/coordination/weak-map-runtime-coordinator';
+
+// MFE state container — abstract contract and default implementation
+export { MfeStateContainer, DefaultMfeStateContainer } from './state';
+export type { MfeStateContainerConfig } from './state';
+
+// GTS package extraction utility
+export { extractGtsPackage } from './gts/extract-package';

@@ -40,7 +40,8 @@ import type { ExtensionMounter } from '../runtime/ExtensionMounter';
  *
  * @example
  * ```typescript
- * import { mfeRegistryFactory, gtsPlugin } from '@gears-frontx/screensets';
+ * import { mfeRegistryFactory } from '@gears-frontx/mfes';
+ * import { gtsPlugin } from '@gears-frontx/gts-plugin';
  *
  * const registry = mfeRegistryFactory.build({ typeSystem: gtsPlugin });
  * registry.registerDomain(myDomain, new MyDomainFactory());

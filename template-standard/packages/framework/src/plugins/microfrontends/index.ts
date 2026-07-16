@@ -17,13 +17,13 @@
 // @cpt-dod:cpt-frontx-dod-framework-composition-shared-property:p1
 
 import {
-  mfeRegistryFactory,
   type ActionsChain,
   type MfeHandler,
   type TypeSystemPlugin,
   FRONTX_ACTION_MOUNT_EXT,
   FRONTX_ACTION_UNMOUNT_EXT,
-} from '@gears-frontx/screensets';
+} from '@gears-frontx/mfes';
+import { mfeRegistryFactory } from '../../mfe/registry';
 import { getStore } from '@gears-frontx/state';
 import type { FrontXPlugin } from '../../types';
 import { mfeSlice, addExtensionMounted, removeExtensionMounted } from './slice';
@@ -100,8 +100,9 @@ function collectLifecycleDomains(chain: ActionsChain): string[] {
  * @example
  * ```typescript
  * import { createFrontX, microfrontends } from '@gears-frontx/framework';
- * import { MfeHandlerMF, FrontX_MFE_ENTRY_MF } from '@gears-frontx/screensets/mfe/handler';
- * import { gtsPlugin } from '@gears-frontx/screensets/plugins/gts';
+ * import { MfeHandlerMF } from '@gears-frontx/mfes';
+ * import { FrontX_MFE_ENTRY_MF } from '@gears-frontx/framework';
+ * import { gtsPlugin } from '@gears-frontx/gts-plugin';
  *
  * const app = createFrontX()
  *   .use(microfrontends({

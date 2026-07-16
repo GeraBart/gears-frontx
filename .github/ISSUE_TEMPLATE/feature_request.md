@@ -26,7 +26,7 @@ Provide concrete examples of how this feature would be used:
 Which FrontX package(s) would this impact?
 - [ ] @gears-frontx/framework
 - [ ] @gears-frontx/react
-- [ ] @gears-frontx/screensets
+- [ ] @gears-frontx/mfes
 - [ ] @gears-frontx/cli
 - [ ] @gears-frontx/i18n
 - [ ] @gears-frontx/state

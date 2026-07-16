@@ -3,7 +3,10 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     globals: true,
-    environment: 'node',
+    // jsdom (not 'node'): DefaultExtensionMounter/mount-strategies tests exercise real
+    // DOM Element creation via ContainerHooks (document.createElement) — extracted
+    // from screensets' jsdom-based suite in Stage 1, so mfes needs the same environment.
+    environment: 'jsdom',
     include: ['__tests__/**/*.test.ts', 'src/**/__tests__/**/*.test.ts'],
     coverage: {
       provider: 'v8',

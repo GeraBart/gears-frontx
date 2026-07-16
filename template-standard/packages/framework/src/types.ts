@@ -150,7 +150,7 @@ export interface FrontXActions {
   loadExtension: (extensionId: string) => void;
   mountExtension: (extensionId: string) => void;
   unmountExtension: (extensionId: string) => void;
-  registerExtension: (extension: import('@gears-frontx/screensets').Extension) => void;
+  registerExtension: (extension: import('@gears-frontx/mfes').Extension) => void;
   unregisterExtension: (extensionId: string) => void;
 }
 
@@ -405,7 +405,7 @@ export interface FrontXApp extends FrontXAppRuntimeExtensions {
   i18nRegistry: I18nRegistry;
 
   /** MFE-enabled MfeRegistry (optional, provided by microfrontends plugin) */
-  mfeRegistry?: import('@gears-frontx/screensets').MfeRegistry;
+  mfeRegistry?: import('@gears-frontx/mfes').MfeRegistry;
 
   /** All registered actions (type-safe via FrontXActions interface) */
   actions: FrontXActions;

@@ -3,7 +3,7 @@
  * Rules for @gears-frontx/framework package
  *
  * Framework package CAN import:
- * - @gears-frontx/state, @gears-frontx/screensets, @gears-frontx/api, @gears-frontx/i18n (SDK packages)
+ * - @gears-frontx/state, @gears-frontx/mfes, @gears-frontx/api, @gears-frontx/i18n (SDK packages)
  *
  * Framework package CANNOT import:
  * - @gears-frontx/react (would create circular dependency)

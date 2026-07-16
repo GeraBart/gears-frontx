@@ -8,7 +8,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RestProtocol } from '../protocols/RestProtocol';
 import { SseProtocol } from '../protocols/SseProtocol';
-import { SseMockPlugin } from '@gears-frontx/frontx-template-standard';
+import { LocalSseMockPlugin as SseMockPlugin } from './fixtures/mockPlugins';
 import { apiRegistry } from '../apiRegistry';
 import type {
   RestPluginHooks,

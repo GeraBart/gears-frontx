@@ -2,7 +2,7 @@
  * Migration Helpers - Utilities for migrating from @gears-frontx/uicore
  *
  * These helpers assist users migrating from the deprecated @gears-frontx/uicore package
- * to the new SDK architecture (@gears-frontx/framework, @gears-frontx/screensets, @gears-frontx/react).
+ * to the new SDK architecture (@gears-frontx/framework, @gears-frontx/mfes, @gears-frontx/react).
  *
  * Framework Layer: L2
  */

@@ -21,7 +21,7 @@ import {
   setExtensionUnregistered,
   setExtensionError,
 } from './slice';
-import type { MfeRegistry } from '@gears-frontx/screensets';
+import type { MfeRegistry } from '@gears-frontx/mfes';
 
 // ============================================================================
 // Effect Initialization

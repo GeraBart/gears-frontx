@@ -7,7 +7,7 @@
  * - react, react-dom (React adapter)
  *
  * React package CANNOT import:
- * - @gears-frontx/state, @gears-frontx/screensets, @gears-frontx/api, @gears-frontx/i18n (use framework re-exports)
+ * - @gears-frontx/state, @gears-frontx/mfes, @gears-frontx/api, @gears-frontx/i18n (use framework re-exports)
  * - @gears-frontx/uicore (deprecated)
  */
 

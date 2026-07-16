@@ -16,9 +16,11 @@ import {
   FRONTX_SHARED_PROPERTY_THEME,
   FRONTX_SHARED_PROPERTY_LANGUAGE,
   FRONTX_SCREEN_EXTENSION_TYPE,
+} from '../../../src/mfe/constants';
+import {
   FRONTX_ACTION_LOAD_EXT,
   FRONTX_ACTION_MOUNT_EXT,
-} from '@gears-frontx/screensets';
+} from '@gears-frontx/mfes';
 
 describe('Base Extension Domain Constants - Shared Properties', () => {
   describe('screenDomain sharedProperties', () => {

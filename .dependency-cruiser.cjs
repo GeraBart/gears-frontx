@@ -209,7 +209,9 @@ module.exports = {
     doNotFollow: '^node_modules',
     exclude: {
       dynamic: true,
-      path: 'packages/.*/dist|node_modules|packages/mfes/mfes|packages/cli/templates|packages/cli/template-sources',
+      // `.claude/worktrees` are disposable agent-spawned repo checkouts, not
+      // part of the ecosystem's own dependency graph.
+      path: 'packages/.*/dist|node_modules|packages/mfes/mfes|packages/cli/templates|packages/cli/template-sources|\\.claude',
     },
   },
 };

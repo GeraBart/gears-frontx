@@ -260,7 +260,7 @@ FrontX/                               # Repository root
 FrontX follows a layered architecture for maximum flexibility:
 
 ```
-L1 (SDK)        @gears-frontx/state, @gears-frontx/api, @gears-frontx/i18n, @gears-frontx/screensets
+L1 (SDK)        @gears-frontx/state, @gears-frontx/api, @gears-frontx/i18n, @gears-frontx/mfes
                 Zero cross-dependencies, no React, use anywhere
                     ↓
 L2 (Framework)  @gears-frontx/framework

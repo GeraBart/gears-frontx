@@ -43,7 +43,7 @@
 ## REPO INVARIANTS
 - Event-driven architecture only (see EVENTS.md).
 - Registries follow Open/Closed; adding items must not modify registry root files.
-- App-level deps limited to: @gears-frontx/react, react, react-dom. Standalone projects must also declare peer deps explicitly: @gears-frontx/framework, @gears-frontx/api, @gears-frontx/i18n, @gears-frontx/screensets, @gears-frontx/state.
+- App-level deps limited to: @gears-frontx/react, react, react-dom. Standalone projects must also declare peer deps explicitly: @gears-frontx/framework, @gears-frontx/api, @gears-frontx/i18n, @gears-frontx/mfes, @gears-frontx/gts-plugin, @gears-frontx/state.
 - MFE UI autonomy: MFEs own their UI components locally (e.g., components/ui/). No shared UI kit required.
 - Cross-domain communication only via events.
 - Public system contracts must not carry tooling metadata; keep tooling and runtime handoff state internal; do not export internal-only Flux event names used for L2/L3 wiring (narrow subscribe helpers are OK).

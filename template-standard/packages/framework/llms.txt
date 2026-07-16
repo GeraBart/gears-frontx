@@ -2,7 +2,7 @@
 
 > Plugin-based application framework for FrontX SDK. Orchestrates SDK packages into cohesive applications with MFE (Microfrontend) support.
 
-Part of the FrontX Framework Layer (L2) - depends on all SDK packages (@gears-frontx/state, @gears-frontx/screensets, @gears-frontx/api, @gears-frontx/i18n). Owns layout slices.
+Part of the FrontX Framework Layer (L2) - depends on all SDK packages (@gears-frontx/state, @gears-frontx/mfes, @gears-frontx/gts-plugin, @gears-frontx/api, @gears-frontx/i18n). Owns layout slices.
 
 ## Core API
 

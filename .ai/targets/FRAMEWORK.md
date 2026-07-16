@@ -8,7 +8,7 @@
 ## SCOPE
 - Package: `packages/framework/`
 - Layer: L2 Framework (depends on all L1 SDK packages)
-- Peer dependencies: `@gears-frontx/state`, `@gears-frontx/screensets`, `@gears-frontx/api`, `@gears-frontx/i18n`, `@gears-frontx/auth`, `@tanstack/query-core`
+- Peer dependencies: `@gears-frontx/state`, `@gears-frontx/mfes`, `@gears-frontx/gts-plugin`, `@gears-frontx/api`, `@gears-frontx/i18n`, `@gears-frontx/auth`, `@tanstack/query-core`
 
 ## CRITICAL RULES
 - Applications built by composing plugins via `createGears FrontX().use()`.

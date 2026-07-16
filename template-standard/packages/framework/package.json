@@ -43,6 +43,8 @@
   "devDependencies": {
     "@gears-frontx/auth": "*",
     "@gears-frontx/frontx-template-standard": "*",
+    "@gears-frontx/mfes": "file:../../../packages/mfes",
+    "@gears-frontx/gts-plugin": "file:../../../packages/gts-plugin",
     "@vitest/coverage-v8": "4.1.4",
     "@tanstack/query-core": "^5.0.0",
     "tsup": "8.0.0",
@@ -53,7 +55,8 @@
     "@gears-frontx/auth": "*",
     "@gears-frontx/frontx-template-standard": "*",
     "@gears-frontx/state": "*",
-    "@gears-frontx/screensets": "*",
+    "@gears-frontx/mfes": "*",
+    "@gears-frontx/gts-plugin": "*",
     "@gears-frontx/api": "*",
     "@gears-frontx/i18n": "*",
     "@tanstack/query-core": "^5.0.0",
@@ -69,7 +72,10 @@
     "@gears-frontx/state": {
       "optional": false
     },
-    "@gears-frontx/screensets": {
+    "@gears-frontx/mfes": {
+      "optional": false
+    },
+    "@gears-frontx/gts-plugin": {
       "optional": false
     },
     "@gears-frontx/api": {

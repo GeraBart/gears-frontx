@@ -3,7 +3,7 @@
  *
  * Default implementation of ExtensionManager using Maps for storage.
  * Contains all business logic for registration, validation, and lifecycle triggering.
- * Extracted from @gears-frontx/screensets in Phase 7 (extension-domain governance).
+ * Extracted from the legacy screensets package in Phase 7 (extension-domain governance).
  *
  * @packageDocumentation
  * @internal
@@ -341,6 +341,7 @@ export class DefaultExtensionManager extends ExtensionManager {
     }
   }
 
+  // @cpt-begin:cpt-frontx-flow-extension-domain-governance-admission:p1:inst-domain-registered
   setDomainImplementation(
     domainId: string,
     mounter: ExtensionMounter,
@@ -355,4 +356,5 @@ export class DefaultExtensionManager extends ExtensionManager {
     domainState.lifecycleTrigger = lifecycleTrigger;
     domainState.implementation = implementation;
   }
+  // @cpt-end:cpt-frontx-flow-extension-domain-governance-admission:p1:inst-domain-registered
 }

@@ -8,7 +8,7 @@
  * - react, react-dom (React adapter)
  *
  * React package CANNOT import:
- * - @gears-frontx/state, @gears-frontx/screensets, @gears-frontx/api (use framework re-exports)
+ * - @gears-frontx/state, @gears-frontx/mfes, @gears-frontx/api (use framework re-exports)
  */
 
 import type { ConfigArray } from 'typescript-eslint';
@@ -43,7 +43,7 @@ export const reactConfig: ConfigArray = [
               message: 'REACT VIOLATION: Import from @gears-frontx/framework instead. React package uses framework re-exports.',
             },
             {
-              group: ['@gears-frontx/screensets', '@gears-frontx/screensets/*'],
+              group: ['@gears-frontx/mfes', '@gears-frontx/mfes/*'],
               message: 'REACT VIOLATION: Import from @gears-frontx/framework instead. React package uses framework re-exports.',
             },
             {

@@ -21,8 +21,8 @@ import {
   selectRegisteredExtensions,
 } from '../../../src/plugins/microfrontends';
 import { eventBus, resetStore } from '@gears-frontx/state';
-import { gtsPlugin } from '@gears-frontx/screensets/plugins/gts';
-import type { MfeRegistry } from '@gears-frontx/screensets';
+import { gtsPlugin } from '@gears-frontx/gts-plugin';
+import type { MfeRegistry } from '@gears-frontx/mfes';
 import type { Extension, ExtensionDomain } from '@gears-frontx/framework';
 import { TestContainerProvider } from '../../../src/testing/TestContainerProvider';
 import type { FrontXApp } from '../../../src/types';

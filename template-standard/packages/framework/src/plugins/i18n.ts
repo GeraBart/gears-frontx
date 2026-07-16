@@ -11,7 +11,7 @@
 
 import { eventBus } from '@gears-frontx/state';
 import { i18nRegistry as singletonI18nRegistry, Language } from '@gears-frontx/i18n';
-import { FRONTX_SHARED_PROPERTY_LANGUAGE } from '@gears-frontx/screensets';
+import { FRONTX_SHARED_PROPERTY_LANGUAGE } from '../mfe/constants';
 import type { FrontXPlugin, SetLanguagePayload, LanguagePropagationFailedPayload } from '../types';
 
 // Define i18n events for module augmentation

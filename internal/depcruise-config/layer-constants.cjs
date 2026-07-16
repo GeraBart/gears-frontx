@@ -15,14 +15,14 @@
  */
 
 // L1 — SDK packages. Must have zero `@gears-frontx/*` dependencies and no React.
-const SDK_PACKAGES = Object.freeze(['state', 'api', 'i18n', 'screensets']);
+const SDK_PACKAGES = Object.freeze(['state', 'api', 'i18n', 'mfes']);
 
 // L2 — Framework package may import exactly these SDK packages (no more).
 const ALLOWED_FRAMEWORK_SDK_DEPS = Object.freeze([
   '@gears-frontx/state',
   '@gears-frontx/api',
   '@gears-frontx/i18n',
-  '@gears-frontx/screensets',
+  '@gears-frontx/mfes',
 ]);
 
 // Packages that have been removed / folded into another layer. Any surviving

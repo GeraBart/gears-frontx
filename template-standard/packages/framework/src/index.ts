@@ -91,26 +91,26 @@ export {
   overlayDomain,
 } from './plugins';
 
-// MFE Type Constants (re-exported from @gears-frontx/screensets for convenience)
+// MFE Type Constants (solution-specific GTS type ids, app-layer owned)
 export {
   FRONTX_SCREEN_EXTENSION_TYPE,
   FRONTX_MFE_ENTRY_MF,
-} from '@gears-frontx/screensets';
+} from './mfe/constants';
 
-// MFE Action Constants (re-exported from @gears-frontx/screensets for convenience)
+// MFE Action Constants (re-exported from @gears-frontx/mfes for convenience)
 export {
   FRONTX_ACTION_LOAD_EXT,
   FRONTX_ACTION_MOUNT_EXT,
   FRONTX_ACTION_UNMOUNT_EXT,
-} from '@gears-frontx/screensets';
+} from '@gears-frontx/mfes';
 
-// MFE Shared Property Constants (re-exported from @gears-frontx/screensets for convenience)
+// MFE Shared Property Constants (solution-specific GTS type ids, app-layer owned)
 export {
   FRONTX_SHARED_PROPERTY_THEME,
   FRONTX_SHARED_PROPERTY_LANGUAGE,
-} from '@gears-frontx/screensets';
+} from './mfe/constants';
 
-// MFE Types (re-exported from @gears-frontx/screensets for convenience)
+// MFE Types (re-exported from @gears-frontx/mfes for convenience)
 export type {
   MfeMountContext,
   Extension,
@@ -125,7 +125,6 @@ export type {
   MfeEntryLifecycle,
   MfeEntry,
   MfeEntryMF,
-  JSONSchema,
   LoadExtPayload,
   MountExtPayload,
   UnmountExtPayload,
@@ -138,9 +137,12 @@ export type {
   MfManifestBuildInfo,
   MfManifestShared,
   MfManifestAssets,
-} from '@gears-frontx/screensets';
+} from '@gears-frontx/mfes';
 
-// MFE Abstract Classes (re-exported from @gears-frontx/screensets for convenience)
+// JSONSchema type (from the GTS type-system plugin, not core MFE runtime)
+export type { JSONSchema } from '@gears-frontx/gts-plugin';
+
+// MFE Abstract Classes (re-exported from @gears-frontx/mfes for convenience)
 export {
   ChildMfeBridge,
   ParentMfeBridge,
@@ -149,7 +151,6 @@ export {
   ActionHandler,
   MfeRegistry,
   MfeRegistryFactory,
-  mfeRegistryFactory,
   ExtensionDomainImplementationFactory,
   ExtensionDomainImplementation,
   ExtensionMounter,
@@ -157,27 +158,30 @@ export {
   ConcurrentMountStrategy,
   OptionalMountStrategy,
   ExclusiveMountStrategy,
-} from '@gears-frontx/screensets';
+} from '@gears-frontx/mfes';
+
+// MFE Registry singleton (app-layer composition root — see ./mfe/registry)
+export { mfeRegistryFactory } from './mfe/registry';
 
 export type {
   ContainerHooks,
   DomainContext,
   ActionPayload,
-} from '@gears-frontx/screensets';
+} from '@gears-frontx/mfes';
 
-// MFE Concrete Implementations (re-exported from @gears-frontx/screensets subpath exports)
-export { MfeHandlerMF } from '@gears-frontx/screensets/mfe/handler';
-export { gtsPlugin } from '@gears-frontx/screensets/plugins/gts';
+// MFE Concrete Implementations (re-exported from @gears-frontx/mfes for convenience)
+export { MfeHandlerMF } from '@gears-frontx/mfes';
+export { gtsPlugin } from '@gears-frontx/gts-plugin';
 
 // GTS Derived Schemas (application-layer registration)
 export { themeSchema, languageSchema, extensionScreenSchema } from './gts';
 
-// MFE Utilities (re-exported from @gears-frontx/screensets for convenience)
+// MFE Utilities (re-exported from @gears-frontx/mfes for convenience)
 export {
   createShadowRoot,
   injectCssVariables,
   extractGtsPackage,
-} from '@gears-frontx/screensets';
+} from '@gears-frontx/mfes';
 
 // MFE Plugin Types
 export type {
@@ -248,8 +252,8 @@ export type {
 // Re-export FrontXStore from types (wrapped version)
 export type { FrontXStore } from './types';
 
-// From @gears-frontx/screensets (contracts only - SDK Layer L1)
-export { LayoutDomain } from '@gears-frontx/screensets';
+// From @gears-frontx/frontx-template-standard (app-layer domain placement values)
+export { LayoutDomain } from '@gears-frontx/frontx-template-standard';
 
 // Layout slices (owned by @gears-frontx/framework)
 export {

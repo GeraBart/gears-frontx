@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { BaseApiService } from '../BaseApiService';
 import { RestProtocol } from '../protocols/RestProtocol';
 import { SseProtocol } from '../protocols/SseProtocol';
-import { RestMockPlugin, SseMockPlugin } from '@gears-frontx/frontx-template-standard';
+import { LocalRestMockPlugin as RestMockPlugin, LocalSseMockPlugin as SseMockPlugin } from './fixtures/mockPlugins';
 import { ApiPluginBase, ApiProtocol } from '../types';
 
 // Test service implementation
