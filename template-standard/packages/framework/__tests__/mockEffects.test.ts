@@ -11,9 +11,11 @@ import {
   apiRegistry,
   BaseApiService,
   isMockPlugin,
-  RestMockPlugin,
   RestProtocol,
 } from '@gears-frontx/api';
+// RestMockPlugin was relocated from @gears-frontx/api to the template in
+// Phase 9's mock separation; @gears-frontx/api ships no mocks.
+import { RestMockPlugin } from '@gears-frontx/frontx-template-standard';
 import { mockSlice } from '../src/slices/mockSlice';
 import { initMockEffects, toggleMockMode, MockEvents } from '../src/effects/mockEffects';
 

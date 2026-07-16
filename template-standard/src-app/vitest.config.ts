@@ -23,13 +23,20 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   plugins: [react()],
-  // `vitest.setup.ts` lives at the real repo root (shared with ecosystem
-  // package tests, e.g. packages/api) — two levels up from this config's own
-  // directory. Vite's dev-server file-serving restriction otherwise blocks
-  // reading it via `/@fs/...` outside the default project-root boundary.
+  // Vitest's `root` does not default to this config file's own directory
+  // when invoked via `--config` from a different CWD (e.g. `template-standard/`
+  // via `npm test`) — it defaults to the CWD. Set it explicitly so `include`/
+  // `exclude` below resolve against `src-app/` as the header comment states,
+  // and so this config does not pick up `packages/*` tests (which have their
+  // own configs) or nested MFE tests (excluded below, relative to this root).
+  root: __dirname,
+  // `vitest.setup.ts` lives inside template-standard — one level up from this
+  // config's own directory (`src-app/` -> `template-standard/`). Vite's
+  // dev-server file-serving restriction otherwise blocks reading it via
+  // `/@fs/...` outside the default project-root boundary.
   server: {
     fs: {
-      allow: [path.resolve(__dirname, '../..')],
+      allow: [path.resolve(__dirname, '..')],
     },
   },
   resolve: {

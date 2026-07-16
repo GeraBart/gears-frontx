@@ -2,7 +2,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react';
-import { definePackageVitestConfig } from '../../../../vitest.shared';
+import { definePackageVitestConfig } from '../../vitest.shared';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
