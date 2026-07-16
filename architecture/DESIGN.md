@@ -64,14 +64,15 @@ Requirements that significantly influence architecture decisions. Each driver be
 | `cpt-frontx-fr-no-architectural-ceiling` | The same distribution and boundary policy imposes no architectural cap on integrated units, governing growth by performance thresholds rather than structure (`cpt-frontx-adr-artifact-versioning-and-distribution`). |
 | `cpt-frontx-fr-cli-template-install` | The CLI resolves and installs templates by versioned source-spec at runtime (`cpt-frontx-adr-template-acquisition-and-location`, `cpt-frontx-adr-source-spec-syntax`). |
 | `cpt-frontx-fr-cli-template-list` | Template inventory and versions are reported from the externalized, source-spec-resolved template store (`cpt-frontx-adr-template-acquisition-and-location`). |
-| `cpt-frontx-fr-cli-template-update-local` | Local template updates operate on the externalized template store without touching scaffolded projects (`cpt-frontx-adr-template-acquisition-and-location`). |
-| `cpt-frontx-fr-cli-template-validate-prepublish` | Pre-publish structure validation runs against the template manifest publication contract (`cpt-frontx-adr-template-manifest-contract`). |
-| `cpt-frontx-fr-cli-project-scaffold` | Project scaffolding is driven from the project-level command namespace (`cpt-frontx-adr-cli-command-organization`). |
-| `cpt-frontx-fr-cli-microfrontend-scaffold` | Microfrontend scaffolding is driven from the microfrontend-level command namespace sharing one resolver (`cpt-frontx-adr-cli-command-organization`). |
-| `cpt-frontx-fr-cli-composed-template-resolution` | Referenced microfrontend templates are resolved recursively in one operation under a defined collision rule (`cpt-frontx-adr-composed-template-resolution`). |
-| `cpt-frontx-fr-cli-project-upgrade-changeset` | Upgrades apply as reviewable, non-destructive change sets recorded against project provenance (`cpt-frontx-adr-project-upgrade-mechanism`, `cpt-frontx-adr-project-provenance-record`). |
+| `cpt-frontx-fr-cli-template-update-local` | Local template updates operate on the externalized template store without touching any repository (`cpt-frontx-adr-template-acquisition-and-location`). |
+| `cpt-frontx-fr-cli-template-validate-prepublish` | Pre-publish structure validation runs against the template manifest publication contract, including that the template's declared ownership boundaries are well-formed (`cpt-frontx-adr-template-manifest-contract`, `cpt-frontx-adr-template-ownership-boundary-declaration`). |
+| `cpt-frontx-fr-cli-seed-repository` | An installed template is applied to seed a new repository through one uniform apply-and-assemble path that operates over any template (`cpt-frontx-adr-kind-agnostic-template-mechanism`, `cpt-frontx-adr-composed-template-resolution`). |
+| `cpt-frontx-fr-cli-add-template-to-repository` | An installed template is added into an existing repository through the same apply path, its declared boundaries checked against the templates already applied before any write (`cpt-frontx-adr-kind-agnostic-template-mechanism`, `cpt-frontx-adr-assembly-conflict-prevention`). |
+| `cpt-frontx-fr-cli-composed-template-resolution` | A repository is assembled from one or more templates, and a preset's referenced templates are resolved transitively and applied in one operation (`cpt-frontx-adr-composed-template-resolution`). |
+| `cpt-frontx-fr-cli-template-boundary-declaration` | A template declares the exclusive subtrees and shared-file regions it owns, carried in its manifest (`cpt-frontx-adr-template-ownership-boundary-declaration`, `cpt-frontx-adr-template-manifest-contract`). |
+| `cpt-frontx-fr-cli-assembly-conflict-prevention` | A pre-flight intersection check over the staged assembly refuses conflicting claims before any files are written, never silently merging (`cpt-frontx-adr-assembly-conflict-prevention`). |
+| `cpt-frontx-fr-cli-project-upgrade-changeset` | Each applied template upgrades independently as a reviewable, non-destructive change set computed against that template's own provenance record (`cpt-frontx-adr-project-upgrade-mechanism`, `cpt-frontx-adr-project-provenance-record`). |
 | `cpt-frontx-fr-cli-upgrade-review-approval` | The change-set engine gates application of changes behind explicit review and approval (`cpt-frontx-adr-project-upgrade-mechanism`). |
-| `cpt-frontx-fr-cli-two-namespace-commands` | The command surface is organized into project-level and microfrontend-level namespaces (`cpt-frontx-adr-cli-command-organization`). |
 | `cpt-frontx-fr-ai-frontx-skills` | Base FrontX skills are delivered by the AI Tooling kit, with base content kept solution-agnostic (`cpt-frontx-adr-solution-ai-content-placement`). |
 | `cpt-frontx-fr-ai-template-bundle-extensions` | Templates carry AI bundles conforming to the template AI extension contract (`cpt-frontx-adr-template-ai-extension-contract`). |
 | `cpt-frontx-fr-ai-extension-discovery-activation` | Installed-template extensions are discovered and activated without manual wiring (`cpt-frontx-adr-extension-discovery-activation`). |
@@ -89,6 +90,8 @@ This table maps non-functional requirements from the PRD to specific design/arch
 | `cpt-frontx-nfr-evolvability` | Versioned releases without lockstep upgrades | Per-concern independent versioning across all artifacts | Independently published, per-concern versioned artifacts, each on its own semver line and cadence; a breaking change is bounded to that artifact's own major version, and cross-artifact compatibility on the single coupled edge (`mfes → gts-plugin`) is expressed as a satisfiable semver range rather than a matched version number (`cpt-frontx-adr-artifact-versioning-and-distribution`). | Per-artifact semver discipline; a compatibility check asserting the `mfes → gts-plugin` range is satisfiable and not exact-pinned (no duplicate-runtime skew); a registry-side deprecation cycle (published notice + minimum window) before any removal. |
 | `cpt-frontx-nfr-scalability-ceiling` | No architectural cap on integrated units | Per-concern independent versioning; runtime boundaries | The distribution and boundary architecture imposes no structural ceiling, so integration scales to the PRD operational floors governed only by performance thresholds (`cpt-frontx-adr-artifact-versioning-and-distribution`). | Load test registering the PRD operational floors of microfrontends and type definitions against one application without architectural failure. |
 | `cpt-frontx-nfr-security` | Default-deny posture; validated admission | MFE Runtime isolation, contract matching, type validation | Loaded units are isolated at runtime (`cpt-frontx-adr-mfe-load-isolation`); every unit and extension passes contract matching and type validation before admission (`cpt-frontx-adr-domain-extension-compatibility`, `cpt-frontx-adr-runtime-type-system-coupling`), granting no access beyond a domain's declared grants. | Admission audit asserting 100% of admitted units validated and zero access paths outside an extension domain's declared grants. |
+| `cpt-frontx-nfr-evolvability` | Versioned releases without lockstep upgrades | CLI change-set & upgrade engine (`cpt-frontx-component-cli-change-set-engine`) | The single authoritative change-set engine applies a template-version transition as a reviewed, approvable, non-destructive and reversible change set computed against that applied template's own provenance record, so each applied template in a repository adopts a newer version on its own cadence without a forced, destructive rewrite; the reviewed change equals the applied change (`cpt-frontx-adr-project-upgrade-mechanism`, `cpt-frontx-adr-cli-internal-decomposition`). | End-to-end upgrade test asserting the applied file set equals the approved change set, that a declined upgrade writes nothing, and that an applied upgrade is reversible. |
+| `cpt-frontx-nfr-evolvability` | Versioned releases without lockstep upgrades | AI Tooling Framework (`cpt-frontx-component-ai-base-kit`, `cpt-frontx-component-ai-extension-host`) | Template-sourced expertise plus automatic discovery-and-activation lets each template's AI capabilities evolve and ship on the template's own line while the base kit stays solution-agnostic, so agent capability tracks installed-template versions rather than a lockstep framework release (`cpt-frontx-adr-solution-ai-content-placement`, `cpt-frontx-adr-extension-discovery-activation`, `cpt-frontx-adr-ai-tooling-internal-decomposition`). | Discovery test asserting a newly installed template version activates its bundled extension without a base-kit release, and that removing the template deactivates only its extension. |
 
 #### Architecture Decision Records
 
@@ -98,6 +101,7 @@ Foundational:
 
 * `cpt-frontx-adr-artifact-versioning-and-distribution` — Distributes the ecosystem as independently published, per-concern, independently versioned artifacts.
 * `cpt-frontx-adr-core-package-boundaries` — Partitions the Core Framework into boundary-governed concerns (runtime, type-system provider, protocol surface).
+* `cpt-frontx-adr-contract-schema-ownership` — Ends the circular DESIGN↔ADR schema deferral by assigning each owned contract's role to DESIGN, its decision rationale to the ADR, and its concrete field-level schema to the owning FEATURE.
 
 Pillar 1 — Core Framework:
 
@@ -119,11 +123,14 @@ Pillar 2 — CLI:
 
 * `cpt-frontx-adr-template-acquisition-and-location` — Externalizes templates and resolves them by source-spec at runtime.
 * `cpt-frontx-adr-source-spec-syntax` — Defines the versioned source-spec syntax for template acquisition.
-* `cpt-frontx-adr-template-manifest-contract` — Defines the template manifest publication contract.
-* `cpt-frontx-adr-project-provenance-record` — Records project provenance for scaffolded projects.
-* `cpt-frontx-adr-composed-template-resolution` — Resolves composed templates with a defined collision rule.
-* `cpt-frontx-adr-project-upgrade-mechanism` — Applies project upgrades as reviewable, non-destructive change sets.
-* `cpt-frontx-adr-cli-command-organization` — Organizes the command surface into project-level and microfrontend-level namespaces.
+* `cpt-frontx-adr-kind-agnostic-template-mechanism` — Establishes one uniform mechanism that operates over any template, each template declaring what it produces.
+* `cpt-frontx-adr-template-manifest-contract` — Defines the template manifest publication contract declaring identity, version, ownership boundaries, and referenced templates.
+* `cpt-frontx-adr-template-ownership-boundary-declaration` — Defines the two-tier ownership-boundary declaration (exclusive subtrees plus shared-file region ownership with a declared merge).
+* `cpt-frontx-adr-assembly-conflict-prevention` — Detects and refuses conflicting assembly before any write via a pre-flight intersection check and a post-materialization boundary-honesty guard.
+* `cpt-frontx-adr-composed-template-resolution` — Assembles a repository from one or more templates and resolves a preset's referenced templates transitively in one operation.
+* `cpt-frontx-adr-project-provenance-record` — Records provenance per applied template, one record per applied template with no single whole-repository origin.
+* `cpt-frontx-adr-project-upgrade-mechanism` — Upgrades each applied template independently as a reviewable, non-destructive change set.
+* `cpt-frontx-adr-cli-internal-decomposition` — Decomposes the single `@gears-frontx/cli` package into internal template-resolver, pre-publish-validator, assembler, conflict-checker, provenance-recorder, and change-set-&-upgrade-engine components.
 
 Pillar 3 — AI Tooling:
 
@@ -132,6 +139,7 @@ Pillar 3 — AI Tooling:
 * `cpt-frontx-adr-extension-discovery-activation` — Discovers and activates installed-template AI extensions without manual wiring.
 * `cpt-frontx-adr-solution-ai-content-placement` — Separates base ecosystem AI content from solution-specific content.
 * `cpt-frontx-adr-ai-driven-upgrade-orchestration` — Orchestrates AI-driven template upgrades over the CLI change-set engine.
+* `cpt-frontx-adr-ai-tooling-internal-decomposition` — Decomposes the single `cyber-pilot-kit-frontx` package into internal base-kit, extension-host, and upgrade-orchestration components.
 
 ### 1.3 Architecture Layers
 
@@ -158,7 +166,7 @@ graph TD
 | Layer | Responsibility | Technology |
 |-------|---------------|------------|
 | Presentation | Application and microfrontend UI; chosen freely per unit, not constrained by the platform | Any UI framework (React, Vue, Svelte, vanilla JavaScript); TypeScript |
-| Application (Tooling) | Template and project lifecycle (install, scaffold, compose, upgrade) and AI-agent orchestration over it | Node.js CLI (`@gears-frontx/cli`); Cypilot kit (`cyber-pilot-kit-frontx`); GitHub source registry; npm package registry |
+| Application (Tooling) | Template and repository lifecycle (install, apply, assemble, upgrade) and AI-agent orchestration over it | Node.js CLI (`@gears-frontx/cli`); Cypilot kit (`cyber-pilot-kit-frontx`); GitHub source registry; npm package registry |
 | Domain (Type System) | Concrete type-definition provider behind the runtime's opaque type-substrate port; infrastructure schemas and validation | TypeScript type-system plugin (`@gears-frontx/gts-plugin`) over a concrete type-definition specification |
 | Infrastructure (Runtime substrate) | Agnostic registration, on-demand loading, extension-domain governance, mediation, isolation, and protocol-separated service access | TypeScript runtime (`@gears-frontx/mfes`) with module-federation runtime and lazy import; API Protocol Surface (`@gears-frontx/api`) with a transport peer dependency |
 
@@ -205,6 +213,22 @@ A unit gains nothing until it earns it. Microfrontends and their extensions are 
 Each concern is published as its own artifact and versioned on its own semver line and cadence; a breaking change bumps only that artifact's own major version, and no single artifact's release pace constrains another's. Consuming applications adopt new versions on their own schedule rather than in lockstep. The one compile-time coupling edge, `mfes → gts-plugin`, is not held to a matched version number: `mfes` declares a satisfiable semver range (peer/caret) on `gts-plugin`, so version skew is resolved by ranges rather than lockstep. Breaking changes are isolated behind semantic versioning and a registry-side deprecation cycle (a published notice and a minimum window elapse before any removal). This is what lets the ecosystem evolve continuously without forcing a coordinated platform-wide upgrade.
 
 **ADRs**: `cpt-frontx-adr-artifact-versioning-and-distribution`, `cpt-frontx-adr-core-package-boundaries`
+
+#### Reviewable, non-destructive lifecycle
+
+- [ ] `p2` - **ID**: `cpt-frontx-principle-reviewable-lifecycle`
+
+The lifecycle tooling never changes a developer's repository silently or irreversibly. The CLI applies each applied template's upgrade only as a change set that is computed against that template's own provenance record, presented for explicit review, and applied non-destructively and reversibly once approved — so the change a developer reviews is exactly the change that is applied, and a declined upgrade leaves the repository untouched. Making every mutation reviewable and reversible is what lets each applied template track its evolving source on its own cadence without the risk of a destructive, unattributable rewrite. This principle governs the CLI pillar; the AI pillar's own guiding rule (base tooling ships no solution content; template-specific expertise arrives only through installed-template bundles) is already stated by `cpt-frontx-principle-template-agnostic-tooling` and is not restated as a separate principle.
+
+**ADRs**: `cpt-frontx-adr-project-upgrade-mechanism`, `cpt-frontx-adr-cli-internal-decomposition`
+
+#### Ownership-bounded composition
+
+- [ ] `p2` - **ID**: `cpt-frontx-principle-ownership-bounded-composition`
+
+A repository is assembled from one or more independently-applied templates, and every template carries its own boundary. Each template defines what it produces and declares the boundaries of what it owns — the subtrees it alone writes and the regions of shared files it contributes to; the lifecycle tooling operates over any template through one uniform mechanism, resolving a preset's referenced templates together and comparing the applied templates' declared boundaries before writing so that a clash is reported and refused rather than silently merged. Making ownership an explicit, declared, and arbitrated property is what lets independently-authored templates be composed into one repository — and later upgraded one at a time — without the multi-writer corruption that undeclared composition invites.
+
+**ADRs**: `cpt-frontx-adr-kind-agnostic-template-mechanism`, `cpt-frontx-adr-template-ownership-boundary-declaration`, `cpt-frontx-adr-assembly-conflict-prevention`
 
 ### 2.2 Constraints
 
@@ -282,6 +306,54 @@ The CLI (`@gears-frontx/cli`) has zero dependency on any template. It resolves t
 
 **ADRs**: `cpt-frontx-adr-template-acquisition-and-location`
 
+#### CLI-2 — One authoritative shared resolver
+
+- [ ] `p2` - **ID**: `cpt-frontx-constraint-cli-shared-resolver`
+
+The CLI resolves templates through exactly one resolver, shared across every template application and assembly; no command carries its own divergent resolution path. Acquisition by source-spec and transitive preset reference resolution are owned by the single template-resolver component, so resolution behavior cannot drift by command. CI-enforceable invariant: every application and assembly routes acquisition and preset resolution through the one resolver component and no second resolution implementation exists.
+
+**ADRs**: `cpt-frontx-adr-template-acquisition-and-location`, `cpt-frontx-adr-cli-internal-decomposition`
+
+#### CLI-3 — Single authoritative change-set engine
+
+- [ ] `p2` - **ID**: `cpt-frontx-constraint-cli-authoritative-change-set`
+
+Every applied-template upgrade is computed and applied by exactly one change-set engine; there is no second path that mutates a repository. The set of changes a developer reviews and approves is identical to the set the engine applies — the reviewed change equals the applied change. CI-enforceable invariant: an upgrade test asserts the applied file set equals the approved change set, with no mutation reaching the repository outside the engine.
+
+**ADRs**: `cpt-frontx-adr-project-upgrade-mechanism`, `cpt-frontx-adr-cli-internal-decomposition`
+
+#### CLI-4 — Non-destructive, reversible upgrade
+
+- [ ] `p2` - **ID**: `cpt-frontx-constraint-cli-non-destructive-upgrade`
+
+An approved upgrade is applied non-destructively and can be reversed; a declined upgrade writes nothing and leaves the repository unchanged. The engine never performs an in-place destructive rewrite that a developer cannot undo. CI-enforceable invariant: an end-to-end test asserts a declined upgrade produces no file changes and an applied upgrade is reversible to the pre-upgrade state.
+
+**ADRs**: `cpt-frontx-adr-project-upgrade-mechanism`
+
+#### CLI-5 — Declared template ownership boundaries
+
+- [ ] `p2` - **ID**: `cpt-frontx-constraint-cli-boundary-declaration`
+
+Every template declares the boundaries of what it owns in its manifest — the exclusive subtrees it alone creates or modifies, and, for each shared file it writes into, the keys or regions it owns together with the merge by which its contribution combines with others'. Pre-publish validation checks the declaration is well-formed. CI-enforceable invariant: pre-publish validation rejects a template whose ownership-boundary declaration is malformed, and no template writes shared-file content it did not declare a region for.
+
+**ADRs**: `cpt-frontx-adr-template-ownership-boundary-declaration`, `cpt-frontx-adr-template-manifest-contract`
+
+#### CLI-6 — Pre-flight assembly-conflict prevention
+
+- [ ] `p2` - **ID**: `cpt-frontx-constraint-cli-assembly-conflict-prevention`
+
+When one or more templates are applied to a repository, a pre-flight intersection check compares the applied templates' declared ownership boundaries over the staged assembly and refuses the whole assembly before any file is written if two templates claim the same exclusive subtree or the same shared-file region; conflicting claims are never silently merged. A post-materialization guard verifies each template wrote only within its declared boundary. CI-enforceable invariant: an assembly of two boundary-intersecting templates is refused with zero files written, and a template writing outside its declared boundary is caught by the honesty guard.
+
+**ADRs**: `cpt-frontx-adr-assembly-conflict-prevention`, `cpt-frontx-adr-template-ownership-boundary-declaration`
+
+#### CLI-7 — Per-applied-template provenance
+
+- [ ] `p2` - **ID**: `cpt-frontx-constraint-cli-per-template-provenance`
+
+A repository carries one provenance record per applied template, each capturing that template's identity, applied-from version, source-spec, and occupied boundary; there is no single whole-repository origin record. A per-template upgrade reads and updates only the record of the template it upgrades. CI-enforceable invariant: assembling from N templates writes N provenance records, and upgrading one applied template updates only its own record while the others are unchanged.
+
+**ADRs**: `cpt-frontx-adr-project-provenance-record`
+
 #### KIT-1 — Prefixed resource identifiers in the AI Tooling kit
 
 - [x] `p2` - **ID**: `cpt-frontx-constraint-kit-prefixed-resource-ids`
@@ -290,11 +362,27 @@ Every resource identifier in the AI Tooling kit (`cyber-pilot-kit-frontx`) carri
 
 **ADRs**: `cpt-frontx-adr-ai-tooling-framework-packaging`
 
+#### KIT-2 — Zero solution-specific AI content in the framework
+
+- [ ] `p2` - **ID**: `cpt-frontx-constraint-kit-zero-solution-content`
+
+The AI Tooling Framework (`cyber-pilot-kit-frontx`) ships no solution-specific AI content of its own; its base kit carries only solution-agnostic ecosystem capabilities. Solution-specific skills, workflows, guidelines, and reference artifacts enter a project exclusively as extensions bundled with installed templates, discovered and activated by the extension host. CI-enforceable invariant: the packaged base kit contains no template- or solution-named resource, and every solution-specific capability present in a project traces to an installed-template bundle.
+
+**ADRs**: `cpt-frontx-adr-solution-ai-content-placement`, `cpt-frontx-adr-ai-tooling-internal-decomposition`
+
+#### KIT-3 — Orchestrates, does not reimplement, the change-set engine
+
+- [ ] `p2` - **ID**: `cpt-frontx-constraint-kit-orchestrates-not-reimplements`
+
+The AI Tooling Framework's upgrade workflows orchestrate and enrich the CLI's single change-set engine; they contain no independent change-set or project-mutation logic of their own. Change computation and application remain owned by the CLI engine (CLI-3), and the framework adds only review gating, change-impact analysis, and downstream-effect assessment on top of it. CI-enforceable invariant: the framework holds no code path that computes or applies project changes independently of the CLI change-set engine.
+
+**ADRs**: `cpt-frontx-adr-ai-driven-upgrade-orchestration`, `cpt-frontx-adr-ai-tooling-internal-decomposition`
+
 ## 3. Technical Architecture
 
 ### 3.1 Domain Model
 
-The ecosystem's core entities span the three pillars: the runtime substrate's registration and governance concepts, the type substrate, the protocol surface, and the lifecycle entities the CLI and AI Tooling Framework operate on. Entities are described at architecture altitude; the **Schema** column points to the owning artifact and format where each entity's concrete shape lives (or, for forward-looking lifecycle entities, the owning decision record and the format it will take), never an inline schema (DATA-DESIGN-NO-001).
+The ecosystem's core entities span the three pillars: the runtime substrate's registration and governance concepts, the type substrate, the protocol surface, and the lifecycle entities the CLI and AI Tooling Framework operate on. Entities are described at architecture altitude; the **Schema** column points to the owning artifact and format where each entity's concrete shape lives, never an inline schema (DATA-DESIGN-NO-001). For the lifecycle-contract entities, ownership is split per `cpt-frontx-adr-contract-schema-ownership`: DESIGN owns the entity's role and relationships, the named decision record owns the decision rationale, and the named owning FEATURE owns the concrete field-level schema — the schema is delegated to the FEATURE and is not deferred back to DESIGN or fixed in the ADR.
 
 **Core Entities**:
 
@@ -308,11 +396,13 @@ The ecosystem's core entities span the three pillars: the runtime substrate's re
 | LifecycleStage | A defined stage in a unit's runtime lifecycle, modelled by the type substrate as one of the default infrastructure instances. | TypeScript/GTS — `@gears-frontx/gts-plugin` |
 | Schema | A type-definition identity the runtime carries opaquely; its concrete shape and validation are owned by the type-system provider. | Opaque identity in `@gears-frontx/mfes`; concrete shape in `@gears-frontx/gts-plugin` (GTS) |
 | ApiService | A protocol-separated service surface a unit calls for request/response or streaming, with auto-derived cache keys over a realm-shared fetch cache. | TypeScript — `@gears-frontx/api` |
-| Template | An externally hosted, versioned scaffolding unit resolved by source-spec at runtime and bundled into no tool; a project template may compose microfrontend templates by reference. | Target — template repository content; format owned by `cpt-frontx-adr-source-spec-syntax` |
-| TemplateManifest | The descriptor every publishable template exposes in a defined shape, produced at pre-publish validation and consumed at install and scaffold. | Target — manifest file; shape owned by `cpt-frontx-adr-template-manifest-contract` |
-| ProjectProvenance | The record written into a scaffolded project capturing the originating template and template version, so a later upgrade can determine what to apply. | Target — provenance record; shape owned by `cpt-frontx-adr-project-provenance-record` |
+| Template | An externally hosted, versioned unit resolved by source-spec at runtime and bundled into no tool; it defines what it produces and declares the boundaries of what it owns, and may reference other templates to be applied together as a preset. | Target — template repository content; format owned by `cpt-frontx-adr-source-spec-syntax` |
+| TemplateManifest | The descriptor every publishable template exposes in a defined shape — its identity, version, declared ownership boundaries, and referenced templates — produced at pre-publish validation and consumed at install, apply, and assembly. | Manifest file — role owned by DESIGN, decision by `cpt-frontx-adr-template-manifest-contract`, concrete schema owned by `cpt-frontx-feature-template-manifest` |
+| OwnershipBoundary | A template's declaration of the ground it owns: the exclusive subtrees it alone writes and, per shared file, the keys or regions it owns with a declared merge; compared across applied templates to detect a conflicting assembly. | Declared in the manifest — role owned by DESIGN, decision by `cpt-frontx-adr-template-ownership-boundary-declaration`, concrete schema owned by `cpt-frontx-feature-template-manifest` |
+| Assembly | A repository composed from one or more independently-applied templates, including a preset's transitively-referenced templates, whose declared boundaries are checked for intersection before any files are written. | Materialized repository content; assembled by the CLI per `cpt-frontx-adr-composed-template-resolution` and `cpt-frontx-adr-assembly-conflict-prevention` |
+| ProjectProvenance | The set of records written into a repository — one per applied template — each capturing that template's identity, applied-from version, source-spec, and occupied boundary, so a later per-template upgrade can determine what to apply. | In-repository provenance records, one per applied template — role owned by DESIGN, decision by `cpt-frontx-adr-project-provenance-record`, concrete schema owned by `cpt-frontx-feature-composed-provenance` |
 | Kit | The AI Tooling delivery unit — a Cypilot kit carrying base ecosystem capabilities, every resource identifier prefixed for unambiguous namespacing. | Target — Cypilot kit resources; shape owned by `cpt-frontx-adr-ai-tooling-framework-packaging` |
-| AiExtension | A template-bundled AI capability conforming to the extension contract, discovered and activated in a consuming project without manual wiring. | Target — extension bundle; shape owned by `cpt-frontx-adr-template-ai-extension-contract` |
+| AiExtension | A template-bundled AI capability conforming to the extension contract, discovered and activated in a consuming project without manual wiring. | Extension bundle — role owned by DESIGN, decision by `cpt-frontx-adr-template-ai-extension-contract`, concrete schema owned by `cpt-frontx-feature-template-ai-extensions` |
 
 **Relationships**:
 
@@ -322,13 +412,16 @@ The ecosystem's core entities span the three pillars: the runtime substrate's re
 - MfeEntry ↔ host: exchanges Actions and ActionsChains through the mediator over the parent–child bridge.
 - Extension / MfeEntry → Schema: validated against type definitions at registration.
 - Schema → LifecycleStage: a Schema's concrete shape and the default lifecycle instances are resolved by the type-system provider.
-- Template → TemplateManifest: declares its published shape through a manifest.
-- Template → Template: a project template composes microfrontend templates by reference.
-- ProjectProvenance → Template: records the originating template and version.
+- Template → TemplateManifest: declares its published shape, ownership boundaries, and referenced templates through a manifest.
+- TemplateManifest → OwnershipBoundary: the manifest carries the template's ownership-boundary declaration.
+- Template → Template: a preset references other templates to be applied together, resolved transitively.
+- Assembly → Template: a repository is assembled from one or more applied templates, including a preset's referenced templates.
+- Assembly → OwnershipBoundary: the applied templates' declared boundaries are compared pairwise before any write.
+- ProjectProvenance → Template: each provenance record names the template and applied-from version of one applied template.
 - Template → AiExtension: a template bundles its AI extension.
 - Kit → AiExtension: discovers and activates the AiExtensions of installed templates.
 
-**Core invariants** (architecture altitude): a unit is admitted to an ExtensionDomain only after type validation and contract matching both succeed, and admission never exceeds the domain's declared cardinality; the runtime holds a Schema only by opaque identity, so concrete shape and validation belong exclusively to the type-system provider; every publishable Template has exactly one TemplateManifest; every scaffolded project carries exactly one ProjectProvenance naming a single originating Template version; the base Kit carries no solution-specific content, so an AiExtension becomes agent-visible only after discovery and activation.
+**Core invariants** (architecture altitude): a unit is admitted to an ExtensionDomain only after type validation and contract matching both succeed, and admission never exceeds the domain's declared cardinality; the runtime holds a Schema only by opaque identity, so concrete shape and validation belong exclusively to the type-system provider; every publishable Template has exactly one TemplateManifest declaring its ownership boundaries; within one Assembly no two applied templates' exclusive-subtree boundaries intersect and no two claim the same shared-file region without a compatible declared merge, and a conflicting assembly is refused before any file is written; a repository carries exactly one ProjectProvenance record per applied template and no single whole-repository origin; the base Kit carries no solution-specific content, so an AiExtension becomes agent-visible only after discovery and activation.
 
 ### 3.2 Component Model
 
@@ -341,14 +434,32 @@ graph TD
         GTS[type-system-plugin: gears-frontx/gts-plugin]
         API[api-surface: gears-frontx/api]
     end
-    subgraph Pillar2[Pillar 2 — CLI]
-        CLI[cli: gears-frontx/cli]
+    subgraph Pillar2[Pillar 2 — CLI: gears-frontx/cli]
+        CLI[cli: package anchor]
+        RES[template-resolver]
+        VAL[pre-publish-validator]
+        ASM[assembler]
+        CHK[conflict-checker]
+        PROV[provenance-recorder]
+        ENG[change-set-and-upgrade-engine]
+        CLI --- RES
+        CLI --- VAL
+        CLI --- ASM
+        CLI --- CHK
+        CLI --- PROV
+        CLI --- ENG
     end
-    subgraph Pillar3[Pillar 3 — AI Tooling]
-        KIT[ai-tooling-kit: cyber-pilot-kit-frontx]
+    subgraph Pillar3[Pillar 3 — AI Tooling: cyber-pilot-kit-frontx]
+        KIT[ai-tooling-kit: package anchor]
+        BASE[base-kit]
+        HOST[extension-host]
+        ORCH[upgrade-orchestration]
+        KIT --- BASE
+        KIT --- HOST
+        KIT --- ORCH
     end
     GTS -- implements type-substrate port of --> MFES
-    KIT -- orchestrates --> CLI
+    ORCH -- orchestrates --> ENG
 ```
 
 #### MFE Runtime
@@ -439,25 +550,187 @@ Concrete artifact: `@gears-frontx/cli`.
 
 ##### Why this component exists
 
-Project Developers and the AI agents acting for them need to drive the full template and project lifecycle — acquiring templates, scaffolding projects and microfrontends, resolving composed templates, recording provenance, and upgrading projects — from a single, predictable command surface that is decoupled from the templates it operates on.
+Project Developers and the AI agents acting for them need to drive the full template and repository lifecycle — acquiring templates, applying them to seed or extend a repository, resolving presets, checking assembly for conflicts, recording per-applied-template provenance, and upgrading each applied template — from a single, predictable command surface that is decoupled from the templates it operates on. This component is the package-level anchor for `@gears-frontx/cli`: it owns the command surface, organized by lifecycle capability, and delegates each concern to one internal component, so the pillar reads as a set of single-responsibility parts rather than one fused unit (`cpt-frontx-adr-cli-internal-decomposition`).
 
 ##### Responsibility scope
 
-- Owns template install (by versioned source-spec), local listing, and local update of installed templates without touching scaffolded projects.
-- Owns pre-publish template-structure validation against the publication contract.
-- Owns project and microfrontend scaffolding, composed-template resolution in a single operation, and project-provenance recording.
-- Owns the change-set engine that applies a project upgrade as a reviewable, approvable, non-destructive change set.
-- Organizes its command surface into project-level and microfrontend-level namespaces.
+- Owns the command surface, organized by lifecycle capability — install / list / update / validate a template; apply a template to seed a repository; add a template into an existing repository; assemble with a pre-flight conflict check; upgrade an applied template — dispatching each command to the owning internal component through one uniform mechanism that operates over any template (`cpt-frontx-adr-kind-agnostic-template-mechanism`).
+- Composes the internal components — template resolver, pre-publish validator, assembler, conflict checker, provenance recorder, and change-set-&-upgrade engine — into the lifecycle the command surface exposes.
+- Holds the package's template-independence guarantee: it resolves templates by versioned source-spec at runtime and bundles none (CLI-1).
 
 ##### Responsibility boundaries
 
-- Has zero dependency on any template; templates are resolved by source-spec at runtime and none are bundled (CLI-1).
-- Does not own the runtime mechanisms a scaffolded application uses (registration, type validation, communication) — those belong to the Core Framework.
-- Owns the change-set engine itself; AI-driven orchestration of upgrades is layered above it by the AI Tooling kit, not duplicated here.
+- Owns no lifecycle mechanism directly; acquisition, validation, assembly, conflict checking, provenance, and upgrade are each owned by the corresponding internal component below.
+- The command surface operates identically over any template through one uniform mechanism (`cpt-frontx-adr-kind-agnostic-template-mechanism`).
+- Does not own the runtime mechanisms an assembled application uses (registration, type validation, communication) — those belong to the Core Framework.
+- Does not own AI-driven orchestration of upgrades; that is layered above the change-set engine by the AI Tooling kit and not duplicated here.
 
 ##### Related components (by ID)
 
+- `cpt-frontx-component-cli-template-resolver` — composes (delegates template acquisition and preset resolution to).
+- `cpt-frontx-component-cli-prepublish-validator` — composes (delegates pre-publish structure and boundary validation to).
+- `cpt-frontx-component-cli-assembler` — composes (delegates multi-template assembly and materialization to).
+- `cpt-frontx-component-cli-conflict-checker` — composes (delegates pre-flight conflict checking and the boundary-honesty guard to).
+- `cpt-frontx-component-cli-provenance-recorder` — composes (delegates per-applied-template provenance write/read to).
+- `cpt-frontx-component-cli-change-set-engine` — composes (delegates per-applied-template upgrade computation and application to).
 - No intra-ecosystem package dependency. It operates on external templates that target the Core Framework, with no compile-time coupling to any of them.
+
+#### CLI Template Resolver
+
+- [ ] `p2` - **ID**: `cpt-frontx-component-cli-template-resolver`
+
+Internal component of `@gears-frontx/cli`.
+
+##### Why this component exists
+
+The CLI owns no template, so a single component must turn a versioned source-spec into resolved template content and resolve a preset's referenced templates transitively. Concentrating all resolution in one component is what lets every template application and assembly share one authoritative resolution path rather than each command carrying its own (CLI-2).
+
+##### Responsibility scope
+
+- Owns template acquisition by versioned source-spec (install), local listing of installed templates, and local update of the installed template store without touching any repository (`cpt-frontx-adr-template-acquisition-and-location`, `cpt-frontx-adr-source-spec-syntax`).
+- Owns transitive preset reference resolution, resolving the referenced templates a preset declares into the set to apply in one operation, with cycle detection (`cpt-frontx-adr-composed-template-resolution`).
+- Reads the template manifest role to learn a template's identity, declared ownership boundaries, and referenced templates.
+
+##### Responsibility boundaries
+
+- Bundles no template (CLI-1); is the one shared resolver across every application and assembly (CLI-2).
+- Resolves any template through the same path (`cpt-frontx-adr-kind-agnostic-template-mechanism`).
+- Does not materialize files into a repository (assembler), check boundaries for conflict (conflict checker), record provenance (provenance recorder), validate a candidate template for publication (pre-publish validator), or apply upgrades (change-set engine).
+
+##### Related components (by ID)
+
+- `cpt-frontx-component-cli` — internal component of (composed by).
+- `cpt-frontx-component-cli-assembler` — provides the resolved set of templates to.
+- `cpt-frontx-component-cli-prepublish-validator` — shares template-manifest reading with.
+
+#### CLI Pre-Publish Validator
+
+- [ ] `p2` - **ID**: `cpt-frontx-component-cli-prepublish-validator`
+
+Internal component of `@gears-frontx/cli`.
+
+##### Why this component exists
+
+A template must be checked against the manifest publication contract before it is published, so a structurally malformed template is caught by its author rather than by a consumer. This component is that pre-publish conformance check.
+
+##### Responsibility scope
+
+- Owns pre-publish template-structure validation against the template-manifest contract (`cpt-frontx-contract-template-manifest`), including that the template's declared ownership boundaries are well-formed, producing a structural pass/fail conformance result (`cpt-frontx-adr-template-manifest-contract`, `cpt-frontx-adr-template-ownership-boundary-declaration`).
+
+##### Responsibility boundaries
+
+- Reads the manifest contract role only; the concrete manifest schema it checks against is owned by `cpt-frontx-feature-template-manifest`, per `cpt-frontx-adr-contract-schema-ownership`.
+- Does not acquire, resolve, assemble, or upgrade.
+
+##### Related components (by ID)
+
+- `cpt-frontx-component-cli` — internal component of (composed by).
+- `cpt-frontx-component-cli-template-resolver` — shares template-manifest reading with.
+
+#### CLI Assembler
+
+- [ ] `p2` - **ID**: `cpt-frontx-component-cli-assembler`
+
+Internal component of `@gears-frontx/cli`.
+
+##### Why this component exists
+
+The resolved set of templates must be materialized into a repository on disk — whether seeding a new repository or extending an existing one — assembling one or more templates, including a preset's referenced templates, in a single operation.
+
+##### Responsibility scope
+
+- Owns assembly and materialization of the resolved template set into a repository, seeding a new repository (`cpt-frontx-fr-cli-seed-repository`) or adding into an existing one (`cpt-frontx-fr-cli-add-template-to-repository`), composing a preset's referenced templates in one operation (`cpt-frontx-adr-composed-template-resolution`, `cpt-frontx-adr-kind-agnostic-template-mechanism`).
+- Stages the assembly's intended writes for the conflict checker and, only after the check passes, materializes them and composes any shared files per their declared merges.
+- Triggers per-applied-template provenance recording as the final step of an apply.
+
+##### Responsibility boundaries
+
+- Does not acquire or resolve templates (template resolver) and does not own the provenance records' shape or write logic (provenance recorder).
+- Does not decide whether an assembly conflicts (conflict checker); it writes nothing until the pre-flight check passes.
+- Does not apply upgrades to an already-applied template (change-set engine).
+
+##### Related components (by ID)
+
+- `cpt-frontx-component-cli` — internal component of (composed by).
+- `cpt-frontx-component-cli-template-resolver` — consumes the resolved template set from.
+- `cpt-frontx-component-cli-conflict-checker` — submits the staged assembly to before writing.
+- `cpt-frontx-component-cli-provenance-recorder` — invokes to record each applied template's origin at apply time.
+
+#### CLI Conflict Checker
+
+- [ ] `p2` - **ID**: `cpt-frontx-component-cli-conflict-checker`
+
+Internal component of `@gears-frontx/cli`.
+
+##### Why this component exists
+
+Independently-authored templates write into one repository, so two can claim the same ground. This component detects a conflicting assembly before any file is written and prevents it, so a repository is never corrupted or silently clobbered by two templates fighting over the same ground.
+
+##### Responsibility scope
+
+- Owns the pre-flight intersection check over the staged assembly: it compares the declared ownership boundaries of every pair of applied templates and refuses the whole assembly before any write if two claim the same exclusive subtree or the same shared-file region without a compatible declared merge, reporting the contesting templates and the contested ground and never silently merging (`cpt-frontx-adr-assembly-conflict-prevention`, `cpt-frontx-adr-template-ownership-boundary-declaration`).
+- Owns the post-materialization boundary-honesty guard that verifies each template wrote only within its declared boundary (CLI-6).
+
+##### Responsibility boundaries
+
+- Reads the declared ownership boundaries from the manifest role only; the concrete boundary schema is owned by `cpt-frontx-feature-template-manifest`, per `cpt-frontx-adr-contract-schema-ownership`.
+- Does not resolve or acquire templates (template resolver) and does not itself write files (assembler); it renders a pass/refuse verdict.
+
+##### Related components (by ID)
+
+- `cpt-frontx-component-cli` — internal component of (composed by).
+- `cpt-frontx-component-cli-assembler` — checks the staged assembly for, and gates the write of.
+
+#### CLI Provenance Recorder
+
+- [ ] `p2` - **ID**: `cpt-frontx-component-cli-provenance-recorder`
+
+Internal component of `@gears-frontx/cli`.
+
+##### Why this component exists
+
+A per-template upgrade needs a self-contained origin baseline that travels with the repository; each applied template must record which template and version it was applied from, and its upgrade must read that record to establish its diff baseline.
+
+##### Responsibility scope
+
+- Owns writing one in-repository provenance record per applied template (`cpt-frontx-contract-project-provenance`) at apply time and reading and updating the matching record at that template's upgrade time as the diff baseline (`cpt-frontx-adr-project-provenance-record`).
+
+##### Responsibility boundaries
+
+- Owns the provenance records' role and their write-at-apply / read-and-update-at-upgrade lifecycle placement, one record per applied template with no single whole-repository origin (CLI-7); the concrete record schema and storage are owned by `cpt-frontx-feature-composed-provenance`, per `cpt-frontx-adr-contract-schema-ownership`.
+- Does not compute or apply the upgrade diff (change-set engine) and does not resolve or assemble templates.
+
+##### Related components (by ID)
+
+- `cpt-frontx-component-cli` — internal component of (composed by).
+- `cpt-frontx-component-cli-assembler` — invoked by at apply time to record each applied template's origin.
+- `cpt-frontx-component-cli-change-set-engine` — supplies the matching origin baseline to.
+
+#### CLI Change-Set & Upgrade Engine
+
+- [ ] `p2` - **ID**: `cpt-frontx-component-cli-change-set-engine`
+
+Internal component of `@gears-frontx/cli`.
+
+##### Why this component exists
+
+Upgrading an applied template to a newer version must be reviewable and safe rather than a silent, destructive rewrite, and must leave the other applied templates untouched. This component is the single authoritative engine that, for one applied template, computes a change set against that template's provenance record, gates it behind explicit review and approval, and applies it non-destructively — the mechanism the AI pillar orchestrates rather than reimplements.
+
+##### Responsibility scope
+
+- Owns computing the change set for one applied template's version transition against that template's recorded provenance baseline, gating application behind explicit review and approval, and applying the approved set non-destructively and reversibly within that template's boundary, leaving the other applied templates unchanged (`cpt-frontx-adr-project-upgrade-mechanism`).
+- Is the one authoritative change-set engine in the ecosystem; the reviewed change equals the applied change (CLI-3, CLI-4).
+
+##### Responsibility boundaries
+
+- Reads the provenance baseline from the provenance recorder; does not itself resolve or acquire templates (template resolver).
+- Contains no AI workflow logic; AI-driven review, change-impact, and downstream-effect analysis are layered above it by the AI Tooling kit's upgrade-orchestration component, which orchestrates and does not reimplement this engine (KIT-3).
+
+##### Related components (by ID)
+
+- `cpt-frontx-component-cli` — internal component of (composed by).
+- `cpt-frontx-component-cli-provenance-recorder` — reads the origin baseline from.
+- `cpt-frontx-component-ai-upgrade-orchestration` — orchestrated by (for AI-driven upgrades).
 
 #### AI Tooling Framework
 
@@ -469,21 +742,97 @@ Concrete artifact: `cyber-pilot-kit-frontx` (a Cypilot kit).
 
 AI agents working in a FrontX project need ecosystem fluency from session start and the ability to gain template-specific expertise automatically when a template is installed. This component delivers those capabilities as a Cypilot kit — the framework's delivered public surface — installed through the Cypilot CLI.
 
+This component is the package-level anchor for `cyber-pilot-kit-frontx`: it is the kit that Cypilot installs, and it delegates its concerns to three internal components — base kit, extension host, and upgrade orchestration — so the pillar reads as single-responsibility parts rather than one fused unit (`cpt-frontx-adr-ai-tooling-internal-decomposition`).
+
 ##### Responsibility scope
 
-- Owns the base ecosystem AI capabilities (skills, workflows, guidelines, reference artifacts) available to agents at session start.
-- Owns the extension contract that a template's AI bundle conforms to, and the discovery-and-activation mechanism that turns installed-template extensions into agent-visible capabilities with no manual wiring.
-- Owns the AI workflow surface for template upgrades (review gates, change-impact analysis, downstream effect assessment) that coordinates with the CLI change-set engine.
+- Is the delivered Cypilot kit and installation unit; every contributed resource identifier carries the `frontx_` prefix (KIT-1, `cpt-frontx-adr-ai-tooling-framework-packaging`).
+- Composes the internal components — base kit, extension host, and upgrade orchestration — into the framework's public surface.
 
 ##### Responsibility boundaries
 
-- Ships zero solution-specific AI content; solution capabilities arrive exclusively through template bundles (parallels CLI-1).
-- Every contributed resource identifier carries the `frontx_` prefix (KIT-1).
-- Does not own the upgrade change-set engine; it orchestrates and enriches the engine owned by the CLI rather than reimplementing it.
+- Owns no capability directly; base capabilities, extension discovery/activation, and upgrade orchestration are each owned by the corresponding internal component below.
+- Ships zero solution-specific AI content; solution capabilities arrive exclusively through template bundles (KIT-2).
+- Does not own the upgrade change-set engine; the upgrade-orchestration component orchestrates and enriches the CLI's engine rather than reimplementing it (KIT-3).
 
 ##### Related components (by ID)
 
-- `cpt-frontx-component-cli` — coordinates with (orchestrates the CLI's change-set engine for AI-driven upgrades).
+- `cpt-frontx-component-ai-base-kit` — composes (delegates base ecosystem capabilities to).
+- `cpt-frontx-component-ai-extension-host` — composes (delegates extension discovery and activation to).
+- `cpt-frontx-component-ai-upgrade-orchestration` — composes (delegates AI-driven upgrade workflows to).
+
+#### AI Base Kit
+
+- [ ] `p2` - **ID**: `cpt-frontx-component-ai-base-kit`
+
+Internal component of `cyber-pilot-kit-frontx`.
+
+##### Why this component exists
+
+AI agents working in a FrontX project need ecosystem fluency from session start, independent of any installed template. This component is the base set of ecosystem capabilities always available to agents.
+
+##### Responsibility scope
+
+- Owns the base ecosystem AI capabilities — skills, workflows, guidelines, and reference artifacts — available to agents at session start, every resource identifier `frontx_`-prefixed (KIT-1).
+
+##### Responsibility boundaries
+
+- Ships zero solution-specific AI content (KIT-2); solution-specific capabilities arrive only through the extension host from installed-template bundles.
+- Does not discover or activate template extensions (extension host) and does not orchestrate upgrades (upgrade orchestration).
+
+##### Related components (by ID)
+
+- `cpt-frontx-component-ai-tooling-kit` — internal component of (composed by).
+- `cpt-frontx-component-ai-extension-host` — base capability set is extended by.
+
+#### AI Extension Host
+
+- [ ] `p2` - **ID**: `cpt-frontx-component-ai-extension-host`
+
+Internal component of `cyber-pilot-kit-frontx`.
+
+##### Why this component exists
+
+Template-specific expertise must become agent-visible automatically when a template is installed, with no manual wiring, so that expertise travels with the template rather than being recreated per project.
+
+##### Responsibility scope
+
+- Owns recognition of the template AI-extension contract (`cpt-frontx-contract-template-ai-extension`) and the discovery-and-activation mechanism that turns an installed template's bundled extension into agent-visible capabilities with no manual wiring (`cpt-frontx-adr-extension-discovery-activation`, `cpt-frontx-adr-template-ai-extension-contract`).
+- Reports a malformed bundle as a structural error and does not activate it.
+
+##### Responsibility boundaries
+
+- Recognizes the extension contract role only; the concrete extension schema is owned by `cpt-frontx-feature-template-ai-extensions`, per `cpt-frontx-adr-contract-schema-ownership`.
+- Does not author extensions (Template Developers do) and does not package the base kit (base kit).
+
+##### Related components (by ID)
+
+- `cpt-frontx-component-ai-tooling-kit` — internal component of (composed by).
+- `cpt-frontx-component-ai-base-kit` — activates discovered extensions into the base capability set of.
+
+#### AI Upgrade Orchestration
+
+- [ ] `p2` - **ID**: `cpt-frontx-component-ai-upgrade-orchestration`
+
+Internal component of `cyber-pilot-kit-frontx`.
+
+##### Why this component exists
+
+AI-driven upgrade workflows must add review gating, change-impact analysis, and downstream-effect assessment on top of the CLI's change-set engine — enriching the developer's decision without owning a second, divergent upgrade mechanism.
+
+##### Responsibility scope
+
+- Owns the AI workflow surface for template upgrades that orchestrates and enriches the CLI change-set engine (`cpt-frontx-adr-ai-driven-upgrade-orchestration`).
+
+##### Responsibility boundaries
+
+- Orchestrates, and does not reimplement, the CLI change-set engine; it holds no independent change computation or project-mutation logic (KIT-3).
+- Owns no change-set engine of its own; change computation and application remain owned by `cpt-frontx-component-cli-change-set-engine`.
+
+##### Related components (by ID)
+
+- `cpt-frontx-component-ai-tooling-kit` — internal component of (composed by).
+- `cpt-frontx-component-cli-change-set-engine` — orchestrates and enriches (for AI-driven upgrades).
 
 ### 3.3 API Contracts
 
@@ -515,9 +864,9 @@ Covers `cpt-frontx-interface-cli` (PRD §7.1).
 
 - **Technology**: command-line interface — `@gears-frontx/cli`
 - **Location**: command surface of `@gears-frontx/cli`
-- **Shape**: the command surface that drives the template and project lifecycle — install, list, update, and pre-publish validation of templates; project and microfrontend scaffolding with composed-template resolution; provenance recording; and reviewable change-set upgrades — organized into project-level and microfrontend-level namespaces sharing one resolver.
+- **Shape**: the command surface that drives the template and repository lifecycle, organized by lifecycle capability over one uniform mechanism that operates over any template — install / list / update / validate a template (`cpt-frontx-fr-cli-template-install`, `cpt-frontx-fr-cli-template-validate-prepublish`); apply a template to seed a new repository (`cpt-frontx-fr-cli-seed-repository`); add a template into an existing repository (`cpt-frontx-fr-cli-add-template-to-repository`); assemble one or more templates, resolving a preset's referenced templates and refusing conflicting assembly before any write (`cpt-frontx-fr-cli-composed-template-resolution`, `cpt-frontx-fr-cli-assembly-conflict-prevention`); and upgrade each applied template independently as a reviewable change set (`cpt-frontx-fr-cli-project-upgrade-changeset`) — all through one shared resolver.
 - **Stability**: unstable; incompatible changes to the command surface require a major version bump under the per-concern independent versioning policy.
-- **ADRs**: `cpt-frontx-adr-artifact-versioning-and-distribution`, `cpt-frontx-adr-cli-command-organization`
+- **ADRs**: `cpt-frontx-adr-artifact-versioning-and-distribution`, `cpt-frontx-adr-kind-agnostic-template-mechanism`, `cpt-frontx-adr-cli-internal-decomposition`
 
 #### AI Tooling Framework interface
 
@@ -531,11 +880,12 @@ Covers `cpt-frontx-interface-ai-tooling-framework` (PRD §7.1).
 
 #### External integration contracts
 
-The integration contracts below complement the interfaces above. Each is referenced by its PRD ID with its shape, stability, and owning decision record; the concrete contract shapes are owned by those ADRs and the §3.1 entities, not specified inline here (INT-DESIGN-NO-001).
+The integration contracts below complement the interfaces above. Each entry states the contract's role, its producer and consumer, its stability, the decision record that owns its rationale, and — where the contract carries a concrete field-level schema — the FEATURE that owns that schema. Per `cpt-frontx-adr-contract-schema-ownership`, DESIGN owns the contract role, the ADR owns the decision rationale, and the owning FEATURE owns the concrete schema; the schema is neither inlined here nor deferred back to DESIGN or fixed in the ADR (INT-DESIGN-NO-001, DATA-DESIGN-NO-001).
 
 - **Source-spec** (`cpt-frontx-contract-source-spec`): a versioned reference that identifies a template on the source registry, resolved generically by the CLI without prescribing a fixed syntax at requirement altitude. Stability: compatible across minor and patch versions; breaking changes follow `cpt-frontx-nfr-evolvability`. **ADRs**: `cpt-frontx-adr-template-acquisition-and-location`, `cpt-frontx-adr-source-spec-syntax`.
-- **Template manifest** (`cpt-frontx-contract-template-manifest`): the descriptor every template publishes in a defined shape, produced when a template is validated for publication and consumed when it is installed or scaffolded. Stability: versioned with the platform; non-backward-compatible changes follow `cpt-frontx-nfr-evolvability`. **ADRs**: `cpt-frontx-adr-mfe-asset-discovery`, `cpt-frontx-adr-template-manifest-contract`.
-- **Project provenance** (`cpt-frontx-contract-project-provenance`): the record written into each scaffolded project capturing the originating template and version so a later upgrade can determine what to apply. Stability: readable across versions; non-backward-compatible changes follow `cpt-frontx-nfr-evolvability`. **ADRs**: `cpt-frontx-adr-project-provenance-record`.
+- **Template manifest** (`cpt-frontx-contract-template-manifest`): the descriptor every template publishes in a defined shape — its identity, version, declared ownership boundaries, and referenced templates — produced when a template is validated for publication (pre-publish validator) and consumed when it is installed, applied, or assembled (template resolver, assembler, conflict checker). Stability: versioned with the platform; non-backward-compatible changes follow `cpt-frontx-nfr-evolvability`. Role owned by DESIGN; concrete schema owned by `cpt-frontx-feature-template-manifest`. **ADRs**: `cpt-frontx-adr-template-manifest-contract`, `cpt-frontx-adr-template-ownership-boundary-declaration`, `cpt-frontx-adr-contract-schema-ownership`.
+- **Project provenance** (`cpt-frontx-contract-project-provenance`): the set of records written into a repository (provenance recorder), one per applied template, each capturing that template's identity, applied-from version, source-spec, and occupied boundary so a later per-template upgrade (change-set engine) can determine what to apply; there is no single whole-repository origin. Stability: readable across versions; non-backward-compatible changes follow `cpt-frontx-nfr-evolvability`. Role owned by DESIGN; concrete schema owned by `cpt-frontx-feature-composed-provenance`. **ADRs**: `cpt-frontx-adr-project-provenance-record`, `cpt-frontx-adr-contract-schema-ownership`.
+- **Template AI-extension** (`cpt-frontx-contract-template-ai-extension`): the conformance shape a template's bundled AI extension declares — the closed set of extension categories (skills, workflows, guidelines, reference artifacts) — produced by the Template Developer at authoring and consumed by the AI extension host at discovery and activation. Stability: additive changes within the contract preserve conforming templates; admitting or removing a category is a breaking change following `cpt-frontx-nfr-evolvability`. Role owned by DESIGN; concrete schema owned by `cpt-frontx-feature-template-ai-extensions`. **ADRs**: `cpt-frontx-adr-template-ai-extension-contract`, `cpt-frontx-adr-extension-discovery-activation`, `cpt-frontx-adr-contract-schema-ownership`.
 - **Kit-installation** (`cpt-frontx-contract-kit-installation`): the path by which the AI Tooling Framework is installed into a consuming project through the Cypilot CLI integration, making its skills and activated template extensions available to agents. Stability: compatible across minor and patch versions; breaking changes follow `cpt-frontx-nfr-evolvability`. **ADRs**: `cpt-frontx-adr-ai-tooling-framework-packaging`.
 - **Package-registry distribution** (`cpt-frontx-contract-package-registry-distribution`): the publish-and-install path for the ecosystem's packages on the package registry, consumed by applications through their chosen package manager. Stability: semantic versioning under the per-concern independent versioning policy. **ADRs**: `cpt-frontx-adr-artifact-versioning-and-distribution`.
 
@@ -582,7 +932,7 @@ The ecosystem depends on a small set of external systems and third-party librari
 
 | Dependency Module | Interface Used | Purpose | Owning Component |
 |-------------------|----------------|---------|------------------|
-| GitHub source registry (`cpt-frontx-actor-github`) | versioned source-spec fetch | Hosts the project and microfrontend templates and the AI Tooling Framework; the CLI resolves and fetches them by versioned source-spec at runtime (`cpt-frontx-adr-template-acquisition-and-location`, `cpt-frontx-adr-source-spec-syntax`). | `@gears-frontx/cli` (and the Cypilot integration for the kit) |
+| GitHub source registry (`cpt-frontx-actor-github`) | versioned source-spec fetch | Hosts the templates and the AI Tooling Framework; the CLI resolves and fetches them by versioned source-spec at runtime (`cpt-frontx-adr-template-acquisition-and-location`, `cpt-frontx-adr-source-spec-syntax`). | `@gears-frontx/cli` (and the Cypilot integration for the kit) |
 
 #### npm package registry
 
@@ -637,7 +987,7 @@ sequenceDiagram
 
 **Description**: A registered microfrontend is admitted only after type validation and extension-domain contract matching both succeed and the domain's cardinality permits the occupant; it is then loaded on demand and mounted in isolation under the domain's mount strategy (`cpt-frontx-adr-mfe-runtime-public-surface`, `cpt-frontx-adr-mfe-handler-resolution`, `cpt-frontx-adr-runtime-type-system-coupling`, `cpt-frontx-adr-domain-extension-compatibility`, `cpt-frontx-adr-extension-domain-occupancy`, `cpt-frontx-adr-mfe-load-isolation`). On validation failure the runtime rejects the unit and it is not placed into its extension domain, realizing the default-deny admission posture.
 
-#### Composed-project scaffold
+#### Multi-template assembly with pre-flight conflict check
 
 - [ ] `p1` - **ID**: `cpt-frontx-seq-composed-project-scaffold`
 
@@ -650,23 +1000,31 @@ sequenceDiagram
     participant Dev as Project Developer
     participant CLI as CLI (@gears-frontx/cli)
     participant GH as GitHub source registry
-    participant Proj as Scaffolded project
+    participant Chk as Conflict checker
+    participant Repo as Repository
     participant Kit as AI Tooling Framework (cyber-pilot-kit-frontx)
-    Dev->>CLI: install project template (versioned source-spec)
-    CLI->>GH: resolve template + composed microfrontend templates by reference
-    alt registry reachable and composition consistent
+    Dev->>CLI: install + apply template(s) / preset (versioned source-spec)
+    CLI->>GH: resolve template(s) + a preset's referenced templates by reference
+    alt registry reachable and references resolvable
         GH-->>CLI: template content
-        CLI->>CLI: resolve composition recursively (collision rule)
-        CLI->>Proj: scaffold project + composed microfrontends; write provenance
-        CLI->>Kit: activate base capabilities + bundled template extensions
-        Kit-->>Dev: ecosystem and template-specific AI capabilities active
-    else registry unreachable or composition collision
-        GH-->>CLI: error / conflicting composition
+        CLI->>CLI: resolve preset references transitively (cycle-detected)
+        CLI->>Chk: stage assembly; pre-flight intersection check over declared boundaries
+        alt boundaries do not intersect
+            Chk-->>CLI: no conflict
+            CLI->>Repo: materialize assembly; write one provenance record per applied template
+            CLI->>Kit: activate base capabilities + bundled template extensions
+            Kit-->>Dev: ecosystem and template-specific AI capabilities active
+        else two templates claim the same ground
+            Chk-->>CLI: conflict (contesting templates + contested ground)
+            CLI-->>Dev: report and refuse assembly; abort without writing files
+        end
+    else registry unreachable or reference unresolvable
+        GH-->>CLI: error
         CLI-->>Dev: report failure; abort without writing files
     end
 ```
 
-**Description**: The CLI installs a project template by versioned source-spec, resolves its composed microfrontend templates recursively in one operation under a defined collision rule, scaffolds the project and its microfrontends, records project provenance, and the AI Tooling Framework activates base and template-bundled capabilities (`cpt-frontx-adr-template-acquisition-and-location`, `cpt-frontx-adr-source-spec-syntax`, `cpt-frontx-adr-composed-template-resolution`, `cpt-frontx-adr-cli-command-organization`, `cpt-frontx-adr-project-provenance-record`, `cpt-frontx-adr-extension-discovery-activation`). If the source registry is unreachable or a composition collision is detected, the CLI reports the failure and aborts before writing any files.
+**Description**: The CLI installs and applies one or more templates by versioned source-spec, resolving a preset's referenced templates transitively in one operation with cycle detection; it stages the whole assembly and runs a pre-flight intersection check comparing the applied templates' declared ownership boundaries before writing anything. Only if no two templates claim the same ground does it materialize the assembly, write one provenance record per applied template, and let the AI Tooling Framework activate base and template-bundled capabilities (`cpt-frontx-adr-template-acquisition-and-location`, `cpt-frontx-adr-source-spec-syntax`, `cpt-frontx-adr-composed-template-resolution`, `cpt-frontx-adr-assembly-conflict-prevention`, `cpt-frontx-adr-project-provenance-record`, `cpt-frontx-adr-extension-discovery-activation`). If the source registry is unreachable, a reference is unresolvable, or the conflict check detects an intersection, the CLI reports the failure and refuses the assembly before writing any files, never silently merging.
 
 #### AI-driven template upgrade
 
@@ -679,25 +1037,25 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant AI as AI agent (AI Tooling Framework)
-    participant Prov as Project provenance
+    participant Prov as Applied-template provenance record
     participant Eng as Change-set engine (@gears-frontx/cli)
     participant Dev as Project Developer
-    participant Proj as Project files
-    AI->>Prov: read originating template + version
+    participant Repo as Repository files
+    AI->>Prov: read chosen applied template's record (template + applied-from version)
     AI->>Eng: orchestrate change analysis to newer version; enrich impact assessment
-    Eng-->>AI: proposed reviewable change set
+    Eng-->>AI: proposed reviewable change set (bounded to that template)
     AI->>Dev: present change set + downstream impact
     alt approved
         Dev->>Eng: approve
-        Eng->>Proj: apply non-destructively
-        Eng->>Prov: update provenance to newer version
+        Eng->>Repo: apply non-destructively within the template's boundary
+        Eng->>Prov: update that template's record to newer version
     else rejected or incompatibilities flagged
         Dev-->>Eng: decline
-        Eng-->>Proj: no files written; project unchanged
+        Eng-->>Repo: no files written; repository unchanged
     end
 ```
 
-**Description**: An AI agent reads project provenance, orchestrates and enriches the CLI's single change-set engine to analyze the version transition, and presents a reviewable change set with downstream-impact assessment; the engine applies the approved set non-destructively and updates provenance (`cpt-frontx-adr-ai-driven-upgrade-orchestration`, `cpt-frontx-adr-project-upgrade-mechanism`, `cpt-frontx-adr-project-provenance-record`). If the developer declines or impact assessment flags incompatibilities, no files are written and the project remains at its current version.
+**Description**: An AI agent reads the chosen applied template's provenance record, orchestrates and enriches the CLI's single change-set engine to analyze that template's version transition, and presents a reviewable change set bounded to that template with downstream-impact assessment; the engine applies the approved set non-destructively within the template's boundary and updates that template's provenance record, leaving the other applied templates untouched (`cpt-frontx-adr-ai-driven-upgrade-orchestration`, `cpt-frontx-adr-project-upgrade-mechanism`, `cpt-frontx-adr-project-provenance-record`). If the developer declines or impact assessment flags incompatibilities, no files are written and the applied template remains at its current version.
 
 #### Template AI-extension discovery and activation
 
@@ -731,14 +1089,14 @@ sequenceDiagram
 
 ### 3.7 Database schemas & tables
 
-Not applicable because the ecosystem persists no databases; provenance and manifests are files. The only durable artifacts are the file-based project-provenance record and the template manifest, whose shapes are owned by `cpt-frontx-adr-project-provenance-record` and `cpt-frontx-adr-template-manifest-contract` and described as §3.1 entities. There are no data stores, and therefore no partitioning, replication, sharding, hot/warm/cold-tier, or archival strategy to document (DATA-DESIGN-001 satisfied by this explicit justification).
+Not applicable because the ecosystem persists no databases; provenance and manifests are files. The only durable artifacts are the file-based project-provenance record and the template manifest, described as §3.1 entities; their roles are owned by DESIGN, their decision rationale by `cpt-frontx-adr-project-provenance-record` and `cpt-frontx-adr-template-manifest-contract`, and their concrete schemas by the owning FEATUREs (`cpt-frontx-feature-composed-provenance`, `cpt-frontx-feature-template-manifest`) per `cpt-frontx-adr-contract-schema-ownership`. There are no data stores, and therefore no partitioning, replication, sharding, hot/warm/cold-tier, or archival strategy to document (DATA-DESIGN-001 satisfied by this explicit justification).
 
 ### 3.8 Deployment Topology
 
 The ecosystem has no server-side runtime to deploy; its artifacts are distributed as published units and consumed within the consuming application's own build and runtime. Two distribution channels carry the artifacts:
 
 - **Package registry (npm-compatible)** — the Core Framework packages and the CLI are published to the npm package registry (`cpt-frontx-actor-package-registry`) under the per-concern independent versioning policy and installed by applications with their chosen package manager (`cpt-frontx-adr-artifact-versioning-and-distribution`).
-- **GitHub source registry (tarball/source)** — templates, composed microfrontend templates, and the AI Tooling Framework are hosted on the GitHub source registry (`cpt-frontx-actor-github`) and acquired by versioned source-spec at install and upgrade time; the AI Tooling Framework is additionally installed into a consuming project through the Cypilot CLI integration (`cpt-frontx-actor-cypilot-cli`) (`cpt-frontx-adr-template-acquisition-and-location`, `cpt-frontx-adr-ai-tooling-framework-packaging`).
+- **GitHub source registry (tarball/source)** — templates and the AI Tooling Framework are hosted on the GitHub source registry (`cpt-frontx-actor-github`) and acquired by versioned source-spec at install and upgrade time; the AI Tooling Framework is additionally installed into a consuming project through the Cypilot CLI integration (`cpt-frontx-actor-cypilot-cli`) (`cpt-frontx-adr-template-acquisition-and-location`, `cpt-frontx-adr-ai-tooling-framework-packaging`).
 
 The runtime topology is therefore wholly in-browser within the composed application: the host loads independently published microfrontends on demand, and there is no separate server tier owned by the ecosystem.
 
