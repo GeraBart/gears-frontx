@@ -16,8 +16,8 @@ import { themes } from '../../../src/plugins/themes';
 import { i18n } from '../../../src/plugins/i18n';
 import { microfrontends } from '../../../src/plugins/microfrontends';
 import { eventBus, resetStore } from '@gears-frontx/state';
-import { FRONTX_SHARED_PROPERTY_THEME, FRONTX_SHARED_PROPERTY_LANGUAGE } from '@gears-frontx/screensets';
-import { gtsPlugin } from '@gears-frontx/screensets/plugins/gts';
+import { FRONTX_SHARED_PROPERTY_THEME, FRONTX_SHARED_PROPERTY_LANGUAGE } from '../../../src/mfe/constants';
+import { gtsPlugin } from '@gears-frontx/gts-plugin';
 import type { FrontXApp } from '../../../src/types';
 
 describe('Theme and Language Propagation - decouple-domain-contracts', () => {

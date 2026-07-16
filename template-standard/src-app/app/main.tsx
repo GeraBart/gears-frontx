@@ -19,7 +19,7 @@ import { draculaLargeTheme } from '@/app/themes/dracula-large';
 // Register application-specific GTS schemas before constructing the FrontX app.
 // These derived schemas encode application-level constraints (valid theme names,
 // supported languages, screen extension shape) and are not part of the core
-// type system in @gears-frontx/screensets.
+// type system in @gears-frontx/gts-plugin.
 gtsPlugin.registerSchema(themeSchema);
 gtsPlugin.registerSchema(languageSchema);
 gtsPlugin.registerSchema(extensionScreenSchema);

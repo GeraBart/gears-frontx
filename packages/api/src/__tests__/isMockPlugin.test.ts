@@ -7,17 +7,21 @@
 
 import { describe, expect, it } from 'vitest';
 import { MOCK_PLUGIN, isMockPlugin, ApiPluginBase } from '../types';
-import { RestMockPlugin, SseMockPlugin } from '@gears-frontx/frontx-template-standard';
+import { LocalRestMockPlugin, LocalSseMockPlugin } from './fixtures/mockPlugins';
 
 describe('isMockPlugin', () => {
-  describe('built-in mock plugins', () => {
-    it('should return true for RestMockPlugin', () => {
-      const plugin = new RestMockPlugin({ mockMap: {} });
+  // These fixtures are minimal local stand-ins for the template-owned RestMockPlugin/
+  // SseMockPlugin — RestMockPlugin/SseMockPlugin are just one example of a plugin that
+  // sets the MOCK_PLUGIN marker via RestPluginWithConfig/SsePluginWithConfig; the
+  // marker mechanism itself is what isMockPlugin validates, and that's api-owned.
+  describe('plugins built on RestPluginWithConfig/SsePluginWithConfig', () => {
+    it('should return true for a REST plugin using the marker', () => {
+      const plugin = new LocalRestMockPlugin({ mockMap: {} });
       expect(isMockPlugin(plugin)).toBe(true);
     });
 
-    it('should return true for SseMockPlugin', () => {
-      const plugin = new SseMockPlugin({ mockStreams: {} });
+    it('should return true for an SSE plugin using the marker', () => {
+      const plugin = new LocalSseMockPlugin({ mockStreams: {} });
       expect(isMockPlugin(plugin)).toBe(true);
     });
   });
@@ -86,14 +90,14 @@ describe('isMockPlugin', () => {
       expect(MOCK_PLUGIN).toBe(Symbol.for('frontx:plugin:mock'));
     });
 
-    it('should be present on RestMockPlugin class', () => {
-      expect(MOCK_PLUGIN in RestMockPlugin).toBe(true);
-      expect(RestMockPlugin[MOCK_PLUGIN]).toBe(true);
+    it('should be present on a REST plugin fixture class', () => {
+      expect(MOCK_PLUGIN in LocalRestMockPlugin).toBe(true);
+      expect(LocalRestMockPlugin[MOCK_PLUGIN]).toBe(true);
     });
 
-    it('should be present on SseMockPlugin class', () => {
-      expect(MOCK_PLUGIN in SseMockPlugin).toBe(true);
-      expect(SseMockPlugin[MOCK_PLUGIN]).toBe(true);
+    it('should be present on an SSE plugin fixture class', () => {
+      expect(MOCK_PLUGIN in LocalSseMockPlugin).toBe(true);
+      expect(LocalSseMockPlugin[MOCK_PLUGIN]).toBe(true);
     });
   });
 });

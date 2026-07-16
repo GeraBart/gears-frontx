@@ -10,7 +10,7 @@
 // @cpt-dod:cpt-frontx-dod-framework-composition-shared-property:p1
 
 import { eventBus } from '@gears-frontx/state';
-import { FRONTX_SHARED_PROPERTY_THEME } from '@gears-frontx/screensets';
+import { FRONTX_SHARED_PROPERTY_THEME } from '../mfe/constants';
 import type { FrontXPlugin, ChangeThemePayload, ThemePropagationFailedPayload } from '../types';
 import { createThemeRegistry } from '../registries/themeRegistry';
 

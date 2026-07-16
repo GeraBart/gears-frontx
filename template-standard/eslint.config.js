@@ -5,7 +5,7 @@
  * studio) and the host app (src-app/), relocated here from the ecosystem
  * monorepo by Phase 11 template-move. See the ecosystem root's
  * `eslint.config.js` for the rules that still apply to `mfes`, `gts-plugin`,
- * `api`, `cli`, `screensets`.
+ * `api`.
  */
 
 import js from '@eslint/js';
@@ -300,7 +300,7 @@ export default [
                 'REACT VIOLATION: Import from @gears-frontx/framework instead.',
             },
             {
-              group: ['@gears-frontx/screensets', '@gears-frontx/screensets/*'],
+              group: ['@gears-frontx/mfes', '@gears-frontx/mfes/*', '@gears-frontx/gts-plugin', '@gears-frontx/gts-plugin/*'],
               message:
                 'REACT VIOLATION: Import from @gears-frontx/framework instead.',
             },
@@ -410,9 +410,9 @@ export default [
                 'LAYER VIOLATION: App-layer code must import from @gears-frontx/react, not directly from @gears-frontx/i18n (Layer 1).',
             },
             {
-              group: ['@gears-frontx/screensets', '@gears-frontx/screensets/*'],
+              group: ['@gears-frontx/mfes', '@gears-frontx/mfes/*', '@gears-frontx/gts-plugin', '@gears-frontx/gts-plugin/*'],
               message:
-                'LAYER VIOLATION: App-layer code must import from @gears-frontx/react, not directly from @gears-frontx/screensets (Layer 1).',
+                'LAYER VIOLATION: App-layer code must import from @gears-frontx/react, not directly from @gears-frontx/mfes (Layer 1).',
             },
             // Redux term bans - use FrontX state terms instead
             {

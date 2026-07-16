@@ -76,7 +76,7 @@ Each runnable Vitest entrypoint sets `test.environment` in its own `vitest.confi
 | `@gears-frontx/framework` | `packages/framework/vitest.config.ts` | `node` |
 | `@gears-frontx/i18n` | `packages/i18n/vitest.config.ts` | `node` |
 | `@gears-frontx/react` | `packages/react/vitest.config.ts` | `jsdom` |
-| `@gears-frontx/screensets` | `packages/screensets/vitest.config.ts` | `jsdom` |
+| `@gears-frontx/mfes` | `packages/mfes/vitest.config.ts` | `jsdom` |
 | `@gears-frontx/state` | `packages/state/vitest.config.ts` | `node` |
 | `@gears-frontx/studio` | `packages/studio/vitest.config.ts` | `jsdom` |
 

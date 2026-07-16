@@ -21,7 +21,7 @@ import { RestProtocol } from '../protocols/RestProtocol';
 import { RestEndpointProtocol } from '../protocols/RestEndpointProtocol';
 import { SseProtocol } from '../protocols/SseProtocol';
 import { SseStreamProtocol } from '../protocols/SseStreamProtocol';
-import { RestMockPlugin, SseMockPlugin } from '@gears-frontx/frontx-template-standard';
+import { LocalRestMockPlugin as RestMockPlugin, LocalSseMockPlugin as SseMockPlugin } from './fixtures/mockPlugins';
 import { apiRegistry } from '../apiRegistry';
 import type { EndpointDescriptor, MutationDescriptor, StreamDescriptor } from '../types';
 

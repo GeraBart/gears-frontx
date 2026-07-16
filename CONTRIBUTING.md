@@ -65,7 +65,7 @@ Publishing is automated via CI/CD. On push to a publishing branch, CI detects ve
 ### Publish Order
 
 Packages are published in dependency order:
-1. L1 SDK: `@gears-frontx/state`, `@gears-frontx/screensets`, `@gears-frontx/api`, `@gears-frontx/i18n`
+1. L1 SDK: `@gears-frontx/state`, `@gears-frontx/mfes`, `@gears-frontx/api`, `@gears-frontx/i18n`
 2. L2 Framework: `@gears-frontx/framework`
 3. L3 React: `@gears-frontx/react`
 4. Standalone: `@gears-frontx/studio`, `@gears-frontx/cli`

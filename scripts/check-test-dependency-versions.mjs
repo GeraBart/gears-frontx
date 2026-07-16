@@ -62,6 +62,10 @@ export const skipDirectories = new Set([
   // this repo) — same "templates/ is not a live workspace" convention already
   // used by eslint.config.js's `packages/**/templates/**` ignore.
   'templates',
+  // Disposable Claude Code agent worktrees (`.claude/worktrees/*`) are full
+  // repo checkouts — walking into them would double-count every workspace's
+  // package.json against a stale copy of this same dependency policy.
+  '.claude',
 ]);
 
 /**

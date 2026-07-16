@@ -30,7 +30,8 @@ export interface MfeRegistryConfig {
    *
    * @example
    * ```typescript
-   * import { mfeRegistryFactory, gtsPlugin } from '@gears-frontx/screensets';
+   * import { mfeRegistryFactory } from '@gears-frontx/mfes';
+   * import { gtsPlugin } from '@gears-frontx/gts-plugin';
    *
    * // Build the registry with GTS plugin at application wiring time
    * const registry = mfeRegistryFactory.build({ typeSystem: gtsPlugin });

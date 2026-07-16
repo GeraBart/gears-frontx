@@ -14,8 +14,9 @@
 
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { eventBus, resetStore } from '@gears-frontx/state';
-import { gtsPlugin } from '@gears-frontx/screensets/plugins/gts';
-import type { TypeSystemPlugin, JSONSchema } from '@gears-frontx/screensets';
+import { gtsPlugin } from '@gears-frontx/gts-plugin';
+import type { TypeSystemPlugin } from '@gears-frontx/mfes';
+import type { JSONSchema } from '@gears-frontx/gts-plugin';
 import { createFrontX } from '../../src/createFrontX';
 import { microfrontends } from '../../src/plugins/microfrontends';
 import { loadLayoutDomains } from '../../src/plugins/microfrontends/gts/loader';

@@ -29,6 +29,9 @@ export default [
       '**/*.config.*',
       '**/*.cjs',
       'scripts/**',
+      // Disposable Claude Code agent worktrees — full repo checkouts that
+      // should never be linted as part of this repo's own source tree.
+      '.claude/**',
     ],
   },
 

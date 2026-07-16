@@ -1,6 +1,7 @@
 // @cpt-flow:cpt-frontx-flow-mfe-host-communication-dispatch-chain:p1
 // @cpt-algo:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p2
 // @cpt-state:cpt-frontx-state-mfe-host-communication-action-lifecycle:p2
+// @cpt-flow:cpt-frontx-flow-extension-domain-governance-admission:p1
 /**
  * Default Actions Chains Mediator Implementation
  *
@@ -233,7 +234,9 @@ export class DefaultActionsChainsMediator extends ActionsChainsMediator {
 
     try {
       // @cpt-begin:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-invoke-within-timeout
+      // @cpt-begin:cpt-frontx-flow-extension-domain-governance-admission:p1:inst-admitted-mount
       await this.executeAction(action);
+      // @cpt-end:cpt-frontx-flow-extension-domain-governance-admission:p1:inst-admitted-mount
       // @cpt-end:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-invoke-within-timeout
 
       // @cpt-begin:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-success
@@ -251,10 +254,12 @@ export class DefaultActionsChainsMediator extends ActionsChainsMediator {
 
       // @cpt-begin:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-chain-done
       // @cpt-begin:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-return-done
+      // @cpt-begin:cpt-frontx-flow-extension-domain-governance-admission:p1:inst-mount-success
       return {
         completed: true,
         path: [...path],
       };
+      // @cpt-end:cpt-frontx-flow-extension-domain-governance-admission:p1:inst-mount-success
       // @cpt-end:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-return-done
       // @cpt-end:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-chain-done
       // @cpt-end:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-success

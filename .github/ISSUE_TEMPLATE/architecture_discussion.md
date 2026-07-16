@@ -30,7 +30,7 @@ Why would this change be beneficial? What problems does it solve?
 Which FrontX components or packages are affected?
 - [ ] Core Framework (@gears-frontx/framework)
 - [ ] React Integration (@gears-frontx/react)
-- [ ] Screensets (@gears-frontx/screensets)
+- [ ] MFEs (@gears-frontx/mfes)
 - [ ] CLI (@gears-frontx/cli)
 - [ ] Internationalization (@gears-frontx/i18n)
 - [ ] State Management (@gears-frontx/state)

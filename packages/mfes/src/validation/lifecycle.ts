@@ -2,7 +2,7 @@
  * Lifecycle Validation
  *
  * Validation utilities for lifecycle hooks and stages.
- * Extracted from @gears-frontx/screensets in Phase 7 (extension-domain governance).
+ * Extracted from the legacy screensets package in Phase 7 (extension-domain governance).
  *
  * @packageDocumentation
  */

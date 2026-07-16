@@ -15,7 +15,9 @@ export default defineConfig({
   splitting: true,
   external: [
     '@gears-frontx/state',
-    '@gears-frontx/screensets',
+    '@gears-frontx/mfes',
+    '@gears-frontx/gts-plugin',
+    '@gears-frontx/frontx-template-standard',
     '@gears-frontx/api',
     '@gears-frontx/i18n',
     '@reduxjs/toolkit',

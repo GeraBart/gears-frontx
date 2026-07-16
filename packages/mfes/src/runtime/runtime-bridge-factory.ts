@@ -2,7 +2,7 @@
  * Runtime Bridge Factory
  *
  * Abstract runtime bridge factory — contract for internal bridge wiring.
- * Extracted from @gears-frontx/screensets in Phase 7 (extension-domain governance).
+ * Extracted from the legacy screensets package in Phase 7 (extension-domain governance).
  *
  * This is NOT the same as MfeBridgeFactory in handler/types.ts, which is
  * a public abstraction for custom handler bridge implementations.

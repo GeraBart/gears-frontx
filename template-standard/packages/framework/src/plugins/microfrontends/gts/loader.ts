@@ -7,7 +7,7 @@
  * @packageDocumentation
  */
 
-import type { ExtensionDomain } from '@gears-frontx/screensets';
+import type { ExtensionDomain } from '@gears-frontx/mfes';
 
 // Import layout domain instances
 import sidebarDomainInstance from './frontx.screensets/instances/domains/sidebar.v1.json';

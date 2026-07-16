@@ -13,7 +13,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createFrontX } from '../../../createFrontX';
 import { microfrontends, addExtensionMounted } from '../index';
-import { gtsPlugin } from '@gears-frontx/screensets/plugins/gts';
+import { gtsPlugin } from '@gears-frontx/gts-plugin';
 import { themeSchema, languageSchema, extensionScreenSchema } from '../../../gts';
 import { loadLayoutDomains } from '../gts/loader';
 import type { FrontXApp } from '../../../types';
@@ -25,13 +25,13 @@ import {
   FRONTX_ACTION_MOUNT_EXT,
   FRONTX_ACTION_UNMOUNT_EXT,
   ExtensionMounter,
-} from '@gears-frontx/screensets';
+} from '@gears-frontx/mfes';
 import type {
   ContainerHooks,
   DomainContext,
   ActionPayload,
   MountStrategy,
-} from '@gears-frontx/screensets';
+} from '@gears-frontx/mfes';
 
 // ─── Container hooks that track created containers ────────────────────────────
 

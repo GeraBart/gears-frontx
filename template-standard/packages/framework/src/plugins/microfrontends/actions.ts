@@ -18,7 +18,7 @@ import {
   FRONTX_ACTION_UNMOUNT_EXT,
   type Extension,
   type MfeRegistry,
-} from '@gears-frontx/screensets';
+} from '@gears-frontx/mfes';
 
 // ============================================================================
 // Module-Level Registry Reference
