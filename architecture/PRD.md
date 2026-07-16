@@ -37,7 +37,7 @@
 
 ### 1.1 Purpose
 
-The FrontX Ecosystem exists to enable AI-driven creation of frontend projects. It gives teams a product set in which AI agents can reliably scaffold, extend, and evolve frontend projects by targeting stable, narrow, explicitly-contracted product capabilities instead of improvising against an open-ended codebase. The ecosystem delivers this through three co-equal pillars: a **Core Framework** that makes an application runtime-extensible by composable microfrontends over a substrate for typed entities; a **CLI** that owns the full project lifecycle — installing, listing, updating, and validating templates, scaffolding projects and microfrontends, resolving composed templates, recording project provenance, and upgrading existing projects to newer template versions; and an **AI Tooling Framework** that equips AI agents with ecosystem-wide capabilities, lets templates contribute their own AI capabilities, activates those capabilities automatically in consuming projects, and orchestrates AI-driven project upgrades.
+The FrontX Ecosystem exists to enable AI-driven creation of frontend projects. It gives teams a product set in which AI agents can reliably scaffold, extend, and evolve frontend projects by targeting stable, narrow, explicitly-contracted product capabilities instead of improvising against an open-ended codebase. Templates define what any given project becomes; the platform provides the lifecycle and runtime mechanisms for assembling, extending, and evolving a project from them. The ecosystem delivers this through three co-equal pillars: a **Core Framework** that makes an application runtime-extensible by composable microfrontends over a substrate for typed entities; a **CLI** that owns the full lifecycle of assembling and evolving a repository from templates — installing, listing, updating, and validating templates, applying a template to seed a new repository or extend an existing one, assembling a repository from multiple templates while detecting and preventing conflicting assembly, recording each applied template's provenance independently, and upgrading each applied template independently to a newer version; and an **AI Tooling Framework** that equips AI agents with ecosystem-wide capabilities, lets templates contribute their own AI capabilities, activates those capabilities automatically in consuming projects, and orchestrates AI-driven template upgrades.
 
 Together these pillars let an AI agent carry a frontend project from first scaffold through ongoing extension and version upgrades, while the human Template Developers and Project Developers steering the work stay in control of intent and review. The product's value is measured by how predictably and safely AI agents and their human collaborators can produce and maintain real frontend applications on top of it.
 
@@ -45,14 +45,14 @@ Together these pillars let an AI agent carry a frontend project from first scaff
 
 Teams building frontend projects increasingly depend on AI agents to do the work — scaffolding new projects, adding features, and keeping projects current as their foundations evolve. For an AI agent to do this reliably, it needs a product surface that is stable, narrow, and explicitly contracted, so the agent targets well-defined capabilities rather than guessing at the shape of an open-ended codebase.
 
-Two groups of people, each working alongside AI agents, have distinct needs. **Template Developers** design, version, and publish the project templates and microfrontend templates that other teams build from; they need stable product contracts, pre-publish validation, semantic-versioning discipline, deterministic composition of templates, and a way to bundle template-specific AI capabilities. **Project Developers** scaffold a project from a template and then build business code on top; they need predictable scaffolding output, reliable template upgrades, a clear boundary between what the product provides and what the application must supply, and AI agents that already understand both the ecosystem and the specific template in use.
+Two groups of people, each working alongside AI agents, have distinct needs. **Template Developers** design, version, and publish the templates that other teams build from; they need stable product contracts, pre-publish validation, semantic-versioning discipline, a way to declare the boundaries of what a template owns so independently-authored templates assemble without conflict, and a way to bundle template-specific AI capabilities. **Project Developers** assemble a repository from one or more templates and then build business code on top; they need predictable assembly output, reliable per-template upgrades, a clear boundary between what the product provides and what the application must supply, and AI agents that already understand both the ecosystem and the specific templates in use.
 
-Across both groups, three needs recur: stable, narrow contracts an AI agent can target; a project lifecycle — install, scaffold, compose, validate, and upgrade — that an AI agent can drive end to end; and AI tooling that knows the ecosystem out of the box and can be extended with knowledge specific to each template. The FrontX Ecosystem addresses these needs directly, so that AI-driven frontend development is predictable and safe for both the people directing it and the agents performing it.
+Across both groups, three needs recur: stable, narrow contracts an AI agent can target; a repository lifecycle — install, apply, assemble, validate, and upgrade — that an AI agent can drive end to end; and AI tooling that knows the ecosystem out of the box and can be extended with knowledge specific to each template. The FrontX Ecosystem addresses these needs directly, so that AI-driven frontend development is predictable and safe for both the people directing it and the agents performing it.
 
 ### 1.3 Goals (Business Outcomes)
 
-- **Bounded time-to-scaffold** — A Project Developer (or an AI agent acting for one) can scaffold a working project from a project template in a single operation whose duration is bounded by a target published in the platform's release notes. Baseline: not yet measured (new product); Target: a predictable, bounded scaffold operation; Timeframe: established and published at the first platform release.
-- **Reviewable, reversible upgrades** — Every upgrade of an existing project to a newer template version is applied as a reviewable change set that a developer approves before it touches project files, with non-destructive rollback. Baseline: none (new product); Target: 100% of upgrades review-gated and reversible; Timeframe: first platform release.
+- **Bounded time-to-scaffold** — A Project Developer (or an AI agent acting for one) can assemble a working repository from a template in a single operation whose duration is bounded by a target published in the platform's release notes. Baseline: not yet measured (new product); Target: a predictable, bounded assembly operation; Timeframe: established and published at the first platform release.
+- **Reviewable, reversible upgrades** — Every upgrade of an applied template to a newer version is applied as a reviewable change set that a developer approves before it touches repository files, with non-destructive rollback. Baseline: none (new product); Target: 100% of upgrades review-gated and reversible; Timeframe: first platform release.
 - **Automatic activation of template AI extensions** — When a template that bundles AI capabilities is installed in a project, those capabilities become available to AI agents automatically, with no manual wiring by the developer. Baseline: none (new product); Target: zero manual wiring steps for template-bundled AI capabilities; Timeframe: first platform release.
 - **Compatibility within a major version** — Platform releases preserve backward compatibility within a major version, so consuming applications are not forced to upgrade in lockstep with the product. Baseline: none (new product); Target: zero breaking changes to published product contracts within a major version line; Timeframe: ongoing from the first major release.
 - **No architectural ceiling on application scale** — The platform places no upper limit on the number of microfrontends or type definitions an application integrates, beyond the thresholds stated in the non-functional requirements. Baseline: none (new product); Target: scale governed only by the stated NFR thresholds, not by product architecture; Timeframe: first platform release.
@@ -62,20 +62,21 @@ Across both groups, three needs recur: stable, narrow contracts an AI agent can 
 | Term | Definition |
 |------|------------|
 | ecosystem | The FrontX product set as a whole; referred to hereinafter as "the ecosystem". |
-| project | The development-time unit a Project Developer scaffolds from a project template — its source files plus the recorded provenance of the template it came from — and which the CLI installs into, validates, and upgrades. The development-time form of an application. |
+| project | The development-time unit a Project Developer works in: a repository assembled from one or more templates, together with the recorded provenance of each applied template, and which the CLI installs into, validates, and upgrades. The development-time form of an application. |
 | application | The running frontend product the platform composes at runtime: the host into which microfrontends are loaded and placed, made runtime-extensible by the Core Framework. The runtime form of a project. |
 | microfrontend (MFE) | An independently-developed, runtime-loadable unit of user-facing functionality that the platform loads and places into a running application. Abbreviated **MFE**. |
 | extension | A configured placement that binds one microfrontend into one extension domain, producing a concrete occupant of that domain. An extension is not the microfrontend itself; it is the microfrontend as placed and configured in a specific domain. |
 | extension domain | A named extension point in the application where microfrontends can be placed. It governs which microfrontends may occupy it, whether it permits one or several occupants at once, and what shared state and capabilities its occupants receive. |
 | type definition | A description of an entity's shape that the type system can validate against; specification-format-agnostic at the product-requirements level. |
 | platform | The Core Framework pillar as a consuming application depends on it at runtime — the versioned runtime foundation an application is built upon. (Distinct from "ecosystem", which is the whole FrontX product set.) |
-| project template | A template that scaffolds an entire new project. |
-| microfrontend template | A template that scaffolds a single, independently-developed microfrontend. |
-| scaffold | The act of generating files and configuration into a target directory from a template. |
-| composed template | A project template that references one or more microfrontend templates and resolves them as part of a single scaffold operation. |
-| project provenance | Recorded information about which template, and which template version, a project was scaffolded from. |
-| upgrade | Applying a newer template version to an existing project, delivered as a reviewable change set. |
-| update | Installation of a newer template version locally, without applying it to any existing project. |
+| template | A generator of some part of a project. A template produces files and configuration and declares the boundaries of what it owns. What a template produces is defined by the template itself. |
+| preset | A template that references one or more other templates so that they are applied together as a set. |
+| assembly | A repository composed from one or more independently-applied templates, whether within a single repository or across several repositories. |
+| ownership boundary | A template's declaration of what it owns — the parts of a repository it may create or modify — used to detect and prevent conflicting assembly before any files are written. |
+| scaffold | The act of applying a template to generate files and configuration into a target, whether seeding a new repository or extending an existing one. |
+| template provenance | Recorded information, held per applied template, about which template and which template version it was applied from. A repository carries one provenance record per applied template. |
+| upgrade | Applying a newer version of an already-applied template to a repository, delivered as a reviewable change set; each applied template upgrades independently. |
+| update | Installation of a newer template version locally, without applying it to any repository. |
 | template-bundled AI extension | An AI capability — a skill, workflow, guideline, or reference artifact — that ships inside a template and activates when that template is installed. |
 | AI Tooling Framework | The Pillar 3 component that provides base ecosystem AI capabilities, the extension contract templates use to bundle AI extensions, and the discovery-and-activation surface that turns installed-template extensions into available capabilities for AI agents. |
 
@@ -87,15 +88,15 @@ Across both groups, three needs recur: stable, narrow contracts an AI agent can 
 
 **ID**: `cpt-frontx-actor-template-developer`
 
-**Role**: Designs, authors, versions, and publishes project templates or microfrontend templates that other teams build from. Works alongside AI agents throughout this work.
-**Needs**: Stable product contracts; pre-publish validation tooling; semantic-versioning discipline tooling; reference templates; deterministic composition primitives; support for bundling template-specific AI capabilities.
+**Role**: Designs, authors, versions, and publishes templates that other teams build from. Works alongside AI agents throughout this work.
+**Needs**: Stable product contracts; pre-publish validation tooling; semantic-versioning discipline tooling; reference templates; a way to declare the boundaries of what a template owns; support for bundling template-specific AI capabilities.
 
 #### Project Developer
 
 **ID**: `cpt-frontx-actor-project-developer`
 
-**Role**: Scaffolds a project from an existing project template, then builds business code on top of it. Works alongside AI agents throughout this work.
-**Needs**: Predictable scaffolding output; reliable template upgrades; a clear boundary between what the product provides and what the application must provide; AI agents that already understand both the ecosystem and the specific template in use.
+**Role**: Assembles a repository from one or more templates, then builds business code on top of it. Works alongside AI agents throughout this work.
+**Needs**: Predictable assembly output; reliable per-template upgrades; a clear boundary between what the product provides and what the application must provide; AI agents that already understand both the ecosystem and the specific templates in use.
 
 ### 2.2 System Actors
 
@@ -111,7 +112,7 @@ Across both groups, three needs recur: stable, narrow contracts an AI agent can 
 
 **ID**: `cpt-frontx-actor-github`
 
-**Role**: Public source registry that hosts the project templates and microfrontend templates published by Template Developers, and hosts the FrontX AI Tooling Framework. Both the FrontX CLI and the Cypilot CLI fetch from it by versioned reference.
+**Role**: Public source registry that hosts the templates published by Template Developers, and hosts the FrontX AI Tooling Framework. Both the FrontX CLI and the Cypilot CLI fetch from it by versioned reference.
 **Direction**: Outbound (publications flow to the registry); inbound (the CLI and Cypilot CLI fetch from the registry into a consuming project).
 **Availability**: Required at install and upgrade time.
 
@@ -148,16 +149,16 @@ None.
 
 #### CLI (Pillar 2)
 
-- Installing a project template or microfrontend template from a public source registry by versioned reference.
+- Installing a template from a public source registry by versioned reference.
 - Listing installed templates and their versions.
 - Updating an installed template locally to a newer version.
-- Validating a template's structure against the publication contract before publishing.
-- Scaffolding a new project from an installed project template into a chosen target directory.
-- Scaffolding a new microfrontend from an installed microfrontend template into a chosen target directory.
-- Resolving composed templates at scaffold time, so referenced microfrontend templates are scaffolded as part of the same operation.
-- Upgrading an existing project to a newer template version, applied as a reviewable change set.
-- Reviewing and approving upgrade changes before they apply to project files.
-- Organizing commands into two namespaces — project-level and microfrontend-level — reflecting the two first-class template kinds the product supports.
+- Validating a template's structure — including that its declared ownership boundaries are well-formed — against the publication contract before publishing.
+- Applying an installed template to seed a new repository in a chosen target directory.
+- Adding an installed template into an existing repository.
+- Assembling a repository from multiple independently-applied templates, resolving any templates a preset references so they are applied as part of the same operation.
+- Declaring the boundaries of what a template owns, and detecting and preventing conflicting assembly before any files are written.
+- Upgrading each applied template independently to a newer version, applied as a reviewable change set.
+- Reviewing and approving upgrade changes before they apply to repository files.
 
 #### AI Tooling Framework (Pillar 3)
 
@@ -273,7 +274,7 @@ The system **MUST NOT** place an upper limit on the number of microfrontends or 
 
 - [x] `p1` - **ID**: `cpt-frontx-fr-cli-template-install`
 
-The system **MUST** allow a developer to install a project template or microfrontend template from the source registry by versioned reference.
+The system **MUST** allow a developer to install a template from the source registry by versioned reference.
 
 **Rationale**: Gives developers deterministic, version-pinned acquisition of templates, so the starting point for a project is reproducible rather than dependent on whichever version happens to be current.
 
@@ -303,49 +304,69 @@ The system **MUST** allow a developer to update an installed template to a newer
 
 - [x] `p1` - **ID**: `cpt-frontx-fr-cli-template-validate-prepublish`
 
-The system **MUST** allow a Template Developer to validate a template's structure against the publication contract before publishing it.
+The system **MUST** allow a Template Developer to validate a template's structure — including that the template's declared ownership boundaries are well-formed — against the publication contract before publishing it.
 
-**Rationale**: Catches structural errors before a template reaches other teams, so consumers are protected from malformed templates and the publisher avoids costly post-publication corrections.
+**Rationale**: Catches structural errors and malformed ownership boundaries before a template reaches other teams, so consumers are protected from malformed templates and from assembly conflicts, and the publisher avoids costly post-publication corrections.
 
 **Actors**: `cpt-frontx-actor-template-developer`
 
-#### Scaffold a new project from an installed project template
+#### Apply a template to seed a new repository
 
-- [x] `p1` - **ID**: `cpt-frontx-fr-cli-project-scaffold`
+- [x] `p1` - **ID**: `cpt-frontx-fr-cli-seed-repository`
 
-The system **MUST** allow a Project Developer to scaffold a new project from an installed project template into a chosen target directory.
+The system **MUST** allow a Project Developer to apply an installed template to seed a new repository in a chosen target directory.
 
-**Rationale**: Gives developers predictable, reproducible project bootstrap from a known template, so every project starts from a consistent, contracted foundation.
-
-**Actors**: `cpt-frontx-actor-project-developer`
-
-#### Scaffold a new microfrontend from a microfrontend template
-
-- [x] `p1` - **ID**: `cpt-frontx-fr-cli-microfrontend-scaffold`
-
-The system **MUST** allow a Project Developer to scaffold a new microfrontend from an installed microfrontend template into a chosen target directory.
-
-**Rationale**: Lets a microfrontend be created as an independently-developed unit that an application loads at runtime, so it can be built and versioned on its own rather than built into an application.
+**Rationale**: Gives developers predictable, reproducible bootstrap of a repository from a known template, so every repository starts from a consistent, contracted foundation.
 
 **Actors**: `cpt-frontx-actor-project-developer`
 
-#### Composed-template resolution at project scaffold
+#### Add a template into an existing repository
+
+- [x] `p1` - **ID**: `cpt-frontx-fr-cli-add-template-to-repository`
+
+The system **MUST** allow a Project Developer to add an installed template into an existing repository.
+
+**Rationale**: Lets a repository grow by layering in further templates over time, so parts can be added independently rather than fixed at the moment the repository is first seeded.
+
+**Actors**: `cpt-frontx-actor-project-developer`
+
+#### Multi-template assembly and preset resolution
 
 - [x] `p1` - **ID**: `cpt-frontx-fr-cli-composed-template-resolution`
 
-When a developer scaffolds a project from a project template that references microfrontend templates, the system **MUST** resolve and scaffold those referenced microfrontends as part of the same operation.
+A repository **MAY** be assembled from multiple independently-applied templates. When a template a developer applies references other templates (a preset), the system **MUST** resolve and apply those referenced templates as part of the same operation.
 
-**Rationale**: Delivers a complete composed project in a single step, so developers do not have to discover and scaffold each referenced microfrontend by hand.
+**Rationale**: Lets a repository be composed from several templates in a single step and lets a preset arrange a validated set of templates, so developers do not have to discover and apply each referenced template by hand.
 
 **Actors**: `cpt-frontx-actor-project-developer`
 
-#### Project upgrade as a reviewable change set
+#### Template ownership-boundary declaration
+
+- [x] `p1` - **ID**: `cpt-frontx-fr-cli-template-boundary-declaration`
+
+The system **MUST** allow a template to declare the boundaries of what it owns — the parts of a repository it may create or modify.
+
+**Rationale**: Makes the ground each template claims explicit, so independently-authored templates can be assembled with conflicts detected up front rather than discovered as corrupted output.
+
+**Actors**: `cpt-frontx-actor-template-developer`
+
+#### Conflict-free assembly enforcement
+
+- [x] `p1` - **ID**: `cpt-frontx-fr-cli-assembly-conflict-prevention`
+
+When one or more templates are applied to a repository, the system **MUST** detect when two templates claim the same ground and **MUST** report and refuse the conflicting assembly before any files are written. The system **MUST NOT** silently merge conflicting claims.
+
+**Rationale**: Turns the multi-writer problem into a declared, reviewable, design-time concern, so a repository is never left in a corrupted or silently-clobbered state by two templates fighting over the same ground.
+
+**Actors**: `cpt-frontx-actor-project-developer`
+
+#### Per-template upgrade as a reviewable change set
 
 - [x] `p1` - **ID**: `cpt-frontx-fr-cli-project-upgrade-changeset`
 
-The system **MUST** allow a developer to upgrade an existing project to a newer version of the template it was scaffolded from, with the upgrade applied as a reviewable change set.
+The system **MUST** allow a developer to upgrade an applied template in a repository to a newer version of that template, with the upgrade applied as a reviewable change set. Each applied template **MUST** be upgradeable independently of the others.
 
-**Rationale**: Makes adopting newer template versions non-destructive and auditable, so developers can keep projects current without risking unreviewed changes to their files.
+**Rationale**: Makes adopting newer template versions non-destructive and auditable, and lets each part of a repository move on its own cadence, so developers can keep a repository current without a single whole-repository origin baseline and without risking unreviewed changes to their files.
 
 **Actors**: `cpt-frontx-actor-project-developer`
 
@@ -353,21 +374,11 @@ The system **MUST** allow a developer to upgrade an existing project to a newer 
 
 - [x] `p1` - **ID**: `cpt-frontx-fr-cli-upgrade-review-approval`
 
-The system **MUST** allow a developer to review and approve upgrade changes before they apply to project files.
+The system **MUST** allow a developer to review and approve upgrade changes before they apply to the repository's files.
 
-**Rationale**: Keeps a human in control of what an upgrade changes, so no modification reaches a project's files without explicit approval.
+**Rationale**: Keeps a human in control of what an upgrade changes, so no modification reaches a repository's files without explicit approval.
 
 **Actors**: `cpt-frontx-actor-project-developer`
-
-#### Two-namespace command organization
-
-- [x] `p2` - **ID**: `cpt-frontx-fr-cli-two-namespace-commands`
-
-The system **MUST** organize its commands into two namespaces: one for project-level operations and one for microfrontend-level operations.
-
-**Rationale**: Reflects the two first-class template kinds the product supports, so developers find the right command by the kind of work they are doing.
-
-**Actors**: `cpt-frontx-actor-template-developer`, `cpt-frontx-actor-project-developer`
 
 ### 5.3 AI Tooling Framework
 
@@ -518,7 +529,7 @@ The system **MUST** place no architectural upper limit on the number of microfro
 
 **Stability**: unstable
 
-**Description**: The CLI owns the project lifecycle: it installs, lists, updates, and validates templates from the source registry; scaffolds projects and microfrontends into a chosen target directory; resolves composed templates as part of a single scaffold operation; records project provenance; upgrades existing projects to newer template versions as reviewable change sets that a developer approves before they apply; and organizes its commands into project-level and microfrontend-level namespaces (anchors capabilities C2-1 through C2-10).
+**Description**: The CLI owns the repository lifecycle: it installs, lists, updates, and validates templates from the source registry; applies a template to seed a new repository or extend an existing one; assembles a repository from multiple independently-applied templates and resolves any templates a preset references as part of a single operation; detects and prevents conflicting assembly before any files are written by honoring each template's declared ownership boundaries; records per-applied-template provenance; and upgrades each applied template independently to a newer version as reviewable change sets that a developer approves before they apply (anchors capabilities C2-1 through C2-11).
 
 **Breaking Change Policy**: A major version bump is required for any incompatible change to the command surface; minor and patch versions preserve backward compatibility.
 
@@ -552,17 +563,17 @@ The system **MUST** place no architectural upper limit on the number of microfro
 
 **Direction**: bidirectional
 
-**Description**: The product requires every template to publish a manifest that describes the template in a defined shape, and it both produces that manifest when a template is validated for publication and consumes it when a template is installed or scaffolded. This is an internal contract between templates and the product; it names no external party.
+**Description**: The product requires every template to publish a manifest that describes the template in a defined shape — including the boundaries of what the template owns and any other templates it references to be applied together — and it both produces that manifest when a template is validated for publication and consumes it when a template is installed, applied, or assembled with others. The declared ownership boundaries are what let the product detect and refuse conflicting assembly before any files are written. This is an internal contract between templates and the product; it names no external party.
 
 **Compatibility**: The manifest shape is versioned with the platform; changes that are not backward-compatible follow `cpt-frontx-nfr-evolvability`.
 
-#### Project provenance contract
+#### Per-template provenance contract
 
 - [ ] `p2` - **ID**: `cpt-frontx-contract-project-provenance`
 
 **Direction**: provided by library
 
-**Description**: The product records provenance into each scaffolded project, capturing which template and which template version the project was scaffolded from, so a later upgrade can determine what to apply. This is an internal contract recorded per scaffolded project; it names no external party.
+**Description**: The product records provenance per applied template into the repository, capturing which template and which template version each was applied from, so a later upgrade can determine what to apply for that template. A repository carries one provenance record per applied template rather than a single whole-repository origin. This is an internal contract recorded per applied template; it names no external party.
 
 **Compatibility**: Provenance records remain readable across versions; any change that is not backward-compatible follows `cpt-frontx-nfr-evolvability`.
 
@@ -586,9 +597,19 @@ The system **MUST** place no architectural upper limit on the number of microfro
 
 **Compatibility**: Published packages follow semantic versioning; consuming applications rely on the platform's evolvability commitments (`cpt-frontx-nfr-evolvability`).
 
+#### Template AI-extension contract
+
+- [ ] `p2` - **ID**: `cpt-frontx-contract-template-ai-extension`
+
+**Direction**: bidirectional
+
+**Description**: The product requires a template's bundled AI extensions to conform to a defined shape — a closed set of extension categories (skills, workflows, guidelines, and reference artifacts) — so the same expertise a Template Developer bundles with a template is recognized and activated uniformly in any project that installs it. This is an internal contract between templates and the product: it is declared by the Template Developer at authoring and consumed by the AI Tooling Framework at discovery and activation; it names no external party.
+
+**Compatibility**: Additive changes within the contract preserve conforming templates; admitting or removing an extension category is a breaking change that follows the platform's evolvability requirement (`cpt-frontx-nfr-evolvability`).
+
 ## 8. Use Cases
 
-#### Template Developer publishes a project template that composes microfrontend templates
+#### Template Developer publishes a template that references other templates
 
 - [ ] `p2` - **ID**: `cpt-frontx-usecase-publish-composed-project-template`
 
@@ -599,16 +620,16 @@ The system **MUST** place no architectural upper limit on the number of microfro
 - The product is installed on the developer's machine.
 
 **Main Flow**:
-1. The Template Developer authors the project template's content.
-2. The Template Developer declares the project template's composed microfrontend templates by reference.
-3. The Template Developer validates the template's structure against the publication contract before publishing (`cpt-frontx-fr-cli-template-validate-prepublish`).
+1. The Template Developer authors the template's content.
+2. The Template Developer declares the boundaries of what the template owns (`cpt-frontx-fr-cli-template-boundary-declaration`) and, for a preset, the other templates it references to be applied together (`cpt-frontx-fr-cli-composed-template-resolution`).
+3. The Template Developer validates the template's structure, including that its declared ownership boundaries are well-formed, against the publication contract before publishing (`cpt-frontx-fr-cli-template-validate-prepublish`).
 4. The Template Developer publishes the template to the source registry (`cpt-frontx-actor-github`).
 
 **Postconditions**:
 - The template is available for installation by Project Developers from the source registry.
 
 **Alternative Flows**:
-- **Validation fails**: the validation step reports specific errors; the Template Developer fixes them and re-validates before publishing.
+- **Validation fails**: the validation step reports specific errors — including malformed ownership boundaries; the Template Developer fixes them and re-validates before publishing.
 
 #### Template Developer bundles a template with AI extensions
 
@@ -630,7 +651,7 @@ The system **MUST** place no architectural upper limit on the number of microfro
 **Alternative Flows**:
 - **Extension declaration malformed**: pre-publish validation reports the structural error before publication.
 
-#### Project Developer scaffolds a new project from a composed project template
+#### Project Developer assembles a repository from multiple templates
 
 - [ ] `p2` - **ID**: `cpt-frontx-usecase-scaffold-composed-project`
 
@@ -642,36 +663,38 @@ The system **MUST** place no architectural upper limit on the number of microfro
 - The product is installed.
 
 **Main Flow**:
-1. The Project Developer installs the project template by versioned reference (`cpt-frontx-fr-cli-template-install`).
-2. The Project Developer scaffolds the project (`cpt-frontx-fr-cli-project-scaffold`); the composed microfrontends declared by the template are resolved and scaffolded as part of the same operation (`cpt-frontx-fr-cli-composed-template-resolution`).
-3. The AI Tooling Framework activates the ecosystem's base AI capabilities and any template-bundled AI extensions for AI agents working in the new project (`cpt-frontx-fr-ai-extension-discovery-activation`, `cpt-frontx-fr-ai-session-start-knowledge`).
+1. The Project Developer installs the templates to apply by versioned reference (`cpt-frontx-fr-cli-template-install`).
+2. The Project Developer applies a template to seed the repository (`cpt-frontx-fr-cli-seed-repository`); when a preset is applied, the templates it references are resolved and applied as part of the same operation (`cpt-frontx-fr-cli-composed-template-resolution`).
+3. Before writing, the CLI checks that no two applied templates claim the same ground, honoring each template's declared ownership boundaries (`cpt-frontx-fr-cli-assembly-conflict-prevention`).
+4. The AI Tooling Framework activates the ecosystem's base AI capabilities and any template-bundled AI extensions for AI agents working in the new repository (`cpt-frontx-fr-ai-extension-discovery-activation`, `cpt-frontx-fr-ai-session-start-knowledge`).
 
 **Postconditions**:
-- A scaffolded project on disk with its composed microfrontends; AI agents have ecosystem and template-specific AI capabilities active.
+- A repository on disk assembled from its templates, with one provenance record per applied template; AI agents have ecosystem and template-specific AI capabilities active.
 
 **Alternative Flows**:
-- **Source registry unreachable**: the CLI reports the failure and aborts the scaffold without writing any files.
-- **Composition collision**: the CLI reports the conflicting composition before any files are written.
+- **Source registry unreachable**: the CLI reports the failure and aborts the assembly without writing any files.
+- **Conflicting assembly**: the CLI detects that two templates claim the same ground and reports and refuses the assembly before any files are written (`cpt-frontx-fr-cli-assembly-conflict-prevention`).
 
-#### Project Developer adds a new microfrontend to an existing project
+#### Project Developer adds a template into an existing repository
 
 - [ ] `p2` - **ID**: `cpt-frontx-usecase-add-microfrontend-to-project`
 
 **Actor**: `cpt-frontx-actor-project-developer`
 
 **Preconditions**:
-- An existing scaffolded project is on disk.
-- The microfrontend template is available in the source registry.
+- An existing repository is on disk.
+- The template is available in the source registry.
 
 **Main Flow**:
-1. The Project Developer installs the microfrontend template by versioned reference (`cpt-frontx-fr-cli-template-install`).
-2. The Project Developer scaffolds the microfrontend into the existing project (`cpt-frontx-fr-cli-microfrontend-scaffold`).
-3. At application runtime the microfrontend is registered with the application (`cpt-frontx-fr-mfe-runtime-registration`); type-definition validation runs at registration (`cpt-frontx-fr-mfe-type-validation`).
+1. The Project Developer installs the template by versioned reference (`cpt-frontx-fr-cli-template-install`).
+2. The Project Developer adds the template into the existing repository (`cpt-frontx-fr-cli-add-template-to-repository`); before writing, the CLI checks the added template's declared ownership boundaries against those of the templates already applied and refuses if they conflict (`cpt-frontx-fr-cli-assembly-conflict-prevention`).
+3. If the added template contributes a microfrontend, at application runtime that microfrontend is registered with the application (`cpt-frontx-fr-mfe-runtime-registration`) and type-definition validation runs at registration (`cpt-frontx-fr-mfe-type-validation`).
 
 **Postconditions**:
-- The microfrontend is added to the project and registers and validates successfully at runtime.
+- The template is added to the repository with its own provenance record; any microfrontend it contributes registers and validates successfully at runtime.
 
 **Alternative Flows**:
+- **Conflicting assembly**: the CLI detects that the added template claims ground an already-applied template owns and refuses the addition before any files are written.
 - **Type validation fails at registration**: the application surfaces the validation error and the microfrontend is not placed into its extension domain.
 
 #### Project Developer runs an AI-driven template upgrade
@@ -681,29 +704,29 @@ The system **MUST** place no architectural upper limit on the number of microfro
 **Actor**: `cpt-frontx-actor-project-developer`
 
 **Preconditions**:
-- A project is scaffolded from a template at an older version.
+- A repository has a template applied at an older version.
 - A newer version of that template is available in the source registry.
 
 **Main Flow**:
-1. An AI agent uses the AI Tooling Framework's upgrade orchestration to analyse the change from the older version to the newer version (`cpt-frontx-fr-ai-upgrade-orchestration`).
-2. The AI agent applies the upgrade as a reviewable change set (`cpt-frontx-fr-cli-project-upgrade-changeset`).
-3. The Project Developer reviews and approves the upgrade changes before they apply to project files (`cpt-frontx-fr-cli-upgrade-review-approval`).
-4. The approved change set is applied to the project files.
+1. An AI agent uses the AI Tooling Framework's upgrade orchestration to analyse the change from the applied template's older version to the newer version (`cpt-frontx-fr-ai-upgrade-orchestration`).
+2. The AI agent applies the per-template upgrade as a reviewable change set (`cpt-frontx-fr-cli-project-upgrade-changeset`).
+3. The Project Developer reviews and approves the upgrade changes before they apply to repository files (`cpt-frontx-fr-cli-upgrade-review-approval`).
+4. The approved change set is applied to the repository files, and the applied template's provenance record is updated to the newer version.
 
 **Postconditions**:
-- The project is upgraded to the newer template version with all reviewable changes accepted.
+- The applied template is upgraded to its newer version with all reviewable changes accepted; other applied templates are unaffected.
 
 **Alternative Flows**:
-- **Change set rejected**: the Project Developer declines the change set; the project remains at its current version and no files are written.
+- **Change set rejected**: the Project Developer declines the change set; the applied template remains at its current version and no files are written.
 - **Downstream impact assessment flags incompatibilities**: the AI agent surfaces the incompatibilities before the change set is applied, and the Project Developer decides whether to proceed.
 
 ## 9. Acceptance Criteria
 
-- [ ] AI agents can drive end-to-end FrontX-project creation: install a project template, scaffold the project with its composed microfrontends, and operate on the resulting project with ecosystem-aware AI capabilities — verifiable via `cpt-frontx-usecase-publish-composed-project-template`, `cpt-frontx-usecase-scaffold-composed-project`, and `cpt-frontx-usecase-ai-driven-template-upgrade`.
-- [ ] All three pillars deliver capabilities at the user-capability level: §5 contains functional requirements for all 24 capabilities locked in §2 (Core Framework: 8; CLI: 10; AI Tooling Framework: 6) — verifiable via the §5 inventory.
+- [ ] AI agents can drive end-to-end FrontX-project creation: install a template, assemble a repository from one or more templates, and operate on the resulting repository with ecosystem-aware AI capabilities — verifiable via `cpt-frontx-usecase-publish-composed-project-template`, `cpt-frontx-usecase-scaffold-composed-project`, and `cpt-frontx-usecase-ai-driven-template-upgrade`.
+- [ ] All three pillars deliver capabilities at the user-capability level: §5 contains functional requirements for all 25 capabilities across the three pillars (Core Framework: 8; CLI: 11; AI Tooling Framework: 6) — verifiable via the §5 inventory.
 - [ ] Pillar balance is maintained in the §5 distribution: each pillar has at least 5 functional requirements and the maximum-to-minimum ratio is at most 2 — verifiable by counting §5 entries per pillar.
 - [ ] All four public components have a §7.1 entry with a stability level and a breaking-change policy — verifiable via the §7.1 enumeration.
-- [ ] All five external integration contracts are documented with party, direction, and a compatibility commitment in §7.2 — verifiable via the §7.2 enumeration.
+- [ ] All six external integration contracts are documented with party, direction, and a compatibility commitment in §7.2 — verifiable via the §7.2 enumeration.
 - [ ] The PRD is structurally valid and internally consistent: `cpt validate --artifact architecture/PRD.md --skip-code` returns PASS, and the standing content-quality checks — citation discipline, design-agnostic prose, controlled product vocabulary, and external-system-name scope, together with pillar balance — all clear.
 - [ ] Downstream SDLC artifacts authored against this PRD trace back to specific functional-requirement IDs (`cpt-frontx-fr-*`) and component or contract IDs (`cpt-frontx-interface-*` / `cpt-frontx-contract-*`).
 
@@ -711,7 +734,7 @@ The system **MUST** place no architectural upper limit on the number of microfro
 
 | Dependency | Description | Criticality |
 |------------|-------------|-------------|
-| GitHub (source registry, `cpt-frontx-actor-github`) | Public source registry hosting the project templates, microfrontend templates, and the FrontX AI Tooling Framework; referenced by versioned source-spec contract at install and upgrade time. | p1 |
+| GitHub (source registry, `cpt-frontx-actor-github`) | Public source registry hosting the templates and the FrontX AI Tooling Framework; referenced by versioned source-spec contract at install and upgrade time. | p1 |
 | npm-compatible package registry (`cpt-frontx-actor-package-registry`) | Package registry hosting the product's published packages; consumed by applications at install time using their chosen npm-compatible package manager. | p1 |
 | Cypilot CLI (`cpt-frontx-actor-cypilot-cli`) | The AI-tooling command-line integration through which the AI Tooling Framework is installed into consuming projects and AI agents discover the ecosystem's skills, workflows, and guidelines. | p1 |
 | JavaScript / TypeScript runtime | The runtime environment on which the platform and its consuming applications execute. | p1 |
@@ -730,6 +753,6 @@ The system **MUST** place no architectural upper limit on the number of microfro
 | Risk | Impact | Mitigation |
 |------|--------|------------|
 | The forward-looking AI Tooling Framework pillar lacks initial concrete parity with the Core Framework and CLI pillars at the first published baseline. | Pillar 3 capabilities may be perceived as aspirational rather than delivered at the product's first published baseline. | Deliver Pillar 3 alongside Pillar 1 and Pillar 2 in a matched-version release; publish reference template-bundled AI extensions that exercise template extension, automatic activation, and AI-driven upgrade orchestration. |
-| Template-ecosystem adoption depends on the quality of the reference templates the product ships. | Without high-quality reference templates, Project Developers may not discover the product's strengths, slowing adoption. | Bundle at least one reference project template and at least one reference microfrontend template with the first published baseline; validate each against the publication contract before publishing. |
+| Template-ecosystem adoption depends on the quality of the reference templates the product ships. | Without high-quality reference templates, Project Developers may not discover the product's strengths, slowing adoption. | Bundle a reference preset together with at least two reference templates it assembles into a repository with the first published baseline; validate each against the publication contract before publishing. |
 | The type-definition specification dependency couples the product to an external specification. | A breaking change in the chosen type-definition specification could ripple through the product and its consumers. | Depend on the type-definition contract rather than on a single specification, keeping the specification a replaceable concern at the contract boundary. |
 | Pillar parity drifts over time as new capabilities accumulate unevenly across the three pillars. | One pillar may come to dominate future releases, eroding the co-equal framing the product depends on. | Re-check pillar balance on every revision of this document; escalate any imbalance before it propagates into downstream work. |
