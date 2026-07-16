@@ -612,6 +612,8 @@ class LazyImportTransformer {
   private transformedCount = 0;
   private readonly nonStatic: { node: AstNode }[] = [];
 
+  constructor(private readonly code: string) {}
+
   visit(node: unknown): void {
     if (!node || typeof node !== 'object') return;
     if (Array.isArray(node)) {
@@ -646,6 +648,14 @@ class LazyImportTransformer {
         end: node.start + 'import'.length,
       });
       this.transformedCount += 1;
+      return;
+    }
+    // `@vite-ignore` between `import(` and the argument is the standard
+    // bundler convention for an intentionally non-static dynamic import
+    // (e.g. federation runtimes loading a remote by a runtime-computed URL).
+    // Such imports are not FrontX lazy-import call sites — leave them
+    // untouched rather than erroring or rewriting.
+    if (this.code.slice(node.start, source.start).includes('@vite-ignore')) {
       return;
     }
     this.nonStatic.push({ node: source });
@@ -755,7 +765,7 @@ function transformLazyImports(
     return null;
   }
 
-  const transformer = new LazyImportTransformer();
+  const transformer = new LazyImportTransformer(code);
   transformer.visit(ast);
 
   for (const { node } of transformer.nonStaticNodes()) {

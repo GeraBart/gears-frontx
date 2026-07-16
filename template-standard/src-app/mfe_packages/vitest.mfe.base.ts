@@ -9,7 +9,7 @@ import {
   SHARED_VITEST_SETUP_FILES,
   TEST_INCLUDE_TSX,
   vitestNodeWorkerExecArgv,
-} from '../../../../vitest.shared';
+} from '../../vitest.shared';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 

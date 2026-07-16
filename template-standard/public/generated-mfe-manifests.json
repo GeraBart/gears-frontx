@@ -63,7 +63,7 @@
         },
         {
           "name": "@gears-frontx/api",
-          "version": "0.2.0-alpha.0",
+          "version": "0.3.0-alpha.0",
           "chunkPath": "shared/gears-frontx-api.js",
           "unwrapKey": null
         },
@@ -165,7 +165,7 @@
             },
             {
               "name": "@gears-frontx/api",
-              "version": "0.2.0-alpha.0",
+              "version": "0.3.0-alpha.0",
               "chunkPath": "shared/gears-frontx-api.js",
               "unwrapKey": null
             },
@@ -325,7 +325,7 @@
         },
         {
           "name": "@gears-frontx/api",
-          "version": "0.2.0-alpha.0",
+          "version": "0.3.0-alpha.0",
           "chunkPath": "shared/gears-frontx-api.js",
           "unwrapKey": null
         },
@@ -349,7 +349,7 @@
         },
         {
           "name": "react-redux",
-          "version": "9.2.0",
+          "version": "9.3.0",
           "chunkPath": "shared/react-redux.js",
           "unwrapKey": null
         }
@@ -452,7 +452,7 @@
             },
             {
               "name": "@gears-frontx/api",
-              "version": "0.2.0-alpha.0",
+              "version": "0.3.0-alpha.0",
               "chunkPath": "shared/gears-frontx-api.js",
               "unwrapKey": null
             },
@@ -476,7 +476,7 @@
             },
             {
               "name": "react-redux",
-              "version": "9.2.0",
+              "version": "9.3.0",
               "chunkPath": "shared/react-redux.js",
               "unwrapKey": null
             }
@@ -606,7 +606,7 @@
             },
             {
               "name": "@gears-frontx/api",
-              "version": "0.2.0-alpha.0",
+              "version": "0.3.0-alpha.0",
               "chunkPath": "shared/gears-frontx-api.js",
               "unwrapKey": null
             },
@@ -630,7 +630,7 @@
             },
             {
               "name": "react-redux",
-              "version": "9.2.0",
+              "version": "9.3.0",
               "chunkPath": "shared/react-redux.js",
               "unwrapKey": null
             }
@@ -758,7 +758,7 @@
             },
             {
               "name": "@gears-frontx/api",
-              "version": "0.2.0-alpha.0",
+              "version": "0.3.0-alpha.0",
               "chunkPath": "shared/gears-frontx-api.js",
               "unwrapKey": null
             },
@@ -782,7 +782,7 @@
             },
             {
               "name": "react-redux",
-              "version": "9.2.0",
+              "version": "9.3.0",
               "chunkPath": "shared/react-redux.js",
               "unwrapKey": null
             }
@@ -907,7 +907,7 @@
             },
             {
               "name": "@gears-frontx/api",
-              "version": "0.2.0-alpha.0",
+              "version": "0.3.0-alpha.0",
               "chunkPath": "shared/gears-frontx-api.js",
               "unwrapKey": null
             },
@@ -931,7 +931,7 @@
             },
             {
               "name": "react-redux",
-              "version": "9.2.0",
+              "version": "9.3.0",
               "chunkPath": "shared/react-redux.js",
               "unwrapKey": null
             }
@@ -1022,7 +1022,7 @@
             },
             {
               "name": "@gears-frontx/api",
-              "version": "0.2.0-alpha.0",
+              "version": "0.3.0-alpha.0",
               "chunkPath": "shared/gears-frontx-api.js",
               "unwrapKey": null
             },
@@ -1046,7 +1046,7 @@
             },
             {
               "name": "react-redux",
-              "version": "9.2.0",
+              "version": "9.3.0",
               "chunkPath": "shared/react-redux.js",
               "unwrapKey": null
             }
@@ -1214,7 +1214,7 @@
           "type": "module"
         },
         "globalName": "widgetsFixtureA",
-        "publicPath": "http://localhost:3201/"
+        "publicPath": "auto/"
       },
       "shared": [
         {
@@ -1261,7 +1261,7 @@
         },
         {
           "name": "@gears-frontx/api",
-          "version": "0.2.0-alpha.0",
+          "version": "0.3.0-alpha.0",
           "chunkPath": "shared/gears-frontx-api.js",
           "unwrapKey": null
         },
@@ -1273,7 +1273,7 @@
         },
         {
           "name": "@tanstack/react-query",
-          "version": "5.99.0",
+          "version": "5.101.2",
           "chunkPath": "shared/tanstack-react-query.js",
           "unwrapKey": null
         },
@@ -1285,7 +1285,7 @@
         },
         {
           "name": "react-redux",
-          "version": "9.2.0",
+          "version": "9.3.0",
           "chunkPath": "shared/react-redux.js",
           "unwrapKey": null
         }
@@ -1318,7 +1318,7 @@
               "type": "module"
             },
             "globalName": "widgetsFixtureA",
-            "publicPath": "http://localhost:3201/"
+            "publicPath": "auto/"
           },
           "shared": [
             {
@@ -1365,7 +1365,7 @@
             },
             {
               "name": "@gears-frontx/api",
-              "version": "0.2.0-alpha.0",
+              "version": "0.3.0-alpha.0",
               "chunkPath": "shared/gears-frontx-api.js",
               "unwrapKey": null
             },
@@ -1377,7 +1377,7 @@
             },
             {
               "name": "@tanstack/react-query",
-              "version": "5.99.0",
+              "version": "5.101.2",
               "chunkPath": "shared/tanstack-react-query.js",
               "unwrapKey": null
             },
@@ -1389,7 +1389,7 @@
             },
             {
               "name": "react-redux",
-              "version": "9.2.0",
+              "version": "9.3.0",
               "chunkPath": "shared/react-redux.js",
               "unwrapKey": null
             }
@@ -1400,7 +1400,7 @@
           "js": {
             "async": [],
             "sync": [
-              "assets/lifecycle-Br8lMf1V.js"
+              "assets/lifecycle-BThYHAhN.js"
             ]
           },
           "css": {
@@ -1452,7 +1452,7 @@
           "type": "module"
         },
         "globalName": "widgetsFixtureB",
-        "publicPath": "http://localhost:3202/"
+        "publicPath": "auto/"
       },
       "shared": [
         {
@@ -1499,7 +1499,7 @@
         },
         {
           "name": "@gears-frontx/api",
-          "version": "0.2.0-alpha.0",
+          "version": "0.3.0-alpha.0",
           "chunkPath": "shared/gears-frontx-api.js",
           "unwrapKey": null
         },
@@ -1511,7 +1511,7 @@
         },
         {
           "name": "@tanstack/react-query",
-          "version": "5.99.0",
+          "version": "5.101.2",
           "chunkPath": "shared/tanstack-react-query.js",
           "unwrapKey": null
         },
@@ -1523,7 +1523,7 @@
         },
         {
           "name": "react-redux",
-          "version": "9.2.0",
+          "version": "9.3.0",
           "chunkPath": "shared/react-redux.js",
           "unwrapKey": null
         }
@@ -1554,7 +1554,7 @@
               "type": "module"
             },
             "globalName": "widgetsFixtureB",
-            "publicPath": "http://localhost:3202/"
+            "publicPath": "auto/"
           },
           "shared": [
             {
@@ -1601,7 +1601,7 @@
             },
             {
               "name": "@gears-frontx/api",
-              "version": "0.2.0-alpha.0",
+              "version": "0.3.0-alpha.0",
               "chunkPath": "shared/gears-frontx-api.js",
               "unwrapKey": null
             },
@@ -1613,7 +1613,7 @@
             },
             {
               "name": "@tanstack/react-query",
-              "version": "5.99.0",
+              "version": "5.101.2",
               "chunkPath": "shared/tanstack-react-query.js",
               "unwrapKey": null
             },
@@ -1625,7 +1625,7 @@
             },
             {
               "name": "react-redux",
-              "version": "9.2.0",
+              "version": "9.3.0",
               "chunkPath": "shared/react-redux.js",
               "unwrapKey": null
             }
@@ -1636,7 +1636,7 @@
           "js": {
             "async": [],
             "sync": [
-              "assets/lifecycle-BeXr1Bbq.js"
+              "assets/lifecycle-D3LYZcOi.js"
             ]
           },
           "css": {
