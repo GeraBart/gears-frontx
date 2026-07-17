@@ -1,227 +1,221 @@
-// @cpt-flow:cpt-frontx-flow-cli-scaffolding-scaffold-project:p1
-// @cpt-flow:cpt-frontx-flow-cli-scaffolding-scaffold-mfe:p1
-// @cpt-algo:cpt-frontx-algo-cli-scaffolding-namespace-routing:p1
-// @cpt-algo:cpt-frontx-algo-cli-scaffolding-project-scaffold:p1
-// @cpt-algo:cpt-frontx-algo-cli-scaffolding-mfe-scaffold:p1
-// @cpt-state:cpt-frontx-state-cli-scaffolding-scaffold-op:p1
-// @cpt-dod:cpt-frontx-dod-cli-scaffolding-namespace-surface:p1
-// @cpt-dod:cpt-frontx-dod-cli-scaffolding-project-scaffold:p1
-// @cpt-dod:cpt-frontx-dod-cli-scaffolding-mfe-scaffold:p1
-// TDD: Tests written before implementation. Run to see failures, then implement to pass.
+// @cpt-algo:cpt-frontx-algo-cli-scaffolding-uniform-apply:p1
+// @cpt-state:cpt-frontx-state-cli-scaffolding-assembly-op:p2
+// @cpt-dod:cpt-frontx-dod-cli-scaffolding-uniform-apply:p1
 import { describe, it, expect, vi } from 'vitest';
-import { routeNamespaceCommand } from '../namespaces/route.js';
-import { NAMESPACE_REGISTRY } from '../namespaces/types.js';
-import { scaffoldProject } from '../scaffold/project.js';
-import { scaffoldMfe } from '../scaffold/mfe.js';
-import { ScaffoldState } from '../scaffold/state.js';
+import { uniformApply } from '../scaffold/assembler.js';
+import { AssemblyOpState, runAssemblyOp } from '../scaffold/state.js';
+import type { ConflictVerdict } from '../scaffold/state.js';
 import type { InventoryEntry } from '../inventory/types.js';
 import { InventoryState } from '../inventory/types.js';
+import type { TemplateManifest } from '../manifest/types.js';
 
 // Helpers
-function makeEntry(
-  name: string,
-  kind: 'project-template' | 'mfe-template',
-  files: Array<{ path: string; content: string }> = [],
-): InventoryEntry {
-  const manifest = JSON.stringify({
+function makeEntry(name: string, manifestOverrides: Partial<TemplateManifest> = {}): InventoryEntry {
+  const manifest: TemplateManifest = {
     name,
     version: '1.0.0',
-    kind,
-    ownershipBoundaries: { exclusiveSubtrees: [], sharedFiles: [] },
-    files,
-  });
-  return { name, source: `github:acme/${name}@v1.0.0`, ref: 'v1.0.0', status: InventoryState.INSTALLED, content: manifest };
+    ownershipBoundaries: { exclusiveSubtrees: [`${name}/`], sharedFiles: [] },
+    files: [{ path: `${name}/index.ts`, content: `export const ${name.replace(/[^a-zA-Z0-9]/g, '_')} = true;` }],
+    ...manifestOverrides,
+  };
+  return {
+    name,
+    source: `github:acme/${name}@v1.0.0`,
+    ref: 'v1.0.0',
+    status: InventoryState.INSTALLED,
+    content: JSON.stringify(manifest),
+  };
 }
 
-const noConflict = vi.fn<(path: string) => Promise<boolean>>().mockResolvedValue(false);
-const withConflict = vi.fn<(path: string) => Promise<boolean>>().mockResolvedValue(true);
-const noWrite = vi.fn<(path: string, content: string) => Promise<void>>().mockResolvedValue(undefined);
+const noConflict: ConflictVerdict = { ok: true };
 
-describe('NAMESPACE_REGISTRY — namespace surface (cpt-frontx-interface-cli)', () => {
-  // (a) project-level and microfrontend-level namespaces are the two first-class namespaces
-  // inst-match-namespace: both namespaces defined
-  it('exposes project and microfrontend as the two first-class namespaces', () => {
-    expect(Object.keys(NAMESPACE_REGISTRY)).toEqual(expect.arrayContaining(['project', 'microfrontend']));
-    expect(Object.keys(NAMESPACE_REGISTRY)).toHaveLength(2);
+describe('uniformApply — the ONE apply path (cpt-frontx-algo-cli-scaffolding-uniform-apply)', () => {
+  // (a) seed vs add route through ONE apply path, differing only in
+  // `targetHoldsAppliedTemplates` — same function, same resolver.
+  it('seed (targetHoldsAppliedTemplates=false) and add (=true) call the exact same function', async () => {
+    const entry = makeEntry('template-a');
+    const lookupFn = vi.fn((n: string) => (n === 'template-a' ? entry : undefined));
+
+    const seedResult = await uniformApply(['template-a'], false, lookupFn);
+    const addResult = await uniformApply(['template-a'], true, lookupFn);
+
+    expect(seedResult.ok).toBe(true);
+    expect(addResult.ok).toBe(true);
+    if (seedResult.ok && addResult.ok) {
+      // Identical staged contribution regardless of the flag — no per-category dispatch.
+      expect(seedResult.assembly).toEqual(addResult.assembly);
+    }
+    expect(lookupFn).toHaveBeenCalledWith('template-a');
   });
 
-  // (a) both namespaces register scaffold command
-  it('both namespaces register the scaffold command', () => {
-    expect(NAMESPACE_REGISTRY['project']).toContain('scaffold');
-    expect(NAMESPACE_REGISTRY['microfrontend']).toContain('scaffold');
-  });
-});
+  // (b) resolved set staged with per-template contributions + declared boundaries.
+  it('stages a per-template contribution carrying files + declared ownership boundaries', async () => {
+    const entry = makeEntry('template-a', {
+      ownershipBoundaries: {
+        exclusiveSubtrees: ['template-a/'],
+        sharedFiles: [{ path: 'package.json', mergeStrategy: 'deep-merge', ownedRegions: ['scripts.build'] }],
+      },
+    });
+    const lookupFn = vi.fn(() => entry);
 
-describe('routeNamespaceCommand — namespace routing algo', () => {
-  // inst-case-project: project namespace routes ok
-  it('routes project/scaffold successfully', () => {
-    const result = routeNamespaceCommand({ namespace: 'project', command: 'scaffold', args: {} });
+    const result = await uniformApply(['template-a'], false, lookupFn);
+
     expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.namespace).toBe('project');
-      expect(result.command).toBe('scaffold');
-    }
-  });
-
-  // inst-case-mfe: microfrontend namespace routes ok
-  it('routes microfrontend/scaffold successfully', () => {
-    const result = routeNamespaceCommand({ namespace: 'microfrontend', command: 'scaffold', args: {} });
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.namespace).toBe('microfrontend');
-    }
-  });
-
-  // inst-default-unknown: unknown namespace fails with reason
-  it('fails with unknown-namespace for unrecognized namespace label', () => {
-    const result = routeNamespaceCommand({ namespace: 'unknown', command: 'scaffold', args: {} });
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.reason).toBe('unknown-namespace');
-      expect(result.message).toMatch(/unrecognized namespace/i);
-    }
-  });
-
-  // inst-abort-not-found: command not in namespace fails
-  it('fails with command-not-found for unregistered command', () => {
-    const result = routeNamespaceCommand({ namespace: 'project', command: 'delete', args: {} });
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.reason).toBe('command-not-found');
-    }
-  });
-});
-
-describe('scaffoldProject — project scaffolding flow + algo', () => {
-  // (b) both namespaces route through ONE shared resolver — same lookupFn
-  it('uses the shared lookupFn (same resolver path as scaffoldMfe)', async () => {
-    const sharedLookup = vi.fn(() => makeEntry('my-project', 'project-template'));
-    await scaffoldProject('my-project', '/out', sharedLookup, noConflict, noWrite);
-    // The same function reference is used — no second resolution path
-    expect(sharedLookup).toHaveBeenCalledWith('my-project');
-  });
-
-  // (c) project scaffold succeeds with valid template reference and non-conflicting target dir
-  // inst-return-done, inst-return-complete
-  it('succeeds with a valid project-template entry and non-conflicting target', async () => {
-    const entry = makeEntry('my-project', 'project-template', [
-      { path: 'src/index.ts', content: 'export {};' },
+    if (!result.ok) return;
+    expect(result.assembly.contributions).toHaveLength(1);
+    const [contribution] = result.assembly.contributions;
+    expect(contribution.templateName).toBe('template-a');
+    expect(contribution.files).toEqual([{ path: 'template-a/index.ts', content: 'export const template_a = true;' }]);
+    expect(contribution.ownershipBoundaries.exclusiveSubtrees).toEqual(['template-a/']);
+    expect(contribution.ownershipBoundaries.sharedFiles).toEqual([
+      { path: 'package.json', mergeStrategy: 'deep-merge', ownedRegions: ['scripts.build'] },
     ]);
-    const lookup = vi.fn(() => entry);
-    const written: Array<[string, string]> = [];
-    const write = vi.fn(async (p: string, c: string) => { written.push([p, c]); });
-    const result = await scaffoldProject('my-project', '/out', lookup, noConflict, write);
+  });
+
+  // Multiple templates in one resolved set are each staged with their own identity.
+  it('stages one contribution per template in the resolved set, tagged with identity', async () => {
+    const entries: Record<string, InventoryEntry> = {
+      'template-a': makeEntry('template-a'),
+      'template-b': makeEntry('template-b'),
+    };
+    const lookupFn = vi.fn((n: string) => entries[n]);
+
+    const result = await uniformApply(['template-a', 'template-b'], false, lookupFn);
+
     expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.message).toMatch(/scaffold complete/i);
-    }
-    expect(written).toEqual([['/out/src/index.ts', 'export {};']]);
+    if (!result.ok) return;
+    expect(result.assembly.contributions.map((c) => c.templateName)).toEqual(['template-a', 'template-b']);
   });
 
-  // (e) scaffold aborts with notification when template reference cannot be resolved
-  // inst-abort-not-found, inst-transition-req-aborted-unresolved
-  it('aborts with unresolved when template reference not in local inventory', async () => {
-    const lookup = vi.fn(() => undefined);
-    const result = await scaffoldProject('missing', '/out', lookup, noConflict, noWrite);
+  // inst-ua-receive: unresolved reference aborts before staging anything.
+  it('aborts with unresolved when a template reference is not in the local inventory', async () => {
+    const lookupFn = vi.fn(() => undefined);
+
+    const result = await uniformApply(['missing'], false, lookupFn);
+
     expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.reason).toBe('unresolved');
-      expect(result.message).toMatch(/not found in local inventory/i);
-    }
+    if (result.ok) return;
+    expect(result.reason).toBe('unresolved');
+    expect(result.templateRef).toBe('missing');
+    expect(result.message).toMatch(/not found in local inventory/i);
   });
 
-  // (f) scaffold aborts with notification when target directory contains conflicting content
-  // inst-abort-conflict
-  it('aborts with conflict when target directory has conflicting content', async () => {
-    const lookup = vi.fn(() => makeEntry('my-project', 'project-template'));
-    const result = await scaffoldProject('my-project', '/out', lookup, withConflict, noWrite);
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.reason).toBe('conflict');
-      expect(result.message).toMatch(/conflicting content/i);
-    }
-  });
+  it('routes template resolution exclusively through the injected lookupFn — no second resolution path', async () => {
+    const entry = makeEntry('template-a');
+    const lookupFn = vi.fn(() => entry);
 
-  // (g) scaffold aborts when manifest kind mismatches invoking namespace
-  // inst-abort-kind-mismatch, inst-transition-resolved-aborted
-  it('aborts with kind-mismatch when template is mfe-template (not project-template)', async () => {
-    const lookup = vi.fn(() => makeEntry('my-mfe', 'mfe-template'));
-    const result = await scaffoldProject('my-mfe', '/out', lookup, noConflict, noWrite);
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.reason).toBe('kind-mismatch');
-      expect(result.message).toMatch(/kind mismatch/i);
-    }
+    await uniformApply(['template-a'], false, lookupFn);
+
+    expect(lookupFn).toHaveBeenCalledTimes(1);
+    expect(lookupFn).toHaveBeenCalledWith('template-a');
   });
 });
 
-describe('scaffoldMfe — microfrontend scaffolding flow + algo', () => {
-  // (b) same shared resolver path
-  it('uses the shared lookupFn (same resolver path as scaffoldProject)', async () => {
-    const sharedLookup = vi.fn(() => makeEntry('my-mfe', 'mfe-template'));
-    await scaffoldMfe('my-mfe', '/out', sharedLookup, noConflict, noWrite);
-    expect(sharedLookup).toHaveBeenCalledWith('my-mfe');
-  });
-
-  // (d) mfe scaffold succeeds with valid mfe-template entry and non-conflicting target dir
-  it('succeeds with a valid mfe-template entry and non-conflicting target', async () => {
-    const entry = makeEntry('my-mfe', 'mfe-template', [
-      { path: 'src/mfe.ts', content: 'export const mfe = {};' },
-    ]);
-    const written: Array<[string, string]> = [];
-    const write = vi.fn(async (p: string, c: string) => { written.push([p, c]); });
-    const result = await scaffoldMfe('my-mfe', '/out', () => entry, noConflict, write);
-    expect(result.ok).toBe(true);
-    expect(written).toEqual([['/out/src/mfe.ts', 'export const mfe = {};']]);
-  });
-
-  // (e) aborts when template not found
-  it('aborts with unresolved when template reference not in local inventory', async () => {
-    const result = await scaffoldMfe('missing', '/out', () => undefined, noConflict, noWrite);
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.reason).toBe('unresolved');
-    }
-  });
-
-  // (f) aborts on conflict
-  it('aborts with conflict when target directory has conflicting content', async () => {
-    const result = await scaffoldMfe('my-mfe', '/out', () => makeEntry('my-mfe', 'mfe-template'), withConflict, noWrite);
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.reason).toBe('conflict');
-    }
-  });
-
-  // (g) aborts on kind mismatch — project-template provided to mfe namespace
-  it('aborts with kind-mismatch when template is project-template (not mfe-template)', async () => {
-    const result = await scaffoldMfe('my-project', '/out', () => makeEntry('my-project', 'project-template'), noConflict, noWrite);
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.reason).toBe('kind-mismatch');
-    }
+describe('AssemblyOpState — assembly-op state machine (cpt-frontx-state-cli-scaffolding-assembly-op)', () => {
+  it('defines REQUESTED, RESOLVED, CONFLICT_CHECKED, ASSEMBLED, ABORTED states', () => {
+    expect(AssemblyOpState.REQUESTED).toBe('REQUESTED');
+    expect(AssemblyOpState.RESOLVED).toBe('RESOLVED');
+    expect(AssemblyOpState.CONFLICT_CHECKED).toBe('CONFLICT_CHECKED');
+    expect(AssemblyOpState.ASSEMBLED).toBe('ASSEMBLED');
+    expect(AssemblyOpState.ABORTED).toBe('ABORTED');
   });
 });
 
-describe('ScaffoldState — state machine definition', () => {
-  // State machine enum values match FEATURE spec
-  it('defines REQUESTED, RESOLVED, SCAFFOLDED, ABORTED states', () => {
-    expect(ScaffoldState.REQUESTED).toBe('REQUESTED');
-    expect(ScaffoldState.RESOLVED).toBe('RESOLVED');
-    expect(ScaffoldState.SCAFFOLDED).toBe('SCAFFOLDED');
-    expect(ScaffoldState.ABORTED).toBe('ABORTED');
-  });
-});
+describe('runAssemblyOp — driving the assembly-op transitions', () => {
+  // inst-as-req-resolved / inst-as-resolved-checked / inst-as-checked-assembled
+  it('REQUESTED → RESOLVED → CONFLICT_CHECKED → ASSEMBLED on a clean apply', async () => {
+    const entry = makeEntry('template-a');
+    const materializeFn = vi.fn(async () => undefined);
+    const conflictVerdictFn = vi.fn(async (): Promise<ConflictVerdict> => noConflict);
 
-describe('cpt-frontx-interface-cli surface shape (h)', () => {
-  // (h) the namespace boundary is implemented as part of cpt-frontx-interface-cli
-  it('NAMESPACE_REGISTRY and routeNamespaceCommand are exported from the namespaces module', () => {
-    expect(typeof NAMESPACE_REGISTRY).toBe('object');
-    expect(typeof routeNamespaceCommand).toBe('function');
+    const result = await runAssemblyOp({
+      templateRefs: ['template-a'],
+      targetHoldsAppliedTemplates: false,
+      lookupFn: () => entry,
+      alreadyOccupiedBoundaries: [],
+      conflictVerdictFn,
+      materializeFn,
+    });
+
+    expect(result.state).toBe(AssemblyOpState.ASSEMBLED);
+    expect(conflictVerdictFn).toHaveBeenCalledTimes(1);
+    expect(materializeFn).toHaveBeenCalledTimes(1);
+    if (result.state === AssemblyOpState.ASSEMBLED) {
+      expect(result.assembly.contributions).toHaveLength(1);
+    }
   });
 
-  it('scaffoldProject and scaffoldMfe are exported from the scaffold module', () => {
-    expect(typeof scaffoldProject).toBe('function');
-    expect(typeof scaffoldMfe).toBe('function');
+  // inst-as-req-aborted-unresolved
+  it('REQUESTED → ABORTED when a template reference cannot be resolved', async () => {
+    const materializeFn = vi.fn(async () => undefined);
+    const conflictVerdictFn = vi.fn(async (): Promise<ConflictVerdict> => noConflict);
+
+    const result = await runAssemblyOp({
+      templateRefs: ['missing'],
+      targetHoldsAppliedTemplates: false,
+      lookupFn: () => undefined,
+      alreadyOccupiedBoundaries: [],
+      conflictVerdictFn,
+      materializeFn,
+    });
+
+    expect(result.state).toBe(AssemblyOpState.ABORTED);
+    if (result.state === AssemblyOpState.ABORTED) {
+      expect(result.abort.reason).toBe('unresolved');
+    }
+    // Aborted before the conflict check and before any materialization.
+    expect(conflictVerdictFn).not.toHaveBeenCalled();
+    expect(materializeFn).not.toHaveBeenCalled();
+  });
+
+  // inst-as-resolved-aborted-conflict — the verdict SEAM reports a conflict.
+  it('RESOLVED → ABORTED when the conflict-verdict seam reports an intersecting claim', async () => {
+    const entry = makeEntry('template-a');
+    const materializeFn = vi.fn(async () => undefined);
+    const conflictVerdictFn = vi.fn(
+      async (): Promise<ConflictVerdict> => ({
+        ok: false,
+        conflicts: [{ ground: 'template-a/', contestants: ['template-a', 'template-b'] }],
+      }),
+    );
+
+    const result = await runAssemblyOp({
+      templateRefs: ['template-a'],
+      targetHoldsAppliedTemplates: true,
+      lookupFn: () => entry,
+      alreadyOccupiedBoundaries: [{ exclusiveSubtrees: ['template-a/'], sharedFiles: [] }],
+      conflictVerdictFn,
+      materializeFn,
+    });
+
+    expect(result.state).toBe(AssemblyOpState.ABORTED);
+    if (result.state === AssemblyOpState.ABORTED) {
+      expect(result.abort.reason).toBe('conflict');
+      if (result.abort.reason === 'conflict') {
+        expect(result.abort.conflicts).toEqual([{ ground: 'template-a/', contestants: ['template-a', 'template-b'] }]);
+      }
+    }
+    // No file materialized once a conflict is reported — refused before any write.
+    expect(materializeFn).not.toHaveBeenCalled();
+  });
+
+  it('passes the staged assembly and already-occupied boundaries to the verdict seam', async () => {
+    const entry = makeEntry('template-a');
+    const alreadyOccupied = [{ exclusiveSubtrees: ['template-b/'], sharedFiles: [] }];
+    const conflictVerdictFn = vi.fn(async (): Promise<ConflictVerdict> => noConflict);
+
+    await runAssemblyOp({
+      templateRefs: ['template-a'],
+      targetHoldsAppliedTemplates: true,
+      lookupFn: () => entry,
+      alreadyOccupiedBoundaries: alreadyOccupied,
+      conflictVerdictFn,
+      materializeFn: async () => undefined,
+    });
+
+    expect(conflictVerdictFn).toHaveBeenCalledWith(
+      expect.objectContaining({ contributions: expect.any(Array) }),
+      alreadyOccupied,
+    );
   });
 });

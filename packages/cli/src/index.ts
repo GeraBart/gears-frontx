@@ -44,16 +44,26 @@ export type { ReadManifestResult } from './manifest/validate-contract.js';
 export type { ValidateCommandResult } from './commands/validate.js';
 export { MANIFEST_FILENAME, MANIFEST_SCHEMA_VERSION } from './manifest/types.js';
 
-export { routeNamespaceCommand } from './namespaces/route.js';
-export { NAMESPACE_REGISTRY } from './namespaces/types.js';
-export type { Namespace, NamespaceRouteInput, NamespaceRouteResult } from './namespaces/types.js';
-
-export { scaffoldProject } from './scaffold/project.js';
-export { scaffoldMfe } from './scaffold/mfe.js';
 export { scaffoldComposedProject } from './scaffold/composed.js';
 export type { ComposedScaffoldResult } from './scaffold/composed.js';
-export { ScaffoldState } from './scaffold/state.js';
-export type { ScaffoldResult, WriteFileFn, ConflictCheckFn } from './scaffold/types.js';
+
+// F12 kindless assembler core (cpt-frontx-algo-cli-scaffolding-uniform-apply,
+// cpt-frontx-state-cli-scaffolding-assembly-op) — the ONE apply path both
+// seed-a-repository and add-a-template invoke. The pre-flight conflict
+// checker (P29) and the entry flows (P30) build on this surface.
+export { uniformApply } from './scaffold/assembler.js';
+export type { UniformApplyResult } from './scaffold/assembler.js';
+export { AssemblyOpState, runAssemblyOp } from './scaffold/state.js';
+export type {
+  AssemblyOpInput,
+  AssemblyOpResult,
+  AssemblyAbortReason,
+  BoundaryConflictEntry,
+  ConflictVerdict,
+  ConflictVerdictFn,
+  MaterializeAssemblyFn,
+} from './scaffold/state.js';
+export type { WriteFileFn, ConflictCheckFn, ContributionEntry, StagedAssembly } from './scaffold/types.js';
 
 export { resolveComposition } from './composition/resolve.js';
 export { CompositionResolutionState } from './composition/state.js';
