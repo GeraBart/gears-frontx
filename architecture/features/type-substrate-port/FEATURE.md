@@ -203,4 +203,3 @@ The system **MUST** delegate every schema validation and type-hierarchy-resoluti
 - [ ] A conforming `TypeSystemPlugin` implementation can be injected into the runtime without any runtime modification
 - [ ] The runtime correctly rejects a microfrontend whose declared type identifier fails port validation, surfacing port-supplied error details to the caller
 - [ ] The runtime correctly resolves type hierarchy through the port for handler-selection decisions, without local identifier parsing
-- [ ] GATE A: No references to the pre-ecosystem-redesign archive or the internal surface inventory document appear in this artifact (CI-checkable invariant)

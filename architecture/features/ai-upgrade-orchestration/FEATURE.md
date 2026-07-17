@@ -95,13 +95,13 @@ Delivers the AI-guided upgrade path defined in `cpt-frontx-seq-ai-driven-templat
 
 - [x] `p1` - **ID**: `cpt-frontx-algo-ai-upgrade-orchestration-enrich`
 
-**Input**: ProjectProvenance (originating template, current version), target template version
+**Input**: the selected applied template's provenance record (template identity, current version), target template version
 
 **Output**: Enriched review package containing the proposed change set, change-impact analysis, and downstream-effect assessment
 
 **Steps**:
-1. [x] - `p1` - Extract originating template identifier and current version from ProjectProvenance - `inst-extract-provenance`
-2. [x] - `p1` - Invoke the single CLI change-set engine (F14) with the originating template, current version, and target version - `inst-invoke-engine`
+1. [x] - `p1` - Extract the selected applied template's identity and current version from its provenance record - `inst-extract-provenance`
+2. [x] - `p1` - Invoke the single CLI change-set engine (F14) with the selected applied template, its current version, and the target version - `inst-invoke-engine`
 3. [x] - `p1` - Receive the proposed reviewable change set from the engine (the identical change set the direct CLI upgrade path would produce) - `inst-receive-changeset`
 4. [x] - `p1` - **IF** the change set is empty or unresolvable - `inst-check-empty`
    1. [x] - `p1` - **RETURN** empty change set signal to the caller - `inst-empty-signal`

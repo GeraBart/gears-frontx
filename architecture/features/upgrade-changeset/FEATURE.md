@@ -25,18 +25,18 @@
 
 <!-- /toc -->
 
-- [x] `p1` - **ID**: `cpt-frontx-featstatus-upgrade-changeset`
+- [ ] `p1` - **ID**: `cpt-frontx-featstatus-upgrade-changeset`
 ## 1. Feature Context
 
-- [x] `p2` - `cpt-frontx-feature-upgrade-changeset`
+- [ ] `p2` - `cpt-frontx-feature-upgrade-changeset`
 
 ### 1.1 Overview
 
-The Upgrade Change-Set Engine is the single `target` CLI-owned mechanism (`cpt-frontx-component-cli`) that computes a diff between a project's current template version and a target version, presents it as a reviewable and approvable change set, applies it non-destructively on approval, and supports rollback to the pre-upgrade project state.
+The Upgrade Change-Set Engine is the single `target` CLI-owned mechanism (`cpt-frontx-component-cli`) that upgrades each applied template independently: for a selected applied template it computes a diff between the version recorded in that template's own provenance record and a target version, presents it as a reviewable and approvable change set, applies it non-destructively on approval, and supports rollback to the pre-upgrade repository state. Each applied template adopts a newer version on its own cadence — there is no forced whole-repository upgrade.
 
 ### 1.2 Purpose
 
-This feature exists to let a project developer safely adopt newer template versions without hand-editing files or risking unreviewed changes. It satisfies the requirement that upgrades are expressed as approvable change sets (`cpt-frontx-fr-cli-project-upgrade-changeset`) and that no modification reaches project files until the developer grants explicit approval (`cpt-frontx-fr-cli-upgrade-review-approval`). The engine is reusable across invokers — direct CLI and AI orchestration (F17) both drive the same engine without a second implementation.
+This feature exists to let a project developer safely adopt newer versions of any applied template without hand-editing files or risking unreviewed changes. It satisfies the requirement that upgrades are expressed as approvable change sets (`cpt-frontx-fr-cli-project-upgrade-changeset`) and that no modification reaches repository files until the developer grants explicit approval (`cpt-frontx-fr-cli-upgrade-review-approval`). Each applied template is diffed and applied independently against its own provenance record. The engine is reusable across invokers — direct CLI and AI orchestration (F17) both drive the same engine without a second implementation.
 
 **Requirements**: `cpt-frontx-fr-cli-project-upgrade-changeset`, `cpt-frontx-fr-cli-upgrade-review-approval`
 
@@ -52,7 +52,7 @@ This feature exists to let a project developer safely adopt newer template versi
 
 - **PRD**: [PRD.md](../../PRD.md)
 - **Design**: [DESIGN.md](../../DESIGN.md)
-- **Dependencies**: `cpt-frontx-feature-composed-provenance` (F13) — owns `ProjectProvenance` and `cpt-frontx-contract-project-provenance`; this engine reads the provenance baseline written at scaffold time but does not redefine the entity or the contract.
+- **Dependencies**: `cpt-frontx-feature-composed-provenance` (F13) — owns `ProjectProvenance` and `cpt-frontx-contract-project-provenance`; this engine reads the per-applied-template provenance records written at apply time but does not redefine the entity or the contract.
 
 ## 2. Actor Flows (CDSL)
 
@@ -75,15 +75,15 @@ User-facing interactions that start with an actor (human or external system) and
 - Change set contains conflicts with developer modifications; engine surfaces them in the presented change set for manual resolution before approval.
 
 **Steps**:
-1. [x] - `p1` - Developer invokes the upgrade command, providing the target template version or requesting the latest available version - `inst-invoke-upgrade`
-2. [x] - `p1` - Engine reads the project provenance baseline via `cpt-frontx-contract-project-provenance` to determine the originating template and current version - `inst-read-provenance`
+1. [x] - `p1` - Developer invokes the upgrade command, naming the applied template to upgrade and providing the target version or requesting the latest available version - `inst-invoke-upgrade`
+2. [x] - `p1` - Engine reads the selected applied template's provenance record via `cpt-frontx-contract-project-provenance` to determine that template's identity and current version - `inst-read-provenance`
 3. [x] - `p1` - **IF** the target version cannot be resolved: - `inst-if-no-target`
    1. [x] - `p1` - Engine reports the resolution failure and **RETURN** without writing any files - `inst-abort-no-target`
 4. [x] - `p1` - Engine computes the template-version diff against the provenance baseline (see `cpt-frontx-algo-upgrade-changeset-compute`) - `inst-compute-diff`
 5. [x] - `p1` - Engine presents the change set to the developer for review, including any flagged conflicts - `inst-present-changeset`
 6. [x] - `p1` - **IF** developer approves the change set: - `inst-if-approved`
    1. [x] - `p1` - Engine applies the change set non-destructively (see `cpt-frontx-algo-upgrade-changeset-apply`) - `inst-apply-changeset`
-   2. [x] - `p1` - Engine updates the project provenance to the newer template version - `inst-update-provenance`
+   2. [x] - `p1` - Engine updates the selected applied template's provenance record to the newer version - `inst-update-provenance`
    3. [x] - `p1` - **RETURN** success: change set applied and provenance updated - `inst-return-success`
 7. [x] - `p1` - **ELSE** (developer declines): - `inst-else-declined`
    1. [x] - `p1` - Engine makes no changes to project files - `inst-no-write-on-decline`
@@ -102,7 +102,7 @@ Internal system functions and procedures that do not interact with actors direct
 **Output**: A change set describing the diff between the provenance-recorded baseline version and the target version (added, modified, and removed files; flagged conflicts).
 
 **Steps**:
-1. [x] - `p1` - Read `target` the project provenance record from the project root via `cpt-frontx-contract-project-provenance`; extract the originating template identity and current version - `inst-cmp-read-provenance`
+1. [x] - `p1` - Read `target` the selected applied template's provenance record from the repository via `cpt-frontx-contract-project-provenance`; extract that template's identity and current version - `inst-cmp-read-provenance`
 2. [x] - `p1` - Resolve `target` the template at the baseline version from the local inventory - `inst-cmp-resolve-baseline`
 3. [x] - `p1` - Resolve `target` the template at the target version from the local inventory - `inst-cmp-resolve-target`
 4. [x] - `p1` - Compute the file-level diff between the baseline-version template files and the target-version template files - `inst-cmp-diff-files`
@@ -130,7 +130,7 @@ Internal system functions and procedures that do not interact with actors direct
 3. [x] - `p1` - **CATCH** application error: - `inst-app-catch`
    1. [x] - `p1` - Restore `target` all affected files from the pre-upgrade snapshot, leaving the project byte-for-byte unchanged - `inst-app-restore-on-error`
    2. [x] - `p1` - Report the error and **RETURN** failure without updating provenance - `inst-app-return-failure`
-4. [x] - `p1` - Update `target` the project provenance record to the newer template version - `inst-app-update-prov`
+4. [x] - `p1` - Update `target` the selected applied template's provenance record to the newer version - `inst-app-update-prov`
 5. [x] - `p1` - Retain `target` the pre-upgrade snapshot for rollback until the developer explicitly releases it or a new upgrade cycle begins - `inst-app-retain-snapshot`
 6. [x] - `p1` - **RETURN** success: applied entries, updated provenance, rollback available - `inst-app-return-success`
 
@@ -187,7 +187,7 @@ The system **MUST** compute a reviewable change set by diffing the target templa
 
 - [x] `p1` - **ID**: `cpt-frontx-dod-upgrade-changeset-apply`
 
-The system **MUST** apply the approved change set non-destructively by writing only the approved entries to the project, retain a pre-upgrade snapshot for rollback, and update the project provenance to the newer template version upon successful application.
+The system **MUST** apply the approved change set non-destructively by writing only the approved entries to the repository, retain a pre-upgrade snapshot for rollback, and update the selected applied template's provenance record to the newer version upon successful application.
 
 **Implements**:
 - `cpt-frontx-flow-upgrade-changeset-review-approval`
@@ -225,7 +225,7 @@ The system **MUST** provide exactly one change-set engine in `cpt-frontx-compone
 ## 6. Acceptance Criteria
 
 - [x] Invoking the upgrade command with an available newer template version produces a reviewable change set and writes no project files until the developer approves.
-- [x] Approving the change set writes only the approved entries and updates the project provenance record to the newer template version.
+- [x] Approving the change set writes only the approved entries and updates the selected applied template's provenance record to the newer version.
 - [x] Declining the change set leaves the project byte-for-byte unchanged, with no file created, modified, or deleted.
 - [x] Applying a change set and then rolling it back restores the exact pre-upgrade project state, including the provenance record.
 - [x] Both direct CLI invocation and AI-driven orchestration (F17) drive the same change-set engine; no second diff-and-apply implementation exists.
