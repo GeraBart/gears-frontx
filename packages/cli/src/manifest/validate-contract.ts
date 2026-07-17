@@ -1,6 +1,5 @@
 // @cpt-algo:cpt-frontx-algo-template-manifest-validate-contract:p1
 import type { ManifestViolation, ManifestValidationResult, TemplateManifest } from './types.js';
-import { RECOGNIZED_KINDS } from './types.js';
 
 // Result type for manifest parsing + validation in one step.
 export type ReadManifestResult =
@@ -8,6 +7,8 @@ export type ReadManifestResult =
   | { ok: false; message: string };
 
 // Parse and validate manifest content in one step, returning the typed manifest.
+// This is the single read path — the same authoritative shape consumed at
+// install, apply, and assembly time (cpt-frontx-dod-template-manifest-single-description).
 export function readManifestFromContent(content: string): ReadManifestResult {
   const validation = validateManifestContract(content);
   if (validation.status === 'REJECTED') {
@@ -17,6 +18,14 @@ export function readManifestFromContent(content: string): ReadManifestResult {
     };
   }
   return { ok: true, manifest: JSON.parse(content) as TemplateManifest };
+}
+
+// A well-formed repository-relative path: a non-empty string that is not
+// absolute and does not escape the repository root via a `..` segment.
+function isWellFormedRepoRelativePath(value: unknown): value is string {
+  if (typeof value !== 'string' || value.trim() === '') return false;
+  if (value.startsWith('/')) return false;
+  return !value.split(/[\\/]/).includes('..');
 }
 
 // @cpt-begin:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-read-manifest
@@ -50,6 +59,7 @@ export function validateManifestContract(raw: string): ManifestValidationResult 
 
   const obj = parsed as Record<string, unknown>;
 
+  // ── Category 1: identity ──────────────────────────────────────────────────
   // @cpt-begin:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-check-identity
   const name = obj['name'];
   // @cpt-begin:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-if-identity-missing
@@ -61,80 +71,120 @@ export function validateManifestContract(raw: string): ManifestValidationResult 
   // @cpt-end:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-if-identity-missing
   // @cpt-end:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-check-identity
 
+  // ── Category 2: version (versioned shape) ─────────────────────────────────
   // @cpt-begin:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-check-version
   const version = obj['version'];
   // @cpt-begin:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-if-version-missing
   if (typeof version !== 'string' || version.trim() === '') {
     // @cpt-begin:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-add-version-violation
-    violations.push({ field: 'version', message: 'version field is required and must be a non-empty string' });
+    violations.push({ field: 'version', message: 'version field is required and must conform to the versioned shape (a non-empty string)' });
     // @cpt-end:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-add-version-violation
   }
   // @cpt-end:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-if-version-missing
   // @cpt-end:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-check-version
 
-  // @cpt-begin:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-check-kind
-  const kind = obj['kind'];
-  // @cpt-begin:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-if-kind-invalid
-  const isValidKind = RECOGNIZED_KINDS.includes(kind as (typeof RECOGNIZED_KINDS)[number]);
-  if (!isValidKind) {
-    // @cpt-begin:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-add-kind-violation
+  // ── Category 3: ownership boundaries ──────────────────────────────────────
+  // @cpt-begin:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-check-boundaries
+  const boundaries = obj['ownershipBoundaries'];
+  const boundariesIsObject =
+    typeof boundaries === 'object' && boundaries !== null && !Array.isArray(boundaries);
+  if (!boundariesIsObject) {
     violations.push({
-      field: 'kind',
-      message: `kind field is required and must be one of: ${RECOGNIZED_KINDS.join(', ')}`,
+      field: 'ownershipBoundaries',
+      message: 'ownership-boundaries category is required (an object declaring exclusiveSubtrees and sharedFiles)',
     });
-    // @cpt-end:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-add-kind-violation
   }
-  // @cpt-end:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-if-kind-invalid
-  // @cpt-end:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-check-kind
+  const boundariesObj = boundariesIsObject ? (boundaries as Record<string, unknown>) : {};
+  const exclusiveSubtrees = Array.isArray(boundariesObj['exclusiveSubtrees'])
+    ? (boundariesObj['exclusiveSubtrees'] as unknown[])
+    : [];
+  const sharedFiles = Array.isArray(boundariesObj['sharedFiles'])
+    ? (boundariesObj['sharedFiles'] as unknown[])
+    : [];
+  // @cpt-end:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-check-boundaries
 
-  // @cpt-begin:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-if-project-template
-  if (kind === 'project-template') {
-    // @cpt-begin:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-check-compositions
-    const compositions = obj['compositions'];
-    if (compositions !== undefined) {
-      if (!Array.isArray(compositions)) {
-        violations.push({ field: 'compositions', message: 'compositions must be an array when present' });
-      } else {
-        // @cpt-begin:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-for-each-composition
-        for (let i = 0; i < compositions.length; i++) {
-          const entry = compositions[i] as unknown;
-          // @cpt-begin:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-check-composition-ref
-          if (
-            typeof entry !== 'object' ||
-            entry === null ||
-            Array.isArray(entry)
-          ) {
-            // @cpt-begin:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-if-composition-invalid
-            // @cpt-begin:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-add-composition-violation
-            violations.push({
-              field: `compositions[${i}]`,
-              message: 'composition entry must be an object with a "ref" field',
-            });
-            // @cpt-end:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-add-composition-violation
-            // @cpt-end:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-if-composition-invalid
-          } else {
-            const ref = (entry as Record<string, unknown>)['ref'];
-            // A structurally valid ref is a non-empty, non-whitespace-only string.
-            // The full source-spec grammar is validated at resolution time, not here.
-            if (typeof ref !== 'string' || ref.trim() === '') {
-              // @cpt-begin:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-if-composition-invalid
-              // @cpt-begin:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-add-composition-violation
-              violations.push({
-                field: `compositions[${i}].ref`,
-                message: 'composition ref must be a non-empty string (source-spec or registered name)',
-              });
-              // @cpt-end:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-add-composition-violation
-              // @cpt-end:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-if-composition-invalid
-            }
-          }
-          // @cpt-end:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-check-composition-ref
-        }
-        // @cpt-end:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-for-each-composition
-      }
+  // @cpt-begin:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-for-each-subtree
+  for (let i = 0; i < exclusiveSubtrees.length; i++) {
+    const subtree = exclusiveSubtrees[i];
+    // @cpt-begin:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-if-subtree-invalid
+    if (!isWellFormedRepoRelativePath(subtree)) {
+      // @cpt-begin:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-add-subtree-violation
+      violations.push({
+        field: `ownershipBoundaries.exclusiveSubtrees[${i}]`,
+        message: 'exclusive subtree must be a well-formed repository-relative path',
+      });
+      // @cpt-end:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-add-subtree-violation
     }
-    // @cpt-end:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-check-compositions
+    // @cpt-end:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-if-subtree-invalid
   }
-  // @cpt-end:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-if-project-template
+  // @cpt-end:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-for-each-subtree
+
+  // @cpt-begin:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-for-each-shared-file
+  for (let i = 0; i < sharedFiles.length; i++) {
+    const entry = sharedFiles[i];
+    const entryObj =
+      typeof entry === 'object' && entry !== null && !Array.isArray(entry)
+        ? (entry as Record<string, unknown>)
+        : null;
+    const path = entryObj?.['path'];
+    const mergeStrategy = entryObj?.['mergeStrategy'];
+    const ownedRegions = entryObj?.['ownedRegions'];
+    // @cpt-begin:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-if-shared-file-invalid
+    if (
+      entryObj === null ||
+      typeof path !== 'string' || path.trim() === '' ||
+      typeof mergeStrategy !== 'string' || mergeStrategy.trim() === '' ||
+      !Array.isArray(ownedRegions)
+    ) {
+      // @cpt-begin:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-add-shared-file-violation
+      violations.push({
+        field: `ownershipBoundaries.sharedFiles[${i}]`,
+        message: 'a shared-file entry must declare a path, a merge strategy, and the owned keys/regions',
+      });
+      // @cpt-end:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-add-shared-file-violation
+    }
+    // @cpt-end:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-if-shared-file-invalid
+  }
+  // @cpt-end:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-for-each-shared-file
+
+  // ── Category 4: referenced templates ──────────────────────────────────────
+  // @cpt-begin:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-check-referenced
+  const referenced = obj['referencedTemplates'];
+  const referencedList =
+    referenced === undefined ? [] : Array.isArray(referenced) ? (referenced as unknown[]) : null;
+  if (referencedList === null) {
+    violations.push({
+      field: 'referencedTemplates',
+      message: 'referenced-templates category must be an array when present',
+    });
+  }
+  // @cpt-end:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-check-referenced
+
+  // @cpt-begin:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-for-each-referenced
+  for (let i = 0; i < (referencedList ?? []).length; i++) {
+    const entry = (referencedList as unknown[])[i];
+    // @cpt-begin:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-check-referenced-entry
+    const entryObj =
+      typeof entry === 'object' && entry !== null && !Array.isArray(entry)
+        ? (entry as Record<string, unknown>)
+        : null;
+    const ref = entryObj?.['ref'];
+    const appliedAt = entryObj?.['appliedAt'];
+    const refIsWellFormed = typeof ref === 'string' && ref.trim() !== '';
+    const targetIsPresent = typeof appliedAt === 'string' && appliedAt.trim() !== '';
+    // @cpt-end:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-check-referenced-entry
+    // @cpt-begin:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-if-referenced-invalid
+    if (entryObj === null || !refIsWellFormed || !targetIsPresent) {
+      // @cpt-begin:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-add-referenced-violation
+      violations.push({
+        field: `referencedTemplates[${i}]`,
+        message: 'a referenced-template entry must declare a well-formed reference and a target location it is applied at',
+      });
+      // @cpt-end:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-add-referenced-violation
+    }
+    // @cpt-end:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-if-referenced-invalid
+  }
+  // @cpt-end:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-for-each-referenced
 
   // @cpt-begin:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-if-violations
   if (violations.length > 0) {

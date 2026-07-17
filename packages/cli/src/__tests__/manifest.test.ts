@@ -8,9 +8,20 @@ import { validateManifestContract } from '../manifest/validate-contract.js';
 import { validateCommand } from '../commands/validate.js';
 import type { TemplateManifest, ReadFileFn } from '../manifest/types.js';
 
-// Helper: build a valid manifest JSON string
+// Helper: build a valid four-category manifest JSON string.
+// Categories: (1) identity, (2) version, (3) ownership boundaries, (4) referenced templates.
 function validManifest(overrides: Partial<TemplateManifest> = {}): string {
-  const base: TemplateManifest = { name: 'my-tpl', version: '1.0.0', kind: 'mfe-template' };
+  const base: TemplateManifest = {
+    name: 'my-tpl',
+    version: '1.0.0',
+    ownershipBoundaries: {
+      exclusiveSubtrees: ['src/generated'],
+      sharedFiles: [
+        { path: 'package.json', mergeStrategy: 'deep-merge', ownedRegions: ['scripts.build'] },
+      ],
+    },
+    referencedTemplates: [{ ref: 'github:acme/mfe-a@v1.0.0', appliedAt: 'packages/mfe-a' }],
+  };
   return JSON.stringify({ ...base, ...overrides });
 }
 
@@ -24,8 +35,11 @@ describe('validateManifestContract', () => {
   });
 
   // inst-check-identity / inst-add-identity-violation
-  it('missing name field → identity violation', () => {
-    const raw = JSON.stringify({ version: '1.0.0', kind: 'mfe-template' });
+  it('missing identity (name) → identity violation', () => {
+    const raw = JSON.stringify({
+      version: '1.0.0',
+      ownershipBoundaries: { exclusiveSubtrees: [], sharedFiles: [] },
+    });
     const result = validateManifestContract(raw);
     expect(result.status).toBe('REJECTED');
     if (result.status !== 'REJECTED') return;
@@ -33,39 +47,98 @@ describe('validateManifestContract', () => {
   });
 
   // inst-check-version / inst-add-version-violation
-  it('missing version field → version violation', () => {
-    const raw = JSON.stringify({ name: 'my-tpl', kind: 'mfe-template' });
+  it('missing version → version violation', () => {
+    const raw = JSON.stringify({
+      name: 'my-tpl',
+      ownershipBoundaries: { exclusiveSubtrees: [], sharedFiles: [] },
+    });
     const result = validateManifestContract(raw);
     expect(result.status).toBe('REJECTED');
     if (result.status !== 'REJECTED') return;
     expect(result.violations.some((v) => v.field === 'version')).toBe(true);
   });
 
-  // inst-check-kind / inst-add-kind-violation
-  it('invalid kind field → kind violation', () => {
-    const raw = JSON.stringify({ name: 'my-tpl', version: '1.0.0', kind: 'unknown-kind' });
-    const result = validateManifestContract(raw);
-    expect(result.status).toBe('REJECTED');
-    if (result.status !== 'REJECTED') return;
-    expect(result.violations.some((v) => v.field === 'kind')).toBe(true);
-  });
-
-  // inst-if-composition-invalid / inst-add-composition-violation
-  it('project-template with malformed composition ref → composition violation', () => {
+  // inst-if-version-missing — malformed (non-string) version
+  it('malformed version (non-string) → version violation', () => {
     const raw = JSON.stringify({
       name: 'my-tpl',
-      version: '1.0.0',
-      kind: 'project-template',
-      compositions: [{ ref: '   ' }], // whitespace-only ref is invalid
+      version: 123,
+      ownershipBoundaries: { exclusiveSubtrees: [], sharedFiles: [] },
     });
     const result = validateManifestContract(raw);
     expect(result.status).toBe('REJECTED');
     if (result.status !== 'REJECTED') return;
-    expect(result.violations.some((v) => v.field.startsWith('compositions'))).toBe(true);
+    expect(result.violations.some((v) => v.field === 'version')).toBe(true);
   });
 
-  // inst-return-validated
-  it('valid manifest → VALIDATED with no violations', () => {
+  // inst-check-boundaries — ownership-boundaries category absent
+  it('missing ownership-boundaries category → boundaries violation', () => {
+    const raw = JSON.stringify({ name: 'my-tpl', version: '1.0.0' });
+    const result = validateManifestContract(raw);
+    expect(result.status).toBe('REJECTED');
+    if (result.status !== 'REJECTED') return;
+    expect(result.violations.some((v) => v.field === 'ownershipBoundaries')).toBe(true);
+  });
+
+  // inst-for-each-subtree / inst-if-subtree-invalid / inst-add-subtree-violation
+  it('ill-formed exclusive subtree → subtree violation', () => {
+    const raw = JSON.stringify({
+      name: 'my-tpl',
+      version: '1.0.0',
+      ownershipBoundaries: { exclusiveSubtrees: ['../escapes-root'], sharedFiles: [] },
+    });
+    const result = validateManifestContract(raw);
+    expect(result.status).toBe('REJECTED');
+    if (result.status !== 'REJECTED') return;
+    expect(result.violations.some((v) => v.field.startsWith('ownershipBoundaries.exclusiveSubtrees'))).toBe(true);
+  });
+
+  // inst-for-each-shared-file / inst-if-shared-file-invalid / inst-add-shared-file-violation
+  it('shared-file entry missing merge strategy / owned regions → shared-file violation', () => {
+    const raw = JSON.stringify({
+      name: 'my-tpl',
+      version: '1.0.0',
+      ownershipBoundaries: {
+        exclusiveSubtrees: [],
+        sharedFiles: [{ path: 'package.json' }], // missing mergeStrategy + ownedRegions
+      },
+    });
+    const result = validateManifestContract(raw);
+    expect(result.status).toBe('REJECTED');
+    if (result.status !== 'REJECTED') return;
+    expect(result.violations.some((v) => v.field.startsWith('ownershipBoundaries.sharedFiles'))).toBe(true);
+  });
+
+  // inst-for-each-referenced / inst-check-referenced-entry / inst-if-referenced-invalid
+  it('referenced-template entry missing target location → referenced violation', () => {
+    const raw = JSON.stringify({
+      name: 'my-project',
+      version: '1.0.0',
+      ownershipBoundaries: { exclusiveSubtrees: [], sharedFiles: [] },
+      referencedTemplates: [{ ref: 'github:acme/mfe@v1' }], // missing appliedAt
+    });
+    const result = validateManifestContract(raw);
+    expect(result.status).toBe('REJECTED');
+    if (result.status !== 'REJECTED') return;
+    expect(result.violations.some((v) => v.field.startsWith('referencedTemplates'))).toBe(true);
+  });
+
+  // inst-for-each-referenced — malformed reference
+  it('referenced-template entry with malformed reference → referenced violation', () => {
+    const raw = JSON.stringify({
+      name: 'my-project',
+      version: '1.0.0',
+      ownershipBoundaries: { exclusiveSubtrees: [], sharedFiles: [] },
+      referencedTemplates: [{ ref: '   ', appliedAt: 'packages/x' }], // whitespace-only ref
+    });
+    const result = validateManifestContract(raw);
+    expect(result.status).toBe('REJECTED');
+    if (result.status !== 'REJECTED') return;
+    expect(result.violations.some((v) => v.field.startsWith('referencedTemplates'))).toBe(true);
+  });
+
+  // inst-return-validated — conforming four-category manifest
+  it('valid four-category manifest → VALIDATED with no violations', () => {
     const result = validateManifestContract(validManifest());
     expect(result.status).toBe('VALIDATED');
     expect(result.violations).toHaveLength(0);
@@ -73,18 +146,24 @@ describe('validateManifestContract', () => {
 
   // forward-reading invariant — schemaVersion is optional
   it('manifest without schemaVersion still passes (forward-readable)', () => {
-    const raw = JSON.stringify({ name: 'my-tpl', version: '2.0.0', kind: 'project-template' });
+    const raw = JSON.stringify({
+      name: 'my-tpl',
+      version: '2.0.0',
+      ownershipBoundaries: { exclusiveSubtrees: [], sharedFiles: [] },
+    });
     const result = validateManifestContract(raw);
     expect(result.status).toBe('VALIDATED');
   });
 
-  // valid project-template with well-formed composition refs
-  it('project-template with valid composition refs → VALIDATED', () => {
+  // a leaf template (no referenced templates) is valid
+  it('leaf template with no referencedTemplates → VALIDATED', () => {
     const raw = JSON.stringify({
-      name: 'my-project',
+      name: 'leaf',
       version: '1.0.0',
-      kind: 'project-template',
-      compositions: [{ ref: 'github:acme/mfe-a@v1.0.0' }, { ref: 'registered-mfe' }],
+      ownershipBoundaries: {
+        exclusiveSubtrees: ['src'],
+        sharedFiles: [],
+      },
     });
     const result = validateManifestContract(raw);
     expect(result.status).toBe('VALIDATED');
@@ -111,8 +190,8 @@ describe('validateCommand', () => {
 
   // inst-report-violations / inst-return-fail
   it('reports all violations on REJECTED manifest', async () => {
-    // Missing name and version — two violations expected
-    const raw = JSON.stringify({ kind: 'mfe-template' });
+    // Missing identity, version, and ownership boundaries — multiple violations expected.
+    const raw = JSON.stringify({});
     const readFileFn: ReadFileFn = vi.fn().mockResolvedValue(raw);
     const result = await validateCommand('/some/template', readFileFn);
     expect(result.ok).toBe(false);
@@ -123,14 +202,12 @@ describe('validateCommand', () => {
 });
 
 describe('single authoritative description', () => {
-  // inst-dod-template-manifest-single-description
-  it('TemplateManifest type is the same shape used by validate and install/scaffold consumers', () => {
-    // structural: validateManifestContract accepts raw and returns typed TemplateManifest on success;
-    // no divergent descriptor exists — one shape for all commands
-    const raw = JSON.stringify({ name: 'my-tpl', version: '1.0.0', kind: 'mfe-template' });
-    const result = validateManifestContract(raw);
+  // cpt-frontx-dod-template-manifest-single-description
+  it('the same four-category shape validated is what validate/install/assembly consume', () => {
+    // structural: validateManifestContract accepts raw and the same TemplateManifest
+    // shape (identity, version, ownership boundaries, referenced templates) is returned
+    // by readManifestFromContent on success — no divergent or partial descriptor exists.
+    const result = validateManifestContract(validManifest());
     expect(result.status).toBe('VALIDATED');
-    // The same TemplateManifest type is what a readManifestFromContent helper would return.
-    // No divergent descriptor exists.
   });
 });

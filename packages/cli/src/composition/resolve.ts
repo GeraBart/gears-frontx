@@ -48,7 +48,9 @@ export function resolveComposition(
   // @cpt-end:cpt-frontx-algo-composed-provenance-recursive-resolution:p1:inst-add-visited
 
   // @cpt-begin:cpt-frontx-algo-composed-provenance-recursive-resolution:p1:inst-read-composition-list
-  const compositions = manifest.compositions ?? [];
+  // The set of templates this one references (a preset applies together). Each
+  // entry carries a well-formed reference (`ref`) and the location it is applied at.
+  const compositions = manifest.referencedTemplates ?? [];
   // @cpt-end:cpt-frontx-algo-composed-provenance-recursive-resolution:p1:inst-read-composition-list
 
   // @cpt-begin:cpt-frontx-algo-composed-provenance-recursive-resolution:p1:inst-init-accumulator

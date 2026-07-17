@@ -23,7 +23,13 @@ function makeEntry(
   kind: 'project-template' | 'mfe-template',
   files: Array<{ path: string; content: string }> = [],
 ): InventoryEntry {
-  const manifest = JSON.stringify({ name, version: '1.0.0', kind, files });
+  const manifest = JSON.stringify({
+    name,
+    version: '1.0.0',
+    kind,
+    ownershipBoundaries: { exclusiveSubtrees: [], sharedFiles: [] },
+    files,
+  });
   return { name, source: `github:acme/${name}@v1.0.0`, ref: 'v1.0.0', status: InventoryState.INSTALLED, content: manifest };
 }
 
