@@ -15,8 +15,8 @@
   - [2.9 Ecosystem Distribution & Versioning Policy - MEDIUM](#29-ecosystem-distribution--versioning-policy---medium)
   - [2.10 Template Externalization & Source-Spec Resolution - HIGH](#210-template-externalization--source-spec-resolution---high)
   - [2.11 Template Manifest Contract & Pre-Publish Validation - HIGH](#211-template-manifest-contract--pre-publish-validation---high)
-  - [2.12 Two-Namespace Commands & Project/MFE Scaffolding - HIGH](#212-two-namespace-commands--projectmfe-scaffolding---high)
-  - [2.13 Composed-Template Resolution & Project Provenance - HIGH](#213-composed-template-resolution--project-provenance---high)
+  - [2.12 Kindless Template Assembly & Conflict-Checked Composition - HIGH](#212-kindless-template-assembly--conflict-checked-composition---high)
+  - [2.13 Preset Resolution & Per-Applied-Template Provenance - HIGH](#213-preset-resolution--per-applied-template-provenance---high)
   - [2.14 Upgrade Change-Set Engine - HIGH](#214-upgrade-change-set-engine---high)
   - [2.15 AI Tooling Kit Packaging & Base Content - HIGH](#215-ai-tooling-kit-packaging--base-content---high)
   - [2.16 Template AI-Extension Contract & Discovery/Activation - HIGH](#216-template-ai-extension-contract--discoveryactivation---high)
@@ -33,7 +33,7 @@ This decomposition breaks the FROZEN FrontX DESIGN into 17 work-package features
 
 **Three pillars.**
 - **Pillar 1 — Core Framework** (`@gears-frontx/mfes`, `@gears-frontx/gts-plugin`, `@gears-frontx/api`): F2 type-substrate port, F4 registry & handler resolution, F3 GTS default type-system provider, F5 discovery & lazy-import loading, F6 host–MFE communication, F7 extension-domain governance, F8 runtime isolation, F9 API protocol surface.
-- **Pillar 2 — CLI** (`@gears-frontx/cli`): F10 template externalization & source-spec resolution, F11 template manifest contract, F12 two-namespace commands & scaffolding, F13 composed-template resolution & provenance, F14 upgrade change-set engine.
+- **Pillar 2 — CLI** (`@gears-frontx/cli`): F10 template externalization & source-spec resolution, F11 template manifest contract, F12 kindless template assembly & conflict-checked composition, F13 preset resolution & per-applied-template provenance, F14 upgrade change-set engine.
 - **Pillar 3 — AI Tooling** (`cyber-pilot-kit-frontx`): F15 kit packaging & base content, F16 template AI-extension contract & discovery/activation, F17 AI-driven upgrade orchestration.
 - **Cross-cutting:** F1 ecosystem distribution & versioning policy governs all published artifacts.
 
@@ -522,7 +522,7 @@ This decomposition breaks the FROZEN FrontX DESIGN into 17 work-package features
 
 - [x] `p1` - **ID**: `cpt-frontx-feature-template-manifest`
 
-- **Purpose**: Define the single published template manifest as the conformance contract — every template declares itself (identity, version, kind, referenced compositions) in a versioned shape, checked at pre-publish validation and read at install and scaffold, giving one authoritative description.
+- **Purpose**: Define the single published template manifest as the conformance contract — every template declares itself in a versioned shape across exactly four categories (identity, version, ownership boundaries, referenced templates), checked at pre-publish validation and read at install, apply, and assembly, giving one authoritative description.
 
 - **Depends On**: `cpt-frontx-feature-template-resolution`
 
@@ -558,36 +558,52 @@ This decomposition breaks the FROZEN FrontX DESIGN into 17 work-package features
 
   - N/A
 
-### 2.12 [Two-Namespace Commands & Project/MFE Scaffolding](features/cli-scaffolding/) - HIGH
+### 2.12 [Kindless Template Assembly & Conflict-Checked Composition](features/cli-scaffolding/) - HIGH
 
-- [x] `p1` - **ID**: `cpt-frontx-feature-cli-scaffolding`
+- [ ] `p1` - **ID**: `cpt-frontx-feature-cli-scaffolding`
 
-- **Purpose**: Organize the CLI command surface into project-level and microfrontend-level namespaces sharing one resolver, and drive project and microfrontend scaffolding from those namespaces — the namespace organization being the CLI's public interface.
+- **Purpose**: Apply any installed template through one uniform path — seeding a new repository or adding a template into an existing one is the same mechanism — reading each template's declared ownership boundaries from its manifest, running a pre-flight intersection check that refuses conflicting assembly before any write, and assembling a repository from one or more independently-applied templates including a preset's referenced templates.
 
 - **Depends On**: `cpt-frontx-feature-template-resolution`
 
 - **Scope**:
-  - Two-namespace command architecture (project-level + microfrontend-level, one shared resolver).
-  - Project scaffolding.
-  - Microfrontend scaffolding.
+  - One uniform apply path (seed a repository / add a template into an existing repository).
+  - Ownership-boundary declaration read from the manifest (CLI-5).
+  - Pre-flight assembly conflict check before any write, never silently merging (CLI-6).
+  - Multi-template and preset (referenced-template) assembly in one operation.
 
 - **Out of scope**:
-  - Composed-template recursion + provenance (F13).
+  - Per-applied-template provenance write + recursion detail (F13).
   - Upgrade (F14).
   - Manifest validation (F11).
 
 - **Requirements Covered**:
 
-  - [x] `p1` - `cpt-frontx-fr-cli-two-namespace-commands`
-  - [x] `p1` - `cpt-frontx-fr-cli-project-scaffold`
-  - [x] `p1` - `cpt-frontx-fr-cli-microfrontend-scaffold`
+  - [x] `p1` - `cpt-frontx-fr-cli-seed-repository`
+  - [x] `p1` - `cpt-frontx-fr-cli-add-template-to-repository`
+  - [x] `p1` - `cpt-frontx-fr-cli-template-boundary-declaration`
+  - [x] `p1` - `cpt-frontx-fr-cli-assembly-conflict-prevention`
+  - [x] `p1` - `cpt-frontx-fr-cli-composed-template-resolution`
+
+- **Design Principles Covered**:
+
+  - [ ] `p1` - `cpt-frontx-principle-ownership-bounded-composition`
+
+- **Design Constraints Covered**:
+
+  - [ ] `p1` - `cpt-frontx-constraint-cli-boundary-declaration`
+  - [ ] `p1` - `cpt-frontx-constraint-cli-assembly-conflict-prevention`
 
 - **Domain Model Entities**:
   - Template
+  - OwnershipBoundary
+  - Assembly
 
 - **Design Components**:
 
   - [ ] `p1` - `cpt-frontx-component-cli` (shared)
+  - [ ] `p1` - `cpt-frontx-component-cli-assembler`
+  - [ ] `p1` - `cpt-frontx-component-cli-conflict-checker`
 
 - **API**:
   - `cpt-frontx-interface-cli` (command surface)
@@ -599,21 +615,21 @@ This decomposition breaks the FROZEN FrontX DESIGN into 17 work-package features
 
   - N/A
 
-### 2.13 [Composed-Template Resolution & Project Provenance](features/composed-provenance/) - HIGH
+### 2.13 [Preset Resolution & Per-Applied-Template Provenance](features/composed-provenance/) - HIGH
 
-- [x] `p1` - **ID**: `cpt-frontx-feature-composed-provenance`
+- [ ] `p1` - **ID**: `cpt-frontx-feature-composed-provenance`
 
-- **Purpose**: Resolve manifest-declared composed templates recursively in one operation under a defined collision rule (nearest-declaration-wins, collision reported before any write), scaffold the composition, and write each scaffolded project's provenance record (template identity + version + re-resolvable source-spec).
+- **Purpose**: Resolve a preset's referenced templates recursively in one operation under a defined collision rule (nearest-declaration-wins, collision reported before any write), apply the resolved set, and write the repository's provenance as one record per applied template — each capturing that template's identity, applied-from version, re-resolvable source-spec, and occupied ownership boundary — with no single whole-repository origin.
 
 - **Depends On**: `cpt-frontx-feature-cli-scaffolding`, `cpt-frontx-feature-template-resolution`
 
 - **Scope**:
-  - Manifest-declared recursive composition through the shared resolver.
+  - Preset (referenced-template) recursive resolution through the shared resolver.
   - Nearest-declaration-wins collision rule + pre-write collision report.
-  - Project-provenance record written at scaffold time.
+  - One provenance record per applied template, written at apply time (CLI-7).
 
 - **Out of scope**:
-  - Base scaffolding/namespaces (F12).
+  - Uniform apply path + conflict check (F12).
   - Install/source-spec (F10).
   - Upgrade change-set (F14).
 
@@ -621,13 +637,19 @@ This decomposition breaks the FROZEN FrontX DESIGN into 17 work-package features
 
   - [x] `p1` - `cpt-frontx-fr-cli-composed-template-resolution`
 
+- **Design Constraints Covered**:
+
+  - [ ] `p1` - `cpt-frontx-constraint-cli-per-template-provenance`
+
 - **Domain Model Entities**:
   - Template
   - ProjectProvenance
+  - OwnershipBoundary
 
 - **Design Components**:
 
   - [x] `p1` - `cpt-frontx-component-cli` (shared)
+  - [ ] `p1` - `cpt-frontx-component-cli-provenance-recorder`
 
 - **API**:
   - `cpt-frontx-contract-project-provenance`
@@ -642,23 +664,23 @@ This decomposition breaks the FROZEN FrontX DESIGN into 17 work-package features
 
 ### 2.14 [Upgrade Change-Set Engine](features/upgrade-changeset/) - HIGH
 
-- [x] `p1` - **ID**: `cpt-frontx-feature-upgrade-changeset`
+- [ ] `p1` - **ID**: `cpt-frontx-feature-upgrade-changeset`
 
-- **Purpose**: Provide the single CLI-owned change-set engine that computes a template-version diff against project provenance, presents it for review and approval, applies it non-destructively, and supports rollback — the one reviewable, reversible engine both direct CLI and AI orchestration drive.
+- **Purpose**: Provide the single CLI-owned change-set engine that upgrades each applied template independently — computing a version diff against that template's own provenance record, presenting it for review and approval, applying it non-destructively, and supporting rollback — the one reviewable, reversible engine both direct CLI and AI orchestration drive.
 
 - **Depends On**: `cpt-frontx-feature-composed-provenance`
 
 - **Scope**:
-  - Version-diff computation against provenance baseline.
+  - Version-diff computation against the selected applied template's provenance record.
   - Reviewable change-set presentation + explicit approval gate.
   - Non-destructive apply.
   - Rollback/reversibility.
-  - Provenance update on apply.
+  - Per-applied-template provenance update on apply.
 
 - **Out of scope**:
   - AI orchestration/enrichment of the engine (F17).
-  - Scaffolding (F12).
-  - Composition (F13).
+  - Uniform apply path + conflict check (F12).
+  - Preset resolution + provenance write (F13).
 
 - **Requirements Covered**:
 
@@ -671,6 +693,7 @@ This decomposition breaks the FROZEN FrontX DESIGN into 17 work-package features
 - **Design Components**:
 
   - [x] `p1` - `cpt-frontx-component-cli` (shared)
+  - [ ] `p1` - `cpt-frontx-component-cli-change-set-engine`
 
 - **API**:
   - CLI upgrade command

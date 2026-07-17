@@ -21,19 +21,19 @@
 
 <!-- /toc -->
 
-- [x] `p1` - **ID**: `cpt-frontx-featstatus-composed-provenance`
+- [ ] `p1` - **ID**: `cpt-frontx-featstatus-composed-provenance`
 
 ## 1. Feature Context
 
-- [x] `p2` - `cpt-frontx-feature-composed-provenance`
+- [ ] `p2` - `cpt-frontx-feature-composed-provenance`
 
 ### 1.1 Overview
 
-Resolves manifest-declared composed templates recursively through the shared resolver in a single scaffold operation, applying a nearest-declaration-wins collision rule and aborting before any write on unresolvable collisions, then records the originating template identity, version, and source-spec as an in-project provenance record. All CDSL behavior is `target` (GREENFIELD — grounded in `cpt-frontx-adr-composed-template-resolution`, `cpt-frontx-adr-project-provenance-record`, and DESIGN §3.1/§3.6).
+Resolves a preset's referenced templates recursively through the shared resolver in a single operation, applying a nearest-declaration-wins collision rule and aborting before any write on unresolvable collisions, then writes the repository's provenance as a set of records — one per applied template — each capturing that template's identity, applied-from version, source-spec, and occupied ownership boundary. All CDSL behavior is `target` (GREENFIELD — grounded in `cpt-frontx-adr-composed-template-resolution`, `cpt-frontx-adr-project-provenance-record`, and DESIGN §3.1/§3.6).
 
 ### 1.2 Purpose
 
-This feature realizes the manifest-declared recursive composition decided in `cpt-frontx-adr-composed-template-resolution` and the project-provenance record decided in `cpt-frontx-adr-project-provenance-record`. It covers the recursive resolution of a project template's composed microfrontend templates through the shared resolver, the deterministic nearest-declaration-wins collision rule with pre-write reporting, the scaffold of the full composition in one operation, and the writing of the in-project provenance record. This feature is the OWNER of `cpt-frontx-contract-project-provenance`.
+This feature realizes the preset (referenced-template) recursive resolution decided in `cpt-frontx-adr-composed-template-resolution` and the per-applied-template provenance decided in `cpt-frontx-adr-project-provenance-record`, and owns the concrete provenance schema per `cpt-frontx-adr-contract-schema-ownership`. It covers the recursive resolution of a preset's referenced templates through the shared resolver, the deterministic nearest-declaration-wins collision rule with pre-write reporting, the assembly of the full set in one operation, and the writing of one provenance record per applied template. The provenance is a set of records, one per applied template, with no single whole-repository origin. This feature is the OWNER of `cpt-frontx-contract-project-provenance`.
 
 **Requirements**: `cpt-frontx-fr-cli-composed-template-resolution`
 
@@ -53,7 +53,7 @@ This feature realizes the manifest-declared recursive composition decided in `cp
 - **Design**: [DESIGN.md](../../DESIGN.md)
 - **Dependencies**:
   - `cpt-frontx-feature-template-resolution` (F10 — Template Externalization & Source-Spec Resolution)
-  - `cpt-frontx-feature-cli-scaffolding` (F12 — Two-Namespace Commands & Project/MFE Scaffolding)
+  - `cpt-frontx-feature-cli-scaffolding` (F12 — Kindless Template Assembly & Conflict-Checked Composition)
 
 ## 2. Actor Flows (CDSL)
 
@@ -70,7 +70,7 @@ This feature realizes the manifest-declared recursive composition decided in `cp
 **Involves**: `cpt-frontx-actor-project-developer`, `cpt-frontx-actor-github`, `cpt-frontx-actor-cypilot-cli`
 
 **Success Scenarios**:
-- Developer issues a scaffold command; the CLI resolves the project template and all composed microfrontend templates recursively; the full composition is delivered in one operation; the provenance record is written into the scaffolded project.
+- Developer issues an apply command; the CLI resolves the root template and all of its preset's referenced templates recursively; the full set is applied in one operation; one provenance record is written per applied template into the repository.
 
 **Error Scenarios**:
 - Source registry (`cpt-frontx-actor-github`) unreachable: CLI reports the failure and aborts with no files written.
@@ -79,20 +79,20 @@ This feature realizes the manifest-declared recursive composition decided in `cp
 
 **Steps**:
 
-1. [x] - `p1` - Developer issues a scaffold command to `cpt-frontx-actor-cypilot-cli`, supplying a versioned source-spec for the project template - `inst-issue-scaffold`
-2. [x] - `p1` - CLI resolves the project template from `cpt-frontx-actor-github` using the shared resolver (`cpt-frontx-adr-template-acquisition-and-location`) with the supplied source-spec - `inst-resolve-root-template`
+1. [x] - `p1` - Developer issues an apply command to `cpt-frontx-actor-cypilot-cli`, supplying a versioned source-spec for the root template - `inst-issue-scaffold`
+2. [x] - `p1` - CLI resolves the root template from `cpt-frontx-actor-github` using the shared resolver (`cpt-frontx-adr-template-acquisition-and-location`) with the supplied source-spec - `inst-resolve-root-template`
 3. [x] - `p1` - **IF** the source registry is unreachable - `inst-check-registry-reach`
    1. [x] - `p1` - CLI reports the registry failure to the developer and **RETURN** (no files written) - `inst-abort-registry`
-4. [x] - `p1` - CLI reads the resolved project template's manifest to obtain its declared composition of microfrontend templates - `inst-read-manifest`
-5. [x] - `p1` - CLI invokes the composed-template resolution algorithm (`cpt-frontx-algo-composed-provenance-recursive-resolution`) to recursively resolve all declared template references and detect collisions or cycles - `inst-invoke-resolution`
+4. [x] - `p1` - CLI reads the resolved root template's manifest to obtain the referenced templates its preset declares - `inst-read-manifest`
+5. [x] - `p1` - CLI invokes the referenced-template resolution algorithm (`cpt-frontx-algo-composed-provenance-recursive-resolution`) to recursively resolve all declared template references and detect collisions or cycles - `inst-invoke-resolution`
 6. [x] - `p1` - **IF** the resolution algorithm returns a collision or cycle error - `inst-check-resolution-error`
    1. [x] - `p1` - CLI reports the conflicting or cyclic declarations to the developer and **RETURN** (no files written) - `inst-abort-resolution-error`
-7. [x] - `p1` - CLI scaffolds the project and all resolved composed microfrontends from the single collision-free composition set, writing all files in one operation - `inst-scaffold-composition`
-8. [x] - `p1` - CLI invokes the provenance write algorithm (`cpt-frontx-algo-composed-provenance-provenance-write`) to record the originating template identity, version, and source-spec inside the scaffolded project root - `inst-invoke-provenance-write`
-9. [x] - `p1` - **IF** the provenance write fails - `inst-check-provenance-write-fail`
+7. [x] - `p1` - CLI applies the root template and all resolved referenced templates from the single collision-free set, writing all files in one operation - `inst-scaffold-composition`
+8. [x] - `p1` - CLI invokes the provenance write algorithm (`cpt-frontx-algo-composed-provenance-provenance-write`) to write one provenance record per applied template — each capturing that template's identity, applied-from version, source-spec, and occupied ownership boundary — into the repository - `inst-invoke-provenance-write`
+9. [x] - `p1` - **IF** any provenance record write fails - `inst-check-provenance-write-fail`
    1. [x] - `p1` - CLI reports the provenance write failure to the developer - `inst-report-provenance-fail`
 10. [x] - `p1` - CLI signals the AI Tooling Framework to activate base ecosystem capabilities and any bundled template extensions - `inst-activate-kit`
-11. [x] - `p1` - **RETURN** the scaffolded project with provenance and AI capabilities active to the developer - `inst-return-success`
+11. [x] - `p1` - **RETURN** the assembled repository with per-applied-template provenance and AI capabilities active to the developer - `inst-return-success`
 
 ## 3. Processes / Business Logic (CDSL)
 
@@ -132,19 +132,20 @@ This feature realizes the manifest-declared recursive composition decided in `cp
 
 - [x] `p2` - **ID**: `cpt-frontx-algo-composed-provenance-provenance-write`
 
-**Input**: scaffolded project root path, originating template identity, scaffolded-from template version, source-spec that re-resolves the origin
+**Input**: repository root path; the set of applied templates, each with its identity, applied-from version, source-spec that re-resolves it, and the ownership boundary it occupied
 
-**Output**: in-project provenance record written; or a write error
+**Output**: one in-repository provenance record written per applied template — the provenance set; or a write error. The concrete schema (`cpt-frontx-contract-project-provenance`): a set of records, one per applied template, each record `{ template identity, applied-from version, source-spec, occupied ownership boundary }`, with no single whole-repository origin record.
 
 **Steps**:
 
-1. [x] - `p1` - Accept the scaffolded project root path, the template identity, the exact scaffolded-from template version, and the source-spec sufficient to re-resolve the origin - `inst-accept-provenance-inputs`
-2. [x] - `p1` - Construct the provenance record capturing: template identity, scaffolded-from version, and source-spec (in the shape decided by `cpt-frontx-adr-source-spec-syntax`) - `inst-construct-provenance`
-3. [x] - `p1` - Determine the provenance record storage location inside the scaffolded project root (per `cpt-frontx-contract-project-provenance`) - `inst-determine-storage-location`
-4. [x] - `p1` - Write the provenance record to that location in a durable, human-readable format - `inst-write-record`
-5. [x] - `p1` - **IF** the write fails - `inst-check-write-fail`
-   1. [x] - `p1` - **RETURN** a provenance-write error; the scaffold is considered incomplete without the record - `inst-return-write-error`
-6. [x] - `p1` - **RETURN** the written provenance record location - `inst-return-provenance-location`
+1. [x] - `p1` - Accept the repository root path and the set of applied templates with their identities, applied-from versions, source-specs, and occupied ownership boundaries - `inst-accept-provenance-inputs`
+2. [x] - `p1` - Determine the provenance store location inside the repository root (per `cpt-frontx-contract-project-provenance`) - `inst-determine-storage-location`
+3. [x] - `p1` - **FOR EACH** applied template in the set - `inst-foreach-applied`
+   1. [x] - `p1` - Construct one provenance record capturing that template's identity, its applied-from version, its source-spec (in the shape decided by `cpt-frontx-adr-source-spec-syntax`), and its occupied ownership boundary - `inst-construct-provenance`
+   2. [x] - `p1` - Write the record into the provenance set in a durable, human-readable format - `inst-write-record`
+   3. [x] - `p1` - **IF** the write fails - `inst-check-write-fail`
+      1. [x] - `p1` - **RETURN** a provenance-write error; the assembly is considered incomplete without a record for every applied template - `inst-return-write-error`
+4. [x] - `p1` - **RETURN** the written provenance set — one record per applied template, no single whole-repository origin - `inst-return-provenance-location`
 
 ## 4. States (CDSL)
 
@@ -161,7 +162,7 @@ This feature realizes the manifest-declared recursive composition decided in `cp
 1. [x] - `p1` - **FROM** DECLARED **TO** RESOLVING **WHEN** the developer issues a scaffold command and the CLI begins recursive resolution of the declared composition - `inst-transition-declared-resolving`
 2. [x] - `p1` - **FROM** RESOLVING **TO** RESOLVED **WHEN** all declared template references are recursively resolved and the accumulating composition set contains no collisions and no cycles - `inst-transition-resolving-resolved`
 3. [x] - `p1` - **FROM** RESOLVING **TO** COLLISION_ABORTED **WHEN** an unresolvable composition collision or a reference cycle is detected during resolution — the CLI reports the specific conflict or cycle and aborts before any files are written - `inst-transition-resolving-collision-aborted`
-4. [x] - `p1` - **FROM** RESOLVED **TO** SCAFFOLDED **WHEN** the full collision-free composition is written to disk and the provenance record is successfully written into the scaffolded project root - `inst-transition-resolved-scaffolded`
+4. [x] - `p1` - **FROM** RESOLVED **TO** SCAFFOLDED **WHEN** the full collision-free set is written to disk and one provenance record per applied template is successfully written into the repository - `inst-transition-resolved-scaffolded`
 
 ## 5. Definitions of Done
 
@@ -169,7 +170,7 @@ This feature realizes the manifest-declared recursive composition decided in `cp
 
 - [x] `p1` - **ID**: `cpt-frontx-dod-composed-provenance-composition-delivered`
 
-The system **MUST** implement manifest-declared recursive composition through the shared resolver, apply the nearest-declaration-wins collision rule, detect reference cycles, and report all collisions and cycles before writing any files — realizing the single-operation composed scaffold described in `cpt-frontx-flow-composed-provenance-scaffold-composed-project` and the resolution algorithm `cpt-frontx-algo-composed-provenance-recursive-resolution`.
+The system **MUST** implement recursive resolution of a preset's referenced templates through the shared resolver, apply the nearest-declaration-wins collision rule, detect reference cycles, and report all collisions and cycles before writing any files — realizing the single-operation assembly described in `cpt-frontx-flow-composed-provenance-scaffold-composed-project` and the resolution algorithm `cpt-frontx-algo-composed-provenance-recursive-resolution`.
 
 **Implements**:
 - `cpt-frontx-flow-composed-provenance-scaffold-composed-project`
@@ -184,7 +185,7 @@ The system **MUST** implement manifest-declared recursive composition through th
 
 - [x] `p1` - **ID**: `cpt-frontx-dod-composed-provenance-provenance-at-scaffold`
 
-The system **MUST** write an in-project provenance record at scaffold time capturing the originating template identity, the exact scaffolded-from template version, and a re-resolvable source-spec — enabling a later upgrade operation to establish a precise diff baseline from the record — realizing `cpt-frontx-algo-composed-provenance-provenance-write`.
+The system **MUST** write one in-repository provenance record per applied template at apply time — each capturing that template's identity, its applied-from version, a re-resolvable source-spec, and its occupied ownership boundary — as a set of records with no single whole-repository origin, so a later per-template upgrade can establish a precise diff baseline from the matching record — realizing `cpt-frontx-algo-composed-provenance-provenance-write`.
 
 **Implements**:
 - `cpt-frontx-algo-composed-provenance-provenance-write`
@@ -192,15 +193,15 @@ The system **MUST** write an in-project provenance record at scaffold time captu
 **Contracts**: `cpt-frontx-contract-project-provenance` (OWNER), `cpt-frontx-seq-composed-project-scaffold`
 
 **Touches**:
-- Entities: Template, ProjectProvenance
+- Entities: Template, ProjectProvenance, OwnershipBoundary
 
 ## 6. Acceptance Criteria
 
-- [x] Scaffolding a project template with one or more manifest-declared microfrontend template references produces a single operation that delivers all referenced microfrontends without requiring the developer to scaffold each one separately.
-- [x] A composition referencing microfrontend templates at two or more levels of depth resolves all transitively-declared microfrontends, not only directly-declared ones.
-- [x] When two branches of a composition contribute a unit at the same target path, the nearest-declaration-wins rule resolves to the shallower declaration; the same composition resolves identically on every invocation.
-- [x] When an unresolvable composition collision is detected, the CLI reports the conflicting target path and contributing unit identities, and no files are written to disk.
-- [x] When a reference cycle is detected in the composition tree, the CLI reports the cycle and aborts before writing any files.
-- [x] A scaffolded project contains an in-project provenance record capturing the originating template identity, the exact template version it was scaffolded from, and a source-spec sufficient to re-resolve that origin.
+- [x] Applying a template whose preset references one or more other templates produces a single operation that applies all referenced templates without requiring the developer to apply each one separately.
+- [x] A preset referencing templates at two or more levels of depth resolves all transitively-referenced templates, not only directly-referenced ones.
+- [x] When two branches of a preset contribute a unit at the same target path, the nearest-declaration-wins rule resolves to the shallower declaration; the same preset resolves identically on every invocation.
+- [x] When an unresolvable collision is detected, the CLI reports the conflicting target path and contributing unit identities, and no files are written to disk.
+- [x] When a reference cycle is detected in the preset tree, the CLI reports the cycle and aborts before writing any files.
+- [x] An assembled repository contains one provenance record per applied template, each capturing that template's identity, its applied-from version, a re-resolvable source-spec, and its occupied ownership boundary — with no single whole-repository origin record.
 - [x] `cpt --json validate --artifact architecture/features/composed-provenance/FEATURE.md --skip-code` returns PASS.
 - [x] `cpt --json validate-toc architecture/features/composed-provenance/FEATURE.md` returns PASS.

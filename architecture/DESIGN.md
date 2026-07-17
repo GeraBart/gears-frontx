@@ -66,8 +66,8 @@ Requirements that significantly influence architecture decisions. Each driver be
 | `cpt-frontx-fr-cli-template-list` | Template inventory and versions are reported from the externalized, source-spec-resolved template store (`cpt-frontx-adr-template-acquisition-and-location`). |
 | `cpt-frontx-fr-cli-template-update-local` | Local template updates operate on the externalized template store without touching any repository (`cpt-frontx-adr-template-acquisition-and-location`). |
 | `cpt-frontx-fr-cli-template-validate-prepublish` | Pre-publish structure validation runs against the template manifest publication contract, including that the template's declared ownership boundaries are well-formed (`cpt-frontx-adr-template-manifest-contract`, `cpt-frontx-adr-template-ownership-boundary-declaration`). |
-| `cpt-frontx-fr-cli-seed-repository` | An installed template is applied to seed a new repository through one uniform apply-and-assemble path that operates over any template (`cpt-frontx-adr-kind-agnostic-template-mechanism`, `cpt-frontx-adr-composed-template-resolution`). |
-| `cpt-frontx-fr-cli-add-template-to-repository` | An installed template is added into an existing repository through the same apply path, its declared boundaries checked against the templates already applied before any write (`cpt-frontx-adr-kind-agnostic-template-mechanism`, `cpt-frontx-adr-assembly-conflict-prevention`). |
+| `cpt-frontx-fr-cli-seed-repository` | An installed template is applied to seed a new repository through one uniform apply-and-assemble path that operates over any template (`cpt-frontx-adr-uniform-template-mechanism`, `cpt-frontx-adr-composed-template-resolution`). |
+| `cpt-frontx-fr-cli-add-template-to-repository` | An installed template is added into an existing repository through the same apply path, its declared boundaries checked against the templates already applied before any write (`cpt-frontx-adr-uniform-template-mechanism`, `cpt-frontx-adr-assembly-conflict-prevention`). |
 | `cpt-frontx-fr-cli-composed-template-resolution` | A repository is assembled from one or more templates, and a preset's referenced templates are resolved transitively and applied in one operation (`cpt-frontx-adr-composed-template-resolution`). |
 | `cpt-frontx-fr-cli-template-boundary-declaration` | A template declares the exclusive subtrees and shared-file regions it owns, carried in its manifest (`cpt-frontx-adr-template-ownership-boundary-declaration`, `cpt-frontx-adr-template-manifest-contract`). |
 | `cpt-frontx-fr-cli-assembly-conflict-prevention` | A pre-flight intersection check over the staged assembly refuses conflicting claims before any files are written, never silently merging (`cpt-frontx-adr-assembly-conflict-prevention`). |
@@ -123,7 +123,7 @@ Pillar 2 — CLI:
 
 * `cpt-frontx-adr-template-acquisition-and-location` — Externalizes templates and resolves them by source-spec at runtime.
 * `cpt-frontx-adr-source-spec-syntax` — Defines the versioned source-spec syntax for template acquisition.
-* `cpt-frontx-adr-kind-agnostic-template-mechanism` — Establishes one uniform mechanism that operates over any template, each template declaring what it produces.
+* `cpt-frontx-adr-uniform-template-mechanism` — Establishes one uniform mechanism that operates over any template, each template declaring what it produces.
 * `cpt-frontx-adr-template-manifest-contract` — Defines the template manifest publication contract declaring identity, version, ownership boundaries, and referenced templates.
 * `cpt-frontx-adr-template-ownership-boundary-declaration` — Defines the two-tier ownership-boundary declaration (exclusive subtrees plus shared-file region ownership with a declared merge).
 * `cpt-frontx-adr-assembly-conflict-prevention` — Detects and refuses conflicting assembly before any write via a pre-flight intersection check and a post-materialization boundary-honesty guard.
@@ -228,7 +228,7 @@ The lifecycle tooling never changes a developer's repository silently or irrever
 
 A repository is assembled from one or more independently-applied templates, and every template carries its own boundary. Each template defines what it produces and declares the boundaries of what it owns — the subtrees it alone writes and the regions of shared files it contributes to; the lifecycle tooling operates over any template through one uniform mechanism, resolving a preset's referenced templates together and comparing the applied templates' declared boundaries before writing so that a clash is reported and refused rather than silently merged. Making ownership an explicit, declared, and arbitrated property is what lets independently-authored templates be composed into one repository — and later upgraded one at a time — without the multi-writer corruption that undeclared composition invites.
 
-**ADRs**: `cpt-frontx-adr-kind-agnostic-template-mechanism`, `cpt-frontx-adr-template-ownership-boundary-declaration`, `cpt-frontx-adr-assembly-conflict-prevention`
+**ADRs**: `cpt-frontx-adr-uniform-template-mechanism`, `cpt-frontx-adr-template-ownership-boundary-declaration`, `cpt-frontx-adr-assembly-conflict-prevention`
 
 ### 2.2 Constraints
 
@@ -554,14 +554,14 @@ Project Developers and the AI agents acting for them need to drive the full temp
 
 ##### Responsibility scope
 
-- Owns the command surface, organized by lifecycle capability — install / list / update / validate a template; apply a template to seed a repository; add a template into an existing repository; assemble with a pre-flight conflict check; upgrade an applied template — dispatching each command to the owning internal component through one uniform mechanism that operates over any template (`cpt-frontx-adr-kind-agnostic-template-mechanism`).
+- Owns the command surface, organized by lifecycle capability — install / list / update / validate a template; apply a template to seed a repository; add a template into an existing repository; assemble with a pre-flight conflict check; upgrade an applied template — dispatching each command to the owning internal component through one uniform mechanism that operates over any template (`cpt-frontx-adr-uniform-template-mechanism`).
 - Composes the internal components — template resolver, pre-publish validator, assembler, conflict checker, provenance recorder, and change-set-&-upgrade engine — into the lifecycle the command surface exposes.
 - Holds the package's template-independence guarantee: it resolves templates by versioned source-spec at runtime and bundles none (CLI-1).
 
 ##### Responsibility boundaries
 
 - Owns no lifecycle mechanism directly; acquisition, validation, assembly, conflict checking, provenance, and upgrade are each owned by the corresponding internal component below.
-- The command surface operates identically over any template through one uniform mechanism (`cpt-frontx-adr-kind-agnostic-template-mechanism`).
+- The command surface operates identically over any template through one uniform mechanism (`cpt-frontx-adr-uniform-template-mechanism`).
 - Does not own the runtime mechanisms an assembled application uses (registration, type validation, communication) — those belong to the Core Framework.
 - Does not own AI-driven orchestration of upgrades; that is layered above the change-set engine by the AI Tooling kit and not duplicated here.
 
@@ -594,7 +594,7 @@ The CLI owns no template, so a single component must turn a versioned source-spe
 ##### Responsibility boundaries
 
 - Bundles no template (CLI-1); is the one shared resolver across every application and assembly (CLI-2).
-- Resolves any template through the same path (`cpt-frontx-adr-kind-agnostic-template-mechanism`).
+- Resolves any template through the same path (`cpt-frontx-adr-uniform-template-mechanism`).
 - Does not materialize files into a repository (assembler), check boundaries for conflict (conflict checker), record provenance (provenance recorder), validate a candidate template for publication (pre-publish validator), or apply upgrades (change-set engine).
 
 ##### Related components (by ID)
@@ -639,7 +639,7 @@ The resolved set of templates must be materialized into a repository on disk —
 
 ##### Responsibility scope
 
-- Owns assembly and materialization of the resolved template set into a repository, seeding a new repository (`cpt-frontx-fr-cli-seed-repository`) or adding into an existing one (`cpt-frontx-fr-cli-add-template-to-repository`), composing a preset's referenced templates in one operation (`cpt-frontx-adr-composed-template-resolution`, `cpt-frontx-adr-kind-agnostic-template-mechanism`).
+- Owns assembly and materialization of the resolved template set into a repository, seeding a new repository (`cpt-frontx-fr-cli-seed-repository`) or adding into an existing one (`cpt-frontx-fr-cli-add-template-to-repository`), composing a preset's referenced templates in one operation (`cpt-frontx-adr-composed-template-resolution`, `cpt-frontx-adr-uniform-template-mechanism`).
 - Stages the assembly's intended writes for the conflict checker and, only after the check passes, materializes them and composes any shared files per their declared merges.
 - Triggers per-applied-template provenance recording as the final step of an apply.
 
@@ -866,7 +866,7 @@ Covers `cpt-frontx-interface-cli` (PRD §7.1).
 - **Location**: command surface of `@gears-frontx/cli`
 - **Shape**: the command surface that drives the template and repository lifecycle, organized by lifecycle capability over one uniform mechanism that operates over any template — install / list / update / validate a template (`cpt-frontx-fr-cli-template-install`, `cpt-frontx-fr-cli-template-validate-prepublish`); apply a template to seed a new repository (`cpt-frontx-fr-cli-seed-repository`); add a template into an existing repository (`cpt-frontx-fr-cli-add-template-to-repository`); assemble one or more templates, resolving a preset's referenced templates and refusing conflicting assembly before any write (`cpt-frontx-fr-cli-composed-template-resolution`, `cpt-frontx-fr-cli-assembly-conflict-prevention`); and upgrade each applied template independently as a reviewable change set (`cpt-frontx-fr-cli-project-upgrade-changeset`) — all through one shared resolver.
 - **Stability**: unstable; incompatible changes to the command surface require a major version bump under the per-concern independent versioning policy.
-- **ADRs**: `cpt-frontx-adr-artifact-versioning-and-distribution`, `cpt-frontx-adr-kind-agnostic-template-mechanism`, `cpt-frontx-adr-cli-internal-decomposition`
+- **ADRs**: `cpt-frontx-adr-artifact-versioning-and-distribution`, `cpt-frontx-adr-uniform-template-mechanism`, `cpt-frontx-adr-cli-internal-decomposition`
 
 #### AI Tooling Framework interface
 

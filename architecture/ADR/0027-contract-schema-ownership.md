@@ -50,7 +50,7 @@ The rule applies to every cross-artifact contract, and specifically resolves the
 
 ### Consequences
 
-* Good, because every contract now has exactly one role owner (DESIGN), one rationale owner (the ADR), and one schema owner (the FEATURE), closing the circular deferral.
+* Good, because every contract has exactly one role owner (DESIGN), one rationale owner (the ADR), and one schema owner (the FEATURE), so no contract's ownership defers in a circle.
 * Good, because both purity gates (DATA-DESIGN-NO-001, DATA-ADR-NO-001) are honored by construction.
 * Good, because code gains a single authoritative schema to trace to, replacing unilateral, untraced shapes.
 * Neutral, because the ADR and DESIGN carry a pointer to the owning FEATURE rather than the schema itself.
