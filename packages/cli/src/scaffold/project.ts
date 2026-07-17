@@ -53,13 +53,18 @@ export async function scaffoldProject(
 
   // @cpt-begin:cpt-frontx-algo-cli-scaffolding-project-scaffold:p1:inst-validate-kind
   // @cpt-begin:cpt-frontx-algo-cli-scaffolding-project-scaffold:p1:inst-check-kind
-  if (manifestResult.manifest.kind !== 'project-template') {
+  // Transitional read: the manifest `kind` field was removed from the F11 contract
+  // (Option-C kindless assembly). This namespace-kind guard and its markers are the
+  // F12 old-model surface swept by the kindless-assembler phase; read defensively
+  // until then so this package keeps building.
+  const manifestKind = (manifestResult.manifest as { kind?: string }).kind;
+  if (manifestKind !== 'project-template') {
     // @cpt-begin:cpt-frontx-algo-cli-scaffolding-project-scaffold:p1:inst-abort-kind-mismatch
     // @cpt-begin:cpt-frontx-state-cli-scaffolding-scaffold-op:p1:inst-transition-resolved-aborted
     return {
       ok: false,
       reason: 'kind-mismatch',
-      message: `Scaffold aborted — template kind mismatch: expected "project-template", got "${manifestResult.manifest.kind}".`,
+      message: `Scaffold aborted — template kind mismatch: expected "project-template", got "${manifestKind}".`,
     };
     // @cpt-end:cpt-frontx-state-cli-scaffolding-scaffold-op:p1:inst-transition-resolved-aborted
     // @cpt-end:cpt-frontx-algo-cli-scaffolding-project-scaffold:p1:inst-abort-kind-mismatch

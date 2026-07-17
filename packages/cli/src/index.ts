@@ -32,7 +32,9 @@ export { validateCommand } from './commands/validate.js';
 export type {
   TemplateManifest,
   TemplateFile,
-  CompositionRef,
+  OwnershipBoundary,
+  SharedFileEntry,
+  ReferencedTemplate,
   ManifestViolation,
   ManifestValidationResult,
   ManifestValidationState,
@@ -40,7 +42,7 @@ export type {
 } from './manifest/types.js';
 export type { ReadManifestResult } from './manifest/validate-contract.js';
 export type { ValidateCommandResult } from './commands/validate.js';
-export { MANIFEST_FILENAME, MANIFEST_SCHEMA_VERSION, RECOGNIZED_KINDS } from './manifest/types.js';
+export { MANIFEST_FILENAME, MANIFEST_SCHEMA_VERSION } from './manifest/types.js';
 
 export { routeNamespaceCommand } from './namespaces/route.js';
 export { NAMESPACE_REGISTRY } from './namespaces/types.js';

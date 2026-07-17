@@ -17,7 +17,12 @@ function makeEntry(
   version: string,
   files: Array<{ path: string; content: string }>,
 ): InventoryEntry {
-  const manifest = { name, version, kind: 'project-template', files };
+  const manifest = {
+    name,
+    version,
+    ownershipBoundaries: { exclusiveSubtrees: [], sharedFiles: [] },
+    files,
+  };
   return {
     name,
     source: `local:${name}`,

@@ -13,9 +13,9 @@ function makeEntry(
   const manifest = {
     name,
     version,
-    kind: 'project-template',
+    ownershipBoundaries: { exclusiveSubtrees: [], sharedFiles: [] },
     files,
-    compositions,
+    referencedTemplates: compositions.map((c) => ({ ref: c.ref, appliedAt: '.' })),
   };
   return {
     name,
