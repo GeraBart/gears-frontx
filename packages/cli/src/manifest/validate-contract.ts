@@ -1,5 +1,5 @@
 // @cpt-algo:cpt-frontx-algo-template-manifest-validate-contract:p1
-import type { ManifestViolation, ManifestValidationResult, TemplateManifest } from './types.js';
+import type { ManifestViolation, ManifestValidationResult, TemplateManifest } from './types';
 
 // Result type for manifest parsing + validation in one step.
 export type ReadManifestResult =

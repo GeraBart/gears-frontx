@@ -2,13 +2,13 @@
 // @cpt-state:cpt-frontx-state-composed-provenance-composition-resolution:p1
 // @cpt-dod:cpt-frontx-dod-composed-provenance-composition-delivered:p1
 // @cpt-dod:cpt-frontx-dod-composed-provenance-provenance-at-scaffold:p1
-import type { InventoryEntry } from '../inventory/types.js';
-import { readManifestFromContent } from '../manifest/validate-contract.js';
-import { resolveComposition } from '../composition/resolve.js';
-import { CompositionResolutionState } from '../composition/state.js';
-import { writeProvenance } from '../provenance/write.js';
-import type { ProvenanceWriteFn } from '../provenance/types.js';
-import type { ConflictCheckFn, WriteFileFn } from './types.js';
+import type { InventoryEntry } from '../inventory/types';
+import { readManifestFromContent } from '../manifest/validate-contract';
+import { resolveComposition } from '../composition/resolve';
+import { CompositionResolutionState } from '../composition/state';
+import { writeProvenance } from '../provenance/write';
+import type { ProvenanceWriteFn } from '../provenance/types';
+import type { ConflictCheckFn, ReadContentItemsFn, WriteFileFn } from './types';
 
 export type ComposedScaffoldResult =
   | { ok: true; message: string; provenanceLocation: string }
@@ -31,6 +31,7 @@ export async function scaffoldComposedProject(
   conflictCheckFn: ConflictCheckFn,
   writeFileFn: WriteFileFn,
   provenanceWriteFn: ProvenanceWriteFn,
+  readContentFn: ReadContentItemsFn,
 ): Promise<ComposedScaffoldResult> {
 // @cpt-end:cpt-frontx-flow-composed-provenance-scaffold-composed-project:p1:inst-issue-scaffold
 
@@ -70,13 +71,14 @@ export async function scaffoldComposedProject(
   stateTrace.push(CompositionResolutionState.RESOLVING);
 
   // @cpt-begin:cpt-frontx-flow-composed-provenance-scaffold-composed-project:p1:inst-invoke-resolution
-  const compositionResult = resolveComposition(
-    manifestResult.manifest,
+  const compositionResult = await resolveComposition(
+    rootEntry,
     templateRef,
     new Set<string>(),
     0,
     null,
     lookupFn,
+    readContentFn,
   );
   // @cpt-end:cpt-frontx-flow-composed-provenance-scaffold-composed-project:p1:inst-invoke-resolution
 

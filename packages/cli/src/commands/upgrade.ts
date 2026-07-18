@@ -12,9 +12,9 @@
 // F17 orchestration drive this same single engine
 // (cpt-frontx-dod-upgrade-changeset-single-engine) — there is no second
 // diff/apply implementation.
-import { upgradeChangeSetReviewApproval } from '../upgrade/flow.js';
-import type { UpgradeFlowDeps } from '../upgrade/flow.js';
-import type { ChangeSet } from '../upgrade/types.js';
+import { upgradeChangeSetReviewApproval } from '../upgrade/flow';
+import type { UpgradeFlowDeps } from '../upgrade/flow';
+import type { ChangeSet } from '../upgrade/types';
 
 export interface UpgradeCommandResult {
   ok: boolean;

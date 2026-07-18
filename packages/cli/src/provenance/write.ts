@@ -1,7 +1,7 @@
 // @cpt-algo:cpt-frontx-algo-composed-provenance-provenance-write:p1
 // @cpt-dod:cpt-frontx-dod-composed-provenance-provenance-at-scaffold:p1
-import { provenancePath } from './contract.js';
-import type { ProvenanceRecord, ProvenanceWriteFn } from './types.js';
+import { provenancePath } from './contract';
+import type { ProvenanceRecord, ProvenanceWriteFn } from './types';
 
 export type WriteProvenanceResult =
   | { ok: true; location: string }

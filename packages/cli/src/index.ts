@@ -3,35 +3,34 @@
 // Zero template content is bundled in this package.
 // All template resolution happens at runtime via source-spec.
 
-export { parseSourceSpec } from './spec-parser/parse.js';
-export type { StructuredRef, ParseError, ParseResult } from './spec-parser/types.js';
+export { parseSourceSpec } from './spec-parser/parse';
+export type { StructuredRef, ParseError, ParseResult } from './spec-parser/types';
 
-export { resolveToInventory } from './resolver/resolve.js';
-export type { FetchFn, InventoryReadyRecord, ResolutionError, ResolveResult } from './resolver/types.js';
+export { resolveToInventory } from './resolver/resolve';
+export type { FetchFn, InventoryReadyRecord, ResolutionError, ResolveResult } from './resolver/types';
 
-export { TemplateInventory } from './inventory/TemplateInventory.js';
-export { InventoryIndex } from './inventory/InventoryIndex.js';
-export { InventoryStore } from './inventory/InventoryStore.js';
-export { InventoryState } from './inventory/types.js';
-export type { InventoryEntry, InventoryError, InventoryResult } from './inventory/types.js';
+export { TemplateInventory } from './inventory/TemplateInventory';
+export { InventoryIndex } from './inventory/InventoryIndex';
+export { InventoryStore } from './inventory/InventoryStore';
+export { InventoryState } from './inventory/types';
+export type { InventoryEntry, InventoryError, InventoryResult } from './inventory/types';
 
-export { installCommand } from './commands/install.js';
-export type { InstallCommandResult } from './commands/install.js';
+export { installCommand } from './commands/install';
+export type { InstallCommandResult } from './commands/install';
 
 // F16 cross-pillar edge (F16 <- F10): install-time extension discovery hook
-export type { DiscoveryHookContext, DiscoveryHookResult, ExtensionDiscoveryHook } from './discovery/types.js';
+export type { DiscoveryHookContext, DiscoveryHookResult, ExtensionDiscoveryHook } from './discovery/types';
 
-export { listCommand } from './commands/list.js';
-export type { ListEntry } from './commands/list.js';
+export { listCommand } from './commands/list';
+export type { ListEntry } from './commands/list';
 
-export { updateLocalCommand } from './commands/update-local.js';
-export type { UpdateLocalResult } from './commands/update-local.js';
+export { updateLocalCommand } from './commands/update-local';
+export type { UpdateLocalResult } from './commands/update-local';
 
-export { validateManifestContract, readManifestFromContent } from './manifest/validate-contract.js';
-export { validateCommand } from './commands/validate.js';
+export { validateManifestContract, readManifestFromContent } from './manifest/validate-contract';
+export { validateCommand } from './commands/validate';
 export type {
   TemplateManifest,
-  TemplateFile,
   OwnershipBoundary,
   SharedFileEntry,
   ReferencedTemplate,
@@ -39,21 +38,21 @@ export type {
   ManifestValidationResult,
   ManifestValidationState,
   ReadFileFn,
-} from './manifest/types.js';
-export type { ReadManifestResult } from './manifest/validate-contract.js';
-export type { ValidateCommandResult } from './commands/validate.js';
-export { MANIFEST_FILENAME, MANIFEST_SCHEMA_VERSION } from './manifest/types.js';
+} from './manifest/types';
+export type { ReadManifestResult } from './manifest/validate-contract';
+export type { ValidateCommandResult } from './commands/validate';
+export { MANIFEST_FILENAME, MANIFEST_SCHEMA_VERSION } from './manifest/types';
 
-export { scaffoldComposedProject } from './scaffold/composed.js';
-export type { ComposedScaffoldResult } from './scaffold/composed.js';
+export { scaffoldComposedProject } from './scaffold/composed';
+export type { ComposedScaffoldResult } from './scaffold/composed';
 
 // F12 kindless assembler core (cpt-frontx-algo-cli-scaffolding-uniform-apply,
 // cpt-frontx-state-cli-scaffolding-assembly-op) — the ONE apply path both
 // seed-a-repository and add-a-template invoke. The pre-flight conflict
 // checker (P29) and the entry flows (P30) build on this surface.
-export { uniformApply } from './scaffold/assembler.js';
-export type { UniformApplyResult } from './scaffold/assembler.js';
-export { AssemblyOpState, runAssemblyOp } from './scaffold/state.js';
+export { uniformApply } from './scaffold/assembler';
+export type { UniformApplyResult } from './scaffold/assembler';
+export { AssemblyOpState, runAssemblyOp } from './scaffold/state';
 export type {
   AssemblyOpInput,
   AssemblyOpResult,
@@ -63,16 +62,23 @@ export type {
   ConflictVerdictFn,
   MaterializeAssemblyFn,
 } from './scaffold/state.js';
-export type { WriteFileFn, ConflictCheckFn, ContributionEntry, StagedAssembly } from './scaffold/types.js';
+export type {
+  WriteFileFn,
+  ConflictCheckFn,
+  ContentItem,
+  ReadContentItemsFn,
+  ContributionEntry,
+  StagedAssembly,
+} from './scaffold/types.js';
 
-export { resolveComposition } from './composition/resolve.js';
-export { CompositionResolutionState } from './composition/state.js';
-export type { CompositionFileEntry, CollisionRecord, CompositionSetResult } from './composition/types.js';
+export { resolveComposition } from './composition/resolve';
+export { CompositionResolutionState } from './composition/state';
+export type { CompositionFileEntry, CollisionRecord, CompositionSetResult } from './composition/types';
 
-export { writeProvenance } from './provenance/write.js';
-export type { WriteProvenanceResult } from './provenance/write.js';
-export type { ProvenanceRecord, ProvenanceWriteFn } from './provenance/types.js';
-export { PROVENANCE_RELATIVE_PATH, provenancePath } from './provenance/contract.js';
+export { writeProvenance } from './provenance/write';
+export type { WriteProvenanceResult } from './provenance/write';
+export type { ProvenanceRecord, ProvenanceWriteFn } from './provenance/types';
+export { PROVENANCE_RELATIVE_PATH, provenancePath } from './provenance/contract';
 
 // F14 Upgrade Change-Set Engine (cpt-frontx-dod-upgrade-changeset-single-engine)
 // There is exactly ONE engine. Direct CLI invocation uses these canonical
@@ -82,15 +88,15 @@ export { PROVENANCE_RELATIVE_PATH, provenancePath } from './provenance/contract.
 // upgrade` command/invocation surface (`upgradeCommand`, ./commands/upgrade.js),
 // per DESIGN §3.4 ("orchestrates ... through its command surface ... NOT by
 // linking its engine").
-export { upgradeChangeSetReviewApproval } from './upgrade/flow.js';
-export type { UpgradeFlowResult, UpgradeFlowDeps } from './upgrade/flow.js';
-export { computeChangeSet } from './upgrade/compute.js';
-export type { ComputeResult } from './upgrade/compute.js';
-export { applyChangeSet } from './upgrade/apply.js';
-export type { ApplyResult } from './upgrade/apply.js';
-export { rollbackChangeSet } from './upgrade/rollback.js';
-export type { RollbackResult } from './upgrade/rollback.js';
-export { ChangeSetLifecycleState } from './upgrade/state.js';
+export { upgradeChangeSetReviewApproval } from './upgrade/flow';
+export type { UpgradeFlowResult, UpgradeFlowDeps } from './upgrade/flow';
+export { computeChangeSet } from './upgrade/compute';
+export type { ComputeResult } from './upgrade/compute';
+export { applyChangeSet } from './upgrade/apply';
+export type { ApplyResult } from './upgrade/apply';
+export { rollbackChangeSet } from './upgrade/rollback';
+export type { RollbackResult } from './upgrade/rollback';
+export { ChangeSetLifecycleState } from './upgrade/state';
 export type {
   ChangeKind,
   CleanEntry,
@@ -104,9 +110,9 @@ export type {
   RemoveProjectFileFn,
   WriteProvenanceFn,
   PresentAndGetApprovalFn,
-} from './upgrade/types.js';
+} from './upgrade/types';
 
 // F14 command/invocation surface — the ONLY integration path F17 (and any
 // other external artifact) should use to drive the change-set engine.
-export { upgradeCommand } from './commands/upgrade.js';
-export type { UpgradeCommandResult } from './commands/upgrade.js';
+export { upgradeCommand } from './commands/upgrade';
+export type { UpgradeCommandResult } from './commands/upgrade';

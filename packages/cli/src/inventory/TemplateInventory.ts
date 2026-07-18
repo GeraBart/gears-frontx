@@ -5,13 +5,13 @@
 // @cpt-dod:cpt-frontx-dod-template-resolution-install-by-spec:p1
 // @cpt-dod:cpt-frontx-dod-template-resolution-list-inventory:p1
 // @cpt-dod:cpt-frontx-dod-template-resolution-bounded-local-update:p1
-import { parseSourceSpec } from '../spec-parser/parse.js';
-import { resolveToInventory } from '../resolver/resolve.js';
-import type { FetchFn } from '../resolver/types.js';
-import { InventoryIndex } from './InventoryIndex.js';
-import { InventoryStore } from './InventoryStore.js';
-import { InventoryState } from './types.js';
-import type { InventoryEntry, InventoryResult } from './types.js';
+import { parseSourceSpec } from '../spec-parser/parse';
+import { resolveToInventory } from '../resolver/resolve';
+import type { FetchFn } from '../resolver/types';
+import { InventoryIndex } from './InventoryIndex';
+import { InventoryStore } from './InventoryStore';
+import { InventoryState } from './types';
+import type { InventoryEntry, InventoryResult } from './types';
 
 export class TemplateInventory {
   private readonly index = new InventoryIndex();

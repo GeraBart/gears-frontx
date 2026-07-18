@@ -4,9 +4,9 @@
 // @cpt-dod:cpt-frontx-dod-template-manifest-validate-command:p1
 // @cpt-dod:cpt-frontx-dod-template-manifest-single-description:p1
 import { describe, it, expect, vi } from 'vitest';
-import { validateManifestContract } from '../manifest/validate-contract.js';
-import { validateCommand } from '../commands/validate.js';
-import type { TemplateManifest, ReadFileFn } from '../manifest/types.js';
+import { validateManifestContract } from '../manifest/validate-contract';
+import { validateCommand } from '../commands/validate';
+import type { TemplateManifest, ReadFileFn } from '../manifest/types';
 
 // Helper: build a valid four-category manifest JSON string.
 // Categories: (1) identity, (2) version, (3) ownership boundaries, (4) referenced templates.

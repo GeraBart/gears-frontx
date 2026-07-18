@@ -1,6 +1,6 @@
 // @cpt-algo:cpt-frontx-algo-template-resolution-resolve-to-inventory:p1
-import type { StructuredRef } from '../spec-parser/types.js';
-import type { FetchFn, ResolveResult } from './types.js';
+import type { StructuredRef } from '../spec-parser/types';
+import type { FetchFn, ResolveResult } from './types';
 
 export async function resolveToInventory(
   ref: StructuredRef,

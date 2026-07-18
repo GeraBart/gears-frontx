@@ -5,12 +5,6 @@
 export const MANIFEST_FILENAME = 'frontx-template.json';
 export const MANIFEST_SCHEMA_VERSION = '1.0';
 
-// Single content item within a template — delivered at scaffold/assembly time.
-export interface TemplateFile {
-  path: string;    // relative path within the template
-  content: string; // file content to write at destination
-}
-
 // Ownership category (3b): per shared file, the regions this template owns and
 // the merge strategy applied when another template also writes it.
 export interface SharedFileEntry {
@@ -35,15 +29,18 @@ export interface ReferencedTemplate {
 
 // Single authoritative contract — cpt-frontx-contract-template-manifest.
 // EXACTLY four declared categories: identity, version, ownership boundaries,
-// referenced templates. The same shape is checked at pre-publish validation and
-// consumed at install, apply, and assembly time — no per-command divergence.
+// referenced templates. The manifest declares NO content and carries NO file
+// bodies — every consumer reads content items from the resolved on-disk
+// installed content path (cpt-frontx-algo-cli-scaffolding-uniform-apply
+// inst-ua-read-content), never from this shape. The same shape is checked at
+// pre-publish validation and consumed at install, apply, and assembly time —
+// no per-command divergence.
 export interface TemplateManifest {
   schemaVersion?: string;                     // optional; absent = '1.0'; enables forward-reading
   name: string;                               // (1) identity
   version: string;                            // (2) version — versioned shape
   ownershipBoundaries: OwnershipBoundary;     // (3) ownership boundaries
   referencedTemplates?: ReferencedTemplate[]; // (4) referenced templates (a preset applies together)
-  files?: TemplateFile[];                     // content items delivered at scaffold/assembly time
 }
 
 export interface ManifestViolation {

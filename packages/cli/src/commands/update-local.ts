@@ -1,7 +1,7 @@
 // @cpt-flow:cpt-frontx-flow-template-resolution-update-local:p1
 // @cpt-dod:cpt-frontx-dod-template-resolution-bounded-local-update:p1
-import type { FetchFn } from '../resolver/types.js';
-import { TemplateInventory } from '../inventory/TemplateInventory.js';
+import type { FetchFn } from '../resolver/types';
+import { TemplateInventory } from '../inventory/TemplateInventory';
 
 export interface UpdateLocalResult {
   ok: boolean;
