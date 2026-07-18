@@ -1,6 +1,6 @@
 // @cpt-algo:cpt-frontx-algo-template-resolution-parse-spec:p1
 // @cpt-dod:cpt-frontx-dod-template-resolution-spec-parser-rejection:p1
-import type { ParseResult } from './types.js';
+import type { ParseResult } from './types';
 
 export function parseSourceSpec(raw: string): ParseResult {
   // @cpt-begin:cpt-frontx-algo-template-resolution-parse-spec:p1:inst-parse-prefix-check

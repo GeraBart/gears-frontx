@@ -4,9 +4,9 @@
 // @cpt-dod:cpt-frontx-dod-upgrade-changeset-apply:p1
 // @cpt-dod:cpt-frontx-dod-upgrade-changeset-rollback:p1
 // @cpt-dod:cpt-frontx-dod-upgrade-changeset-single-engine:p1
-import { computeChangeSet } from './compute.js';
-import { applyChangeSet } from './apply.js';
-import { ChangeSetLifecycleState } from './state.js';
+import { computeChangeSet } from './compute';
+import { applyChangeSet } from './apply';
+import { ChangeSetLifecycleState } from './state';
 import type {
   ProjectSnapshot,
   ReadProvenanceFn,
@@ -16,7 +16,8 @@ import type {
   RemoveProjectFileFn,
   WriteProvenanceFn,
   PresentAndGetApprovalFn,
-} from './types.js';
+} from './types';
+import type { ReadContentItemsFn } from '../scaffold/types';
 
 export type UpgradeFlowResult =
   | { status: 'applied'; targetVersion: string; snapshot: ProjectSnapshot }
@@ -31,6 +32,7 @@ export interface UpgradeFlowDeps {
   readProvenance: ReadProvenanceFn;
   lookupByVersion: VersionedLookupFn;
   readProjectFile: ReadProjectFileFn;
+  readContentItems: ReadContentItemsFn;
   writeProjectFile: WriteProjectFileFn;
   removeProjectFile: RemoveProjectFileFn;
   writeProvenance: WriteProvenanceFn;
@@ -56,6 +58,7 @@ export async function upgradeChangeSetReviewApproval(
     readProvenance: deps.readProvenance,
     lookupByVersion: deps.lookupByVersion,
     readProjectFile: deps.readProjectFile,
+    readContentItems: deps.readContentItems,
   });
   // @cpt-end:cpt-frontx-flow-upgrade-changeset-review-approval:p1:inst-compute-diff
   // @cpt-end:cpt-frontx-flow-upgrade-changeset-review-approval:p1:inst-read-provenance

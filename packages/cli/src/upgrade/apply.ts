@@ -1,6 +1,6 @@
 // @cpt-algo:cpt-frontx-algo-upgrade-changeset-apply:p1
 // @cpt-dod:cpt-frontx-dod-upgrade-changeset-apply:p1
-import { provenancePath } from '../provenance/contract.js';
+import { provenancePath } from '../provenance/contract';
 import type {
   ChangeSet,
   ProjectSnapshot,
@@ -9,7 +9,7 @@ import type {
   WriteProjectFileFn,
   RemoveProjectFileFn,
   WriteProvenanceFn,
-} from './types.js';
+} from './types';
 
 export type ApplyResult =
   | { ok: true; snapshot: ProjectSnapshot }

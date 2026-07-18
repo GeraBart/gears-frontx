@@ -1,7 +1,7 @@
 // @cpt-algo:cpt-frontx-algo-template-resolution-parse-spec:p1
 // @cpt-dod:cpt-frontx-dod-template-resolution-spec-parser-rejection:p1
 import { describe, it, expect } from 'vitest';
-import { parseSourceSpec } from '../spec-parser/parse.js';
+import { parseSourceSpec } from '../spec-parser/parse';
 
 describe('parseSourceSpec', () => {
   // cpt-frontx-algo-template-resolution-parse-spec: happy path

@@ -124,11 +124,12 @@ Internal system functions and procedures called by actor flows above.
 
 **Steps**:
 1. [x] - `p1` - Receive the resolved set of templates and the target repository path. - `inst-ua-receive`
-2. [x] - `p1` - Read each template's manifest to obtain its declared ownership boundaries and its content items. - `inst-ua-read-manifests`
-3. [x] - `p1` - **FOR EACH** template in the resolved set - `inst-ua-foreach-template`
-   - [x] - `p1` - Compute the content items the template contributes and the exclusive subtrees and shared-file regions it declares to occupy. - `inst-ua-compute-contribution`
+2. [x] - `p1` - Read each template's manifest to obtain ONLY its four declared categories — identity, version, declared ownership boundaries, and referenced templates; the manifest declares no content and carries no file bodies. - `inst-ua-read-manifests`
+3. [x] - `p1` - Read each template's content items directly from its installed content path — the resolved on-disk template materialized into the local inventory by `cpt-frontx-feature-template-resolution` — never from its manifest. - `inst-ua-read-content`
+4. [x] - `p1` - **FOR EACH** template in the resolved set - `inst-ua-foreach-template`
+   - [x] - `p1` - Compute the content items the template contributes by scoping the content read from its installed content path to the exclusive subtrees and shared-file regions its manifest declares to occupy. - `inst-ua-compute-contribution`
    - [x] - `p1` - Add the template's contribution and declared boundaries to the staged assembly, tagged with the template's identity. - `inst-ua-stage-contribution`
-4. [x] - `p1` - **RETURN** the staged assembly carrying every applied template's contribution and declared boundaries, for the conflict check to evaluate. - `inst-ua-return-staged`
+5. [x] - `p1` - **RETURN** the staged assembly carrying every applied template's contribution and declared boundaries, for the conflict check to evaluate. - `inst-ua-return-staged`
 
 ### Pre-Flight Assembly Conflict Check
 
@@ -208,7 +209,7 @@ The system **MUST** run a pre-flight intersection check over the staged assembly
 
 - [x] `p1` - **ID**: `cpt-frontx-dod-cli-scaffolding-boundary-declared-assembly`
 
-The system **MUST** assemble a repository from one or more independently-applied templates — including a preset's referenced templates resolved and applied together — reading each template's declared ownership boundaries from its manifest and writing one provenance record per applied template (`target`).
+The system **MUST** assemble a repository from one or more independently-applied templates — including a preset's referenced templates resolved and applied together — reading each template's declared ownership boundaries from its manifest, reading that template's content from its installed content path scoped to those declared boundaries (never from the manifest), and writing one provenance record per applied template (`target`).
 
 **Implements**:
 - `cpt-frontx-flow-cli-scaffolding-seed-repository`

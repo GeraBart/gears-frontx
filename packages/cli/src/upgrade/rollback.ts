@@ -1,7 +1,7 @@
 // @cpt-algo:cpt-frontx-algo-upgrade-changeset-rollback:p1
 // @cpt-dod:cpt-frontx-dod-upgrade-changeset-rollback:p1
-import { ChangeSetLifecycleState } from './state.js';
-import type { ProjectSnapshot, WriteProjectFileFn, RemoveProjectFileFn } from './types.js';
+import { ChangeSetLifecycleState } from './state';
+import type { ProjectSnapshot, WriteProjectFileFn, RemoveProjectFileFn } from './types';
 
 export type RollbackResult = { ok: true } | { ok: false; message: string };
 

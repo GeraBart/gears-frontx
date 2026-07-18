@@ -7,9 +7,9 @@
 // @cpt-dod:cpt-frontx-dod-template-resolution-list-inventory:p1
 // @cpt-dod:cpt-frontx-dod-template-resolution-bounded-local-update:p1
 import { describe, it, expect, vi } from 'vitest';
-import { TemplateInventory } from '../inventory/TemplateInventory.js';
-import { InventoryState } from '../inventory/types.js';
-import type { FetchFn } from '../resolver/types.js';
+import { TemplateInventory } from '../inventory/TemplateInventory';
+import { InventoryState } from '../inventory/types';
+import type { FetchFn } from '../resolver/types';
 
 function makeSuccessFetch(content = 'template-content'): FetchFn {
   return vi.fn().mockResolvedValue(content);

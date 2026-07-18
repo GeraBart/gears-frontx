@@ -2,8 +2,8 @@
 // @cpt-dod:cpt-frontx-dod-upgrade-changeset-apply:p1
 // @cpt-dod:cpt-frontx-dod-upgrade-changeset-rollback:p1
 // @cpt-dod:cpt-frontx-dod-upgrade-changeset-single-engine:p1
-import type { ProvenanceRecord } from '../provenance/types.js';
-import type { InventoryEntry } from '../inventory/types.js';
+import type { ProvenanceRecord } from '../provenance/types';
+import type { InventoryEntry } from '../inventory/types';
 
 export type { ProvenanceRecord };
 

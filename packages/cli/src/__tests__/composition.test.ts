@@ -1,9 +1,16 @@
 import { describe, it, expect, vi } from 'vitest';
-import { scaffoldComposedProject } from '../scaffold/composed.js';
-import type { InventoryEntry } from '../inventory/types.js';
-import { InventoryState } from '../inventory/types.js';
+import { scaffoldComposedProject } from '../scaffold/composed';
+import type { InventoryEntry } from '../inventory/types';
+import { InventoryState } from '../inventory/types';
+import type { ContentItem, ReadContentItemsFn } from '../scaffold/types';
 
-// Helper: build a minimal inventory entry with a serialized manifest.
+// Content items live SEPARATELY from the manifest, in a registry keyed by
+// template name, and are read via the injected `readContentFn` seam directly
+// from the "installed content path" — never from the manifest.
+const contentRegistry = new Map<string, ContentItem[]>();
+const readContentFn: ReadContentItemsFn = async (entry) => contentRegistry.get(entry.name) ?? [];
+
+// Helper: build a minimal inventory entry with a serialized manifest (no `files`).
 function makeEntry(
   name: string,
   version: string,
@@ -14,9 +21,9 @@ function makeEntry(
     name,
     version,
     ownershipBoundaries: { exclusiveSubtrees: [], sharedFiles: [] },
-    files,
     referencedTemplates: compositions.map((c) => ({ ref: c.ref, appliedAt: '.' })),
   };
+  contentRegistry.set(name, files);
   return {
     name,
     source: `local:${name}`,
@@ -47,6 +54,7 @@ describe('scaffoldComposedProject', () => {
       conflictCheckFn,
       writeFileFn,
       provenanceWriteFn,
+      readContentFn,
     );
 
     expect(result.ok).toBe(true);
@@ -74,6 +82,7 @@ describe('scaffoldComposedProject', () => {
       vi.fn().mockResolvedValue(false),
       writeFileFn,
       provenanceWriteFn,
+      readContentFn,
     );
 
     expect(result.ok).toBe(true);
@@ -105,6 +114,7 @@ describe('scaffoldComposedProject', () => {
       vi.fn().mockResolvedValue(false),
       writeFileFn,
       provenanceWriteFn,
+      readContentFn,
     );
 
     expect(result.ok).toBe(true);
@@ -137,6 +147,7 @@ describe('scaffoldComposedProject', () => {
       vi.fn().mockResolvedValue(false),
       writeFileFn,
       provenanceWriteFn,
+      readContentFn,
     );
 
     expect(result.ok).toBe(false);
@@ -164,6 +175,7 @@ describe('scaffoldComposedProject', () => {
       vi.fn().mockResolvedValue(false),
       writeFileFn,
       provenanceWriteFn,
+      readContentFn,
     );
 
     expect(result.ok).toBe(false);
@@ -190,6 +202,7 @@ describe('scaffoldComposedProject', () => {
       vi.fn().mockResolvedValue(false),
       writeFileFn,
       provenanceWriteFn,
+      readContentFn,
     );
 
     expect(provenanceWriteFn).toHaveBeenCalledOnce();

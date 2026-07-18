@@ -1,13 +1,18 @@
 // @cpt-algo:cpt-frontx-algo-composed-provenance-recursive-resolution:p1
 // @cpt-dod:cpt-frontx-dod-composed-provenance-composition-delivered:p1
-import type { TemplateManifest } from '../manifest/types.js';
-import { readManifestFromContent } from '../manifest/validate-contract.js';
-import type { InventoryEntry } from '../inventory/types.js';
-import type { CollisionRecord, CompositionFileEntry, CompositionSetResult } from './types.js';
+import { readManifestFromContent } from '../manifest/validate-contract';
+import type { InventoryEntry } from '../inventory/types';
+import type { ReadContentItemsFn } from '../scaffold/types';
+import type { CollisionRecord, CompositionFileEntry, CompositionSetResult } from './types';
 
 // @cpt-begin:cpt-frontx-algo-composed-provenance-recursive-resolution:p1:inst-accept-manifest
 /**
  * Recursively resolves a composed template tree into a flat file map.
+ *
+ * Content items are read directly from each template's resolved on-disk
+ * installed content path (via the injected `readContentFn` seam) — the
+ * manifest carries no content (cpt-frontx-algo-cli-scaffolding-uniform-apply
+ * inst-ua-read-content).
  *
  * Nearest-declaration-wins semantics: a file at shallower depth overrides one
  * deeper in the tree. Files at equal depth but declared by different parents
@@ -17,15 +22,27 @@ import type { CollisionRecord, CompositionFileEntry, CompositionSetResult } from
  * the current stack, not all visited nodes — a diamond pattern (A→B, A→C, B→D,
  * C→D) is NOT a cycle and resolves through collision rules instead.
  */
-export function resolveComposition(
-  manifest: TemplateManifest,
+export async function resolveComposition(
+  entry: InventoryEntry,
   currentIdentity: string,
   visitedPath: Set<string>,
   depth: number,
   declaringParent: string | null,
   lookupFn: (name: string) => InventoryEntry | undefined,
-): CompositionSetResult {
+  readContentFn: ReadContentItemsFn,
+): Promise<CompositionSetResult> {
 // @cpt-end:cpt-frontx-algo-composed-provenance-recursive-resolution:p1:inst-accept-manifest
+
+  const manifestResult = readManifestFromContent(entry.content);
+  if (!manifestResult.ok) {
+    return {
+      ok: false,
+      reason: 'resolve-error',
+      ref: currentIdentity,
+      message: `Cannot read manifest for "${currentIdentity}": ${manifestResult.message}`,
+    };
+  }
+  const manifest = manifestResult.manifest;
 
   // @cpt-begin:cpt-frontx-algo-composed-provenance-recursive-resolution:p1:inst-check-cycle
   if (visitedPath.has(currentIdentity)) {
@@ -54,12 +71,14 @@ export function resolveComposition(
   // @cpt-end:cpt-frontx-algo-composed-provenance-recursive-resolution:p1:inst-read-composition-list
 
   // @cpt-begin:cpt-frontx-algo-composed-provenance-recursive-resolution:p1:inst-init-accumulator
-  // Seed with own files — these are depth-stamped and declared by this template.
+  // Seed with own content items — read directly from the installed content
+  // path (never from the manifest) — depth-stamped and declared by this template.
+  const ownItems = await readContentFn(entry);
   const accumulator = new Map<string, CompositionFileEntry>();
-  for (const file of manifest.files ?? []) {
-    accumulator.set(file.path, {
-      path: file.path,
-      content: file.content,
+  for (const item of ownItems) {
+    accumulator.set(item.path, {
+      path: item.path,
+      content: item.content,
       depth,
       declaringParent,
     });
@@ -95,24 +114,15 @@ export function resolveComposition(
     }
     // @cpt-end:cpt-frontx-algo-composed-provenance-recursive-resolution:p1:inst-check-resolve-fail
 
-    const childManifestResult = readManifestFromContent(childEntry.content);
-    if (!childManifestResult.ok) {
-      return {
-        ok: false,
-        reason: 'resolve-error',
-        ref: compositionRef.ref,
-        message: `Cannot read manifest for "${compositionRef.ref}": ${childManifestResult.message}`,
-      };
-    }
-
     // @cpt-begin:cpt-frontx-algo-composed-provenance-recursive-resolution:p1:inst-recurse
-    const childResult = resolveComposition(
-      childManifestResult.manifest,
+    const childResult = await resolveComposition(
+      childEntry,
       compositionRef.ref,
       ownVisited,
       depth + 1,
       currentIdentity,
       lookupFn,
+      readContentFn,
     );
     // @cpt-end:cpt-frontx-algo-composed-provenance-recursive-resolution:p1:inst-recurse
 

@@ -4,13 +4,21 @@ import { describe, it, expect, vi } from 'vitest';
 import {
   upgradeChangeSetReviewApproval,
   type UpgradeFlowDeps,
-} from '../upgrade/flow.js';
-import { computeChangeSet } from '../upgrade/compute.js';
-import { applyChangeSet } from '../upgrade/apply.js';
-import { rollbackChangeSet } from '../upgrade/rollback.js';
-import type { ChangeSet, ConflictEntry } from '../upgrade/types.js';
-import type { InventoryEntry } from '../inventory/types.js';
-import { InventoryState } from '../inventory/types.js';
+} from '../upgrade/flow';
+import { computeChangeSet } from '../upgrade/compute';
+import { applyChangeSet } from '../upgrade/apply';
+import { rollbackChangeSet } from '../upgrade/rollback';
+import type { ChangeSet, ConflictEntry } from '../upgrade/types';
+import type { InventoryEntry } from '../inventory/types';
+import { InventoryState } from '../inventory/types';
+import type { ContentItem, ReadContentItemsFn } from '../scaffold/types';
+
+// Content items live SEPARATELY from the manifest, in a registry keyed by
+// "name@version", and are read via the injected `readContentItems` seam
+// directly from the "installed content path" — never from the manifest.
+const contentRegistry = new Map<string, ContentItem[]>();
+const readContentItems: ReadContentItemsFn = async (entry) =>
+  contentRegistry.get(`${entry.name}@${entry.ref}`) ?? [];
 
 function makeEntry(
   name: string,
@@ -21,8 +29,8 @@ function makeEntry(
     name,
     version,
     ownershipBoundaries: { exclusiveSubtrees: [], sharedFiles: [] },
-    files,
   };
+  contentRegistry.set(`${name}@${version}`, files);
   return {
     name,
     source: `local:${name}`,
@@ -70,6 +78,7 @@ describe('upgradeChangeSetReviewApproval (F14 change-set engine flow)', () => {
       lookupByVersion: makeLookup([BASELINE, TARGET]),
       readProjectFile: async (p) =>
         p === `${PROJ_ROOT}/src/App.tsx` ? 'v1 content' : null,
+      readContentItems,
       writeProjectFile: writeFn,
       removeProjectFile: removeFn,
       writeProvenance: writeFn,
@@ -100,6 +109,7 @@ describe('upgradeChangeSetReviewApproval (F14 change-set engine flow)', () => {
         if (p === `${PROJ_ROOT}/src/old.ts`) return 'old file';
         return null;
       },
+      readContentItems,
       writeProjectFile: async (p, c) => { written.set(p, c); },
       removeProjectFile: async (p) => { removed.add(p); },
       writeProvenance: async (p, c) => { written.set(p, c); },
@@ -129,6 +139,7 @@ describe('upgradeChangeSetReviewApproval (F14 change-set engine flow)', () => {
       readProvenance: async () => BASE_PROVENANCE,
       lookupByVersion: makeLookup([BASELINE, TARGET]),
       readProjectFile: async () => null,
+      readContentItems,
       writeProjectFile: writeFn,
       removeProjectFile: removeFn,
       writeProvenance: writeFn,
@@ -152,6 +163,7 @@ describe('upgradeChangeSetReviewApproval (F14 change-set engine flow)', () => {
       readProvenance: async () => BASE_PROVENANCE,
       lookupByVersion: makeLookup([BASELINE, TARGET]),
       readProjectFile: async (p) => files.get(p) ?? null,
+      readContentItems,
       writeProjectFile: async (p, c) => { files.set(p, c); },
       removeProjectFile: async (p) => { files.delete(p); },
       writeProvenance: async (p, c) => { files.set(p, c); },
@@ -206,6 +218,7 @@ describe('upgradeChangeSetReviewApproval (F14 change-set engine flow)', () => {
       readProvenance: async () => BASE_PROVENANCE,
       lookupByVersion: makeLookup([BASELINE, TARGET]),
       readProjectFile: async () => null,
+      readContentItems,
       writeProjectFile: writeFn,
       removeProjectFile: removeFn,
       writeProvenance: writeFn,
@@ -230,6 +243,7 @@ describe('upgradeChangeSetReviewApproval (F14 change-set engine flow)', () => {
         if (p === `${PROJ_ROOT}/src/App.tsx`) return 'locally modified content';
         return null;
       },
+      readContentItems,
       writeProjectFile: vi.fn(),
       removeProjectFile: vi.fn(),
       writeProvenance: vi.fn(),

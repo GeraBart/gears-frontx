@@ -1,8 +1,8 @@
 // @cpt-algo:cpt-frontx-algo-template-resolution-resolve-to-inventory:p1
 import { describe, it, expect, vi } from 'vitest';
-import { resolveToInventory } from '../resolver/resolve.js';
-import type { StructuredRef } from '../spec-parser/types.js';
-import type { FetchFn } from '../resolver/types.js';
+import { resolveToInventory } from '../resolver/resolve';
+import type { StructuredRef } from '../spec-parser/types';
+import type { FetchFn } from '../resolver/types';
 
 const validRef: StructuredRef = {
   host: 'github',

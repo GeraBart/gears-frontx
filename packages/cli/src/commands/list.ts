@@ -1,6 +1,6 @@
 // @cpt-flow:cpt-frontx-flow-template-resolution-list:p1
 // @cpt-dod:cpt-frontx-dod-template-resolution-list-inventory:p1
-import { TemplateInventory } from '../inventory/TemplateInventory.js';
+import { TemplateInventory } from '../inventory/TemplateInventory';
 
 export interface ListEntry {
   name: string;

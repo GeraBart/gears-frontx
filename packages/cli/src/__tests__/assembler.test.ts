@@ -2,22 +2,31 @@
 // @cpt-state:cpt-frontx-state-cli-scaffolding-assembly-op:p2
 // @cpt-dod:cpt-frontx-dod-cli-scaffolding-uniform-apply:p1
 import { describe, it, expect, vi } from 'vitest';
-import { uniformApply } from '../scaffold/assembler.js';
-import { AssemblyOpState, runAssemblyOp } from '../scaffold/state.js';
-import type { ConflictVerdict } from '../scaffold/state.js';
-import type { InventoryEntry } from '../inventory/types.js';
-import { InventoryState } from '../inventory/types.js';
-import type { TemplateManifest } from '../manifest/types.js';
+import { uniformApply } from '../scaffold/assembler';
+import { AssemblyOpState, runAssemblyOp } from '../scaffold/state';
+import type { ConflictVerdict } from '../scaffold/state';
+import type { InventoryEntry } from '../inventory/types';
+import { InventoryState } from '../inventory/types';
+import type { TemplateManifest } from '../manifest/types';
+import type { ContentItem, ReadContentItemsFn } from '../scaffold/types';
 
-// Helpers
+// Helpers — the manifest carries ONLY the four declared categories (identity,
+// version, ownership boundaries, referenced templates); content items live
+// SEPARATELY, in a content registry keyed by template name, and are read via
+// the injected `readContentFn` seam directly from the "installed content
+// path" — never from the manifest (inst-ua-read-content).
+const contentRegistry = new Map<string, ContentItem[]>();
+
 function makeEntry(name: string, manifestOverrides: Partial<TemplateManifest> = {}): InventoryEntry {
   const manifest: TemplateManifest = {
     name,
     version: '1.0.0',
     ownershipBoundaries: { exclusiveSubtrees: [`${name}/`], sharedFiles: [] },
-    files: [{ path: `${name}/index.ts`, content: `export const ${name.replace(/[^a-zA-Z0-9]/g, '_')} = true;` }],
     ...manifestOverrides,
   };
+  contentRegistry.set(name, [
+    { path: `${name}/index.ts`, content: `export const ${name.replace(/[^a-zA-Z0-9]/g, '_')} = true;` },
+  ]);
   return {
     name,
     source: `github:acme/${name}@v1.0.0`,
@@ -26,6 +35,8 @@ function makeEntry(name: string, manifestOverrides: Partial<TemplateManifest> = 
     content: JSON.stringify(manifest),
   };
 }
+
+const readContentFn: ReadContentItemsFn = async (entry) => contentRegistry.get(entry.name) ?? [];
 
 const noConflict: ConflictVerdict = { ok: true };
 
@@ -36,8 +47,8 @@ describe('uniformApply — the ONE apply path (cpt-frontx-algo-cli-scaffolding-u
     const entry = makeEntry('template-a');
     const lookupFn = vi.fn((n: string) => (n === 'template-a' ? entry : undefined));
 
-    const seedResult = await uniformApply(['template-a'], false, lookupFn);
-    const addResult = await uniformApply(['template-a'], true, lookupFn);
+    const seedResult = await uniformApply(['template-a'], false, lookupFn, readContentFn);
+    const addResult = await uniformApply(['template-a'], true, lookupFn, readContentFn);
 
     expect(seedResult.ok).toBe(true);
     expect(addResult.ok).toBe(true);
@@ -49,7 +60,7 @@ describe('uniformApply — the ONE apply path (cpt-frontx-algo-cli-scaffolding-u
   });
 
   // (b) resolved set staged with per-template contributions + declared boundaries.
-  it('stages a per-template contribution carrying files + declared ownership boundaries', async () => {
+  it('stages a per-template contribution carrying content items read from the installed content path + declared ownership boundaries', async () => {
     const entry = makeEntry('template-a', {
       ownershipBoundaries: {
         exclusiveSubtrees: ['template-a/'],
@@ -58,7 +69,7 @@ describe('uniformApply — the ONE apply path (cpt-frontx-algo-cli-scaffolding-u
     });
     const lookupFn = vi.fn(() => entry);
 
-    const result = await uniformApply(['template-a'], false, lookupFn);
+    const result = await uniformApply(['template-a'], false, lookupFn, readContentFn);
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -72,6 +83,23 @@ describe('uniformApply — the ONE apply path (cpt-frontx-algo-cli-scaffolding-u
     ]);
   });
 
+  // inst-ua-compute-contribution: content items outside the declared boundaries are excluded.
+  it('scopes the content read from the installed content path to the declared boundaries', async () => {
+    const entry = makeEntry('template-a');
+    contentRegistry.set('template-a', [
+      { path: 'template-a/index.ts', content: 'in-bounds' },
+      { path: 'unrelated/outside.ts', content: 'out-of-bounds' },
+    ]);
+    const lookupFn = vi.fn(() => entry);
+
+    const result = await uniformApply(['template-a'], false, lookupFn, readContentFn);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const [contribution] = result.assembly.contributions;
+    expect(contribution.files).toEqual([{ path: 'template-a/index.ts', content: 'in-bounds' }]);
+  });
+
   // Multiple templates in one resolved set are each staged with their own identity.
   it('stages one contribution per template in the resolved set, tagged with identity', async () => {
     const entries: Record<string, InventoryEntry> = {
@@ -80,7 +108,7 @@ describe('uniformApply — the ONE apply path (cpt-frontx-algo-cli-scaffolding-u
     };
     const lookupFn = vi.fn((n: string) => entries[n]);
 
-    const result = await uniformApply(['template-a', 'template-b'], false, lookupFn);
+    const result = await uniformApply(['template-a', 'template-b'], false, lookupFn, readContentFn);
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -91,7 +119,7 @@ describe('uniformApply — the ONE apply path (cpt-frontx-algo-cli-scaffolding-u
   it('aborts with unresolved when a template reference is not in the local inventory', async () => {
     const lookupFn = vi.fn(() => undefined);
 
-    const result = await uniformApply(['missing'], false, lookupFn);
+    const result = await uniformApply(['missing'], false, lookupFn, readContentFn);
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -104,10 +132,20 @@ describe('uniformApply — the ONE apply path (cpt-frontx-algo-cli-scaffolding-u
     const entry = makeEntry('template-a');
     const lookupFn = vi.fn(() => entry);
 
-    await uniformApply(['template-a'], false, lookupFn);
+    await uniformApply(['template-a'], false, lookupFn, readContentFn);
 
     expect(lookupFn).toHaveBeenCalledTimes(1);
     expect(lookupFn).toHaveBeenCalledWith('template-a');
+  });
+
+  it('reads content items directly from the installed content path via the injected readContentFn seam', async () => {
+    const entry = makeEntry('template-a');
+    const lookupFn = vi.fn(() => entry);
+    const spy = vi.fn(readContentFn);
+
+    await uniformApply(['template-a'], false, lookupFn, spy);
+
+    expect(spy).toHaveBeenCalledWith(entry);
   });
 });
 
@@ -132,6 +170,7 @@ describe('runAssemblyOp — driving the assembly-op transitions', () => {
       templateRefs: ['template-a'],
       targetHoldsAppliedTemplates: false,
       lookupFn: () => entry,
+      readContentFn,
       alreadyOccupiedBoundaries: [],
       conflictVerdictFn,
       materializeFn,
@@ -154,6 +193,7 @@ describe('runAssemblyOp — driving the assembly-op transitions', () => {
       templateRefs: ['missing'],
       targetHoldsAppliedTemplates: false,
       lookupFn: () => undefined,
+      readContentFn,
       alreadyOccupiedBoundaries: [],
       conflictVerdictFn,
       materializeFn,
@@ -183,6 +223,7 @@ describe('runAssemblyOp — driving the assembly-op transitions', () => {
       templateRefs: ['template-a'],
       targetHoldsAppliedTemplates: true,
       lookupFn: () => entry,
+      readContentFn,
       alreadyOccupiedBoundaries: [{ exclusiveSubtrees: ['template-a/'], sharedFiles: [] }],
       conflictVerdictFn,
       materializeFn,
@@ -208,6 +249,7 @@ describe('runAssemblyOp — driving the assembly-op transitions', () => {
       templateRefs: ['template-a'],
       targetHoldsAppliedTemplates: true,
       lookupFn: () => entry,
+      readContentFn,
       alreadyOccupiedBoundaries: alreadyOccupied,
       conflictVerdictFn,
       materializeFn: async () => undefined,

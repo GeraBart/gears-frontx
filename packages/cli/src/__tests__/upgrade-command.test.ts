@@ -5,10 +5,18 @@ import { describe, it, expect, vi } from 'vitest';
 // computeChangeSet), so an external artifact (F17 AI orchestration) can invoke
 // the engine through commands/upgrade.ts WITHOUT importing the engine modules
 // directly.
-import { upgradeCommand } from '../commands/upgrade.js';
-import { computeChangeSet } from '../upgrade/compute.js';
-import type { InventoryEntry } from '../inventory/types.js';
-import { InventoryState } from '../inventory/types.js';
+import { upgradeCommand } from '../commands/upgrade';
+import { computeChangeSet } from '../upgrade/compute';
+import type { InventoryEntry } from '../inventory/types';
+import { InventoryState } from '../inventory/types';
+import type { ContentItem, ReadContentItemsFn } from '../scaffold/types';
+
+// Content items live SEPARATELY from the manifest, in a registry keyed by
+// "name@version", and are read via the injected `readContentItems` seam
+// directly from the "installed content path" — never from the manifest.
+const contentRegistry = new Map<string, ContentItem[]>();
+const readContentItems: ReadContentItemsFn = async (entry) =>
+  contentRegistry.get(`${entry.name}@${entry.ref}`) ?? [];
 
 function makeEntry(
   name: string,
@@ -19,8 +27,8 @@ function makeEntry(
     name,
     version,
     ownershipBoundaries: { exclusiveSubtrees: [], sharedFiles: [] },
-    files,
   };
+  contentRegistry.set(`${name}@${version}`, files);
   return {
     name,
     source: `local:${name}`,
@@ -63,6 +71,7 @@ describe('upgradeCommand (F14 command/invocation surface)', () => {
       readProvenance: async () => BASE_PROVENANCE,
       lookupByVersion: makeLookup([BASELINE, TARGET]),
       readProjectFile,
+      readContentItems,
     });
     expect(libraryResult.ok).toBe(true);
     const expectedChangeSet = (libraryResult as Extract<typeof libraryResult, { ok: true }>).changeSet;
@@ -72,6 +81,7 @@ describe('upgradeCommand (F14 command/invocation surface)', () => {
       readProvenance: async () => BASE_PROVENANCE,
       lookupByVersion: makeLookup([BASELINE, TARGET]),
       readProjectFile,
+      readContentItems,
       writeProjectFile: vi.fn(),
       removeProjectFile: vi.fn(),
       writeProvenance: vi.fn(),
@@ -91,6 +101,7 @@ describe('upgradeCommand (F14 command/invocation surface)', () => {
       readProvenance: async () => BASE_PROVENANCE,
       lookupByVersion: makeLookup([BASELINE, TARGET]),
       readProjectFile: async () => null,
+      readContentItems,
       writeProjectFile: writeFn,
       removeProjectFile: removeFn,
       writeProvenance: writeFn,
@@ -108,6 +119,7 @@ describe('upgradeCommand (F14 command/invocation surface)', () => {
       readProvenance: async () => BASE_PROVENANCE,
       lookupByVersion: makeLookup([BASELINE, TARGET]),
       readProjectFile: async () => null,
+      readContentItems,
       writeProjectFile: vi.fn(),
       removeProjectFile: vi.fn(),
       writeProvenance: vi.fn(),

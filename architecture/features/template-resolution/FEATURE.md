@@ -34,7 +34,7 @@
 
 ### 1.1 Overview
 
-The CLI (`@gears-frontx/cli`) bundles no template and resolves each template from an external source by versioned source-spec (`host:owner/repo@ref`) at runtime into a tracked local inventory, providing install, list, and bounded local update operations that never disturb already-scaffolded projects.
+The CLI (`@gears-frontx/cli`) bundles no template and resolves each template from an external source by versioned source-spec (`host:owner/repo@ref`) at runtime, materializing the template's actual files on disk in a tracked local inventory at an addressable installed content path — not a single manifest blob — so downstream apply and assembly read that content directly, and providing install, list, and bounded local update operations that never disturb already-scaffolded projects.
 
 ### 1.2 Purpose
 
@@ -165,7 +165,7 @@ Internal system functions and procedures that do not interact with actors direct
 
 **Input**: A validated structured reference (host, owner, repo, ref)
 
-**Output**: A materialized inventory entry (name, resolved content path, pinned version) or a resolution error
+**Output**: A materialized inventory entry (name, installed content path addressing the template's actual on-disk files, pinned version) or a resolution error
 
 **Steps**:
 1. [x] - `p1` - Derive the template name from the owner/repo path - `inst-resolve-name`
@@ -173,9 +173,9 @@ Internal system functions and procedures that do not interact with actors direct
 3. [x] - `p1` - Fetch the template content from the source registry at the given ref - `inst-resolve-fetch`
 4. [x] - `p1` - **IF** the fetch fails: - `inst-resolve-fetch-fail-check`
    1. [x] - `p1` - **RETURN** resolution error; do not write to local inventory - `inst-resolve-fetch-fail`
-5. [x] - `p1` - Write the fetched content into the local inventory store under the derived name - `inst-resolve-write`
+5. [x] - `p1` - Materialize the fetched template content — the template's actual files together with its manifest — on disk in the local inventory store under the derived name, addressable at an installed content path - `inst-resolve-write`
 6. [x] - `p1` - Record the installed name and pinned ref in the inventory index - `inst-resolve-index`
-7. [x] - `p1` - **RETURN** inventory entry containing name, content path, and pinned version - `inst-resolve-return`
+7. [x] - `p1` - **RETURN** inventory entry containing name, installed content path, and pinned version - `inst-resolve-return`
 
 ### Bounded Local Inventory Update
 
@@ -192,7 +192,7 @@ Internal system functions and procedures that do not interact with actors direct
 3. [x] - `p1` - Fetch the new template content from the source registry at the new ref using the shared resolver - `inst-bupd-fetch`
 4. [x] - `p1` - **IF** the fetch fails: - `inst-bupd-fetch-fail-check`
    1. [x] - `p1` - **RETURN** fetch error; leave the existing inventory entry unchanged - `inst-bupd-fetch-fail`
-5. [x] - `p1` - Replace the inventory store entry for the named template with the newly fetched content - `inst-bupd-replace`
+5. [x] - `p1` - Replace the named template's materialized files in the inventory store with the newly fetched content at its installed content path - `inst-bupd-replace`
 6. [x] - `p1` - Update the inventory index to record the new pinned ref for the named entry - `inst-bupd-index-update`
 7. [x] - `p1` - Confirm that no paths outside the local inventory store were written during this operation - `inst-bupd-boundary-confirm`
 8. [x] - `p1` - **RETURN** updated inventory entry containing name and new pinned version - `inst-bupd-return`
@@ -224,7 +224,7 @@ Specific implementation tasks derived from flows/algorithms above.
 
 - [x] `p1` - **ID**: `cpt-frontx-dod-template-resolution-install-by-spec`
 
-The system **MUST** install a template into the local inventory by resolving a developer-supplied `host:owner/repo@ref` source-spec through the shared resolver, materialize the fetched content into the tracked inventory store, and record the pinned version — with zero template content bundled in the CLI distribution.
+The system **MUST** install a template into the local inventory by resolving a developer-supplied `host:owner/repo@ref` source-spec through the shared resolver, materialize the fetched content as the template's actual on-disk files in the tracked inventory store addressable at an installed content path (not a single manifest blob), and record the pinned version — with zero template content bundled in the CLI distribution.
 
 **Implements**:
 - `cpt-frontx-flow-template-resolution-install`

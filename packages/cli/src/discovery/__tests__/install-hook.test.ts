@@ -1,9 +1,9 @@
 // @cpt-flow:cpt-frontx-flow-template-ai-extensions-bundle-publish-discover-activate:p1
 import { describe, it, expect, vi } from 'vitest';
-import { installCommand } from '../../commands/install.js';
-import { TemplateInventory } from '../../inventory/TemplateInventory.js';
-import type { FetchFn } from '../../resolver/types.js';
-import type { DiscoveryHookContext, ExtensionDiscoveryHook } from '../types.js';
+import { installCommand } from '../../commands/install';
+import { TemplateInventory } from '../../inventory/TemplateInventory';
+import type { FetchFn } from '../../resolver/types';
+import type { DiscoveryHookContext, ExtensionDiscoveryHook } from '../types';
 
 function makeSuccessFetch(content = 'template-content'): FetchFn {
   return vi.fn().mockResolvedValue(content);

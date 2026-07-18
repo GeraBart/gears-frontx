@@ -1,6 +1,7 @@
 // @cpt-algo:cpt-frontx-algo-upgrade-changeset-compute:p1
 // @cpt-dod:cpt-frontx-dod-upgrade-changeset-computation:p1
-import { readManifestFromContent } from '../manifest/validate-contract.js';
+import { readManifestFromContent } from '../manifest/validate-contract';
+import type { ReadContentItemsFn } from '../scaffold/types';
 import type {
   ChangeSet,
   CleanEntry,
@@ -9,7 +10,7 @@ import type {
   ReadProvenanceFn,
   ReadProjectFileFn,
   VersionedLookupFn,
-} from './types.js';
+} from './types';
 
 export type ComputeResult =
   | { ok: true; changeSet: ChangeSet; provenance: ProvenanceRecord }
@@ -27,6 +28,7 @@ export async function computeChangeSet(
     readProvenance: ReadProvenanceFn;
     lookupByVersion: VersionedLookupFn;
     readProjectFile: ReadProjectFileFn;
+    readContentItems: ReadContentItemsFn;
   },
 ): Promise<ComputeResult> {
   const provenance = await deps.readProvenance(projectRoot);
@@ -64,6 +66,9 @@ export async function computeChangeSet(
   // @cpt-end:cpt-frontx-algo-upgrade-changeset-compute:p1:inst-cmp-resolve-target
 
   // @cpt-begin:cpt-frontx-algo-upgrade-changeset-compute:p1:inst-cmp-diff-files
+  // Manifests are still read to confirm each is well-formed before diffing;
+  // they carry no content — content items are read directly from each
+  // entry's resolved on-disk installed content path (never from the manifest).
   const baselineResult = readManifestFromContent(baselineEntry.content);
   const targetResult = readManifestFromContent(targetEntry.content);
 
@@ -71,12 +76,11 @@ export async function computeChangeSet(
     return { ok: false, reason: 'manifest-error', message: 'Failed to parse template manifest.' };
   }
 
-  const baselineFiles = new Map<string, string>(
-    (baselineResult.manifest.files ?? []).map((f) => [f.path, f.content]),
-  );
-  const targetFiles = new Map<string, string>(
-    (targetResult.manifest.files ?? []).map((f) => [f.path, f.content]),
-  );
+  const baselineItems = await deps.readContentItems(baselineEntry);
+  const targetItems = await deps.readContentItems(targetEntry);
+
+  const baselineFiles = new Map<string, string>(baselineItems.map((f) => [f.path, f.content]));
+  const targetFiles = new Map<string, string>(targetItems.map((f) => [f.path, f.content]));
   // @cpt-end:cpt-frontx-algo-upgrade-changeset-compute:p1:inst-cmp-diff-files
 
   const clean: CleanEntry[] = [];

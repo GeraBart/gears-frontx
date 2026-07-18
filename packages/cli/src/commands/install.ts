@@ -1,9 +1,9 @@
 // @cpt-flow:cpt-frontx-flow-template-resolution-install:p1
 // @cpt-flow:cpt-frontx-flow-template-ai-extensions-bundle-publish-discover-activate:p1
 // @cpt-dod:cpt-frontx-dod-template-resolution-install-by-spec:p1
-import type { FetchFn } from '../resolver/types.js';
-import { TemplateInventory } from '../inventory/TemplateInventory.js';
-import type { DiscoveryHookResult, ExtensionDiscoveryHook } from '../discovery/types.js';
+import type { FetchFn } from '../resolver/types';
+import { TemplateInventory } from '../inventory/TemplateInventory';
+import type { DiscoveryHookResult, ExtensionDiscoveryHook } from '../discovery/types';
 
 export interface InstallCommandResult {
   ok: boolean;

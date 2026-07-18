@@ -1,7 +1,7 @@
-import type { InventoryEntry } from '../inventory/types.js';
-import type { OwnershipBoundary } from '../manifest/types.js';
-import { uniformApply } from './assembler.js';
-import type { StagedAssembly } from './types.js';
+import type { InventoryEntry } from '../inventory/types';
+import type { OwnershipBoundary } from '../manifest/types';
+import { uniformApply } from './assembler';
+import type { ReadContentItemsFn, StagedAssembly } from './types';
 
 // @cpt-state:cpt-frontx-state-cli-scaffolding-assembly-op:p2
 export enum AssemblyOpState {
@@ -50,6 +50,7 @@ export interface AssemblyOpInput {
   templateRefs: string[];
   targetHoldsAppliedTemplates: boolean;
   lookupFn: (name: string) => InventoryEntry | undefined;
+  readContentFn: ReadContentItemsFn;
   alreadyOccupiedBoundaries: OwnershipBoundary[];
   conflictVerdictFn: ConflictVerdictFn;
   materializeFn: MaterializeAssemblyFn;
@@ -66,7 +67,12 @@ export async function runAssemblyOp(input: AssemblyOpInput): Promise<AssemblyOpR
   // FROM REQUESTED — every referenced template must be located in the local
   // inventory (via the shared resolver) and staged as an assembly to reach
   // RESOLVED; an unresolvable reference aborts before anything is staged.
-  const applyResult = await uniformApply(input.templateRefs, input.targetHoldsAppliedTemplates, input.lookupFn);
+  const applyResult = await uniformApply(
+    input.templateRefs,
+    input.targetHoldsAppliedTemplates,
+    input.lookupFn,
+    input.readContentFn,
+  );
 
   if (!applyResult.ok) {
     // @cpt-begin:cpt-frontx-state-cli-scaffolding-assembly-op:p2:inst-as-req-aborted-unresolved

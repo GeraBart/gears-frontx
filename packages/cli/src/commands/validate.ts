@@ -1,8 +1,8 @@
 // @cpt-flow:cpt-frontx-flow-template-manifest-validate-for-publication:p1
 // @cpt-dod:cpt-frontx-dod-template-manifest-validate-command:p1
-import type { ManifestViolation, ReadFileFn } from '../manifest/types.js';
-import { MANIFEST_FILENAME } from '../manifest/types.js';
-import { validateManifestContract } from '../manifest/validate-contract.js';
+import type { ManifestViolation, ReadFileFn } from '../manifest/types';
+import { MANIFEST_FILENAME } from '../manifest/types';
+import { validateManifestContract } from '../manifest/validate-contract';
 
 export interface ValidateCommandResult {
   ok: boolean;
