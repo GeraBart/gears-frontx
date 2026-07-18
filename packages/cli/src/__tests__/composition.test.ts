@@ -186,7 +186,7 @@ describe('scaffoldComposedProject', () => {
   });
 
   // (f) Provenance record written at scaffold with required fields
-  it('(f) provenance record written with templateIdentity, scaffoldedFromVersion, sourceSpec', async () => {
+  it('(f) provenance record written as a per-applied-template set, no whole-repository origin record', async () => {
     const registry = new Map<string, InventoryEntry>([
       ['simple-project', makeEntry('simple-project', '2.1.0', [{ path: 'index.ts', content: 'x' }])],
     ]);
@@ -209,11 +209,19 @@ describe('scaffoldComposedProject', () => {
     const [provenancePath, provenanceContent] = provenanceWriteFn.mock.calls[0] as [string, string];
     expect(provenancePath).toBe('/my-project/.frontx/provenance.json');
 
-    const parsed = JSON.parse(provenanceContent) as Record<string, unknown>;
-    expect(parsed).toHaveProperty('templateIdentity');
-    expect(parsed).toHaveProperty('scaffoldedFromVersion');
-    expect(parsed).toHaveProperty('sourceSpec');
-    expect(parsed['templateIdentity']).toBe('simple-project');
-    expect(parsed['scaffoldedFromVersion']).toBe('2.1.0');
+    // The written provenance store is a SET (array) of per-applied-template
+    // records — never a single flat whole-repository origin record.
+    const parsed = JSON.parse(provenanceContent) as unknown;
+    expect(Array.isArray(parsed)).toBe(true);
+    const records = parsed as Array<Record<string, unknown>>;
+    expect(records).toHaveLength(1);
+
+    const [record] = records;
+    expect(record).toHaveProperty('templateIdentity');
+    expect(record).toHaveProperty('scaffoldedFromVersion');
+    expect(record).toHaveProperty('sourceSpec');
+    expect(record).toHaveProperty('occupiedOwnershipBoundary');
+    expect(record['templateIdentity']).toBe('simple-project');
+    expect(record['scaffoldedFromVersion']).toBe('2.1.0');
   });
 });
