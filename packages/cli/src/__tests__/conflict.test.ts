@@ -32,9 +32,9 @@ describe('checkAssemblyConflicts — F12 pre-flight assembly conflict check (cpt
     expect(verdict.ok).toBe(true);
   });
 
-  // (b) Overlapping exclusive subtrees are REFUSED pre-write — inst-cc-if-subtree-clash /
-  // inst-cc-record-subtree-conflict / inst-cc-return-conflict.
-  it('(b) refuses the whole assembly when two templates claim the same exclusive subtree', () => {
+  // (e) Overlapping exclusive subtrees are REFUSED pre-write — preserved
+  // inst-cc-if-subtree-clash / inst-cc-record-subtree-conflict / inst-cc-return-conflict.
+  it('(e) refuses the whole assembly when two templates claim the same exclusive subtree', () => {
     const assembly = assemblyOf(
       contribution('template-a', { exclusiveSubtrees: ['shared-subtree/'], sharedFiles: noSharedFiles }),
       contribution('template-b', { exclusiveSubtrees: ['shared-subtree/'], sharedFiles: noSharedFiles }),
@@ -49,17 +49,17 @@ describe('checkAssemblyConflicts — F12 pre-flight assembly conflict check (cpt
     ]);
   });
 
-  // (c) Overlapping shared-file owned regions with NO compatible merge are REFUSED —
-  // inst-cc-if-region-clash / inst-cc-record-region-conflict / inst-cc-return-conflict.
-  it('(c) refuses the whole assembly when two templates claim the same shared-file region without a compatible declared merge', () => {
+  // (a) Two `exclusive` claims on the same shared-file path are REFUSED —
+  // inst-cc-if-exclusive-clash / inst-cc-record-exclusive-conflict.
+  it('(a) refuses two exclusive claims on the same shared-file path', () => {
     const assembly = assemblyOf(
       contribution('template-a', {
         exclusiveSubtrees: [],
-        sharedFiles: [{ path: 'package.json', mergeStrategy: 'deep-merge', ownedRegions: ['scripts.build'] }],
+        sharedFiles: [{ path: 'package.json', mergeStrategy: 'exclusive', ownedRegions: [] }],
       }),
       contribution('template-b', {
         exclusiveSubtrees: [],
-        sharedFiles: [{ path: 'package.json', mergeStrategy: 'shallow-merge', ownedRegions: ['scripts.build'] }],
+        sharedFiles: [{ path: 'package.json', mergeStrategy: 'exclusive', ownedRegions: [] }],
       }),
     );
 
@@ -72,32 +72,65 @@ describe('checkAssemblyConflicts — F12 pre-flight assembly conflict check (cpt
     ]);
   });
 
-  // Disjoint regions of the same shared file, or the same region with a
-  // compatible declared merge, are NOT a clash.
-  it('accepts two templates owning disjoint regions of the same shared file', () => {
+  // (b) One `exclusive` + one `region-union` claim on the same shared-file
+  // path are REFUSED — whole-file ownership cannot be shared —
+  // inst-cc-if-exclusive-clash / inst-cc-record-exclusive-conflict.
+  it('(b) refuses one exclusive + one region-union claim on the same shared-file path', () => {
     const assembly = assemblyOf(
       contribution('template-a', {
         exclusiveSubtrees: [],
-        sharedFiles: [{ path: 'package.json', mergeStrategy: 'deep-merge', ownedRegions: ['scripts.build'] }],
+        sharedFiles: [{ path: 'tsconfig.json', mergeStrategy: 'exclusive', ownedRegions: [] }],
       }),
       contribution('template-b', {
         exclusiveSubtrees: [],
-        sharedFiles: [{ path: 'package.json', mergeStrategy: 'deep-merge', ownedRegions: ['scripts.test'] }],
+        sharedFiles: [{ path: 'tsconfig.json', mergeStrategy: 'region-union', ownedRegions: ['compilerOptions.paths'] }],
       }),
     );
 
-    expect(checkAssemblyConflicts(assembly, []).ok).toBe(true);
+    const verdict = checkAssemblyConflicts(assembly, []);
+
+    expect(verdict.ok).toBe(false);
+    if (verdict.ok) return;
+    expect(verdict.conflicts).toEqual([
+      { ground: 'tsconfig.json', contestants: ['template-a', 'template-b'] },
+    ]);
   });
 
-  it('accepts two templates claiming the same shared-file region under the same declared merge strategy', () => {
+  // (c) Two `region-union` claims on the same path with the SAME declared
+  // region key are REFUSED — inst-cc-if-region-key-clash /
+  // inst-cc-record-region-conflict; the ground folds path + region key.
+  it('(c) refuses two region-union claims on the same path with the same declared region key', () => {
     const assembly = assemblyOf(
       contribution('template-a', {
         exclusiveSubtrees: [],
-        sharedFiles: [{ path: '.github/workflows/ci.yml', mergeStrategy: 'append', ownedRegions: ['jobs.test'] }],
+        sharedFiles: [{ path: 'package.json', mergeStrategy: 'region-union', ownedRegions: ['scripts.build'] }],
       }),
       contribution('template-b', {
         exclusiveSubtrees: [],
-        sharedFiles: [{ path: '.github/workflows/ci.yml', mergeStrategy: 'append', ownedRegions: ['jobs.test'] }],
+        sharedFiles: [{ path: 'package.json', mergeStrategy: 'region-union', ownedRegions: ['scripts.build'] }],
+      }),
+    );
+
+    const verdict = checkAssemblyConflicts(assembly, []);
+
+    expect(verdict.ok).toBe(false);
+    if (verdict.ok) return;
+    expect(verdict.conflicts).toEqual([
+      { ground: 'package.json#scripts.build', contestants: ['template-a', 'template-b'] },
+    ]);
+  });
+
+  // (d) Two `region-union` claims on the same path with DISJOINT declared
+  // region keys are NOT a clash — inst-cc-return-pass.
+  it('(d) accepts two region-union claims on the same path with disjoint declared region keys', () => {
+    const assembly = assemblyOf(
+      contribution('template-a', {
+        exclusiveSubtrees: [],
+        sharedFiles: [{ path: 'package.json', mergeStrategy: 'region-union', ownedRegions: ['scripts.build'] }],
+      }),
+      contribution('template-b', {
+        exclusiveSubtrees: [],
+        sharedFiles: [{ path: 'package.json', mergeStrategy: 'region-union', ownedRegions: ['scripts.test'] }],
       }),
     );
 
@@ -125,17 +158,17 @@ describe('checkAssemblyConflicts — F12 pre-flight assembly conflict check (cpt
     ]);
   });
 
-  // (d) The refusal report NAMES each contested ground and its contesting
+  // The refusal report NAMES each contested ground and its contesting
   // templates for MULTIPLE simultaneous conflicts — never silently merges.
-  it('(d) names every contested ground and its contesting templates when multiple conflicts exist', () => {
+  it('names every contested ground and its contesting templates when multiple conflicts exist', () => {
     const assembly = assemblyOf(
       contribution('template-a', {
         exclusiveSubtrees: ['dup-subtree/'],
-        sharedFiles: [{ path: 'tsconfig.json', mergeStrategy: 'deep-merge', ownedRegions: ['compilerOptions.paths'] }],
+        sharedFiles: [{ path: 'tsconfig.json', mergeStrategy: 'exclusive', ownedRegions: [] }],
       }),
       contribution('template-b', {
         exclusiveSubtrees: ['dup-subtree/'],
-        sharedFiles: [{ path: 'tsconfig.json', mergeStrategy: 'shallow-merge', ownedRegions: ['compilerOptions.paths'] }],
+        sharedFiles: [{ path: 'tsconfig.json', mergeStrategy: 'exclusive', ownedRegions: [] }],
       }),
     );
 
