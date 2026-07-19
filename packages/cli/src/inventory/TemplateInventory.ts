@@ -11,11 +11,19 @@ import type { FetchFn } from '../resolver/types';
 import { InventoryIndex } from './InventoryIndex';
 import { InventoryStore } from './InventoryStore';
 import { InventoryState } from './types';
-import type { InventoryEntry, InventoryResult } from './types';
+import type { ContentStorePort, InventoryEntry, InventoryIndexPort, InventoryResult } from './types';
 
+// The index/store are injected as ports (Dependency Inversion) rather than
+// hardcoded to the in-memory classes — the injection site this FEATURE's
+// fs adapters (packages/cli/src/adapters/fs-*.ts) plug into. Defaults
+// preserve today's in-memory behavior unchanged; a real fs-backed root
+// (e.g. `new TemplateInventory(new FsInventoryIndex(root), new FsContentStore(root))`)
+// materializes the same flows to disk without touching this orchestration.
 export class TemplateInventory {
-  private readonly index = new InventoryIndex();
-  private readonly store = new InventoryStore();
+  constructor(
+    private readonly index: InventoryIndexPort = new InventoryIndex(),
+    private readonly store: ContentStorePort = new InventoryStore(),
+  ) {}
 
   // --- install ---
 

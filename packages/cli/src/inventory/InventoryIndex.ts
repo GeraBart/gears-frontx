@@ -1,11 +1,11 @@
 // @cpt-algo:cpt-frontx-algo-template-resolution-resolve-to-inventory:p1
 // @cpt-algo:cpt-frontx-algo-template-resolution-bounded-update:p1
-import type { InventoryEntry } from './types';
+import type { InventoryEntry, InventoryIndexPort } from './types';
 import { InventoryState } from './types';
 
 // In-memory JSON-based index; supports in-memory mode for tests and
 // can be extended with a file-backed persistence layer.
-export class InventoryIndex {
+export class InventoryIndex implements InventoryIndexPort {
   private readonly entries: Map<string, InventoryEntry> = new Map();
 
   // @cpt-begin:cpt-frontx-algo-template-resolution-resolve-to-inventory:p1:inst-resolve-index

@@ -1,10 +1,11 @@
 // @cpt-algo:cpt-frontx-algo-template-resolution-resolve-to-inventory:p1
 // @cpt-algo:cpt-frontx-algo-template-resolution-bounded-update:p1
+import type { ContentStorePort } from './types';
 
 // In-memory content store; production usage can back this with the filesystem.
 // Keeping it separate from the index enforces the single-responsibility
 // principle: index = metadata, store = content blobs.
-export class InventoryStore {
+export class InventoryStore implements ContentStorePort {
   private readonly store: Map<string, string> = new Map();
 
   // @cpt-begin:cpt-frontx-algo-template-resolution-resolve-to-inventory:p1:inst-resolve-write
