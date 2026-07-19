@@ -151,7 +151,7 @@ module.exports = {
       name: 'frontx-cli-1-no-bundled-template-content',
       severity: 'error',
       from: { path: '^packages/cli/src/', pathNot: '^packages/cli/src/generated/' },
-      to: { path: '^(?!packages/|node_modules/|internal/|scripts/).+' },
+      to: { path: '^(?!packages/|node_modules/|internal/|scripts/).+', dependencyTypesNot: ['core'] },
       comment: 'cpt-frontx-constraint-cli-template-independence (CLI-1): @gears-frontx/cli must have zero dependency on bundled template content/assets/packages. Templates are resolved by source-spec at runtime.',
     },
     // @cpt-end:cpt-frontx-constraint-cli-template-independence:p17:inst-dep-cruiser-rule

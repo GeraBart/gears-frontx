@@ -27,3 +27,25 @@ export interface InventoryError {
 export type InventoryResult<T> =
   | { ok: true; value: T }
   | { ok: false; error: InventoryError };
+
+// Port contracts the CONTENT store and metadata INDEX satisfy — the injection
+// site `TemplateInventory` depends on these shapes, not on the concrete
+// in-memory `InventoryStore`/`InventoryIndex` classes, so a real fs-backed
+// adapter (packages/cli/src/adapters/fs-*.ts) can be substituted without any
+// change to flow orchestration (Dependency Inversion; adapters implement the
+// port, IO stays out of pure logic).
+export interface ContentStorePort {
+  write(name: string, content: string): void;
+  replace(name: string, content: string): void;
+  read(name: string): string | undefined;
+  has(name: string): boolean;
+}
+
+export interface InventoryIndexPort {
+  record(entry: InventoryEntry): void;
+  lookup(name: string): InventoryEntry | undefined;
+  update(name: string, patch: Partial<InventoryEntry>): void;
+  all(): InventoryEntry[];
+  getState(name: string): InventoryState;
+  toJSON(): string;
+}
