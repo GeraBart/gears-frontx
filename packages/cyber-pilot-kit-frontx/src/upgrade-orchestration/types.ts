@@ -48,7 +48,11 @@ export interface ChangeSet {
 // @cpt-begin:cpt-frontx-dod-ai-upgrade-orchestration-flow-complete:p1:inst-provenance-type
 // Structural mirror of the F14 engine's `ProvenanceRecord` — read by this
 // orchestration layer itself (flow `inst-read-provenance`) before the engine
-// is ever invoked.
+// is ever invoked. A repository holds ONE record per applied template — a
+// SET of records, never a single whole-repository origin
+// (`cpt-frontx-contract-project-provenance`); `ReadProvenanceFn` below reads
+// that full set, and orchestration selects the NAMED applied template's
+// record from it.
 export interface ProvenanceRecord {
   templateIdentity: string;
   scaffoldedFromVersion: string;
@@ -77,7 +81,16 @@ export interface DownstreamEffectAssessment {
 // @cpt-end:cpt-frontx-dod-ai-upgrade-orchestration-flow-complete:p1:inst-downstream-types
 
 // @cpt-begin:cpt-frontx-dod-ai-upgrade-orchestration-flow-complete:p1:inst-enriched-package-type
+// The named applied template this review package's enrichment reflects —
+// its identity and current (pre-upgrade) version, extracted from the
+// SELECTED provenance record (inst-extract-provenance).
+export interface SelectedTemplate {
+  templateIdentity: string;
+  currentVersion: string;
+}
+
 export interface EnrichedReviewPackage {
+  selectedTemplate: SelectedTemplate;
   changeSet: ChangeSet;
   impactAnalysis: ChangeImpactAnalysis;
   downstreamAssessment: DownstreamEffectAssessment;
@@ -93,7 +106,22 @@ export type EnrichmentResult = { status: 'enriched'; package: EnrichedReviewPack
 export type PresentEnrichedReviewFn = (reviewPackage: EnrichedReviewPackage) => Promise<ReviewDecision>;
 // @cpt-end:cpt-frontx-dod-ai-upgrade-orchestration-gate-enforced:p1:inst-present-review-fn-type
 
-export type ReadProvenanceFn = (projectRoot: string) => Promise<ProvenanceRecord | null>;
+// Reads the project's FULL provenance record SET (one record per applied
+// template — `cpt-frontx-contract-project-provenance`); `null` when
+// provenance is absent or unreadable. Orchestration selects the NAMED
+// applied template's record from the returned set (inst-read-provenance /
+// inst-check-provenance).
+export type ReadProvenanceFn = (projectRoot: string) => Promise<ProvenanceRecord[] | null>;
+
+// Selects the record for the NAMED applied template from the project's
+// provenance record SET — `undefined` when the set holds no matching record
+// (inst-check-provenance / inst-provenance-missing).
+export function selectProvenanceRecord(
+  provenanceSet: ProvenanceRecord[],
+  appliedTemplateName: string,
+): ProvenanceRecord | undefined {
+  return provenanceSet.find((record) => record.templateIdentity === appliedTemplateName);
+}
 
 // @cpt-begin:cpt-frontx-dod-ai-upgrade-orchestration-single-engine:p1:inst-command-surface-types
 // The `frontx upgrade` command/invocation surface's JSON result, mirrored

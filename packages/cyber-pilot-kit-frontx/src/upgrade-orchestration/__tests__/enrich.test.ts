@@ -8,7 +8,12 @@
 // tests exercise it with locally constructed fixtures, never the real engine.
 import { describe, it, expect } from 'vitest';
 import { enrichUpgradeChangeSet, computeChangeImpact, computeDownstreamEffects } from '../enrich.js';
-import type { ChangeSet } from '../types.js';
+import type { ChangeSet, SelectedTemplate } from '../types.js';
+
+const SELECTED_TEMPLATE: SelectedTemplate = {
+  templateIdentity: 'my-template',
+  currentVersion: '1.0.0',
+};
 
 const RESOLVED_CHANGESET: ChangeSet = {
   templateIdentity: 'my-template',
@@ -55,7 +60,7 @@ describe('computeDownstreamEffects', () => {
 describe('enrichUpgradeChangeSet (pure enrichment over an already-computed change set)', () => {
   // inst-receive-changeset / inst-combine-results / inst-return-enriched
   it('enriches a resolved, non-empty change set with impact analysis and downstream assessment', () => {
-    const result = enrichUpgradeChangeSet(RESOLVED_CHANGESET);
+    const result = enrichUpgradeChangeSet(RESOLVED_CHANGESET, SELECTED_TEMPLATE);
     expect(result.status).toBe('enriched');
     if (result.status !== 'enriched') return;
     expect(result.package.changeSet.targetVersion).toBe('2.0.0');
@@ -63,9 +68,19 @@ describe('enrichUpgradeChangeSet (pure enrichment over an already-computed chang
     expect(result.package.downstreamAssessment).toBeDefined();
   });
 
+  // inst-extract-provenance / inst-combine-results — enrichment reflects the SELECTED applied
+  // template's provenance record (identity + current version), not any other record
+  it('combines the SELECTED applied template\'s identity and current version into the enriched package', () => {
+    const otherSelection: SelectedTemplate = { templateIdentity: 'other-template', currentVersion: '3.4.0' };
+    const result = enrichUpgradeChangeSet(RESOLVED_CHANGESET, otherSelection);
+    expect(result.status).toBe('enriched');
+    if (result.status !== 'enriched') return;
+    expect(result.package.selectedTemplate).toEqual(otherSelection);
+  });
+
   // inst-check-empty / inst-empty-signal
   it('returns the empty signal when the change set has no clean/conflict entries', () => {
-    const result = enrichUpgradeChangeSet(EMPTY_CHANGESET);
+    const result = enrichUpgradeChangeSet(EMPTY_CHANGESET, SELECTED_TEMPLATE);
     expect(result.status).toBe('empty');
   });
 });
