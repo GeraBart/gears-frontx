@@ -109,7 +109,7 @@ export function groupContributionsByPath(assembly: StagedAssembly): Map<string, 
 // content-level position that pt.2's span-overlap check (inst-cs-if-span-overlap)
 // compares across regions; a declared region key alone (checked by pt.1's
 // inst-cs-if-key-collision) cannot reveal this.
-interface RegionSpan {
+export interface RegionSpan {
   beginIndex: number;
   endIndex: number;
 }
@@ -119,7 +119,7 @@ interface RegionSpan {
 // region key. Returns undefined if the pair cannot be located — pre-publish
 // manifest validation guarantees well-formed declared keys, not that the
 // markers exist on disk.
-function locateRegionSpan(content: string, templateName: string, regionKey: string): RegionSpan | undefined {
+export function locateRegionSpan(content: string, templateName: string, regionKey: string): RegionSpan | undefined {
   const lines = content.split('\n');
   const beginMarker = `${REGION_BEGIN_PREFIX} ${templateName}:${regionKey}`;
   const endMarker = `${REGION_END_PREFIX} ${templateName}:${regionKey}`;
@@ -134,7 +134,7 @@ function locateRegionSpan(content: string, templateName: string, regionKey: stri
 // content by matching the begin/end sentinel-marker pair keyed by that
 // template's identity and the declared region key. Returns the region text
 // INCLUSIVE of its marker lines, undefined if the pair cannot be located.
-function extractOwnedRegion(content: string, templateName: string, regionKey: string): string | undefined {
+export function extractOwnedRegion(content: string, templateName: string, regionKey: string): string | undefined {
   const span = locateRegionSpan(content, templateName, regionKey);
   if (!span) return undefined;
   const lines = content.split('\n');

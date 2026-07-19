@@ -85,21 +85,21 @@ describe('install-discover-activate leg', () => {
   });
 });
 
-describe('install-discover-activate leg — FILESYSTEM realization (§1.5 AI-Extension Bundle Convention)', () => {
-  const CONTENT_ROOT = 'installed-templates/my-template';
-  const AI_ROOT = `${CONTENT_ROOT}/.frontx/ai`;
+describe('install-discover-activate leg — FILESYSTEM realization (§1.5 id-scoped AI-Extension Bundle Convention)', () => {
+  const PROJECT_ROOT = 'scaffolded-project';
+  const AI_ROOT = `${PROJECT_ROOT}/.frontx/ai`;
 
-  it('a conforming on-disk bundle reaches ACTIVATED and is composed with the base capabilities', () => {
+  it('a conforming id-scoped on-disk bundle reaches ACTIVATED and is composed with the base capabilities', () => {
     const reader = makeFakeReader({
-      [`${AI_ROOT}/extension.json`]: JSON.stringify({
+      [`${AI_ROOT}/my-template/extension.json`]: JSON.stringify({
         id: 'bundle',
         contractVersion: '1.0.0',
         entries: [{ id: 'skill-1', category: 'skills', path: 'skills/skill-1' }],
       }),
-      [`${AI_ROOT}/skills/skill-1/SKILL.md`]: '# Skill 1',
+      [`${AI_ROOT}/my-template/skills/skill-1/SKILL.md`]: '# Skill 1',
     });
 
-    const result = discoverAndActivateFromInstalledTemplateFs(CONTENT_ROOT, reader, emptyBase(), 0);
+    const result = discoverAndActivateFromInstalledTemplateFs(PROJECT_ROOT, reader, emptyBase(), 0);
 
     expect(result.errors).toHaveLength(0);
     expect(result.composed.get('skills')?.get('skill-1')?.source).toBe('template');
@@ -108,7 +108,7 @@ describe('install-discover-activate leg — FILESYSTEM realization (§1.5 AI-Ext
 
   it('a malformed on-disk entry reaches REJECTED and is not activated; conforming entries are unaffected', () => {
     const reader = makeFakeReader({
-      [`${AI_ROOT}/extension.json`]: JSON.stringify({
+      [`${AI_ROOT}/my-template/extension.json`]: JSON.stringify({
         id: 'bundle',
         contractVersion: '1.0.0',
         entries: [
@@ -116,10 +116,10 @@ describe('install-discover-activate leg — FILESYSTEM realization (§1.5 AI-Ext
           { id: 'ok-skill', category: 'skills', path: 'skills/ok-skill' },
         ],
       }),
-      [`${AI_ROOT}/skills/ok-skill/SKILL.md`]: '# OK Skill',
+      [`${AI_ROOT}/my-template/skills/ok-skill/SKILL.md`]: '# OK Skill',
     });
 
-    const result = discoverAndActivateFromInstalledTemplateFs(CONTENT_ROOT, reader, emptyBase(), 0);
+    const result = discoverAndActivateFromInstalledTemplateFs(PROJECT_ROOT, reader, emptyBase(), 0);
 
     expect(result.errors).toHaveLength(1);
     expect(result.composed.get('skills')?.has('broken-skill')).toBe(false);
@@ -127,22 +127,52 @@ describe('install-discover-activate leg — FILESYSTEM realization (§1.5 AI-Ext
     expect(result.lifecycleResults.some((r) => r.state === AiExtensionLifecycleState.REJECTED)).toBe(true);
   });
 
-  it('a missing extension.json anchor is a structural error and the template activates nothing', () => {
+  it('no `.frontx/ai/` bundles at all activates nothing and reports no errors', () => {
     const reader = makeFakeReader({});
-    const result = discoverAndActivateFromInstalledTemplateFs(CONTENT_ROOT, reader, emptyBase(), 0);
+    const result = discoverAndActivateFromInstalledTemplateFs(PROJECT_ROOT, reader, emptyBase(), 0);
+    expect(result.errors).toHaveLength(0);
+    expect(result.composed.get('skills')?.size ?? 0).toBe(0);
+    expect(result.lifecycleResults).toHaveLength(0);
+  });
+
+  it('a missing extension.json anchor for one bundle is a structural error and that bundle activates nothing', () => {
+    const reader = makeFakeReader({
+      [`${AI_ROOT}/anchorless-template/skills/x/README.md`]: 'no anchor here',
+    });
+    const result = discoverAndActivateFromInstalledTemplateFs(PROJECT_ROOT, reader, emptyBase(), 0);
     expect(result.errors).toHaveLength(1);
     expect(result.composed.get('skills')?.size ?? 0).toBe(0);
     expect(result.lifecycleResults).toHaveLength(1);
     expect(result.lifecycleResults[0].state).toBe(AiExtensionLifecycleState.REJECTED);
   });
 
-  it('a subdirectory outside the closed set is a structural error and is not activated', () => {
+  it('a bundle-root subdirectory outside the closed set is a structural error and is not activated', () => {
     const reader = makeFakeReader({
-      [`${AI_ROOT}/extension.json`]: JSON.stringify({ id: 'bundle', contractVersion: '1.0.0', entries: [] }),
-      [`${AI_ROOT}/mocks/oob.md`]: 'oob content',
+      [`${AI_ROOT}/my-template/extension.json`]: JSON.stringify({ id: 'bundle', contractVersion: '1.0.0', entries: [] }),
+      [`${AI_ROOT}/my-template/mocks/oob.md`]: 'oob content',
     });
-    const result = discoverAndActivateFromInstalledTemplateFs(CONTENT_ROOT, reader, emptyBase(), 0);
+    const result = discoverAndActivateFromInstalledTemplateFs(PROJECT_ROOT, reader, emptyBase(), 0);
     expect(result.errors).toHaveLength(1);
     expect(result.errors[0].message).toMatch(/outside the closed-set/);
+  });
+
+  it('multiple disjoint co-located id-scoped bundles are each discovered and activated; a malformed bundle does not affect the other', () => {
+    const reader = makeFakeReader({
+      [`${AI_ROOT}/broken-template/extension.json`]: '{not json',
+      [`${AI_ROOT}/good-template/extension.json`]: JSON.stringify({
+        id: 'good-bundle',
+        contractVersion: '1.0.0',
+        entries: [{ id: 'good-skill', category: 'skills', path: 'skills/good-skill' }],
+      }),
+      [`${AI_ROOT}/good-template/skills/good-skill/SKILL.md`]: '# Good Skill',
+    });
+
+    const result = discoverAndActivateFromInstalledTemplateFs(PROJECT_ROOT, reader, emptyBase(), 0);
+
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0].message).toMatch(/not valid JSON/);
+    expect(result.composed.get('skills')?.get('good-skill')?.source).toBe('template');
+    expect(result.lifecycleResults.some((r) => r.state === AiExtensionLifecycleState.ACTIVATED)).toBe(true);
+    expect(result.lifecycleResults.some((r) => r.state === AiExtensionLifecycleState.REJECTED)).toBe(true);
   });
 });

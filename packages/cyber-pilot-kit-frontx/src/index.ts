@@ -40,8 +40,8 @@ export {
   discoverAndActivateFromInstalledTemplateFs,
 } from './extensions/discover-and-activate.js';
 export type { PrePublishValidationResult } from './extensions/discover-and-activate.js';
-export { discoverExtensionBundleFromFs, SLOT_DIR_NAMES } from './extensions/fs-discovery.js';
-export type { BundleFsReader, FsDiscoveryResult } from './extensions/fs-discovery.js';
+export { discoverExtensionBundlesFromFs, SLOT_DIR_NAMES } from './extensions/fs-discovery.js';
+export type { BundleFsReader, DiscoveredBundle } from './extensions/fs-discovery.js';
 export { createFsBundleReader } from './extensions/fs-bundle-reader.js';
 
 // F17 AI-Driven Upgrade Orchestration

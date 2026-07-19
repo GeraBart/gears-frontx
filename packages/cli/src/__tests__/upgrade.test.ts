@@ -9,9 +9,9 @@ import { computeChangeSet } from '../upgrade/compute';
 import { applyChangeSet } from '../upgrade/apply';
 import { rollbackChangeSet } from '../upgrade/rollback';
 import type { ChangeSet, ConflictEntry } from '../upgrade/types';
-import type { InventoryEntry } from '../inventory/types';
-import { InventoryState } from '../inventory/types';
 import type { ContentItem, ReadContentItemsFn } from '../scaffold/types';
+import type { FetchFn } from '../resolver/types';
+import type { OwnershipBoundary } from '../manifest/types';
 
 // Content items live SEPARATELY from the manifest, in a registry keyed by
 // "name@version", and are read via the injected `readContentItems` seam
@@ -20,49 +20,56 @@ const contentRegistry = new Map<string, ContentItem[]>();
 const readContentItems: ReadContentItemsFn = async (entry) =>
   contentRegistry.get(`${entry.name}@${entry.ref}`) ?? [];
 
-function makeEntry(
+// Manifests, keyed by "name@version" — this is the shared resolver's
+// fetchable content, DISTINCT from any single-entry local inventory. The
+// upgrade engine must reach this registry through fetchFn (re-resolving via
+// the provenance source-spec at a specific version) for BOTH the baseline
+// and the target — never through a local-inventory lookup that only ever
+// retains one version per entry.
+const manifestByVersion = new Map<string, string>();
+
+function registerVersion(
   name: string,
   version: string,
   files: Array<{ path: string; content: string }>,
-): InventoryEntry {
-  const manifest = {
-    name,
-    version,
-    ownershipBoundaries: { exclusiveSubtrees: [], sharedFiles: [] },
-  };
+  ownershipBoundaries: OwnershipBoundary = { exclusiveSubtrees: [], sharedFiles: [] },
+): void {
+  const manifest = { name, version, ownershipBoundaries };
   contentRegistry.set(`${name}@${version}`, files);
-  return {
-    name,
-    source: `local:${name}`,
-    ref: version,
-    status: InventoryState.INSTALLED,
-    content: JSON.stringify(manifest),
-  };
+  manifestByVersion.set(`${name}@${version}`, JSON.stringify(manifest));
 }
+
+// The shared resolver's fetch primitive (cpt-frontx-feature-template-resolution).
+// The requested version always arrives as the URL's trailing "@ref" segment
+// (see resolver/resolve.ts buildFetchUrl) — this fake resolves purely from
+// that, with NO access to any local inventory.
+const fetchFn: FetchFn = async (url) => {
+  const version = url.slice(url.lastIndexOf('@') + 1);
+  const manifest = manifestByVersion.get(`my-template@${version}`);
+  if (!manifest) {
+    throw new Error(`Template "my-template" not found at version "${version}" via shared resolver.`);
+  }
+  return manifest;
+};
 
 const PROJ_ROOT = '/proj';
 
 const BASE_PROVENANCE = {
   templateIdentity: 'my-template',
   scaffoldedFromVersion: '1.0.0',
-  sourceSpec: 'local:my-template',
+  sourceSpec: 'local:acme/my-template@1.0.0',
 };
 
-const BASELINE = makeEntry('my-template', '1.0.0', [
+registerVersion('my-template', '1.0.0', [
   { path: 'src/App.tsx', content: 'v1 content' },
   { path: 'src/old.ts', content: 'old file' },
 ]);
 
-const TARGET = makeEntry('my-template', '2.0.0', [
+registerVersion('my-template', '2.0.0', [
   { path: 'src/App.tsx', content: 'v2 content' },
   { path: 'src/new.ts', content: 'new file' },
   // 'src/old.ts' intentionally removed in target version
 ]);
-
-function makeLookup(entries: InventoryEntry[]) {
-  return (name: string, version: string) =>
-    entries.find((e) => e.name === name && e.ref === version);
-}
 
 describe('upgradeChangeSetReviewApproval (F14 change-set engine flow)', () => {
   // (a) Produces reviewable change set, writes NO project files until developer approves
@@ -75,7 +82,7 @@ describe('upgradeChangeSetReviewApproval (F14 change-set engine flow)', () => {
 
     const result = await upgradeChangeSetReviewApproval(PROJ_ROOT, '2.0.0', {
       readProvenance: async () => BASE_PROVENANCE,
-      lookupByVersion: makeLookup([BASELINE, TARGET]),
+      fetchFn,
       readProjectFile: async (p) =>
         p === `${PROJ_ROOT}/src/App.tsx` ? 'v1 content' : null,
       readContentItems,
@@ -103,7 +110,7 @@ describe('upgradeChangeSetReviewApproval (F14 change-set engine flow)', () => {
 
     const result = await upgradeChangeSetReviewApproval(PROJ_ROOT, '2.0.0', {
       readProvenance: async () => BASE_PROVENANCE,
-      lookupByVersion: makeLookup([BASELINE, TARGET]),
+      fetchFn,
       readProjectFile: async (p) => {
         if (p === `${PROJ_ROOT}/src/App.tsx`) return 'v1 content';
         if (p === `${PROJ_ROOT}/src/old.ts`) return 'old file';
@@ -137,7 +144,7 @@ describe('upgradeChangeSetReviewApproval (F14 change-set engine flow)', () => {
 
     const result = await upgradeChangeSetReviewApproval(PROJ_ROOT, '2.0.0', {
       readProvenance: async () => BASE_PROVENANCE,
-      lookupByVersion: makeLookup([BASELINE, TARGET]),
+      fetchFn,
       readProjectFile: async () => null,
       readContentItems,
       writeProjectFile: writeFn,
@@ -161,7 +168,7 @@ describe('upgradeChangeSetReviewApproval (F14 change-set engine flow)', () => {
 
     const deps: UpgradeFlowDeps = {
       readProvenance: async () => BASE_PROVENANCE,
-      lookupByVersion: makeLookup([BASELINE, TARGET]),
+      fetchFn,
       readProjectFile: async (p) => files.get(p) ?? null,
       readContentItems,
       writeProjectFile: async (p, c) => { files.set(p, c); },
@@ -216,7 +223,7 @@ describe('upgradeChangeSetReviewApproval (F14 change-set engine flow)', () => {
 
     const result = await upgradeChangeSetReviewApproval(PROJ_ROOT, '99.0.0', {
       readProvenance: async () => BASE_PROVENANCE,
-      lookupByVersion: makeLookup([BASELINE, TARGET]),
+      fetchFn,
       readProjectFile: async () => null,
       readContentItems,
       writeProjectFile: writeFn,
@@ -237,7 +244,7 @@ describe('upgradeChangeSetReviewApproval (F14 change-set engine flow)', () => {
 
     await upgradeChangeSetReviewApproval(PROJ_ROOT, '2.0.0', {
       readProvenance: async () => BASE_PROVENANCE,
-      lookupByVersion: makeLookup([BASELINE, TARGET]),
+      fetchFn,
       readProjectFile: async (p) => {
         // App.tsx has been locally modified (differs from baseline 'v1 content')
         if (p === `${PROJ_ROOT}/src/App.tsx`) return 'locally modified content';
@@ -258,5 +265,135 @@ describe('upgradeChangeSetReviewApproval (F14 change-set engine flow)', () => {
     const conflict = capturedChangeSet!.conflicts.find((c: ConflictEntry) => c.path === 'src/App.tsx');
     expect(conflict).toBeDefined();
     expect(conflict!.localContent).toBe('locally modified content');
+  });
+
+  // (h) Baseline is RE-RESOLVED via the shared resolver from the provenance
+  // source-spec at the baseline version — never from a single-entry local
+  // inventory. This fixture's "inventory" (manifestByVersion) holds BOTH
+  // versions precisely because it IS the shared resolver's fetchable
+  // content, not a local, single-entry inventory — a spy on fetchFn proves
+  // the engine actually requests the baseline version, not just the target.
+  it('(h) baseline is re-resolved through the shared resolver at the baseline version, not the local inventory', async () => {
+    const requestedVersions: string[] = [];
+    const spyFetchFn: FetchFn = async (url) => {
+      requestedVersions.push(url.slice(url.lastIndexOf('@') + 1));
+      return fetchFn(url);
+    };
+
+    const result = await computeChangeSet(PROJ_ROOT, '2.0.0', {
+      readProvenance: async () => BASE_PROVENANCE,
+      fetchFn: spyFetchFn,
+      readProjectFile: async () => null,
+      readContentItems,
+    });
+
+    expect(result.ok).toBe(true);
+    // Both the baseline version (from provenance.scaffoldedFromVersion) and
+    // the target version were independently re-resolved via the resolver.
+    expect(requestedVersions).toContain('1.0.0');
+    expect(requestedVersions).toContain('2.0.0');
+  });
+
+  // (i) region-union shared file: diff/apply touches ONLY this template's
+  // own marker-delimited region, leaving a co-owning template's region
+  // byte-for-byte untouched, both in the computed diff and after apply.
+  it('(i) region-union shared file: diff and apply are scoped to this template\'s own owned region only', async () => {
+    const SHARED_PATH = 'shared.config.js';
+    // Distinct versions from the top-level fixture — this test registers its
+    // own baseline/target so it cannot clobber the shared '1.0.0'/'2.0.0'
+    // entries other tests in this file rely on.
+    const REGION_PROVENANCE = {
+      templateIdentity: 'my-template',
+      scaffoldedFromVersion: '1.1.0',
+      sourceSpec: 'local:acme/my-template@1.1.0',
+    };
+    const sharedBoundary: OwnershipBoundary = {
+      exclusiveSubtrees: [],
+      sharedFiles: [{ path: SHARED_PATH, mergeStrategy: 'region-union', ownedRegions: ['setup'] }],
+    };
+
+    registerVersion(
+      'my-template',
+      '1.1.0',
+      [
+        {
+          path: SHARED_PATH,
+          content: [
+            '// frontx:region my-template:setup',
+            'const setupV1 = true;',
+            '// frontx:endregion my-template:setup',
+            '// frontx:region other-template:extra',
+            'const otherStaysPut = true;',
+            '// frontx:endregion other-template:extra',
+          ].join('\n'),
+        },
+      ],
+      sharedBoundary,
+    );
+    registerVersion(
+      'my-template',
+      '2.1.0',
+      [
+        {
+          path: SHARED_PATH,
+          content: [
+            '// frontx:region my-template:setup',
+            'const setupV2 = true;',
+            '// frontx:endregion my-template:setup',
+          ].join('\n'),
+        },
+      ],
+      sharedBoundary,
+    );
+
+    // The current project file — this template's region at the v1.1.0
+    // baseline (unmodified locally) plus a co-owning template's region.
+    const projectFileContent = [
+      '// frontx:region my-template:setup',
+      'const setupV1 = true;',
+      '// frontx:endregion my-template:setup',
+      '// frontx:region other-template:extra',
+      'const otherStaysPut = true;',
+      '// frontx:endregion other-template:extra',
+    ].join('\n');
+
+    const computeResult = await computeChangeSet(PROJ_ROOT, '2.1.0', {
+      readProvenance: async () => REGION_PROVENANCE,
+      fetchFn,
+      readProjectFile: async (p) => (p === `${PROJ_ROOT}/${SHARED_PATH}` ? projectFileContent : null),
+      readContentItems,
+    });
+
+    expect(computeResult.ok).toBe(true);
+    const changeSet = (computeResult as Extract<typeof computeResult, { ok: true }>).changeSet;
+    const regionEntry = changeSet.clean.find((e) => e.path === SHARED_PATH);
+    expect(regionEntry).toBeDefined();
+    expect(regionEntry!.regionKey).toBe('setup');
+    // Only the owned region's NEW content is carried — not the whole file.
+    expect(regionEntry!.content).toContain('setupV2');
+    expect(regionEntry!.content).not.toContain('otherStaysPut');
+
+    // Apply: only this template's region is rewritten in the shared file;
+    // the co-owning template's region is left byte-for-byte untouched.
+    const files = new Map<string, string>([
+      [`${PROJ_ROOT}/${SHARED_PATH}`, projectFileContent],
+      [`${PROJ_ROOT}/.frontx/provenance.json`, JSON.stringify(REGION_PROVENANCE, null, 2)],
+    ]);
+
+    const applyResult = await applyChangeSet(changeSet, PROJ_ROOT, REGION_PROVENANCE, {
+      readProjectFile: async (p) => files.get(p) ?? null,
+      writeProjectFile: async (p, c) => { files.set(p, c); },
+      removeProjectFile: async (p) => { files.delete(p); },
+      writeProvenance: async (p, c) => { files.set(p, c); },
+    });
+
+    expect(applyResult.ok).toBe(true);
+    const appliedContent = files.get(`${PROJ_ROOT}/${SHARED_PATH}`)!;
+    expect(appliedContent).toContain('setupV2');
+    expect(appliedContent).not.toContain('setupV1');
+    // Co-owning template's region is byte-for-byte unchanged.
+    expect(appliedContent).toContain('// frontx:region other-template:extra');
+    expect(appliedContent).toContain('const otherStaysPut = true;');
+    expect(appliedContent).toContain('// frontx:endregion other-template:extra');
   });
 });

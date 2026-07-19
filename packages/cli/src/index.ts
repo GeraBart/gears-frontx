@@ -135,7 +135,6 @@ export type {
   ChangeSet,
   ProjectSnapshot,
   ReadProvenanceFn,
-  VersionedLookupFn,
   ReadProjectFileFn,
   WriteProjectFileFn,
   RemoveProjectFileFn,
