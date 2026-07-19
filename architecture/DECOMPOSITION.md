@@ -21,23 +21,24 @@
   - [2.15 AI Tooling Kit Packaging & Base Content - HIGH](#215-ai-tooling-kit-packaging--base-content---high)
   - [2.16 Template AI-Extension Contract & Discovery/Activation - HIGH](#216-template-ai-extension-contract--discoveryactivation---high)
   - [2.17 AI-Driven Upgrade Orchestration - HIGH](#217-ai-driven-upgrade-orchestration---high)
+  - [2.18 CLI Executable Invocation Surface - HIGH](#218-cli-executable-invocation-surface---high)
 - [3. Feature Dependencies](#3-feature-dependencies)
 
 <!-- /toc -->
 
 ## 1. Overview
 
-This decomposition breaks the FROZEN FrontX DESIGN into 17 work-package features, grouped along the three ecosystem pillars and ordered foundation-first. It is a work-package breakdown only: it states what each feature owns, what it depends on, and which upstream DESIGN/PRD elements it covers — it does not re-derive design, model behavior, or restate requirement text. All upstream elements are cited by ID; per-feature behavior is authored in each `features/{slug}/FEATURE.md`.
+This decomposition breaks the FROZEN FrontX DESIGN into 18 work-package features, grouped along the three ecosystem pillars and ordered foundation-first. It is a work-package breakdown only: it states what each feature owns, what it depends on, and which upstream DESIGN/PRD elements it covers — it does not re-derive design, model behavior, or restate requirement text. All upstream elements are cited by ID; per-feature behavior is authored in each `features/{slug}/FEATURE.md`.
 
 **Decomposition strategy.** Each feature is a cohesive component/subsystem slice with loose coupling to its neighbours, sized so its dependencies form an acyclic graph with the foundations at the roots. Surviving Pillar-1 features (extraction + boundary-hardening of shipping runtime/type-system/API code) are kept distinct in nature from the greenfield Pillar-2/3 features; the two are never mixed in one feature.
 
 **Three pillars.**
 - **Pillar 1 — Core Framework** (`@gears-frontx/mfes`, `@gears-frontx/gts-plugin`, `@gears-frontx/api`): F2 type-substrate port, F4 registry & handler resolution, F3 GTS default type-system provider, F5 discovery & lazy-import loading, F6 host–MFE communication, F7 extension-domain governance, F8 runtime isolation, F9 API protocol surface.
-- **Pillar 2 — CLI** (`@gears-frontx/cli`): F10 template externalization & source-spec resolution, F11 template manifest contract, F12 kindless template assembly & conflict-checked composition, F13 preset resolution & per-applied-template provenance, F14 upgrade change-set engine.
+- **Pillar 2 — CLI** (`@gears-frontx/cli`): F10 template externalization & source-spec resolution, F11 template manifest contract, F12 kindless template assembly & conflict-checked composition, F13 preset resolution & per-applied-template provenance, F14 upgrade change-set engine, F18 CLI executable invocation surface.
 - **Pillar 3 — AI Tooling** (`cyber-pilot-kit-frontx`): F15 kit packaging & base content, F16 template AI-extension contract & discovery/activation, F17 AI-driven upgrade orchestration.
 - **Cross-cutting:** F1 ecosystem distribution & versioning policy governs all published artifacts.
 
-**Coverage and exclusivity.** Every DESIGN component (5), principle (5), constraint (10), and sequence (4), and every PRD functional (24) and non-functional (4) requirement, is assigned to at least one feature; `cpt validate` enforces 100% coverage of the strict DESIGN elements. Each strict element (component / principle / constraint / sequence) is owned by exactly one feature, with one explicit exception: the three components `cpt-frontx-component-mfe-runtime`, `cpt-frontx-component-cli`, and `cpt-frontx-component-ai-tooling-kit` are each realized by several cohesive features and are therefore shared across those features. The shared-component reason is the cohesion/coupling rule: these components decompose into multiple high-cohesion, loosely-coupled features that each own a distinct slice of the component, so listing the component reference in every owning feature preserves coverage without forcing an artificial single-feature monolith. PRD `fr`/`nfr` requirements are covered transitively and may appear in more than one feature's Requirements Covered.
+**Coverage and exclusivity.** Every DESIGN component (14), principle (7), constraint (18), and sequence (4), and every PRD functional (25) and non-functional (4) requirement, is assigned to at least one feature; `cpt validate` enforces the traceability links, and the DECOMPOSITION checklist's COV rule requires 100% coverage of the strict DESIGN elements. Each strict **component, constraint, and sequence** is owned by exactly one feature, with one explicit exception: the three package-anchor components `cpt-frontx-component-mfe-runtime`, `cpt-frontx-component-cli`, and `cpt-frontx-component-ai-tooling-kit` are each realized by several cohesive features and are therefore shared across those features, while each of their internal sub-components (for example `cpt-frontx-component-cli-template-resolver`, `cpt-frontx-component-cli-prepublish-validator`, `cpt-frontx-component-ai-base-kit`, `cpt-frontx-component-ai-extension-host`, `cpt-frontx-component-ai-upgrade-orchestration`) is owned by exactly one feature. The shared-component reason is the cohesion/coupling rule: these components decompose into multiple high-cohesion, loosely-coupled features that each own a distinct slice of the component, so listing the component reference in every owning feature preserves coverage without forcing an artificial single-feature monolith. **Design principles are not subject to single-feature exclusivity** — like PRD `fr`/`nfr` requirements they are cross-cutting and may appear in more than one feature's coverage (for example `cpt-frontx-principle-agnostic-core` across F2/F4/F6, `cpt-frontx-principle-opaque-type-substrate` across F2/F3, `cpt-frontx-principle-default-deny-admission` across F7/F8, and `cpt-frontx-principle-template-agnostic-tooling` across F10/F15), because a principle constrains several features by nature. PRD `fr`/`nfr` requirements are likewise covered transitively and may appear in more than one feature's Requirements Covered.
 
 ## 2. Entries
 
@@ -499,6 +500,7 @@ This decomposition breaks the FROZEN FrontX DESIGN into 17 work-package features
 - **Design Constraints Covered**:
 
   - [x] `p1` - `cpt-frontx-constraint-cli-template-independence`
+  - [x] `p1` - `cpt-frontx-constraint-cli-shared-resolver`
 
 - **Domain Model Entities**:
   - Template
@@ -506,6 +508,7 @@ This decomposition breaks the FROZEN FrontX DESIGN into 17 work-package features
 - **Design Components**:
 
   - [x] `p1` - `cpt-frontx-component-cli` (shared)
+  - [x] `p1` - `cpt-frontx-component-cli-template-resolver`
 
 - **API**:
   - CLI install/list/update commands
@@ -546,6 +549,7 @@ This decomposition breaks the FROZEN FrontX DESIGN into 17 work-package features
 - **Design Components**:
 
   - [x] `p1` - `cpt-frontx-component-cli` (shared)
+  - [x] `p1` - `cpt-frontx-component-cli-prepublish-validator`
 
 - **API**:
   - CLI validate (pre-publish) command
@@ -687,6 +691,15 @@ This decomposition breaks the FROZEN FrontX DESIGN into 17 work-package features
   - [x] `p1` - `cpt-frontx-fr-cli-project-upgrade-changeset`
   - [x] `p1` - `cpt-frontx-fr-cli-upgrade-review-approval`
 
+- **Design Principles Covered**:
+
+  - [ ] `p1` - `cpt-frontx-principle-reviewable-lifecycle`
+
+- **Design Constraints Covered**:
+
+  - [ ] `p1` - `cpt-frontx-constraint-cli-authoritative-change-set`
+  - [ ] `p1` - `cpt-frontx-constraint-cli-non-destructive-upgrade`
+
 - **Domain Model Entities**:
   - ProjectProvenance
 
@@ -738,6 +751,7 @@ This decomposition breaks the FROZEN FrontX DESIGN into 17 work-package features
 - **Design Constraints Covered**:
 
   - [x] `p1` - `cpt-frontx-constraint-kit-prefixed-resource-ids`
+  - [x] `p1` - `cpt-frontx-constraint-kit-zero-solution-content`
 
 - **Domain Model Entities**:
   - Kit
@@ -745,6 +759,7 @@ This decomposition breaks the FROZEN FrontX DESIGN into 17 work-package features
 - **Design Components**:
 
   - [x] `p1` - `cpt-frontx-component-ai-tooling-kit` (shared)
+  - [x] `p1` - `cpt-frontx-component-ai-base-kit`
 
 - **API**:
   - `cpt-frontx-interface-ai-tooling-framework`
@@ -787,6 +802,7 @@ This decomposition breaks the FROZEN FrontX DESIGN into 17 work-package features
 - **Design Components**:
 
   - [x] `p1` - `cpt-frontx-component-ai-tooling-kit` (shared)
+  - [x] `p1` - `cpt-frontx-component-ai-extension-host`
 
 - **API**:
   - N/A
@@ -821,6 +837,10 @@ This decomposition breaks the FROZEN FrontX DESIGN into 17 work-package features
 
   - [x] `p1` - `cpt-frontx-fr-ai-upgrade-orchestration`
 
+- **Design Constraints Covered**:
+
+  - [x] `p1` - `cpt-frontx-constraint-kit-orchestrates-not-reimplements`
+
 - **Domain Model Entities**:
   - ProjectProvenance
   - AiExtension
@@ -828,6 +848,7 @@ This decomposition breaks the FROZEN FrontX DESIGN into 17 work-package features
 - **Design Components**:
 
   - [x] `p1` - `cpt-frontx-component-ai-tooling-kit` (shared)
+  - [x] `p1` - `cpt-frontx-component-ai-upgrade-orchestration`
 
 - **API**:
   - N/A
@@ -835,6 +856,45 @@ This decomposition breaks the FROZEN FrontX DESIGN into 17 work-package features
 - **Sequences**:
 
   - [ ] `p1` - `cpt-frontx-seq-ai-driven-template-upgrade` (OWNER)
+
+- **Data**:
+
+  - N/A
+
+### 2.18 [CLI Executable Invocation Surface](features/cli-invocation/) - HIGH
+
+- [ ] `p1` - **ID**: `cpt-frontx-feature-cli-invocation`
+
+- **Purpose**: Specify the runnable `frontx` executable entrypoint — the cross-command invocation surface that parses argv, selects the named command, and dispatches `frontx <command> [args]` to the internal component that owns that lifecycle behavior — realizing at behavior altitude the command surface the package anchor `cpt-frontx-component-cli` owns and delegates from, and turning the declared `frontx` bin into a runnable command.
+
+- **Depends On**: `cpt-frontx-feature-template-resolution`, `cpt-frontx-feature-template-manifest`, `cpt-frontx-feature-cli-scaffolding`, `cpt-frontx-feature-composed-provenance`, `cpt-frontx-feature-upgrade-changeset`
+
+- **Scope**:
+  - The single `frontx` executable entrypoint and argv parsing.
+  - Dispatch of each command to the owning behavior by canonical ID (install / list / update, pre-publish validate, seed, add, preset resolution & provenance, upgrade) through one dispatch path — no command behavior redefined here.
+  - Usage/help output for no-command, explicit help, and unrecognized command.
+  - Success / user-error / internal-error exit-code convention applied across every dispatched command.
+
+- **Out of scope**:
+  - Every dispatched command's behavior (owned by F10–F14).
+  - The concrete arg-parser library and exact usage strings (CODE).
+  - Template resolution/assembly/conflict-check/provenance/upgrade logic (F10–F14).
+
+- **Requirements Covered**:
+  - N/A — the CLI functional requirements are owned by the dispatched command features (F10–F14); this feature is the cross-command invocation surface that exposes them, covered transitively rather than owning any requirement.
+
+- **Domain Model Entities**:
+  - N/A
+
+- **Design Components**:
+
+  - [ ] `p1` - `cpt-frontx-component-cli` (shared)
+
+- **API**:
+  - `cpt-frontx-interface-cli` (executable command surface)
+
+- **Sequences**:
+  - N/A
 
 - **Data**:
 
@@ -859,6 +919,7 @@ F10 template-resolution          (foundation)
 F15 ai-kit-packaging             (foundation)
    ├─→ F16 template-ai-extensions
    └─→ F17 ai-upgrade-orchestration (also ← F14)
+F18 cli-invocation               (aggregator ← F10, F11, F12, F13, F14 — dispatches to each)
 ```
 
 **Dependency Rationale**:
@@ -880,3 +941,4 @@ F15 ai-kit-packaging             (foundation)
 - `cpt-frontx-feature-template-ai-extensions` requires `cpt-frontx-feature-template-resolution`: discovery is triggered on template install (cross-pillar edge F16 ← F10).
 - `cpt-frontx-feature-ai-upgrade-orchestration` requires `cpt-frontx-feature-upgrade-changeset`: orchestration drives the single CLI change-set engine (cross-pillar edge F17 ← F14).
 - `cpt-frontx-feature-ai-upgrade-orchestration` requires `cpt-frontx-feature-ai-kit-packaging`: the orchestration workflow ships inside the base AI kit.
+- `cpt-frontx-feature-cli-invocation` requires `cpt-frontx-feature-template-resolution`, `cpt-frontx-feature-template-manifest`, `cpt-frontx-feature-cli-scaffolding`, `cpt-frontx-feature-composed-provenance`, and `cpt-frontx-feature-upgrade-changeset`: the invocation surface is the cross-command aggregator that dispatches `frontx <command>` to each owning behavior; it sits above them in the graph and none depend back on it.

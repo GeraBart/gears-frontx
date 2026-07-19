@@ -29,7 +29,7 @@
 
 ### 1.1 Overview
 
-Provides the AI workflow surface through which an AI agent orchestrates a template upgrade by reading project provenance, invoking and enriching the CLI change-set engine with change-impact analysis, review gates, and downstream-effect assessment, then applying the approved change set or leaving the project unchanged if the developer declines.
+Provides the AI workflow surface through which an AI agent orchestrates a template upgrade by reading the project's provenance record set, selecting which applied template to upgrade (a repository holds one provenance record per applied template, with no single whole-repository origin), invoking and enriching the CLI change-set engine with change-impact analysis, review gates, and downstream-effect assessment, then applying the approved change set or leaving the project unchanged if the developer declines.
 
 ### 1.2 Purpose
 
@@ -37,7 +37,7 @@ Delivers the AI-guided upgrade path defined in `cpt-frontx-seq-ai-driven-templat
 
 **Requirements**: `cpt-frontx-fr-ai-upgrade-orchestration`
 
-**Components**: `cpt-frontx-component-ai-tooling-kit`
+**Components**: `cpt-frontx-component-ai-upgrade-orchestration` (the internal sub-component that owns this behavior), within the package anchor `cpt-frontx-component-ai-tooling-kit`
 
 ### 1.3 Actors
 
@@ -73,11 +73,11 @@ Delivers the AI-guided upgrade path defined in `cpt-frontx-seq-ai-driven-templat
 - Downstream-effect assessment flags incompatibilities; AI surfaces them before the gate so the developer can decline.
 
 **Steps**:
-1. [x] - `p1` - Developer requests an AI-driven template upgrade for the current project - `inst-request-upgrade`
-2. [x] - `p1` - AI reads project provenance to determine the originating template and its current version - `inst-read-provenance`
-3. [x] - `p1` - **IF** provenance is absent or unreadable - `inst-check-provenance`
-   1. [x] - `p1` - **RETURN** error to developer: provenance record missing; upgrade cannot proceed - `inst-provenance-missing`
-4. [x] - `p1` - AI invokes the Upgrade Enrichment algorithm with provenance and the target template version - `inst-invoke-enrichment`
+1. [x] - `p1` - Developer requests an AI-driven template upgrade for the current project, naming the applied template to upgrade (or asking the AI to list the applied templates from provenance so one can be chosen) - `inst-request-upgrade`
+2. [x] - `p1` - AI reads the project's provenance record set (`cpt-frontx-contract-project-provenance`) and selects the record for the named applied template, determining that template's identity and current version - `inst-read-provenance`
+3. [x] - `p1` - **IF** provenance is absent or unreadable, or holds no record for the named applied template - `inst-check-provenance`
+   1. [x] - `p1` - **RETURN** error to developer: no matching provenance record; upgrade cannot proceed - `inst-provenance-missing`
+4. [x] - `p1` - AI invokes the Upgrade Enrichment algorithm with the selected applied template's provenance record and the target template version - `inst-invoke-enrichment`
 5. [x] - `p1` - **IF** the engine returns an empty or unresolvable change set - `inst-check-changeset`
    1. [x] - `p1` - **RETURN** finding to developer: no applicable change set; upgrade halted before review gate - `inst-empty-changeset`
 6. [x] - `p1` - AI presents the enriched change set (change-impact analysis + downstream-effect assessment) to the developer for review - `inst-present-review`
@@ -121,7 +121,7 @@ Delivers the AI-guided upgrade path defined in `cpt-frontx-seq-ai-driven-templat
 **Initial State**: PROVENANCE_READ
 
 **Transitions**:
-1. [x] - `p1` - **FROM** PROVENANCE_READ **TO** ANALYZED **WHEN** project provenance has been read and the CLI change-set engine has been invoked and returned a change set and change-impact analysis and downstream-effect assessment are complete - `inst-to-analyzed`
+1. [x] - `p1` - **FROM** PROVENANCE_READ **TO** ANALYZED **WHEN** the provenance record set has been read, the applied template to upgrade has been selected, and the CLI change-set engine has been invoked and returned a change set and change-impact analysis and downstream-effect assessment are complete - `inst-to-analyzed`
 2. [x] - `p1` - **FROM** ANALYZED **TO** REVIEWED **WHEN** the enriched change set with downstream-impact assessment has been presented to the developer at the review gate - `inst-to-reviewed`
 3. [x] - `p1` - **FROM** REVIEWED **TO** APPLIED **WHEN** developer approves and the engine has applied the change set non-destructively and project provenance has been updated to the newer template version - `inst-to-applied`
 4. [x] - `p1` - **FROM** REVIEWED **TO** DECLINED **WHEN** developer declines or incompatibilities are flagged at the review gate; no project files written; project remains at current version - `inst-to-declined`
@@ -140,6 +140,7 @@ The system **MUST** implement the AI-driven upgrade orchestration flow such that
 
 **Cites**:
 - `cpt-frontx-seq-ai-driven-template-upgrade`
+- `cpt-frontx-component-ai-upgrade-orchestration`
 - `cpt-frontx-component-ai-tooling-kit`
 
 **Touches**:
@@ -156,6 +157,7 @@ The system **MUST** ensure that the engine apply step is never triggered without
 
 **Cites**:
 - `cpt-frontx-seq-ai-driven-template-upgrade`
+- `cpt-frontx-component-ai-upgrade-orchestration`
 - `cpt-frontx-component-ai-tooling-kit`
 
 **Touches**:
@@ -172,6 +174,7 @@ The system **MUST** invoke only the CLI change-set engine (F14 — `cpt-frontx-f
 
 **Cites**:
 - `cpt-frontx-seq-ai-driven-template-upgrade`
+- `cpt-frontx-component-ai-upgrade-orchestration`
 - `cpt-frontx-component-ai-tooling-kit`
 
 **Touches**:
@@ -179,7 +182,7 @@ The system **MUST** invoke only the CLI change-set engine (F14 — `cpt-frontx-f
 
 ## 6. Acceptance Criteria
 
-- [x] The AI-driven upgrade flow reads project provenance, invokes the single CLI change-set engine, enriches the result with change-impact analysis and downstream-effect assessment, and presents it to the developer before any apply.
+- [x] The AI-driven upgrade flow reads the project's provenance record set, selects the named applied template to upgrade, invokes the single CLI change-set engine for that template, enriches the result with change-impact analysis and downstream-effect assessment, and presents it to the developer before any apply.
 - [x] The review gate stands unconditionally before the engine apply step: no project files are written until an explicit developer approval.
 - [x] On developer decline or flagged incompatibilities, the project remains at its current version with no files written.
 - [x] The AI orchestration layer contains no second change-set engine implementation; the identical change set is applied by both the AI-orchestrated path and the direct CLI path.

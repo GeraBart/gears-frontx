@@ -48,18 +48,20 @@ This feature provides the mechanism by which template-specific AI expertise trav
 - **PRD**: [PRD.md](../../PRD.md)
 - **Design**: [DESIGN.md](../../DESIGN.md)
 - **Dependencies**:
-  - `cpt-frontx-feature-template-resolution` (F10) — discovery is triggered on template install (cross-pillar edge F16 ← F10)
+  - `cpt-frontx-feature-template-resolution` (F10) — discovery reads what the CLI materialized: F10 (with `cpt-frontx-feature-cli-scaffolding`) writes each applied template's `.frontx/ai/<template-identity>/` bundle into the scaffolded project; this feature's scan reads every such bundle on the AI Tooling Framework's own invocation. The edge is a filesystem handoff via the project, not a CLI-to-Kit signal (DESIGN §3.4).
   - `cpt-frontx-feature-ai-kit-packaging` (F15) — bundled extensions activate into the base kit's capability set
 
 ### 1.5 AI-Extension Bundle Convention
 
-This is the concrete on-disk shape the fs-discovery scan reads at an installed template's content root; it is the schema this FEATURE owns per `cpt-frontx-adr-contract-schema-ownership` (design altitude fixes the contract's existence and closed-set categories in `cpt-frontx-adr-template-ai-extension-contract`; this section fixes the concrete layout).
+This is the concrete on-disk shape the fs-discovery scan reads. A template author places the bundle at the template's content root; after apply the FrontX CLI materializes that bundle into the scaffolded project (`cpt-frontx-feature-cli-scaffolding`), and the discovery scan reads it from the scaffolded project — the same on-disk shape in both places. It is the schema this FEATURE owns per `cpt-frontx-adr-contract-schema-ownership` (design altitude fixes the contract's existence and closed-set categories in `cpt-frontx-adr-template-ai-extension-contract`; this section fixes the concrete layout).
 
-**Bundle root**: `.frontx/ai/`, resolved relative to the installed template's content root.
+**Bundle root**: `.frontx/ai/<template-identity>/` — a per-template, identity-scoped subtree whose `<template-identity>` segment is the applying template's manifest identity. At authoring time it is relative to the template's content root; after apply the FrontX CLI materializes it at the same identity-scoped path under the scaffolded project root, where the discovery scan reads it. Because each applied template owns a distinct `.frontx/ai/<template-identity>/` subtree, any number of co-applied templates' bundles co-locate under `.frontx/ai/` without colliding as assembly content — disjoint id-scoped subtrees never intersect (see **Ownership-boundary declaration** below and DESIGN §3.4). Same-named-slot precedence across bundles is resolved at activation time by the AI Tooling Framework (below), not by the assembly conflict check.
 
-**Anchor**: `.frontx/ai/extension.json` — declares the bundle's identity (`id`, non-empty string), a contract version (`contractVersion`), and the declared entry list (`entries: { id, category, path }[]`), where `category` is one of the closed-set `ExtensionCategory` values and `path` is relative to `.frontx/ai/`. A bundle whose anchor is missing, unparseable as JSON, or lacks a non-empty `id` yields a structural error and contributes no entries to discovery.
+**Anchor**: `.frontx/ai/<template-identity>/extension.json` — declares the bundle's identity (`id`, non-empty string), a contract version (`contractVersion`), and the declared entry list (`entries: { id, category, path }[]`), where `category` is one of the closed-set `ExtensionCategory` values and `path` is relative to the bundle root `.frontx/ai/<template-identity>/`. A bundle whose anchor is missing, unparseable as JSON, or lacks a non-empty `id` yields a structural error and contributes no entries to discovery.
 
-**Slot subdirs** (closed set — a subdirectory of `.frontx/ai/` outside this set is a structural error, "category outside the closed set"):
+**Ownership-boundary declaration**: a template declares its `.frontx/ai/<template-identity>/` bundle root as an **exclusive subtree** in its manifest ownership boundaries (`cpt-frontx-feature-template-manifest`). Because every template's bundle subtree is scoped to its own identity, the pre-flight conflict check sees only disjoint subtrees and accepts co-located bundles, and the post-materialization boundary-honesty guard treats the bundle as a declared write rather than an undeclared one (`cpt-frontx-feature-cli-scaffolding`, DESIGN §3.4).
+
+**Slot subdirs** (closed set — a subdirectory of the bundle root `.frontx/ai/<template-identity>/` outside this set is a structural error, "category outside the closed set"):
 
 | Category | Subdir | Required on-disk shape for a declared entry |
 |---|---|---|
@@ -104,8 +106,8 @@ User-facing interactions that start with an actor (human or external system) and
 
 *Install, discover, and activate leg — Project Developer*
 
-5. [x] - `p1` - Project Developer installs the template into the project via the CLI (`cpt-frontx-feature-template-resolution`); the CLI signals the AI Tooling Framework (`cpt-frontx-component-ai-tooling-kit`) that an installed template is present - `inst-install-template`
-6. [x] - `p1` - AI Tooling Framework initiates extension discovery for the installed template, invoking the contract scan algorithm parameterized by the closed-set extension contract - `inst-initiate-discovery`
+5. [x] - `p1` - Project Developer applies the template into the project via the CLI (`cpt-frontx-feature-template-resolution`, `cpt-frontx-feature-cli-scaffolding`), which materializes the template's `.frontx/ai/<template-identity>/` bundle into the scaffolded project as owned content within its declared exclusive subtree — no CLI-to-Kit signal is sent (DESIGN §3.4) - `inst-install-template`
+6. [x] - `p1` - On its own next invocation the AI Tooling Framework's extension-host component (`cpt-frontx-component-ai-extension-host`, within the package anchor `cpt-frontx-component-ai-tooling-kit`) initiates extension discovery by scanning each `.frontx/ai/<template-identity>/` bundle under the scaffolded project's `.frontx/ai/`, invoking the contract scan algorithm parameterized by the closed-set extension contract - `inst-initiate-discovery`
 7. [x] - `p1` - **FOR EACH** named typed slot in the closed-set contract (skills, workflows, guidelines, reference artifacts) - `inst-scan-each-slot`
    1. [x] - `p1` - Scan the installed template's declared extension bundle for entries targeting the current slot - `inst-scan-slot-entries`
    2. [x] - `p1` - **IF** a located entry does not conform structurally to the current slot's required shape - `inst-check-slot-conformance`

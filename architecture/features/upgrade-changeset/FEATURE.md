@@ -32,7 +32,7 @@
 
 ### 1.1 Overview
 
-The Upgrade Change-Set Engine is the single `target` CLI-owned mechanism (`cpt-frontx-component-cli`) that upgrades each applied template independently: for a selected applied template it computes a diff between the version recorded in that template's own provenance record and a target version, presents it as a reviewable and approvable change set, applies it non-destructively on approval, and supports rollback to the pre-upgrade repository state. Each applied template adopts a newer version on its own cadence — there is no forced whole-repository upgrade.
+The Upgrade Change-Set Engine is the single `target` CLI-owned mechanism (`cpt-frontx-component-cli`) that upgrades each applied template independently: for a selected applied template it re-resolves the baseline version through the shared resolver using the source-spec its provenance record carries, computes a diff to a target version scoped to that template's occupied ownership boundary (whole files for exclusive subtrees, owned regions only for shared files), presents it as a reviewable and approvable change set, applies it non-destructively within that boundary on approval, and supports rollback to the pre-upgrade repository state. Each applied template adopts a newer version on its own cadence — there is no forced whole-repository upgrade, and one template's upgrade never touches another template's regions in a shared file.
 
 ### 1.2 Purpose
 
@@ -99,13 +99,13 @@ Internal system functions and procedures that do not interact with actors direct
 
 **Input**: Project root path; target template version reference.
 
-**Output**: A change set describing the diff between the provenance-recorded baseline version and the target version (added, modified, and removed files; flagged conflicts).
+**Output**: A change set describing the diff between the provenance-recorded baseline version and the target version (added, modified, and removed files; flagged conflicts), scoped to the selected template's occupied ownership boundary.
 
 **Steps**:
-1. [x] - `p1` - Read `target` the selected applied template's provenance record from the repository via `cpt-frontx-contract-project-provenance`; extract that template's identity and current version - `inst-cmp-read-provenance`
-2. [x] - `p1` - Resolve `target` the template at the baseline version from the local inventory - `inst-cmp-resolve-baseline`
-3. [x] - `p1` - Resolve `target` the template at the target version from the local inventory - `inst-cmp-resolve-target`
-4. [x] - `p1` - Compute the file-level diff between the baseline-version template files and the target-version template files - `inst-cmp-diff-files`
+1. [x] - `p1` - Read `target` the selected applied template's provenance record from the repository via `cpt-frontx-contract-project-provenance`; extract that template's identity, current (baseline) version, re-resolvable source-spec, and occupied ownership boundary - `inst-cmp-read-provenance`
+2. [x] - `p1` - Resolve `target` the baseline-version template content by re-fetching it through the shared resolver (`cpt-frontx-feature-template-resolution`) using the provenance record's source-spec at the baseline version — never from the local inventory, which retains only one version per entry and cannot supply an older baseline - `inst-cmp-resolve-baseline`
+3. [x] - `p1` - Resolve `target` the target-version template content through the same shared resolver using the same source-spec at the target version - `inst-cmp-resolve-target`
+4. [x] - `p1` - Compute the file-level diff between the baseline-version and target-version template files, scoped to the template's occupied ownership boundary: for an exclusive subtree, diff whole files; for a `region-union` shared file, diff only within that template's owned marker-delimited region(s), leaving co-owning templates' regions out of the diff - `inst-cmp-diff-files`
 5. [x] - `p1` - **FOR EACH** changed file in the diff: - `inst-cmp-for-each-file`
    1. [x] - `p1` - Check whether the developer has locally modified the file in the project - `inst-cmp-check-local-mod`
    2. [x] - `p1` - **IF** both the template diff and a local developer modification affect the same file: - `inst-cmp-if-conflict`
@@ -126,7 +126,7 @@ Internal system functions and procedures that do not interact with actors direct
 1. [x] - `p1` - Capture `target` a pre-upgrade snapshot of all files affected by the change set so rollback can restore exact pre-upgrade state - `inst-app-snapshot`
 2. [x] - `p1` - **TRY**: - `inst-app-try`
    1. [x] - `p1` - **FOR EACH** clean entry in the change set, in dependency order: - `inst-app-for-each-entry`
-      1. [x] - `p1` - Apply the entry (write added or modified file content; remove removed files) to the project root - `inst-app-apply-entry`
+      1. [x] - `p1` - Apply the entry to the project root within the template's ownership boundary: for an exclusive subtree, write or remove the whole file; for a `region-union` shared file, rewrite only the template's own marker-delimited region(s) in place, leaving every co-owning template's region byte-for-byte untouched - `inst-app-apply-entry`
 3. [x] - `p1` - **CATCH** application error: - `inst-app-catch`
    1. [x] - `p1` - Restore `target` all affected files from the pre-upgrade snapshot, leaving the project byte-for-byte unchanged - `inst-app-restore-on-error`
    2. [x] - `p1` - Report the error and **RETURN** failure without updating provenance - `inst-app-return-failure`
@@ -174,7 +174,7 @@ Internal system functions and procedures that do not interact with actors direct
 
 - [x] `p1` - **ID**: `cpt-frontx-dod-upgrade-changeset-computation`
 
-The system **MUST** compute a reviewable change set by diffing the target template version against the provenance baseline and presenting it to the developer before writing any project file; no project file may be created, modified, or deleted until the developer explicitly approves.
+The system **MUST** compute a reviewable change set by re-resolving the baseline version through the shared resolver from the source-spec recorded in the selected template's provenance record (not from the single-version local inventory), diffing the target template version against that baseline scoped to the template's occupied ownership boundary — whole files for exclusive subtrees and owned marker-delimited regions only for shared files — and presenting it to the developer before writing any project file; no project file may be created, modified, or deleted until the developer explicitly approves.
 
 **Implements**:
 - `cpt-frontx-flow-upgrade-changeset-review-approval`
@@ -187,7 +187,7 @@ The system **MUST** compute a reviewable change set by diffing the target templa
 
 - [x] `p1` - **ID**: `cpt-frontx-dod-upgrade-changeset-apply`
 
-The system **MUST** apply the approved change set non-destructively by writing only the approved entries to the repository, retain a pre-upgrade snapshot for rollback, and update the selected applied template's provenance record to the newer version upon successful application.
+The system **MUST** apply the approved change set non-destructively by writing only the approved entries to the repository within the selected template's ownership boundary — rewriting only that template's own marker-delimited region(s) in a shared file and leaving every co-owning template's region untouched — retain a pre-upgrade snapshot for rollback, and update the selected applied template's provenance record to the newer version upon successful application.
 
 **Implements**:
 - `cpt-frontx-flow-upgrade-changeset-review-approval`
@@ -225,6 +225,8 @@ The system **MUST** provide exactly one change-set engine in `cpt-frontx-compone
 ## 6. Acceptance Criteria
 
 - [x] Invoking the upgrade command with an available newer template version produces a reviewable change set and writes no project files until the developer approves.
+- [x] The baseline version is re-resolved through the shared resolver from the source-spec recorded in the selected template's provenance record, so the diff baseline is obtainable even though the local inventory retains only one version per entry.
+- [x] The computed diff and the applied change set are scoped to the selected template's occupied ownership boundary: whole files for exclusive subtrees, and only the template's own marker-delimited region(s) for a shared file, leaving every co-owning template's region byte-for-byte unchanged.
 - [x] Approving the change set writes only the approved entries and updates the selected applied template's provenance record to the newer version.
 - [x] Declining the change set leaves the project byte-for-byte unchanged, with no file created, modified, or deleted.
 - [x] Applying a change set and then rolling it back restores the exact pre-upgrade project state, including the provenance record.

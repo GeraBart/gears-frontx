@@ -308,7 +308,7 @@ The CLI (`@gears-frontx/cli`) has zero dependency on any template. It resolves t
 
 #### CLI-2 — One authoritative shared resolver
 
-- [ ] `p2` - **ID**: `cpt-frontx-constraint-cli-shared-resolver`
+- [x] `p2` - **ID**: `cpt-frontx-constraint-cli-shared-resolver`
 
 The CLI resolves templates through exactly one resolver, shared across every template application and assembly; no command carries its own divergent resolution path. Acquisition by source-spec and transitive preset reference resolution are owned by the single template-resolver component, so resolution behavior cannot drift by command. CI-enforceable invariant: every application and assembly routes acquisition and preset resolution through the one resolver component and no second resolution implementation exists.
 
@@ -364,7 +364,7 @@ Every resource identifier in the AI Tooling kit (`cyber-pilot-kit-frontx`) carri
 
 #### KIT-2 — Zero solution-specific AI content in the framework
 
-- [ ] `p2` - **ID**: `cpt-frontx-constraint-kit-zero-solution-content`
+- [x] `p2` - **ID**: `cpt-frontx-constraint-kit-zero-solution-content`
 
 The AI Tooling Framework (`cyber-pilot-kit-frontx`) ships no solution-specific AI content of its own; its base kit carries only solution-agnostic ecosystem capabilities. Solution-specific skills, workflows, guidelines, and reference artifacts enter a project exclusively as extensions bundled with installed templates, discovered and activated by the extension host. CI-enforceable invariant: the packaged base kit contains no template- or solution-named resource, and every solution-specific capability present in a project traces to an installed-template bundle.
 
@@ -372,7 +372,7 @@ The AI Tooling Framework (`cyber-pilot-kit-frontx`) ships no solution-specific A
 
 #### KIT-3 — Orchestrates, does not reimplement, the change-set engine
 
-- [ ] `p2` - **ID**: `cpt-frontx-constraint-kit-orchestrates-not-reimplements`
+- [x] `p2` - **ID**: `cpt-frontx-constraint-kit-orchestrates-not-reimplements`
 
 The AI Tooling Framework's upgrade workflows orchestrate and enrich the CLI's single change-set engine; they contain no independent change-set or project-mutation logic of their own. Change computation and application remain owned by the CLI engine (CLI-3), and the framework adds only review gating, change-impact analysis, and downstream-effect assessment on top of it. CI-enforceable invariant: the framework holds no code path that computes or applies project changes independently of the CLI change-set engine.
 
@@ -577,7 +577,7 @@ Project Developers and the AI agents acting for them need to drive the full temp
 
 #### CLI Template Resolver
 
-- [ ] `p2` - **ID**: `cpt-frontx-component-cli-template-resolver`
+- [x] `p2` - **ID**: `cpt-frontx-component-cli-template-resolver`
 
 Internal component of `@gears-frontx/cli`.
 
@@ -605,7 +605,7 @@ The CLI owns no template, so a single component must turn a versioned source-spe
 
 #### CLI Pre-Publish Validator
 
-- [ ] `p2` - **ID**: `cpt-frontx-component-cli-prepublish-validator`
+- [x] `p2` - **ID**: `cpt-frontx-component-cli-prepublish-validator`
 
 Internal component of `@gears-frontx/cli`.
 
@@ -763,7 +763,7 @@ This component is the package-level anchor for `cyber-pilot-kit-frontx`: it is t
 
 #### AI Base Kit
 
-- [ ] `p2` - **ID**: `cpt-frontx-component-ai-base-kit`
+- [x] `p2` - **ID**: `cpt-frontx-component-ai-base-kit`
 
 Internal component of `cyber-pilot-kit-frontx`.
 
@@ -787,7 +787,7 @@ AI agents working in a FrontX project need ecosystem fluency from session start,
 
 #### AI Extension Host
 
-- [ ] `p2` - **ID**: `cpt-frontx-component-ai-extension-host`
+- [x] `p2` - **ID**: `cpt-frontx-component-ai-extension-host`
 
 Internal component of `cyber-pilot-kit-frontx`.
 
@@ -812,7 +812,7 @@ Template-specific expertise must become agent-visible automatically when a templ
 
 #### AI Upgrade Orchestration
 
-- [ ] `p2` - **ID**: `cpt-frontx-component-ai-upgrade-orchestration`
+- [x] `p2` - **ID**: `cpt-frontx-component-ai-upgrade-orchestration`
 
 Internal component of `cyber-pilot-kit-frontx`.
 
@@ -863,8 +863,8 @@ Covers `cpt-frontx-interface-type-system` (PRD §7.1).
 Covers `cpt-frontx-interface-cli` (PRD §7.1).
 
 - **Technology**: command-line interface — `@gears-frontx/cli`
-- **Location**: command surface of `@gears-frontx/cli`
-- **Shape**: the command surface that drives the template and repository lifecycle, organized by lifecycle capability over one uniform mechanism that operates over any template — install / list / update / validate a template (`cpt-frontx-fr-cli-template-install`, `cpt-frontx-fr-cli-template-validate-prepublish`); apply a template to seed a new repository (`cpt-frontx-fr-cli-seed-repository`); add a template into an existing repository (`cpt-frontx-fr-cli-add-template-to-repository`); assemble one or more templates, resolving a preset's referenced templates and refusing conflicting assembly before any write (`cpt-frontx-fr-cli-composed-template-resolution`, `cpt-frontx-fr-cli-assembly-conflict-prevention`); and upgrade each applied template independently as a reviewable change set (`cpt-frontx-fr-cli-project-upgrade-changeset`) — all through one shared resolver.
+- **Location**: the `frontx` executable entrypoint of `@gears-frontx/cli` (the declared `bin`), which parses the invocation and dispatches each command to its owning internal component
+- **Shape**: an executable command surface, invoked as `frontx <command> [args]` from a single entrypoint that parses the invocation and dispatches each command to the owning internal component (`cpt-frontx-adr-cli-internal-decomposition`), that drives the template and repository lifecycle, organized by lifecycle capability over one uniform mechanism that operates over any template — install / list / update / validate a template (`cpt-frontx-fr-cli-template-install`, `cpt-frontx-fr-cli-template-validate-prepublish`); apply a template to seed a new repository (`cpt-frontx-fr-cli-seed-repository`); add a template into an existing repository (`cpt-frontx-fr-cli-add-template-to-repository`); assemble one or more templates, resolving a preset's referenced templates and refusing conflicting assembly before any write (`cpt-frontx-fr-cli-composed-template-resolution`, `cpt-frontx-fr-cli-assembly-conflict-prevention`); and upgrade each applied template independently as a reviewable change set (`cpt-frontx-fr-cli-project-upgrade-changeset`) — all through one shared resolver.
 - **Stability**: unstable; incompatible changes to the command surface require a major version bump under the per-concern independent versioning policy.
 - **ADRs**: `cpt-frontx-adr-artifact-versioning-and-distribution`, `cpt-frontx-adr-uniform-template-mechanism`, `cpt-frontx-adr-cli-internal-decomposition`
 
@@ -892,6 +892,15 @@ The integration contracts below complement the interfaces above. Each entry stat
 ### 3.4 Internal Dependencies
 
 The ecosystem's artifacts integrate only through narrow, explicit contracts; the inter-package dependency graph is intentionally minimal. The single intra-ecosystem package dependency is the MFE Runtime's consumption of the Type System plugin as the injected concrete provider of its opaque type-substrate port — and even that flows through a port boundary rather than a concrete-type coupling. The API Protocol Surface, the CLI, and the AI Tooling Framework hold no intra-ecosystem package dependencies. Coordination between the AI Tooling Framework and the CLI is an orchestration relationship over the CLI's command surface, not a compile-time package dependency.
+
+AI-extension discovery and activation is a **filesystem handoff through the scaffolded project**, not a package edge and not a CLI-to-Kit call. When the FrontX CLI applies a template, it materializes that template's AI-extension bundle into the scaffolded project under its identity-scoped `.frontx/ai/<template-identity>/` subtree as ordinary owned content and sends no signal to the AI Tooling Framework. The AI Tooling Framework, running inside the scaffolded project on its own invocation, discovers and activates those extensions by scanning `.frontx/ai/`. The integration direction is therefore Kit-reads-project, never CLI-calls-Kit, preserving the no-package-dependency boundary above (`cpt-frontx-adr-extension-discovery-activation`, `cpt-frontx-adr-solution-ai-content-placement`).
+
+There are exactly **two** CLI→Kit filesystem handoffs through the scaffolded project, both in the Kit-reads-project direction and neither a package edge or a CLI-to-Kit call:
+
+1. **`.frontx/ai/` (AI-extension bundles)** — the CLI materializes each applied template's bundle; the AI Tooling Framework scans it to discover and activate extensions (above).
+2. **`.frontx/provenance.json` (applied-template provenance)** — the CLI's provenance recorder writes one record per applied template; the AI Tooling Framework reads this record set to select which applied template to upgrade and to obtain its re-resolvable source-spec before orchestrating the CLI change-set engine (§3.6, `cpt-frontx-feature-ai-upgrade-orchestration`, `cpt-frontx-adr-ai-driven-upgrade-orchestration`).
+
+Ownership of `.frontx/` is split. Each applied template's AI bundle lives under its own identity-scoped subtree `.frontx/ai/<template-identity>/`, which the template declares as an exclusive subtree in its ownership boundaries; because these subtrees are disjoint by identity, any number of co-applied templates' bundles co-locate under `.frontx/ai/` without colliding, and same-slot precedence across them is resolved at activation time by the AI Tooling Framework, not by the assembly conflict check. The remainder of `.frontx/` is CLI-owned metadata reserved from templates — specifically `.frontx/provenance.json` written by the provenance recorder (read-only to the Kit) and any other CLI metadata that is not a template's own `.frontx/ai/<template-identity>/` bundle; a template that declares any of the reserved namespace as a boundary is refused at pre-publish validation.
 
 | Dependency Module | Interface Used | Purpose |
 |-------------------|----------------|---------|
@@ -993,7 +1002,7 @@ sequenceDiagram
 
 **Use cases**: `cpt-frontx-usecase-scaffold-composed-project`
 
-**Actors**: `cpt-frontx-actor-project-developer`, `cpt-frontx-actor-github`, `cpt-frontx-actor-cypilot-cli`
+**Actors**: `cpt-frontx-actor-project-developer`, `cpt-frontx-actor-github` (the FrontX CLI, `@gears-frontx/cli`, is the executing system)
 
 ```mermaid
 sequenceDiagram
@@ -1002,7 +1011,6 @@ sequenceDiagram
     participant GH as GitHub source registry
     participant Chk as Conflict checker
     participant Repo as Repository
-    participant Kit as AI Tooling Framework (cyber-pilot-kit-frontx)
     Dev->>CLI: install + apply template(s) / preset (versioned source-spec)
     CLI->>GH: resolve template(s) + a preset's referenced templates by reference
     alt registry reachable and references resolvable
@@ -1011,9 +1019,8 @@ sequenceDiagram
         CLI->>Chk: stage assembly; pre-flight intersection check over declared boundaries
         alt boundaries do not intersect
             Chk-->>CLI: no conflict
-            CLI->>Repo: materialize assembly; write one provenance record per applied template
-            CLI->>Kit: activate base capabilities + bundled template extensions
-            Kit-->>Dev: ecosystem and template-specific AI capabilities active
+            CLI->>Repo: materialize assembly (composing co-owned shared files from owned regions), incl. .frontx/ai/ bundles; write one provenance record per applied template
+            CLI-->>Dev: assembled repository (AI bundles discovered later by the Kit on its own invocation)
         else two templates claim the same ground
             Chk-->>CLI: conflict (contesting templates + contested ground)
             CLI-->>Dev: report and refuse assembly; abort without writing files
@@ -1024,7 +1031,7 @@ sequenceDiagram
     end
 ```
 
-**Description**: The CLI installs and applies one or more templates by versioned source-spec, resolving a preset's referenced templates transitively in one operation with cycle detection; it stages the whole assembly and runs a pre-flight intersection check comparing the applied templates' declared ownership boundaries before writing anything. Only if no two templates claim the same ground does it materialize the assembly, write one provenance record per applied template, and let the AI Tooling Framework activate base and template-bundled capabilities (`cpt-frontx-adr-template-acquisition-and-location`, `cpt-frontx-adr-source-spec-syntax`, `cpt-frontx-adr-composed-template-resolution`, `cpt-frontx-adr-assembly-conflict-prevention`, `cpt-frontx-adr-project-provenance-record`, `cpt-frontx-adr-extension-discovery-activation`). If the source registry is unreachable, a reference is unresolvable, or the conflict check detects an intersection, the CLI reports the failure and refuses the assembly before writing any files, never silently merging.
+**Description**: The CLI installs and applies one or more templates by versioned source-spec, resolving a preset's referenced templates transitively in one operation with cycle detection; it stages the whole assembly and runs a pre-flight intersection check comparing the applied templates' declared ownership boundaries before writing anything. Only if no two templates claim the same ground does it materialize the assembly — composing any shared file co-owned by more than one template from each template's disjoint owned regions, located by identity-scoped region markers — write one provenance record per applied template, and write each template's `.frontx/ai/<template-identity>/` extension bundle into the project as owned content (`cpt-frontx-adr-template-acquisition-and-location`, `cpt-frontx-adr-source-spec-syntax`, `cpt-frontx-adr-composed-template-resolution`, `cpt-frontx-adr-assembly-conflict-prevention`, `cpt-frontx-adr-project-provenance-record`, `cpt-frontx-adr-template-ownership-boundary-declaration`). Activation is out of band: the AI Tooling Framework discovers and activates those bundles on its own invocation by scanning `.frontx/ai/` (§3.4, `cpt-frontx-adr-extension-discovery-activation`), so the CLI sends it no signal. The concrete region-addressing and merge-strategy schema is owned by the CLI FEATUREs, not by DESIGN. If the source registry is unreachable, a reference is unresolvable, or the conflict check detects an intersection, the CLI reports the failure and refuses the assembly before writing any files, never silently merging.
 
 #### AI-driven template upgrade
 
@@ -1071,12 +1078,15 @@ sequenceDiagram
     participant GH as GitHub source registry
     participant PDev as Project Developer
     participant CLI as CLI (@gears-frontx/cli)
+    participant Repo as Scaffolded project
     participant Kit as AI Tooling Framework (cyber-pilot-kit-frontx)
     participant Agent as AI agent
     TDev->>GH: publish template with bundled AI extension (extension contract)
-    PDev->>CLI: install template into project
-    CLI->>Kit: signal installed template present
-    Kit->>Kit: discover bundled extension conforming to contract
+    PDev->>CLI: apply template into project
+    CLI->>Repo: materialize template incl. .frontx/ai/ bundle (no CLI→Kit signal)
+    PDev->>Kit: run AI tooling in the project
+    Kit->>Repo: scan .frontx/ai/ for bundled extension(s)
+    Kit->>Kit: validate discovered extension against contract
     alt extension conforms to contract
         Kit->>Agent: activate extension capabilities (no manual wiring)
         Agent-->>PDev: template-specific AI capabilities available
@@ -1085,7 +1095,7 @@ sequenceDiagram
     end
 ```
 
-**Description**: A Template Developer bundles an AI extension conforming to the extension contract and publishes the template; on install, the AI Tooling Framework discovers the bundled extension and activates its capabilities for agents without manual wiring (`cpt-frontx-adr-template-ai-extension-contract`, `cpt-frontx-adr-extension-discovery-activation`, `cpt-frontx-adr-solution-ai-content-placement`). A malformed extension is reported as a structural error and is not activated, keeping the agent surface to conforming extensions only.
+**Description**: A Template Developer bundles an AI extension conforming to the extension contract and publishes the template; on apply, the FrontX CLI materializes the bundle into the scaffolded project under its identity-scoped `.frontx/ai/<template-identity>/` subtree. On its own next invocation inside that project the AI Tooling Framework scans `.frontx/ai/`, discovers the bundled extension, and activates its capabilities for agents without manual wiring — the CLI sends it no signal, consistent with §3.4 (`cpt-frontx-adr-template-ai-extension-contract`, `cpt-frontx-adr-extension-discovery-activation`, `cpt-frontx-adr-solution-ai-content-placement`). A malformed extension is reported as a structural error and is not activated, keeping the agent surface to conforming extensions only.
 
 ### 3.7 Database schemas & tables
 
@@ -1097,6 +1107,8 @@ The ecosystem has no server-side runtime to deploy; its artifacts are distribute
 
 - **Package registry (npm-compatible)** — the Core Framework packages and the CLI are published to the npm package registry (`cpt-frontx-actor-package-registry`) under the per-concern independent versioning policy and installed by applications with their chosen package manager (`cpt-frontx-adr-artifact-versioning-and-distribution`).
 - **GitHub source registry (tarball/source)** — templates and the AI Tooling Framework are hosted on the GitHub source registry (`cpt-frontx-actor-github`) and acquired by versioned source-spec at install and upgrade time; the AI Tooling Framework is additionally installed into a consuming project through the Cypilot CLI integration (`cpt-frontx-actor-cypilot-cli`) (`cpt-frontx-adr-template-acquisition-and-location`, `cpt-frontx-adr-ai-tooling-framework-packaging`).
+
+Template publication is **out of band**: a template developer publishes a template to GitHub (tag/release) outside the FrontX CLI, which is a pure consumer — it resolves and applies already-published templates by source-spec and never publishes them. The CLI's only pre-publication role is the pre-publish manifest validation (`cpt-frontx-feature-template-manifest`) a developer may run before publishing through their own GitHub workflow.
 
 The runtime topology is therefore wholly in-browser within the composed application: the host loads independently published microfrontends on demand, and there is no separate server tier owned by the ecosystem.
 
