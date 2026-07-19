@@ -11,27 +11,6 @@ interface BoundaryClaim {
   boundary: OwnershipBoundary;
 }
 
-// Two shared-file claims on the SAME path are compatible only when they
-// declare the SAME merge strategy for any region they both claim — that is
-// the "compatible declared merge" the DoD requires
-// (cpt-frontx-adr-template-ownership-boundary-declaration). Disjoint regions
-// never clash regardless of merge strategy.
-function hasIncompatibleRegionClash(
-  a: OwnershipBoundary,
-  b: OwnershipBoundary,
-): { path: string } | null {
-  for (const sharedA of a.sharedFiles) {
-    for (const sharedB of b.sharedFiles) {
-      if (sharedA.path !== sharedB.path) continue;
-      const overlappingRegions = sharedA.ownedRegions.filter((region) => sharedB.ownedRegions.includes(region));
-      if (overlappingRegions.length === 0) continue; // disjoint regions of one shared file — never a clash
-      if (sharedA.mergeStrategy === sharedB.mergeStrategy) continue; // compatible declared merge — never a clash
-      return { path: sharedA.path };
-    }
-  }
-  return null;
-}
-
 // @cpt-dod:cpt-frontx-dod-cli-scaffolding-conflict-check:p1
 // @cpt-algo:cpt-frontx-algo-cli-scaffolding-conflict-check:p1
 /**
@@ -39,10 +18,14 @@ function hasIncompatibleRegionClash(
  * `cpt-frontx-algo-cli-scaffolding-conflict-check`. Combines the STAGED
  * assembly's declared ownership boundaries with the boundaries already
  * occupied by the repository's applied templates, compares every pair of
- * boundary claims, and detects two clash kinds: an exclusive-subtree clash
- * (two templates claiming the same exclusive subtree) and a shared-file
- * region clash (two templates claiming the same shared-file region without a
- * compatible declared merge). When any conflict is found the whole assembly
+ * boundary claims, and detects three clash kinds: an exclusive-subtree clash
+ * (two templates claiming the same exclusive subtree), an exclusive
+ * shared-file clash (two templates claiming the same shared-file path where
+ * either both declare merge strategy `exclusive`, or one declares
+ * `exclusive` while the other declares `region-union` — whole-file ownership
+ * of a shared file cannot be shared), and a region-key clash (two templates
+ * declaring merge strategy `region-union` on the same shared-file path and
+ * claiming the same declared region key). When any conflict is found the whole assembly
  * is REFUSED — the report names each contested ground and its contesting
  * templates, before any file is written; conflicting claims are never
  * silently merged. On no conflict, returns a pass so the P14 uniform-apply
@@ -95,18 +78,46 @@ export function checkAssemblyConflicts(
           // @cpt-end:cpt-frontx-algo-cli-scaffolding-conflict-check:p1:inst-cc-record-subtree-conflict
         }
       }
-      // @cpt-begin:cpt-frontx-algo-cli-scaffolding-conflict-check:p1:inst-cc-if-region-clash
-      // Detect the same shared-file region claimed without a compatible
-      // declared merge.
-      const regionClash = hasIncompatibleRegionClash(claimA.boundary, claimB.boundary);
-      if (regionClash) {
-        // @cpt-end:cpt-frontx-algo-cli-scaffolding-conflict-check:p1:inst-cc-if-region-clash
+      for (const sharedA of claimA.boundary.sharedFiles) {
+        for (const sharedB of claimB.boundary.sharedFiles) {
+          if (sharedA.path !== sharedB.path) continue;
 
-        // @cpt-begin:cpt-frontx-algo-cli-scaffolding-conflict-check:p1:inst-cc-record-region-conflict
-        // Record the shared-file-region conflict — the contested ground and
-        // the two contesting template identities.
-        conflicts.push({ ground: regionClash.path, contestants: [claimA.templateName, claimB.templateName] });
-        // @cpt-end:cpt-frontx-algo-cli-scaffolding-conflict-check:p1:inst-cc-record-region-conflict
+          // @cpt-begin:cpt-frontx-algo-cli-scaffolding-conflict-check:p1:inst-cc-if-exclusive-clash
+          // Both templates claim the same shared-file path AND either both
+          // declare merge strategy `exclusive` for it, or one declares
+          // `exclusive` while the other declares `region-union` — whole-file
+          // ownership of a shared file cannot be shared.
+          const eitherExclusive = sharedA.mergeStrategy === 'exclusive' || sharedB.mergeStrategy === 'exclusive';
+          if (eitherExclusive) {
+            // @cpt-end:cpt-frontx-algo-cli-scaffolding-conflict-check:p1:inst-cc-if-exclusive-clash
+
+            // @cpt-begin:cpt-frontx-algo-cli-scaffolding-conflict-check:p1:inst-cc-record-exclusive-conflict
+            // Record a conflict entry naming the contested file path and the
+            // two contesting template identities.
+            conflicts.push({ ground: sharedA.path, contestants: [claimA.templateName, claimB.templateName] });
+            // @cpt-end:cpt-frontx-algo-cli-scaffolding-conflict-check:p1:inst-cc-record-exclusive-conflict
+            continue;
+          }
+
+          // @cpt-begin:cpt-frontx-algo-cli-scaffolding-conflict-check:p1:inst-cc-if-region-key-clash
+          // Both templates declare merge strategy `region-union` on the same
+          // shared-file path AND claim the same declared region key.
+          const sharedRegionKeys = sharedA.ownedRegions.filter((region) => sharedB.ownedRegions.includes(region));
+          for (const regionKey of sharedRegionKeys) {
+            // @cpt-end:cpt-frontx-algo-cli-scaffolding-conflict-check:p1:inst-cc-if-region-key-clash
+
+            // @cpt-begin:cpt-frontx-algo-cli-scaffolding-conflict-check:p1:inst-cc-record-region-conflict
+            // Record a conflict entry naming the contested file path, the
+            // contested region key (folded into the ground as
+            // `${path}#${regionKey}`), and the two contesting template
+            // identities.
+            conflicts.push({
+              ground: `${sharedA.path}#${regionKey}`,
+              contestants: [claimA.templateName, claimB.templateName],
+            });
+            // @cpt-end:cpt-frontx-algo-cli-scaffolding-conflict-check:p1:inst-cc-record-region-conflict
+          }
+        }
       }
     }
   }
