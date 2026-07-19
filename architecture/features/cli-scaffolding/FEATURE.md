@@ -158,7 +158,7 @@ Internal system functions and procedures called by actor flows above.
 
 ### Compose Shared Files from Owned Regions at Materialization
 
-- [ ] `p1` - **ID**: `cpt-frontx-algo-cli-scaffolding-compose-shared-files`
+- [x] `p1` - **ID**: `cpt-frontx-algo-cli-scaffolding-compose-shared-files`
 
 **Input**: The conflict-cleared staged assembly (per-template contributions and declared ownership boundaries, including `region-union` shared-file entries with their owned region keys, per `cpt-frontx-feature-template-manifest`) and the target repository path.
 
@@ -174,11 +174,11 @@ Internal system functions and procedures called by actor flows above.
    2. [x] - `p1` - **FOR EACH** contributing template, locate and extract its owned region(s) from its installed content by matching the begin/end sentinel markers keyed by that template's identity and each declared region key (region-addressing schema owned by `cpt-frontx-feature-template-manifest`). - `inst-cs-extract-regions`
    3. [x] - `p1` - **IF** two contributors resolved the same declared region key on the path - `inst-cs-if-key-collision`
       1. [x] - `p1` - **RETURN** a materialization-invariant error naming the contested region key and templates — a same-declared-key collision must have been refused by the pre-flight conflict check (`cpt-frontx-algo-cli-scaffolding-conflict-check`), so reaching materialization is an invariant violation. - `inst-cs-return-key-invariant`
-   4. [ ] - `p1` - **IF** any two extracted regions on the path have overlapping actual on-disk marker spans — whether owned by different templates or by the same template declaring multiple region keys - `inst-cs-if-span-overlap`
-      1. [ ] - `p1` - **RETURN** a materialization conflict naming the contested file, the overlapping region markers, and the owning template(s); refuse the assembly and write no file. Actual marker-span overlap is a content-level property that neither pre-publish manifest validation (well-formed keys only) nor the pre-flight conflict check (declared keys only) can observe, so materialization — run per shared-file path regardless of contributor count — is where it is first detectable and refused, covering single-template self-overlap as well as cross-template overlap. - `inst-cs-return-span-overlap`
-   5. [ ] - `p1` - Compose the repository file as the disjoint union of every contributor's extracted region(s), preserving each region's sentinel markers so a later boundary-scoped upgrade can re-locate it, in a deterministic order (by owning template identity, then region key). - `inst-cs-compose-union`
-   6. [ ] - `p1` - Write the composed file to the target repository. - `inst-cs-write-composed`
-4. [ ] - `p1` - **RETURN** the materialized repository files. - `inst-cs-return-materialized`
+   4. [x] - `p1` - **IF** any two extracted regions on the path have overlapping actual on-disk marker spans — whether owned by different templates or by the same template declaring multiple region keys - `inst-cs-if-span-overlap`
+      1. [x] - `p1` - **RETURN** a materialization conflict naming the contested file, the overlapping region markers, and the owning template(s); refuse the assembly and write no file. Actual marker-span overlap is a content-level property that neither pre-publish manifest validation (well-formed keys only) nor the pre-flight conflict check (declared keys only) can observe, so materialization — run per shared-file path regardless of contributor count — is where it is first detectable and refused, covering single-template self-overlap as well as cross-template overlap. - `inst-cs-return-span-overlap`
+   5. [x] - `p1` - Compose the repository file as the disjoint union of every contributor's extracted region(s), preserving each region's sentinel markers so a later boundary-scoped upgrade can re-locate it, in a deterministic order (by owning template identity, then region key). - `inst-cs-compose-union`
+   6. [x] - `p1` - Write the composed file to the target repository. - `inst-cs-write-composed`
+4. [x] - `p1` - **RETURN** the materialized repository files. - `inst-cs-return-materialized`
 
 ## 4. States (CDSL)
 
@@ -237,7 +237,7 @@ The system **MUST** run a pre-flight intersection check over the staged assembly
 
 ### Shared-File Region Composition at Materialization
 
-- [ ] `p1` - **ID**: `cpt-frontx-dod-cli-scaffolding-compose-shared-files`
+- [x] `p1` - **ID**: `cpt-frontx-dod-cli-scaffolding-compose-shared-files`
 
 The system **MUST** materialize a shared file co-owned by more than one applied template by extracting each template's owned region(s) from its installed content (located by the identity-and-region-key sentinel markers whose schema `cpt-frontx-feature-template-manifest` owns) and writing the disjoint union of those regions to a single repository file, preserving the region markers for later boundary-scoped upgrade; an `exclusive` path is written whole by its single owner. Declared-level collisions (same region key, or a contested `exclusive` path) reaching materialization are invariant violations because the pre-flight conflict check already refuses them, whereas an overlap between any two owned regions' actual on-disk marker spans — whether contributed by different templates or by a single template declaring multiple keys — is a content-level property the pre-flight cannot observe, so materialization (run per shared-file path regardless of contributor count) is the authority that detects it and refuses the assembly (`target`).
 

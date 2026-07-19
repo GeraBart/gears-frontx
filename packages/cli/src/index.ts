@@ -89,11 +89,21 @@ export type { WriteProvenanceResult } from './provenance/write';
 export type { ProvenanceRecord, ProvenanceWriteFn } from './provenance/types';
 export { PROVENANCE_RELATIVE_PATH, provenancePath } from './provenance/contract';
 
+// F12 shared-file region composer (cpt-frontx-algo-cli-scaffolding-compose-shared-files,
+// cpt-frontx-dod-cli-scaffolding-compose-shared-files) — the sole authority
+// materializeAssembly (below) delegates to for writing every target
+// repository file, so no per-contribution write can silently clobber another
+// contributor's owned region.
+export { composeSharedFiles, groupContributionsByPath } from './scaffold/compose-shared-files';
+export type { ComposeSharedFilesResult, ExtractedRegion, MaterializedFile } from './scaffold/compose-shared-files';
+
 // F12 entry flows (P30) — cpt-frontx-flow-cli-scaffolding-seed-repository and
 // cpt-frontx-flow-cli-scaffolding-add-template. Both WIRE the P14 uniform-apply
 // path and the P29 pre-flight conflict checker above; neither re-implements
 // them. materializeAssembly realizes the shared boundary-declared-assembly DoD
-// (cpt-frontx-dod-cli-scaffolding-boundary-declared-assembly).
+// (cpt-frontx-dod-cli-scaffolding-boundary-declared-assembly) AND delegates to
+// composeSharedFiles for the shared-file region composition DoD
+// (cpt-frontx-dod-cli-scaffolding-compose-shared-files).
 export { materializeAssembly, occupiedBoundariesFromProvenance } from './scaffold/materialize';
 export type { MaterializeResult, ReadProvenanceRecordsFn } from './scaffold/materialize';
 export { seedRepository } from './commands/seed-repository';

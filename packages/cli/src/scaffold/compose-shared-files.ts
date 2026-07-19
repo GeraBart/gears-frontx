@@ -32,17 +32,32 @@ export interface ExtractedRegion {
   markerBlock: string;
 }
 
-// Part 1 outcome: either the collision-cleared, extracted per-path region set
-// staged for the pt.2 span-overlap check + composition (not implemented
-// here), or one of the two materialization-invariant refusals — both of which
-// name a condition the pre-flight conflict check
-// (`cpt-frontx-algo-cli-scaffolding-conflict-check`) should already have
-// refused, so reaching either here is a bug in that earlier gate rather than
-// a normal refusal path.
+// A single repository file materialized by the algorithm — either a
+// whole-file single-owner write or the composed disjoint-region union.
+export interface MaterializedFile {
+  path: string;
+  content: string;
+}
+
+// The algorithm's outcome: the full set of materialized repository files
+// (`inst-cs-return-materialized`), or one of three refusals — the two
+// declared-level materialization invariants (both of which name a condition
+// the pre-flight conflict check, `cpt-frontx-algo-cli-scaffolding-conflict-check`,
+// should already have refused, so reaching either here is a bug in that
+// earlier gate rather than a normal refusal path), or the content-level
+// span-overlap conflict that only materialization can observe.
 export type ComposeSharedFilesResult =
-  | { ok: true; multiContributorGroups: Map<string, ExtractedRegion[]> }
+  | { ok: true; files: MaterializedFile[] }
   | { ok: false; reason: 'exclusive-contested'; path: string; contestants: string[]; message: string }
-  | { ok: false; reason: 'key-collision'; path: string; regionKey: string; contestants: string[]; message: string };
+  | { ok: false; reason: 'key-collision'; path: string; regionKey: string; contestants: string[]; message: string }
+  | {
+      ok: false;
+      reason: 'span-overlap';
+      path: string;
+      contestants: string[];
+      regionKeys: string[];
+      message: string;
+    };
 
 // Resolves a single content item's declared ownership on its own path — a
 // whole-file `exclusive` claim when no shared-file entry declares the path
@@ -90,14 +105,21 @@ export function groupContributionsByPath(assembly: StagedAssembly): Map<string, 
 }
 // @cpt-end:cpt-frontx-algo-cli-scaffolding-compose-shared-files:p1:inst-cs-group-by-path
 
-// Locates and extracts one template's owned region from its installed
-// content by matching the begin/end sentinel-marker pair keyed by that
-// template's identity and the declared region key. Returns the region text
-// INCLUSIVE of its marker lines, undefined if the pair cannot be located —
-// pre-publish manifest validation guarantees well-formed declared keys, not
-// that the markers exist on disk, so a caller-side treatment of a missing
-// pair is left to the pt.2 phase that consumes this extraction.
-function extractOwnedRegion(content: string, templateName: string, regionKey: string): string | undefined {
+// The actual on-disk line-index span of one located marker pair — the
+// content-level position that pt.2's span-overlap check (inst-cs-if-span-overlap)
+// compares across regions; a declared region key alone (checked by pt.1's
+// inst-cs-if-key-collision) cannot reveal this.
+interface RegionSpan {
+  beginIndex: number;
+  endIndex: number;
+}
+
+// Locates one template's owned region on disk by matching the begin/end
+// sentinel-marker pair keyed by that template's identity and the declared
+// region key. Returns undefined if the pair cannot be located — pre-publish
+// manifest validation guarantees well-formed declared keys, not that the
+// markers exist on disk.
+function locateRegionSpan(content: string, templateName: string, regionKey: string): RegionSpan | undefined {
   const lines = content.split('\n');
   const beginMarker = `${REGION_BEGIN_PREFIX} ${templateName}:${regionKey}`;
   const endMarker = `${REGION_END_PREFIX} ${templateName}:${regionKey}`;
@@ -105,24 +127,35 @@ function extractOwnedRegion(content: string, templateName: string, regionKey: st
   if (beginIndex === -1) return undefined;
   const endIndex = lines.findIndex((line, index) => index > beginIndex && line.includes(endMarker));
   if (endIndex === -1) return undefined;
-  return lines.slice(beginIndex, endIndex + 1).join('\n');
+  return { beginIndex, endIndex };
+}
+
+// Locates and extracts one template's owned region from its installed
+// content by matching the begin/end sentinel-marker pair keyed by that
+// template's identity and the declared region key. Returns the region text
+// INCLUSIVE of its marker lines, undefined if the pair cannot be located.
+function extractOwnedRegion(content: string, templateName: string, regionKey: string): string | undefined {
+  const span = locateRegionSpan(content, templateName, regionKey);
+  if (!span) return undefined;
+  const lines = content.split('\n');
+  return lines.slice(span.beginIndex, span.endIndex + 1).join('\n');
 }
 
 // @cpt-algo:cpt-frontx-algo-cli-scaffolding-compose-shared-files:p1
 /**
- * Part 1 of the compose-shared-files algorithm. Groups the conflict-cleared
- * staged assembly's contributions by target repository file path, writes the
- * whole-file single-owner paths directly, and — for every path with any
- * `region-union` contribution — guards the two materialization-invariant
- * collisions (a contested `exclusive` path, or two contributors resolving
- * the same declared region key) that the pre-flight conflict check
- * (`cpt-frontx-algo-cli-scaffolding-conflict-check`) should already have
- * refused, before extracting each contributor's owned region by its
- * identity-and-region-key sentinel markers.
- *
- * Part 2 — span-overlap detection, disjoint-union composition, and writing
- * the composed file — is a separate, later phase; this function returns the
- * extracted, collision-cleared per-path region set for that phase to consume.
+ * Groups the conflict-cleared staged assembly's contributions by target
+ * repository file path, writes the whole-file single-owner paths directly,
+ * and — for every path with any `region-union` contribution — guards the two
+ * declared-level materialization invariants (a contested `exclusive` path, or
+ * two contributors resolving the same declared region key) that the
+ * pre-flight conflict check (`cpt-frontx-algo-cli-scaffolding-conflict-check`)
+ * should already have refused, before extracting each contributor's owned
+ * region by its identity-and-region-key sentinel markers, refusing the
+ * assembly if any two extracted regions' actual on-disk marker spans
+ * overlap — the content-level check only materialization can observe —
+ * composing the collision-free set as a deterministic disjoint union with
+ * markers preserved, and writing the composed file. Returns every
+ * materialized repository file.
  */
 export async function composeSharedFiles(
   assembly: StagedAssembly,
@@ -130,7 +163,7 @@ export async function composeSharedFiles(
   writeFileFn: WriteFileFn,
 ): Promise<ComposeSharedFilesResult> {
   const grouped = groupContributionsByPath(assembly);
-  const multiContributorGroups = new Map<string, ExtractedRegion[]>();
+  const materializedFiles: MaterializedFile[] = [];
 
   for (const [path, entries] of grouped) {
     // @cpt-begin:cpt-frontx-algo-cli-scaffolding-compose-shared-files:p1:inst-cs-foreach-single
@@ -140,6 +173,7 @@ export async function composeSharedFiles(
     if (entries.length === 1 && entries[0].mergeStrategy === 'exclusive') {
       // @cpt-begin:cpt-frontx-algo-cli-scaffolding-compose-shared-files:p1:inst-cs-write-single
       await writeFileFn(`${targetDir}/${path}`, entries[0].content);
+      materializedFiles.push({ path, content: entries[0].content });
       // @cpt-end:cpt-frontx-algo-cli-scaffolding-compose-shared-files:p1:inst-cs-write-single
       continue;
     }
@@ -211,11 +245,75 @@ export async function composeSharedFiles(
       // @cpt-end:cpt-frontx-algo-cli-scaffolding-compose-shared-files:p1:inst-cs-return-key-invariant
     }
 
-    // Staged for the pt.2 phase: span-overlap detection, disjoint-union
-    // composition, and writing the composed file (out of scope here).
-    multiContributorGroups.set(path, extracted);
+    // @cpt-begin:cpt-frontx-algo-cli-scaffolding-compose-shared-files:p1:inst-cs-if-span-overlap
+    // Re-locates each extracted region's actual on-disk line-index span (not
+    // carried by `ExtractedRegion` — pt.1 only needed the marker text) to
+    // detect an overlap that neither manifest validation (well-formed keys
+    // only) nor the pre-flight conflict check (declared keys only) can see.
+    // A line-index span is only meaningful relative to the buffer it was
+    // located in, so two regions are only compared when they were located in
+    // the SAME on-disk buffer — trivially true for a single template's own
+    // multiple keys (self-overlap), and true for two different templates only
+    // when both ship byte-identical content for the shared path (the
+    // canonical-shared-file convention `cpt-frontx-feature-template-manifest`
+    // expects a region-union path to follow), which is what makes
+    // cross-template overlap detectable at all.
+    const contentByTemplate = new Map(entries.map((entry) => [entry.templateName, entry.content]));
+    const spans = extracted.map((region) => {
+      const content = contentByTemplate.get(region.templateName);
+      const span = content ? locateRegionSpan(content, region.templateName, region.regionKey) : undefined;
+      return { region, content, span };
+    });
+    let overlappingPair: [ExtractedRegion, ExtractedRegion] | undefined;
+    for (let i = 0; i < spans.length && !overlappingPair; i++) {
+      for (let j = i + 1; j < spans.length; j++) {
+        const a = spans[i];
+        const b = spans[j];
+        if (!a.span || !b.span || a.content !== b.content) continue;
+        if (a.span.beginIndex <= b.span.endIndex && b.span.beginIndex <= a.span.endIndex) {
+          overlappingPair = [a.region, b.region];
+          break;
+        }
+      }
+    }
+    // @cpt-end:cpt-frontx-algo-cli-scaffolding-compose-shared-files:p1:inst-cs-if-span-overlap
+    if (overlappingPair) {
+      // @cpt-begin:cpt-frontx-algo-cli-scaffolding-compose-shared-files:p1:inst-cs-return-span-overlap
+      const [regionA, regionB] = overlappingPair;
+      return {
+        ok: false,
+        reason: 'span-overlap',
+        path,
+        contestants: [regionA.templateName, regionB.templateName],
+        regionKeys: [regionA.regionKey, regionB.regionKey],
+        message:
+          `Materialization conflict — path "${path}" has overlapping on-disk marker spans between ` +
+          `${regionA.templateName}:${regionA.regionKey} and ${regionB.templateName}:${regionB.regionKey}; ` +
+          'refusing the assembly and writing no file.',
+      };
+      // @cpt-end:cpt-frontx-algo-cli-scaffolding-compose-shared-files:p1:inst-cs-return-span-overlap
+    }
+
+    // @cpt-begin:cpt-frontx-algo-cli-scaffolding-compose-shared-files:p1:inst-cs-compose-union
+    // Deterministic order — by owning template identity, then region key —
+    // so re-materializing the same collision-free assembly always produces
+    // byte-identical output.
+    const orderedRegions = [...extracted].sort((a, b) =>
+      a.templateName === b.templateName
+        ? a.regionKey.localeCompare(b.regionKey)
+        : a.templateName.localeCompare(b.templateName),
+    );
+    const composedContent = orderedRegions.map((region) => region.markerBlock).join('\n');
+    // @cpt-end:cpt-frontx-algo-cli-scaffolding-compose-shared-files:p1:inst-cs-compose-union
+
+    // @cpt-begin:cpt-frontx-algo-cli-scaffolding-compose-shared-files:p1:inst-cs-write-composed
+    await writeFileFn(`${targetDir}/${path}`, composedContent);
+    materializedFiles.push({ path, content: composedContent });
+    // @cpt-end:cpt-frontx-algo-cli-scaffolding-compose-shared-files:p1:inst-cs-write-composed
     // @cpt-end:cpt-frontx-algo-cli-scaffolding-compose-shared-files:p1:inst-cs-foreach-multi
   }
 
-  return { ok: true, multiContributorGroups };
+  // @cpt-begin:cpt-frontx-algo-cli-scaffolding-compose-shared-files:p1:inst-cs-return-materialized
+  return { ok: true, files: materializedFiles };
+  // @cpt-end:cpt-frontx-algo-cli-scaffolding-compose-shared-files:p1:inst-cs-return-materialized
 }
