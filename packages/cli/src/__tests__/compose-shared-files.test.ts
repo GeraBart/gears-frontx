@@ -87,7 +87,7 @@ describe('composeSharedFiles — part 1 (cpt-frontx-algo-cli-scaffolding-compose
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.multiContributorGroups.size).toBe(0);
+    expect(result.files).toEqual([{ path: 'template-a/index.ts', content: 'export const a = 1;' }]);
     expect(writes).toEqual([{ path: '/target/template-a/index.ts', content: 'export const a = 1;' }]);
   });
 
@@ -107,7 +107,7 @@ describe('composeSharedFiles — part 1 (cpt-frontx-algo-cli-scaffolding-compose
     expect(writes).toEqual([{ path: '/target/tsconfig.json', content: '{"compilerOptions":{}}' }]);
   });
 
-  it('enters the region-union loop and extracts each contributor owned region by identity+key sentinel markers (inst-cs-foreach-multi / inst-cs-extract-regions)', async () => {
+  it('enters the region-union loop, extracts each contributor owned region by identity+key sentinel markers, composes the disjoint union, and writes it (inst-cs-foreach-multi / inst-cs-extract-regions / inst-cs-compose-union / inst-cs-write-composed)', async () => {
     const assembly = assemblyOf(
       contribution(
         'template-a',
@@ -148,24 +148,20 @@ describe('composeSharedFiles — part 1 (cpt-frontx-algo-cli-scaffolding-compose
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    // Part 2 (composition + write) is out of scope — no write for this path yet.
-    expect(writes).toEqual([]);
-    const regions = result.multiContributorGroups.get('package.json');
-    expect(regions).toEqual([
-      {
-        templateName: 'template-a',
-        regionKey: 'scripts-build',
-        markerBlock: '  // frontx:region template-a:scripts-build\n  "build": "tsup"\n  // frontx:endregion template-a:scripts-build',
-      },
-      {
-        templateName: 'template-b',
-        regionKey: 'scripts-test',
-        markerBlock: '  // frontx:region template-b:scripts-test\n  "test": "vitest"\n  // frontx:endregion template-b:scripts-test',
-      },
-    ]);
+    // Deterministic order: by owning template identity, then region key.
+    const expectedComposed = [
+      '  // frontx:region template-a:scripts-build',
+      '  "build": "tsup"',
+      '  // frontx:endregion template-a:scripts-build',
+      '  // frontx:region template-b:scripts-test',
+      '  "test": "vitest"',
+      '  // frontx:endregion template-b:scripts-test',
+    ].join('\n');
+    expect(writes).toEqual([{ path: '/target/package.json', content: expectedComposed }]);
+    expect(result.files).toEqual([{ path: 'package.json', content: expectedComposed }]);
   });
 
-  it('extracts a single region-union contributor even alone on its path (one contributor case of inst-cs-foreach-multi)', async () => {
+  it('composes and writes a single region-union contributor even alone on its path (one contributor case of inst-cs-foreach-multi)', async () => {
     const assembly = assemblyOf(
       contribution(
         'template-a',
@@ -178,15 +174,15 @@ describe('composeSharedFiles — part 1 (cpt-frontx-algo-cli-scaffolding-compose
         ],
       ),
     );
-    const { writeFileFn } = fakeWriter();
+    const { writeFileFn, writes } = fakeWriter();
 
     const result = await composeSharedFiles(assembly, '/target', writeFileFn);
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.multiContributorGroups.get('.env')).toEqual([
-      { templateName: 'template-a', regionKey: 'vars', markerBlock: '# frontx:region template-a:vars\nFOO=1\n# frontx:endregion template-a:vars' },
-    ]);
+    const expectedComposed = '# frontx:region template-a:vars\nFOO=1\n# frontx:endregion template-a:vars';
+    expect(writes).toEqual([{ path: '/target/.env', content: expectedComposed }]);
+    expect(result.files).toEqual([{ path: '.env', content: expectedComposed }]);
   });
 
   it('returns a materialization-invariant error when an exclusive claim is contested (inst-cs-if-exclusive-contested / inst-cs-return-exclusive-invariant)', async () => {
@@ -237,6 +233,84 @@ describe('composeSharedFiles — part 1 (cpt-frontx-algo-cli-scaffolding-compose
     expect(result.path).toBe('package.json');
     expect(result.regionKey).toBe('scripts-build');
     expect(result.contestants).toEqual(['template-a', 'template-b']);
+    expect(writes).toEqual([]);
+  });
+
+  it('returns a materialization conflict when a single template declares two owned regions whose marker spans overlap (self-overlap, inst-cs-if-span-overlap / inst-cs-return-span-overlap)', async () => {
+    const assembly = assemblyOf(
+      contribution(
+        'template-a',
+        {
+          exclusiveSubtrees: [],
+          sharedFiles: [{ path: 'package.json', mergeStrategy: 'region-union', ownedRegions: ['key1', 'key2'] }],
+        },
+        [
+          {
+            path: 'package.json',
+            content: [
+              '// frontx:region template-a:key1',
+              'line1',
+              '// frontx:region template-a:key2',
+              'line2',
+              '// frontx:endregion template-a:key1',
+              'line3',
+              '// frontx:endregion template-a:key2',
+            ].join('\n'),
+          },
+        ],
+      ),
+    );
+    const { writeFileFn, writes } = fakeWriter();
+
+    const result = await composeSharedFiles(assembly, '/target', writeFileFn);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toBe('span-overlap');
+    if (result.reason !== 'span-overlap') return;
+    expect(result.path).toBe('package.json');
+    expect(result.contestants).toEqual(['template-a', 'template-a']);
+    expect(result.regionKeys).toEqual(['key1', 'key2']);
+    expect(writes).toEqual([]);
+  });
+
+  it('returns a materialization conflict when two different templates extract overlapping marker spans from the same on-disk shared-file buffer (cross-template overlap, inst-cs-if-span-overlap / inst-cs-return-span-overlap)', async () => {
+    // Both templates ship the identical canonical shared-file buffer (the
+    // realistic case a region-union shared file is authored to be), with the
+    // two templates' marker pairs interleaved rather than nested — an
+    // authoring bug this check exists to catch.
+    const sharedContent = [
+      'header',
+      '// frontx:region template-a:build',
+      'buildline1',
+      '// frontx:region template-b:test',
+      'testline',
+      '// frontx:endregion template-a:build',
+      '// frontx:endregion template-b:test',
+    ].join('\n');
+    const assembly = assemblyOf(
+      contribution(
+        'template-a',
+        { exclusiveSubtrees: [], sharedFiles: [{ path: 'package.json', mergeStrategy: 'region-union', ownedRegions: ['build'] }] },
+        [{ path: 'package.json', content: sharedContent }],
+      ),
+      contribution(
+        'template-b',
+        { exclusiveSubtrees: [], sharedFiles: [{ path: 'package.json', mergeStrategy: 'region-union', ownedRegions: ['test'] }] },
+        [{ path: 'package.json', content: sharedContent }],
+      ),
+    );
+    const { writeFileFn, writes } = fakeWriter();
+
+    const result = await composeSharedFiles(assembly, '/target', writeFileFn);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toBe('span-overlap');
+    if (result.reason !== 'span-overlap') return;
+    expect(result.path).toBe('package.json');
+    expect(result.contestants).toEqual(['template-a', 'template-b']);
+    expect(result.regionKeys).toEqual(['build', 'test']);
     expect(writes).toEqual([]);
   });
 });
