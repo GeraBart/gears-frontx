@@ -6,29 +6,41 @@ import type { InventoryEntry } from '../inventory/types';
 import { readManifestFromContent } from '../manifest/validate-contract';
 import { resolveComposition } from '../composition/resolve';
 import { CompositionResolutionState } from '../composition/state';
-import { writeProvenance } from '../provenance/write';
+import { uniformApply } from './assembler';
+import { checkAssemblyConflicts } from './conflict';
+import { materializeAssembly } from './materialize';
+import { provenancePath } from '../provenance/contract';
+import type { BoundaryConflictEntry } from './state';
 import type { ProvenanceWriteFn } from '../provenance/types';
-import type { ConflictCheckFn, ReadContentItemsFn, WriteFileFn } from './types';
+import type { ReadContentItemsFn, WriteFileFn } from './types';
 
 export type ComposedScaffoldResult =
   | { ok: true; message: string; provenanceLocation: string }
   | {
       ok: false;
-      reason: 'registry-unreachable' | 'cycle' | 'resolve-error' | 'conflict' | 'provenance-failed';
+      reason: 'registry-unreachable' | 'cycle' | 'resolve-error' | 'provenance-failed';
       message: string;
-    };
+    }
+  | { ok: false; reason: 'conflict'; conflicts: BoundaryConflictEntry[]; message: string };
 
 // @cpt-begin:cpt-frontx-flow-composed-provenance-scaffold-composed-project:p1:inst-issue-scaffold
 /**
- * Scaffold a composed project template: resolves the full composition tree,
- * writes all files under nearest-declaration-wins semantics, then records
- * provenance so the project can be updated or audited later.
+ * Scaffold a composed project template: resolves the full composition tree
+ * (Option-C ordering) — stage → conflict-check → branch → abort-on-conflict
+ * (no writes) → materialize → full per-applied-template provenance set — so
+ * the project can be updated or audited later. Mirrors the same Option-C
+ * ordering already proven by the sibling F12 entry flow
+ * (`cpt-frontx-flow-cli-scaffolding-seed-repository`,
+ * `../commands/seed-repository.ts`): resolve → stage via the uniform apply
+ * path → pre-flight conflict check → materialize. This flow keeps its own
+ * distinct flow/state identity (`cpt-frontx-flow-composed-provenance-scaffold-composed-project`,
+ * `cpt-frontx-state-composed-provenance-composition-resolution`) because it
+ * is owned by `cpt-frontx-feature-composed-provenance`, not F12.
  */
 export async function scaffoldComposedProject(
   templateRef: string,
   targetDir: string,
   lookupFn: (name: string) => InventoryEntry | undefined,
-  conflictCheckFn: ConflictCheckFn,
   writeFileFn: WriteFileFn,
   provenanceWriteFn: ProvenanceWriteFn,
   readContentFn: ReadContentItemsFn,
@@ -36,9 +48,7 @@ export async function scaffoldComposedProject(
 // @cpt-end:cpt-frontx-flow-composed-provenance-scaffold-composed-project:p1:inst-issue-scaffold
 
   // State: DECLARED → tracks composition resolution lifecycle for traceability
-  // @cpt-begin:cpt-frontx-state-composed-provenance-composition-resolution:p1:inst-transition-declared-resolving
   const stateTrace: CompositionResolutionState[] = [CompositionResolutionState.DECLARED];
-  // @cpt-end:cpt-frontx-state-composed-provenance-composition-resolution:p1:inst-transition-declared-resolving
 
   // @cpt-begin:cpt-frontx-flow-composed-provenance-scaffold-composed-project:p1:inst-resolve-root-template
   const rootEntry = lookupFn(templateRef);
@@ -68,7 +78,9 @@ export async function scaffoldComposedProject(
   // @cpt-end:cpt-frontx-flow-composed-provenance-scaffold-composed-project:p1:inst-read-manifest
 
   // Transition: DECLARED → RESOLVING
+  // @cpt-begin:cpt-frontx-state-composed-provenance-composition-resolution:p1:inst-transition-declared-resolving
   stateTrace.push(CompositionResolutionState.RESOLVING);
+  // @cpt-end:cpt-frontx-state-composed-provenance-composition-resolution:p1:inst-transition-declared-resolving
 
   // @cpt-begin:cpt-frontx-flow-composed-provenance-scaffold-composed-project:p1:inst-invoke-resolution
   const compositionResult = await resolveComposition(
@@ -83,9 +95,10 @@ export async function scaffoldComposedProject(
   // @cpt-begin:cpt-frontx-flow-composed-provenance-scaffold-composed-project:p1:inst-check-resolution-error
   if (!compositionResult.ok) {
     // @cpt-begin:cpt-frontx-flow-composed-provenance-scaffold-composed-project:p1:inst-abort-resolution-error
-    // @cpt-begin:cpt-frontx-state-composed-provenance-composition-resolution:p1:inst-transition-resolving-collision-aborted
-    stateTrace.push(CompositionResolutionState.COLLISION_ABORTED);
-    // @cpt-end:cpt-frontx-state-composed-provenance-composition-resolution:p1:inst-transition-resolving-collision-aborted
+    // Transition: RESOLVING → ABORTED (unresolvable reference or reference cycle)
+    // @cpt-begin:cpt-frontx-state-composed-provenance-composition-resolution:p1:inst-transition-resolving-aborted
+    stateTrace.push(CompositionResolutionState.ABORTED);
+    // @cpt-end:cpt-frontx-state-composed-provenance-composition-resolution:p1:inst-transition-resolving-aborted
     return {
       ok: false,
       reason: compositionResult.reason,
@@ -103,66 +116,106 @@ export async function scaffoldComposedProject(
   stateTrace.push(CompositionResolutionState.RESOLVED);
   // @cpt-end:cpt-frontx-state-composed-provenance-composition-resolution:p1:inst-transition-resolving-resolved
 
-  const hasConflict = await conflictCheckFn(targetDir);
-  if (hasConflict) {
+  // @cpt-begin:cpt-frontx-flow-composed-provenance-scaffold-composed-project:p1:inst-stage-composition
+  // Stage the resolved per-template composition set as a staged assembly
+  // through the uniform apply path — the SAME P14 path the sibling F12 entry
+  // flows invoke (`cpt-frontx-algo-cli-scaffolding-uniform-apply`). This
+  // reads each applied template's content items directly from its installed
+  // content path, scoped to its declared ownership boundaries.
+  const templateIdentities = [...compositionResult.templates.keys()];
+  const applyResult = await uniformApply(templateIdentities, false, lookupFn, readContentFn);
+  // @cpt-end:cpt-frontx-flow-composed-provenance-scaffold-composed-project:p1:inst-stage-composition
+
+  if (!applyResult.ok) {
+    // Defensive — every identity here was already resolved and manifest-read
+    // by resolveComposition above via the same lookupFn, so this path is not
+    // expected to be reachable in practice.
     return {
       ok: false,
-      reason: 'conflict',
-      message: `Scaffold aborted — target directory "${targetDir}" contains conflicting content.`,
+      reason: 'resolve-error',
+      message: `Scaffold aborted — ${applyResult.message}`,
     };
   }
 
-  // @cpt-begin:cpt-frontx-flow-composed-provenance-scaffold-composed-project:p1:inst-scaffold-composition
-  // The resolved per-template composition set carries no file content of its
-  // own (cpt-frontx-algo-composed-provenance-recursive-resolution hands over
-  // identities + installed content paths + boundaries, unarbitrated) — each
-  // applied template's content items are read from its installed content
-  // path at write time, never from the manifest.
-  for (const compositionEntry of compositionResult.templates.values()) {
-    const items = await readContentFn(compositionEntry.installedContentPath);
-    for (const item of items) {
-      await writeFileFn(`${targetDir}/${item.path}`, item.content);
-    }
-  }
-  // @cpt-end:cpt-frontx-flow-composed-provenance-scaffold-composed-project:p1:inst-scaffold-composition
+  // @cpt-begin:cpt-frontx-flow-composed-provenance-scaffold-composed-project:p1:inst-check-boundary-conflict
+  // Submit the staged assembly to the pre-flight ownership-boundary conflict
+  // check — the sole authority for boundary-collision arbitration. A fresh
+  // scaffold has no already-occupied boundaries to compare against.
+  const verdict = checkAssemblyConflicts(applyResult.assembly, []);
+  // @cpt-end:cpt-frontx-flow-composed-provenance-scaffold-composed-project:p1:inst-check-boundary-conflict
 
+  // @cpt-begin:cpt-frontx-flow-composed-provenance-scaffold-composed-project:p1:inst-check-conflict-result
+  if (!verdict.ok) {
+    // @cpt-begin:cpt-frontx-flow-composed-provenance-scaffold-composed-project:p1:inst-abort-boundary-conflict
+    // Transition: RESOLVED → ABORTED (same-target-path boundary conflict)
+    // @cpt-begin:cpt-frontx-state-composed-provenance-composition-resolution:p1:inst-transition-resolved-aborted-conflict
+    stateTrace.push(CompositionResolutionState.ABORTED);
+    // @cpt-end:cpt-frontx-state-composed-provenance-composition-resolution:p1:inst-transition-resolved-aborted-conflict
+    const contested = verdict.conflicts
+      .map((conflict) => `"${conflict.ground}" (${conflict.contestants.join(', ')})`)
+      .join('; ');
+    return {
+      ok: false,
+      reason: 'conflict',
+      conflicts: verdict.conflicts,
+      message: `Scaffold aborted — ownership-boundary conflict at ${contested}; no files written.`,
+    };
+    // @cpt-end:cpt-frontx-flow-composed-provenance-scaffold-composed-project:p1:inst-abort-boundary-conflict
+  }
+  // @cpt-end:cpt-frontx-flow-composed-provenance-scaffold-composed-project:p1:inst-check-conflict-result
+
+  // Transition: RESOLVED → CONFLICT_CHECKED (no intersecting boundary claim)
+  // @cpt-begin:cpt-frontx-state-composed-provenance-composition-resolution:p1:inst-transition-resolved-conflict-checked
+  stateTrace.push(CompositionResolutionState.CONFLICT_CHECKED);
+  // @cpt-end:cpt-frontx-state-composed-provenance-composition-resolution:p1:inst-transition-resolved-conflict-checked
+
+  // @cpt-begin:cpt-frontx-flow-composed-provenance-scaffold-composed-project:p1:inst-scaffold-composition
   // @cpt-begin:cpt-frontx-flow-composed-provenance-scaffold-composed-project:p1:inst-invoke-provenance-write
-  const provenanceResult = await writeProvenance(
-    {
-      templateIdentity: templateRef,
-      scaffoldedFromVersion: manifestResult.manifest.version,
-      sourceSpec: rootEntry.source,
-    },
+  // Materialize the cleared staged assembly, writing all files in one
+  // operation — including each applied template's `.frontx/ai/<template-identity>/`
+  // bundle as ordinary owned content — then invoke the provenance write
+  // algorithm with the FULL set of applied templates, so one record per
+  // applied template is written into `.frontx/provenance.json`
+  // (`cpt-frontx-algo-composed-provenance-provenance-write`). Delegates to
+  // the shared `materializeAssembly`, which invokes `composeSharedFiles` for
+  // the write and `writeProvenance` for the provenance set — neither
+  // algorithm is re-implemented here.
+  const materializeResult = await materializeAssembly(
+    applyResult.assembly,
     targetDir,
+    [],
+    lookupFn,
+    writeFileFn,
     provenanceWriteFn,
   );
   // @cpt-end:cpt-frontx-flow-composed-provenance-scaffold-composed-project:p1:inst-invoke-provenance-write
+  // @cpt-end:cpt-frontx-flow-composed-provenance-scaffold-composed-project:p1:inst-scaffold-composition
 
   // @cpt-begin:cpt-frontx-flow-composed-provenance-scaffold-composed-project:p1:inst-check-provenance-write-fail
-  if (!provenanceResult.ok) {
+  if (!materializeResult.ok) {
     // @cpt-begin:cpt-frontx-flow-composed-provenance-scaffold-composed-project:p1:inst-report-provenance-fail
     return {
       ok: false,
       reason: 'provenance-failed',
-      message: `Scaffold completed but provenance write failed: ${provenanceResult.message}`,
+      message: `Scaffold completed but provenance write failed: ${materializeResult.message}`,
     };
     // @cpt-end:cpt-frontx-flow-composed-provenance-scaffold-composed-project:p1:inst-report-provenance-fail
   }
   // @cpt-end:cpt-frontx-flow-composed-provenance-scaffold-composed-project:p1:inst-check-provenance-write-fail
 
-  // @cpt-begin:cpt-frontx-flow-composed-provenance-scaffold-composed-project:p1:inst-activate-kit
-  // Kit activation deferred to Pillar 3 (cyber-pilot-kit-frontx not yet available)
-  // @cpt-end:cpt-frontx-flow-composed-provenance-scaffold-composed-project:p1:inst-activate-kit
-
-  // @cpt-begin:cpt-frontx-state-composed-provenance-composition-resolution:p1:inst-transition-resolved-scaffolded
+  // Transition: CONFLICT_CHECKED → SCAFFOLDED (files + full provenance set written)
+  // @cpt-begin:cpt-frontx-state-composed-provenance-composition-resolution:p1:inst-transition-checked-scaffolded
   stateTrace.push(CompositionResolutionState.SCAFFOLDED);
-  // @cpt-end:cpt-frontx-state-composed-provenance-composition-resolution:p1:inst-transition-resolved-scaffolded
+  // @cpt-end:cpt-frontx-state-composed-provenance-composition-resolution:p1:inst-transition-checked-scaffolded
 
   // @cpt-begin:cpt-frontx-flow-composed-provenance-scaffold-composed-project:p1:inst-return-success
+  // The AI Tooling Framework discovers and activates each applied template's
+  // `.frontx/ai/<template-identity>/` bundle on its own next invocation by
+  // scanning the repository — no CLI-to-Kit signal is sent here.
   return {
     ok: true,
     message: `Scaffold complete — composed project written to "${targetDir}".`,
-    provenanceLocation: provenanceResult.location,
+    provenanceLocation: provenancePath(targetDir),
   };
   // @cpt-end:cpt-frontx-flow-composed-provenance-scaffold-composed-project:p1:inst-return-success
 }
