@@ -90,8 +90,12 @@ describe('scaffoldComposedProject', () => {
     expect(writtenPaths.some((p) => p.includes('src/deep.ts'))).toBe(true);
   });
 
-  // (c) Nearest-declaration-wins: shallower depth wins on conflict
-  it('(c) nearest-declaration-wins: root depth=0 beats composed depth=1 for same path', async () => {
+  // (c) Same-path files from independently-declared templates are ALL staged,
+  // with no precedence applied here — arbitration is deferred entirely to the
+  // pre-flight ownership-boundary conflict check (A2 reframe:
+  // cpt-frontx-algo-composed-provenance-recursive-resolution hands over an
+  // unarbitrated per-template set; it never compares target paths itself).
+  it('(c) same-path claims from two templates are both staged unarbitrated (no precedence here)', async () => {
     const registry = new Map<string, InventoryEntry>([
       [
         'root',
@@ -118,17 +122,19 @@ describe('scaffoldComposedProject', () => {
     );
 
     expect(result.ok).toBe(true);
-    const sharedCall = writeFileFn.mock.calls.find((c: unknown[]) =>
+    const sharedCalls = writeFileFn.mock.calls.filter((c: unknown[]) =>
       (c[0] as string).includes('shared.ts'),
     );
-    expect(sharedCall).toBeDefined();
-    expect(sharedCall![1]).toBe('root-content');
+    // Both templates' contributions to the shared path are staged and written
+    // — resolution applies no target-path comparison or precedence.
+    expect(sharedCalls.map((c) => c[1])).toEqual(expect.arrayContaining(['root-content', 'a-content']));
   });
 
-  // (d) Unresolvable collision: same depth different declaring parents → abort, no files written
-  it('(d) unresolvable collision at same depth/different parents → abort, no files written', async () => {
-    // root composes [A, B]; A composes [X]; B composes [X]; X has "conflict.ts"
-    // X at depth=2 via A (declaringParent=A) and via B (declaringParent=B) → collision
+  // (d) Diamond reference (not a collision at this layer): tpl-x is referenced
+  // via both tpl-a and tpl-b, but is deduplicated once per distinct template
+  // identity in the accumulated per-template set — resolution neither detects
+  // nor aborts on this, since same-target-path arbitration is not its concern.
+  it('(d) diamond reference dedups by template identity — resolves, no collision at this layer', async () => {
     const registry = new Map<string, InventoryEntry>([
       ['root', makeEntry('root', '1.0.0', [], [{ ref: 'tpl-a' }, { ref: 'tpl-b' }])],
       ['tpl-a', makeEntry('tpl-a', '1.0.0', [], [{ ref: 'tpl-x' }])],
@@ -150,11 +156,13 @@ describe('scaffoldComposedProject', () => {
       readContentFn,
     );
 
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.reason).toBe('collision');
-    }
-    expect(writeFileFn).not.toHaveBeenCalled();
+    expect(result.ok).toBe(true);
+    const conflictCalls = writeFileFn.mock.calls.filter((c: unknown[]) =>
+      (c[0] as string).includes('conflict.ts'),
+    );
+    // tpl-x is one distinct template identity, so its content is written once,
+    // regardless of being reachable via two different reference paths.
+    expect(conflictCalls).toHaveLength(1);
   });
 
   // (e) Cycle detection: A composes B, B composes A → abort, no files written

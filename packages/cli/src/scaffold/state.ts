@@ -26,6 +26,16 @@ export interface BoundaryConflictEntry {
   contestants: string[];
 }
 
+// An ownership boundary already occupied by a template previously applied to
+// the target repository, tagged with that template's identity — the P29
+// conflict check (cpt-frontx-algo-cli-scaffolding-conflict-check) needs the
+// identity to name the contesting templates in a refusal report, not just the
+// boundary shape.
+export interface OccupiedBoundaryEntry {
+  templateName: string;
+  boundary: OwnershipBoundary;
+}
+
 // The pre-flight conflict check's verdict shape. The RESOLVED → CONFLICT_CHECKED
 // / RESOLVED → ABORTED transitions are decided by this verdict — this phase
 // models the transition boundary as a SEAM (the `conflictVerdictFn` parameter
@@ -37,7 +47,7 @@ export type ConflictVerdict =
 
 export type ConflictVerdictFn = (
   assembly: StagedAssembly,
-  alreadyOccupiedBoundaries: OwnershipBoundary[],
+  alreadyOccupiedBoundaries: OccupiedBoundaryEntry[],
 ) => ConflictVerdict | Promise<ConflictVerdict>;
 
 // Materializes a cleared, staged assembly into the target repository. Actual
@@ -51,7 +61,7 @@ export interface AssemblyOpInput {
   targetHoldsAppliedTemplates: boolean;
   lookupFn: (name: string) => InventoryEntry | undefined;
   readContentFn: ReadContentItemsFn;
-  alreadyOccupiedBoundaries: OwnershipBoundary[];
+  alreadyOccupiedBoundaries: OccupiedBoundaryEntry[];
   conflictVerdictFn: ConflictVerdictFn;
   materializeFn: MaterializeAssemblyFn;
 }
