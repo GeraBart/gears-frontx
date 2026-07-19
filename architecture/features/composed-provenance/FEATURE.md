@@ -33,7 +33,7 @@ Resolves a preset's referenced templates recursively through the shared resolver
 
 ### 1.2 Purpose
 
-This feature realizes the preset (referenced-template) recursive resolution decided in `cpt-frontx-adr-composed-template-resolution` and the per-applied-template provenance decided in `cpt-frontx-adr-project-provenance-record`, and owns the concrete provenance schema per `cpt-frontx-adr-contract-schema-ownership`. It covers the recursive resolution of a preset's referenced templates through the shared resolver into a deterministic per-template composition set handed unmodified to the pre-flight ownership-boundary conflict check for pre-write collision arbitration, the assembly of the full set in one operation, and the writing of one provenance record per applied template. The provenance is a set of records, one per applied template, with no single whole-repository origin. This feature is the OWNER of `cpt-frontx-contract-project-provenance`.
+This feature realizes the preset (referenced-template) recursive resolution decided in `cpt-frontx-adr-composed-template-resolution` and the per-applied-template provenance decided in `cpt-frontx-adr-project-provenance-record`, and owns the concrete provenance schema per `cpt-frontx-adr-contract-schema-ownership`. It covers the recursive resolution of a preset's referenced templates through the shared resolver into a deterministic per-template composition set handed unmodified to the pre-flight ownership-boundary conflict check for pre-write collision arbitration, the assembly of the full set in one operation, and the writing of one provenance record per applied template. The provenance is a set of records, one per applied template, with no single whole-repository origin. The provenance store is a single file `.frontx/provenance.json` at the repository root, holding the SET of records — one record per applied template, so this single file contains the whole set, consistent with "no single whole-repository origin record"; each record's field layout is already documented in this feature. This feature is the OWNER of `cpt-frontx-contract-project-provenance`.
 
 **Requirements**: `cpt-frontx-fr-cli-composed-template-resolution`
 
@@ -134,12 +134,12 @@ This feature realizes the preset (referenced-template) recursive resolution deci
 
 **Input**: repository root path; the set of applied templates, each with its identity, applied-from version, source-spec that re-resolves it, and the ownership boundary it occupied
 
-**Output**: one in-repository provenance record written per applied template — the provenance set; or a write error. The concrete schema (`cpt-frontx-contract-project-provenance`): a set of records, one per applied template, each record `{ template identity, applied-from version, source-spec, occupied ownership boundary }`, with no single whole-repository origin record.
+**Output**: one in-repository provenance record written per applied template — the provenance set; or a write error. The concrete schema (`cpt-frontx-contract-project-provenance`): a set of records, one per applied template, each record `{ template identity, applied-from version, source-spec, occupied ownership boundary }`, with no single whole-repository origin record. The whole set is held in a single file `.frontx/provenance.json` at the repository root.
 
 **Steps**:
 
 1. [x] - `p1` - Accept the repository root path and the set of applied templates with their identities, applied-from versions, source-specs, and occupied ownership boundaries - `inst-accept-provenance-inputs`
-2. [x] - `p1` - Determine the provenance store location inside the repository root (per `cpt-frontx-contract-project-provenance`) - `inst-determine-storage-location`
+2. [x] - `p1` - Determine the provenance store location inside the repository root — the single file `.frontx/provenance.json` at the repository root (per `cpt-frontx-contract-project-provenance`) - `inst-determine-storage-location`
 3. [x] - `p1` - **FOR EACH** applied template in the set - `inst-foreach-applied`
    1. [x] - `p1` - Construct one provenance record capturing that template's identity, its applied-from version, its source-spec (in the shape decided by `cpt-frontx-adr-source-spec-syntax`), and its occupied ownership boundary - `inst-construct-provenance`
    2. [x] - `p1` - Write the record into the provenance set in a durable, human-readable format - `inst-write-record`

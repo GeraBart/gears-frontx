@@ -8,6 +8,7 @@
   - [1.2 Purpose](#12-purpose)
   - [1.3 Actors](#13-actors)
   - [1.4 References](#14-references)
+  - [1.5 AI-Extension Bundle Convention](#15-ai-extension-bundle-convention)
 - [2. Actor Flows (CDSL)](#2-actor-flows-cdsl)
   - [Bundle, Publish, Install, Discover, and Activate AI Extensions](#bundle-publish-install-discover-and-activate-ai-extensions)
 - [3. Processes / Business Logic (CDSL)](#3-processes--business-logic-cdsl)
@@ -49,6 +50,25 @@ This feature provides the mechanism by which template-specific AI expertise trav
 - **Dependencies**:
   - `cpt-frontx-feature-template-resolution` (F10) — discovery is triggered on template install (cross-pillar edge F16 ← F10)
   - `cpt-frontx-feature-ai-kit-packaging` (F15) — bundled extensions activate into the base kit's capability set
+
+### 1.5 AI-Extension Bundle Convention
+
+This is the concrete on-disk shape the fs-discovery scan reads at an installed template's content root; it is the schema this FEATURE owns per `cpt-frontx-adr-contract-schema-ownership` (design altitude fixes the contract's existence and closed-set categories in `cpt-frontx-adr-template-ai-extension-contract`; this section fixes the concrete layout).
+
+**Bundle root**: `.frontx/ai/`, resolved relative to the installed template's content root.
+
+**Anchor**: `.frontx/ai/extension.json` — declares the bundle's identity (`id`, non-empty string), a contract version (`contractVersion`), and the declared entry list (`entries: { id, category, path }[]`), where `category` is one of the closed-set `ExtensionCategory` values and `path` is relative to `.frontx/ai/`. A bundle whose anchor is missing, unparseable as JSON, or lacks a non-empty `id` yields a structural error and contributes no entries to discovery.
+
+**Slot subdirs** (closed set — a subdirectory of `.frontx/ai/` outside this set is a structural error, "category outside the closed set"):
+
+| Category | Subdir | Required on-disk shape for a declared entry |
+|---|---|---|
+| `skills` | `skills/` | `path` names a subdirectory under `skills/`; that subdirectory MUST contain `SKILL.md` |
+| `workflows` | `workflows/` | `path` names a single Markdown file under `workflows/` |
+| `guidelines` | `guidelines/` | `path` names a single Markdown file under `guidelines/` |
+| `reference_artifacts` | `reference-artifacts/` | `path` names a single file (any extension) under `reference-artifacts/` |
+
+A declared entry whose on-disk content does not match its slot's required shape (e.g. a `skills` entry whose directory has no `SKILL.md`) is a structural error and is REJECTED — it is excluded from the bundle fed to the discovery scan, alongside entries whose declared `category` is outside the closed set.
 
 ## 2. Actor Flows (CDSL)
 
