@@ -32,7 +32,7 @@ The template manifest contract defines the single versioned descriptor every pub
 
 ### 1.2 Purpose
 
-This feature defines and enforces the conformance contract (`cpt-frontx-contract-template-manifest`) that every template must satisfy to be publishable, and owns its concrete field-level schema per `cpt-frontx-adr-contract-schema-ownership`. The CLI validates a candidate template's manifest against the four lean categories before publication, and the same manifest is read at install, apply, and assembly time so one authoritative description serves all commands. The four categories are: **identity** (the template's name); **version** (a versioned shape); **ownership boundaries** (the exclusive subtrees the template alone writes and, per shared file, the regions it owns with a declared merge — `cpt-frontx-adr-template-ownership-boundary-declaration`); and **referenced templates** (the templates a preset applies together, each with the location it is applied at — `cpt-frontx-adr-composed-template-resolution`).
+This feature defines and enforces the conformance contract (`cpt-frontx-contract-template-manifest`) that every template must satisfy to be publishable, and owns its concrete field-level schema per `cpt-frontx-adr-contract-schema-ownership`. The manifest is a single file named `frontx-template.json` located at the root of the template directory. The CLI validates a candidate template's manifest against the four lean categories before publication, and the same manifest is read at install, apply, and assembly time so one authoritative description serves all commands. The four categories are: **identity** (the template's name); **version** (a versioned shape); **ownership boundaries** (the exclusive subtrees the template alone writes and, per shared file, the regions it owns with a declared merge — `cpt-frontx-adr-template-ownership-boundary-declaration`); and **referenced templates** (the templates a preset applies together, each with the location it is applied at — `cpt-frontx-adr-composed-template-resolution`).
 
 **Requirements**: `cpt-frontx-fr-cli-template-validate-prepublish`
 
@@ -73,7 +73,7 @@ User-facing interactions that start with an actor (human or external system) and
 
 **Steps**:
 1. [x] - `p1` - Template developer invokes the CLI pre-publish validate command on the candidate template directory - `inst-invoke-validate`
-2. [x] - `p1` - CLI locates the manifest file in the candidate template directory - `inst-locate-manifest`
+2. [x] - `p1` - CLI locates the manifest file (`frontx-template.json` at the root of the candidate template directory) - `inst-locate-manifest`
 3. [x] - `p1` - **IF** the manifest file is absent - `inst-if-manifest-absent`
    1. [x] - `p1` - **RETURN** FAIL with violation: manifest file not found - `inst-return-manifest-absent`
 4. [x] - `p1` - CLI delegates to the manifest validation algorithm (`cpt-frontx-algo-template-manifest-validate-contract`) - `inst-delegate-to-algo`

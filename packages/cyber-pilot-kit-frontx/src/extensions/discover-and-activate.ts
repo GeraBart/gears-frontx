@@ -1,7 +1,9 @@
 // @cpt-flow:cpt-frontx-flow-template-ai-extensions-bundle-publish-discover-activate:p1
 import { validateExtensionEntry } from './contract.js';
 import { scanAndComposeExtensions, type BaseCapabilities } from './scan.js';
-import type { AiExtensionBundle, ScanAndActivateResult, StructuralError } from './types.js';
+import { discoverExtensionBundleFromFs, type BundleFsReader } from './fs-discovery.js';
+import { AiExtensionLifecycleState } from './types.js';
+import type { AiExtensionBundle, LifecycleResult, ScanAndActivateResult, StructuralError } from './types.js';
 
 export interface PrePublishValidationResult {
   ok: boolean;
@@ -93,4 +95,42 @@ export function discoverAndActivateForInstalledTemplate(
   return result;
   // @cpt-end:cpt-frontx-flow-template-ai-extensions-bundle-publish-discover-activate:p1:inst-return-activated
   // @cpt-end:cpt-frontx-flow-template-ai-extensions-bundle-publish-discover-activate:p1:inst-activate-capabilities
+}
+
+/**
+ * Install-discover-activate leg (Project Developer), FILESYSTEM realization:
+ * reads the installed template's on-disk AI-extension bundle at
+ * `contentRoot` per the FEATURE's §1.5 AI-Extension Bundle Convention (via
+ * `discoverExtensionBundleFromFs`), and feeds the conforming entries into
+ * the EXISTING `scanAndComposeExtensions` algorithm — preserving its
+ * deterministic precedence + lifecycle behavior. Structural errors found at
+ * the fs level (missing/unparseable/identity-less anchor, out-of-set
+ * subdir, malformed on-disk slot shape) are merged with the scan's own
+ * errors and are surfaced as REJECTED lifecycle results; a fs-level error
+ * for the anchor itself means the template contributes nothing.
+ */
+export function discoverAndActivateFromInstalledTemplateFs(
+  contentRoot: string,
+  reader: BundleFsReader,
+  baseCapabilities: BaseCapabilities,
+  installOrder: number,
+): ScanAndActivateResult {
+  // @cpt-begin:cpt-frontx-flow-template-ai-extensions-bundle-publish-discover-activate:p1:inst-scan-each-slot
+  // @cpt-begin:cpt-frontx-flow-template-ai-extensions-bundle-publish-discover-activate:p1:inst-scan-slot-entries
+  const fsResult = discoverExtensionBundleFromFs(contentRoot, reader);
+  // @cpt-end:cpt-frontx-flow-template-ai-extensions-bundle-publish-discover-activate:p1:inst-scan-slot-entries
+  // @cpt-end:cpt-frontx-flow-template-ai-extensions-bundle-publish-discover-activate:p1:inst-scan-each-slot
+
+  const scanResult = scanAndComposeExtensions(fsResult.bundle, baseCapabilities, installOrder);
+
+  const fsRejectedResults: LifecycleResult[] = fsResult.structuralErrors.map((error) => ({
+    state: AiExtensionLifecycleState.REJECTED,
+    error,
+  }));
+
+  return {
+    composed: scanResult.composed,
+    errors: [...fsResult.structuralErrors, ...scanResult.errors],
+    lifecycleResults: [...fsRejectedResults, ...scanResult.lifecycleResults],
+  };
 }

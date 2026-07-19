@@ -20,6 +20,8 @@ export type { InstallCommandResult } from './commands/install';
 
 // F16 cross-pillar edge (F16 <- F10): install-time extension discovery hook
 export type { DiscoveryHookContext, DiscoveryHookResult, ExtensionDiscoveryHook } from './discovery/types';
+export { createFsBackedDiscoveryHook } from './discovery/fs-hook';
+export type { FsExtensionDiscovery } from './discovery/fs-hook';
 
 export { listCommand } from './commands/list';
 export type { ListEntry } from './commands/list';
