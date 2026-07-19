@@ -89,6 +89,18 @@ export type { WriteProvenanceResult } from './provenance/write';
 export type { ProvenanceRecord, ProvenanceWriteFn } from './provenance/types';
 export { PROVENANCE_RELATIVE_PATH, provenancePath } from './provenance/contract';
 
+// F12 entry flows (P30) — cpt-frontx-flow-cli-scaffolding-seed-repository and
+// cpt-frontx-flow-cli-scaffolding-add-template. Both WIRE the P14 uniform-apply
+// path and the P29 pre-flight conflict checker above; neither re-implements
+// them. materializeAssembly realizes the shared boundary-declared-assembly DoD
+// (cpt-frontx-dod-cli-scaffolding-boundary-declared-assembly).
+export { materializeAssembly, occupiedBoundariesFromProvenance } from './scaffold/materialize';
+export type { MaterializeResult, ReadProvenanceRecordsFn } from './scaffold/materialize';
+export { seedRepository } from './commands/seed-repository';
+export type { SeedRepositoryResult } from './commands/seed-repository';
+export { addTemplate } from './commands/add-template';
+export type { AddTemplateResult } from './commands/add-template';
+
 // F14 Upgrade Change-Set Engine (cpt-frontx-dod-upgrade-changeset-single-engine)
 // There is exactly ONE engine. Direct CLI invocation uses these canonical
 // modules internally. F17 AI-driven orchestration does NOT import these
