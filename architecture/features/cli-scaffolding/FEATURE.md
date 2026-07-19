@@ -14,11 +14,13 @@
 - [3. Processes / Business Logic (CDSL)](#3-processes--business-logic-cdsl)
   - [Uniform Template Apply](#uniform-template-apply)
   - [Pre-Flight Assembly Conflict Check](#pre-flight-assembly-conflict-check)
+  - [Compose Shared Files from Owned Regions at Materialization](#compose-shared-files-from-owned-regions-at-materialization)
 - [4. States (CDSL)](#4-states-cdsl)
   - [Assembly Operation State Machine](#assembly-operation-state-machine)
 - [5. Definitions of Done](#5-definitions-of-done)
   - [Uniform Apply Path](#uniform-apply-path)
   - [Pre-Flight Conflict Check Before Any Write](#pre-flight-conflict-check-before-any-write)
+  - [Shared-File Region Composition at Materialization](#shared-file-region-composition-at-materialization)
   - [Ownership-Boundary-Declared Assembly](#ownership-boundary-declared-assembly)
 - [6. Acceptance Criteria](#6-acceptance-criteria)
 
@@ -36,6 +38,8 @@
 ### 1.2 Purpose
 
 This feature realizes the uniform apply mechanism decided in `cpt-frontx-adr-uniform-template-mechanism`, the ownership-boundary declaration decided in `cpt-frontx-adr-template-ownership-boundary-declaration`, and the pre-flight assembly conflict check decided in `cpt-frontx-adr-assembly-conflict-prevention`. It covers seeding a repository from a template, adding a template into a repository that already holds applied templates, resolving a preset's referenced templates into the set applied together (`cpt-frontx-adr-composed-template-resolution`), and refusing an assembly whose declared boundaries intersect before any content is materialized. The command surface that drives these operations is `cpt-frontx-interface-cli`; its stability is governed by `cpt-frontx-adr-artifact-versioning-and-distribution`.
+
+A template's AI-extension bundle root `.frontx/ai/<template-identity>/` is an ordinary identity-scoped **exclusive subtree** in that template's declared boundaries (`cpt-frontx-feature-template-manifest`, `cpt-frontx-feature-template-ai-extensions`): co-applied templates' bundle subtrees are disjoint, so the pre-flight conflict check accepts them and the post-materialization boundary-honesty guard treats each bundle as a declared write. The CLI-owned `.frontx/` metadata — `.frontx/provenance.json` written by `cpt-frontx-feature-composed-provenance` and any other CLI metadata under `.frontx/` that is not a template's own `.frontx/ai/<template-identity>/` bundle — is written by the CLI itself outside any template's ownership boundary; it is neither a party to the template-vs-template conflict check nor a write the boundary-honesty guard attributes to a template, and the manifest validator refuses any template that tries to claim this reserved namespace.
 
 **Requirements**: `cpt-frontx-fr-cli-seed-repository`, `cpt-frontx-fr-cli-add-template-to-repository`, `cpt-frontx-fr-cli-template-boundary-declaration`, `cpt-frontx-fr-cli-assembly-conflict-prevention`, `cpt-frontx-fr-cli-composed-template-resolution`
 
@@ -82,7 +86,7 @@ User-facing interactions that start with an actor and describe the end-to-end fl
 5. [x] - `p1` - The CLI submits the staged assembly to the pre-flight conflict check (`cpt-frontx-algo-cli-scaffolding-conflict-check`). - `inst-seed-conflict-check`
 6. [x] - `p1` - **IF** the conflict check reports an intersecting claim - `inst-seed-if-conflict`
    1. [x] - `p1` - **RETURN** apply aborted — the contesting templates and the contested ground are reported; no files written. - `inst-seed-abort-conflict`
-7. [x] - `p1` - The CLI materializes the staged assembly into the target directory. - `inst-seed-materialize`
+7. [x] - `p1` - The CLI materializes the staged assembly into the target directory, composing every shared file from its co-owning templates' owned regions per `cpt-frontx-algo-cli-scaffolding-compose-shared-files`. - `inst-seed-materialize`
 8. [x] - `p1` - **RETURN** apply complete — repository seeded and one provenance record written per applied template. - `inst-seed-return-done`
 
 ### Add a Template into an Existing Repository
@@ -107,7 +111,7 @@ User-facing interactions that start with an actor and describe the end-to-end fl
 5. [x] - `p1` - The CLI submits the staged assembly, together with the boundaries already occupied by the repository's applied templates, to the pre-flight conflict check (`cpt-frontx-algo-cli-scaffolding-conflict-check`). - `inst-add-conflict-check`
 6. [x] - `p1` - **IF** the conflict check reports an intersecting claim against an already-applied boundary - `inst-add-if-conflict`
    1. [x] - `p1` - **RETURN** apply aborted — the contesting templates and the contested ground are reported; no files written. - `inst-add-abort-conflict`
-7. [x] - `p1` - The CLI materializes only the newly applied templates' contribution into the repository. - `inst-add-materialize`
+7. [x] - `p1` - The CLI materializes only the newly applied templates' contribution into the repository, composing any shared file it co-owns with an already-applied template from their owned regions per `cpt-frontx-algo-cli-scaffolding-compose-shared-files`. - `inst-add-materialize`
 8. [x] - `p1` - **RETURN** apply complete — one provenance record added per newly applied template. - `inst-add-return-done`
 
 ## 3. Processes / Business Logic (CDSL)
@@ -144,11 +148,37 @@ Internal system functions and procedures called by actor flows above.
 2. [x] - `p1` - **FOR EACH** pair of applied templates in the comparison set - `inst-cc-foreach-pair`
    - [x] - `p1` - **IF** both templates declare the same exclusive subtree - `inst-cc-if-subtree-clash`
       1. [x] - `p1` - Record a conflict entry naming the contested subtree and the two contesting template identities. - `inst-cc-record-subtree-conflict`
-   - [x] - `p1` - **IF** both templates claim the same shared-file region without a compatible declared merge - `inst-cc-if-region-clash`
-      1. [x] - `p1` - Record a conflict entry naming the contested file region and the two contesting template identities. - `inst-cc-record-region-conflict`
+   - [x] - `p1` - **IF** both templates claim the same shared-file path and either both declare merge strategy `exclusive` for it, or one declares `exclusive` while the other declares `region-union` (whole-file ownership of a shared file cannot be shared, per `cpt-frontx-feature-template-manifest`) - `inst-cc-if-exclusive-clash`
+      1. [x] - `p1` - Record a conflict entry naming the contested file path and the two contesting template identities. - `inst-cc-record-exclusive-conflict`
+   - [x] - `p1` - **IF** both templates declare merge strategy `region-union` on the same shared-file path and claim the same declared region key - `inst-cc-if-region-key-clash`
+      1. [x] - `p1` - Record a conflict entry naming the contested file path, the contested region key, and the two contesting template identities. - `inst-cc-record-region-conflict`
 3. [x] - `p1` - **IF** any conflict entries were recorded - `inst-cc-if-any-conflict`
    1. [x] - `p1` - **RETURN** the conflict report listing every contested ground and its contesting templates; the assembly is refused and no files are written, never silently merged. - `inst-cc-return-conflict`
 4. [x] - `p1` - **RETURN** pass — the declared boundaries do not intersect; the assembly is cleared for materialization. - `inst-cc-return-pass`
+
+### Compose Shared Files from Owned Regions at Materialization
+
+- [x] `p1` - **ID**: `cpt-frontx-algo-cli-scaffolding-compose-shared-files`
+
+**Input**: The conflict-cleared staged assembly (per-template contributions and declared ownership boundaries, including `region-union` shared-file entries with their owned region keys, per `cpt-frontx-feature-template-manifest`) and the target repository path.
+
+**Output**: For each repository file path, the materialized file body — a single owner's content for an `exclusive` path or exclusive subtree, or the composed disjoint-region union for a `region-union` path — written to the target repository; a materialization-invariant error if a declared-level collision (same region key, or a contested `exclusive` path) reaches this stage; or a materialization conflict refusing the assembly when any two owned regions on the path — across templates or within a single template's multiple keys — have overlapping actual on-disk marker spans (the content-level check the pre-flight cannot perform).
+
+**Steps**:
+1. [x] - `p1` - Group the staged assembly's contributions by target repository file path, carrying each contributing template's identity, declared merge strategy, and owned region keys. - `inst-cs-group-by-path`
+2. [x] - `p1` - **FOR EACH** target file path owned whole by exactly one template (an exclusive subtree or a whole-file `exclusive` claim) - `inst-cs-foreach-single`
+   1. [x] - `p1` - Write that template's content for the path directly. - `inst-cs-write-single`
+3. [x] - `p1` - **FOR EACH** target file path with any `region-union` contribution — one contributor or many - `inst-cs-foreach-multi`
+   1. [x] - `p1` - **IF** more than one contributor claims the path and any of them declares `exclusive` for it - `inst-cs-if-exclusive-contested`
+      1. [x] - `p1` - **RETURN** a materialization-invariant error naming the contested path and do not write the file — a contested `exclusive` path must have been refused by the pre-flight conflict check (`cpt-frontx-algo-cli-scaffolding-conflict-check`), so reaching materialization is an invariant violation. - `inst-cs-return-exclusive-invariant`
+   2. [x] - `p1` - **FOR EACH** contributing template, locate and extract its owned region(s) from its installed content by matching the begin/end sentinel markers keyed by that template's identity and each declared region key (region-addressing schema owned by `cpt-frontx-feature-template-manifest`). - `inst-cs-extract-regions`
+   3. [x] - `p1` - **IF** two contributors resolved the same declared region key on the path - `inst-cs-if-key-collision`
+      1. [x] - `p1` - **RETURN** a materialization-invariant error naming the contested region key and templates — a same-declared-key collision must have been refused by the pre-flight conflict check (`cpt-frontx-algo-cli-scaffolding-conflict-check`), so reaching materialization is an invariant violation. - `inst-cs-return-key-invariant`
+   4. [x] - `p1` - **IF** any two extracted regions on the path have overlapping actual on-disk marker spans — whether owned by different templates or by the same template declaring multiple region keys - `inst-cs-if-span-overlap`
+      1. [x] - `p1` - **RETURN** a materialization conflict naming the contested file, the overlapping region markers, and the owning template(s); refuse the assembly and write no file. Actual marker-span overlap is a content-level property that neither pre-publish manifest validation (well-formed keys only) nor the pre-flight conflict check (declared keys only) can observe, so materialization — run per shared-file path regardless of contributor count — is where it is first detectable and refused, covering single-template self-overlap as well as cross-template overlap. - `inst-cs-return-span-overlap`
+   5. [x] - `p1` - Compose the repository file as the disjoint union of every contributor's extracted region(s), preserving each region's sentinel markers so a later boundary-scoped upgrade can re-locate it, in a deterministic order (by owning template identity, then region key). - `inst-cs-compose-union`
+   6. [x] - `p1` - Write the composed file to the target repository. - `inst-cs-write-composed`
+4. [x] - `p1` - **RETURN** the materialized repository files. - `inst-cs-return-materialized`
 
 ## 4. States (CDSL)
 
@@ -205,6 +235,24 @@ The system **MUST** run a pre-flight intersection check over the staged assembly
 - Component: `cpt-frontx-component-cli`, `cpt-frontx-component-cli-conflict-checker`
 - Entities: `Assembly`, `OwnershipBoundary`
 
+### Shared-File Region Composition at Materialization
+
+- [x] `p1` - **ID**: `cpt-frontx-dod-cli-scaffolding-compose-shared-files`
+
+The system **MUST** materialize a shared file co-owned by more than one applied template by extracting each template's owned region(s) from its installed content (located by the identity-and-region-key sentinel markers whose schema `cpt-frontx-feature-template-manifest` owns) and writing the disjoint union of those regions to a single repository file, preserving the region markers for later boundary-scoped upgrade; an `exclusive` path is written whole by its single owner. Declared-level collisions (same region key, or a contested `exclusive` path) reaching materialization are invariant violations because the pre-flight conflict check already refuses them, whereas an overlap between any two owned regions' actual on-disk marker spans — whether contributed by different templates or by a single template declaring multiple keys — is a content-level property the pre-flight cannot observe, so materialization (run per shared-file path regardless of contributor count) is the authority that detects it and refuses the assembly (`target`).
+
+**Implements**:
+- `cpt-frontx-flow-cli-scaffolding-seed-repository`
+- `cpt-frontx-flow-cli-scaffolding-add-template`
+- `cpt-frontx-algo-cli-scaffolding-compose-shared-files`
+
+**Constraints**: `cpt-frontx-constraint-cli-boundary-declaration`
+
+**Touches**:
+- Interface: `cli`
+- Component: `cpt-frontx-component-cli`, `cpt-frontx-component-cli-assembler`
+- Entities: `Template`, `OwnershipBoundary`, `Assembly`
+
 ### Ownership-Boundary-Declared Assembly
 
 - [x] `p1` - **ID**: `cpt-frontx-dod-cli-scaffolding-boundary-declared-assembly`
@@ -230,6 +278,8 @@ The system **MUST** assemble a repository from one or more independently-applied
 - [ ] Adding a template into a repository that already holds applied templates checks the new template's declared boundaries against the already-occupied boundaries before any write. (`target`)
 - [ ] A preset's referenced templates are resolved and applied together in one operation, one provenance record written per applied template. (`target`)
 - [ ] Apply is aborted with notification and no files written when the template reference cannot be resolved from the local inventory. (`target`)
-- [ ] The pre-flight conflict check refuses the whole assembly before any write when two applied templates claim the same exclusive subtree or the same shared-file region without a compatible declared merge, reporting the contesting templates and the contested ground. (`target`)
+- [ ] The pre-flight conflict check refuses the whole assembly before any write, reporting the contesting templates and the contested ground, when two applied templates claim: the same exclusive subtree; the same shared-file path with two `exclusive` claims or one `exclusive` mixed with a `region-union` claim; or the same declared region key on one `region-union` shared-file path. (`target`)
+- [ ] A shared file co-owned by two or more applied templates under `region-union` is materialized as the disjoint union of each template's owned region(s), extracted from installed content by the identity-and-region-key sentinel markers and written with those markers preserved; an `exclusive` path is written whole by its single owner. (`target`)
+- [ ] Materialization refuses the assembly when any two owned regions on a shared-file path have overlapping actual on-disk marker spans — whether contributed by different templates or by a single template declaring multiple keys — the content-level check that runs per shared-file path regardless of contributor count and that the pre-flight conflict check cannot perform. (`target`)
 - [ ] No apply path silently merges conflicting claims. (`target`)
 - [ ] The apply command surface is part of `cpt-frontx-interface-cli`; an incompatible change to the surface requires a major version bump per `cpt-frontx-adr-artifact-versioning-and-distribution`. (`target`)

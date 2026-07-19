@@ -43,9 +43,8 @@ This feature realizes the preset (referenced-template) recursive resolution deci
 
 | Actor | Role in Feature |
 |-------|-----------------|
-| `cpt-frontx-actor-project-developer` | Initiates the scaffold operation by issuing a scaffold command with a versioned source-spec |
+| `cpt-frontx-actor-project-developer` | Initiates the scaffold operation by issuing a scaffold command with a versioned source-spec; the FrontX CLI (`@gears-frontx/cli`, `cpt-frontx-component-cli`) is the system that executes the composed-template resolution, scaffolds the project, and writes the provenance record |
 | `cpt-frontx-actor-github` | Acts as the external source registry from which the CLI resolves template references |
-| `cpt-frontx-actor-cypilot-cli` | Executes the composed-template resolution, scaffolds the project, and writes the provenance record |
 
 ### 1.4 References
 
@@ -67,7 +66,7 @@ This feature realizes the preset (referenced-template) recursive resolution deci
 
 **Realizes**: `cpt-frontx-seq-composed-project-scaffold`
 
-**Involves**: `cpt-frontx-actor-project-developer`, `cpt-frontx-actor-github`, `cpt-frontx-actor-cypilot-cli`
+**Involves**: `cpt-frontx-actor-project-developer`, `cpt-frontx-actor-github` (the FrontX CLI, `cpt-frontx-component-cli`, is the executing system)
 
 **Success Scenarios**:
 - Developer issues an apply command; the CLI resolves the root template and all of its preset's referenced templates recursively; the full set is applied in one operation; one provenance record is written per applied template into the repository.
@@ -79,7 +78,7 @@ This feature realizes the preset (referenced-template) recursive resolution deci
 
 **Steps**:
 
-1. [x] - `p1` - Developer issues an apply command to `cpt-frontx-actor-cypilot-cli`, supplying a versioned source-spec for the root template - `inst-issue-scaffold`
+1. [x] - `p1` - Developer issues an apply command to the FrontX CLI (`cpt-frontx-component-cli`), supplying a versioned source-spec for the root template - `inst-issue-scaffold`
 2. [x] - `p1` - CLI resolves the root template from `cpt-frontx-actor-github` using the shared resolver (`cpt-frontx-adr-template-acquisition-and-location`) with the supplied source-spec - `inst-resolve-root-template`
 3. [x] - `p1` - **IF** the source registry is unreachable - `inst-check-registry-reach`
    1. [x] - `p1` - CLI reports the registry failure to the developer and **RETURN** (no files written) - `inst-abort-registry`
@@ -91,12 +90,11 @@ This feature realizes the preset (referenced-template) recursive resolution deci
 8. [x] - `p1` - CLI submits the staged assembly to the pre-flight ownership-boundary conflict check (`cpt-frontx-algo-cli-scaffolding-conflict-check`) - `inst-check-boundary-conflict`
 9. [x] - `p1` - **IF** the conflict check reports a same-target-path collision across the set - `inst-check-conflict-result`
    1. [x] - `p1` - CLI reports the contested target path and contesting template identities to the developer and **RETURN** (no files written) - `inst-abort-boundary-conflict`
-10. [x] - `p1` - CLI materializes the cleared staged assembly, writing all files in one operation - `inst-scaffold-composition`
+10. [x] - `p1` - CLI materializes the cleared staged assembly, writing all files in one operation — including each applied template's AI-extension bundle into its identity-scoped `.frontx/ai/<template-identity>/` subtree as ordinary owned content (the bundle contract is owned by `cpt-frontx-feature-template-ai-extensions`) - `inst-scaffold-composition`
 11. [x] - `p1` - CLI invokes the provenance write algorithm (`cpt-frontx-algo-composed-provenance-provenance-write`) to write one provenance record per applied template — each capturing that template's identity, applied-from version, source-spec, and occupied ownership boundary — into the repository - `inst-invoke-provenance-write`
 12. [x] - `p1` - **IF** any provenance record write fails - `inst-check-provenance-write-fail`
     1. [x] - `p1` - CLI reports the provenance write failure to the developer - `inst-report-provenance-fail`
-13. [x] - `p1` - CLI signals the AI Tooling Framework to activate base ecosystem capabilities and any bundled template extensions - `inst-activate-kit`
-14. [x] - `p1` - **RETURN** the assembled repository with per-applied-template provenance and AI capabilities active to the developer - `inst-return-success`
+13. [x] - `p1` - **RETURN** the assembled repository — its files, its `.frontx/ai/` extension bundles, and one provenance record per applied template — to the developer; the AI Tooling Framework discovers and activates those bundles on its own next invocation by scanning the repository's `.frontx/ai/` (no CLI-to-Kit signal; see `cpt-frontx-feature-template-ai-extensions` and DESIGN §3.4) - `inst-return-success`
 
 ## 3. Processes / Business Logic (CDSL)
 
@@ -135,6 +133,8 @@ This feature realizes the preset (referenced-template) recursive resolution deci
 **Input**: repository root path; the set of applied templates, each with its identity, applied-from version, source-spec that re-resolves it, and the ownership boundary it occupied
 
 **Output**: one in-repository provenance record written per applied template — the provenance set; or a write error. The concrete schema (`cpt-frontx-contract-project-provenance`): a set of records, one per applied template, each record `{ template identity, applied-from version, source-spec, occupied ownership boundary }`, with no single whole-repository origin record. The whole set is held in a single file `.frontx/provenance.json` at the repository root.
+
+Terminology (owned here as the provenance schema owner): a template's **declared ownership boundary** is what its manifest declares (`cpt-frontx-feature-template-manifest`) and what the pre-flight conflict check and assembler read before apply (`cpt-frontx-feature-cli-scaffolding`); the **occupied ownership boundary** is that same boundary recorded into the provenance record at apply time. The two terms name the one boundary at two lifecycle stages — declared before apply, occupied once recorded — and later upgrade reads the occupied boundary (`cpt-frontx-feature-upgrade-changeset`).
 
 **Steps**:
 

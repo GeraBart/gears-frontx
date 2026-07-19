@@ -25,10 +25,6 @@ reason = "Auth SDK package has no backing CDSL artifact"
 patterns = ["packages/auth/*"]
 
 [[ignore]]
-reason = "Legacy SDLC artifacts archived during ecosystem redesign; archive is reference-only and deleted after redesign lands"
-patterns = ["architecture/.archive-pre-ecosystem-redesign/**", "*/.archive-pre-ecosystem-redesign/*"]
-
-[[ignore]]
 reason = "Template-standard package is template territory (Phase 11 template-move); code carries pre-redesign markers that reference archived IDs — no active FEATURE artifact backs this package"
 patterns = ["packages/frontx-template-standard/**"]
 
