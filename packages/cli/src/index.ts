@@ -63,7 +63,14 @@ export type {
   ConflictVerdict,
   ConflictVerdictFn,
   MaterializeAssemblyFn,
+  OccupiedBoundaryEntry,
 } from './scaffold/state.js';
+
+// F12 pre-flight assembly conflict checker (P29) — the sole authority for
+// boundary-collision arbitration (cpt-frontx-algo-cli-scaffolding-conflict-check,
+// cpt-frontx-dod-cli-scaffolding-conflict-check). Fills the `conflictVerdictFn`
+// seam `runAssemblyOp` (above) drives through.
+export { checkAssemblyConflicts } from './scaffold/conflict';
 export type {
   WriteFileFn,
   ConflictCheckFn,
@@ -75,7 +82,7 @@ export type {
 
 export { resolveComposition } from './composition/resolve';
 export { CompositionResolutionState } from './composition/state';
-export type { CompositionFileEntry, CollisionRecord, CompositionSetResult } from './composition/types';
+export type { CompositionEntry, CompositionSetResult } from './composition/types';
 
 export { writeProvenance } from './provenance/write';
 export type { WriteProvenanceResult } from './provenance/write';

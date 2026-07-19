@@ -224,7 +224,9 @@ describe('runAssemblyOp — driving the assembly-op transitions', () => {
       targetHoldsAppliedTemplates: true,
       lookupFn: () => entry,
       readContentFn,
-      alreadyOccupiedBoundaries: [{ exclusiveSubtrees: ['template-a/'], sharedFiles: [] }],
+      alreadyOccupiedBoundaries: [
+        { templateName: 'already-applied', boundary: { exclusiveSubtrees: ['template-a/'], sharedFiles: [] } },
+      ],
       conflictVerdictFn,
       materializeFn,
     });
@@ -242,7 +244,9 @@ describe('runAssemblyOp — driving the assembly-op transitions', () => {
 
   it('passes the staged assembly and already-occupied boundaries to the verdict seam', async () => {
     const entry = makeEntry('template-a');
-    const alreadyOccupied = [{ exclusiveSubtrees: ['template-b/'], sharedFiles: [] }];
+    const alreadyOccupied = [
+      { templateName: 'already-applied', boundary: { exclusiveSubtrees: ['template-b/'], sharedFiles: [] } },
+    ];
     const conflictVerdictFn = vi.fn(async (): Promise<ConflictVerdict> => noConflict);
 
     await runAssemblyOp({

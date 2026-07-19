@@ -14,7 +14,7 @@ export type ComposedScaffoldResult =
   | { ok: true; message: string; provenanceLocation: string }
   | {
       ok: false;
-      reason: 'registry-unreachable' | 'collision' | 'cycle' | 'resolve-error' | 'conflict' | 'provenance-failed';
+      reason: 'registry-unreachable' | 'cycle' | 'resolve-error' | 'conflict' | 'provenance-failed';
       message: string;
     };
 
@@ -76,9 +76,7 @@ export async function scaffoldComposedProject(
     templateRef,
     new Set<string>(),
     0,
-    null,
     lookupFn,
-    readContentFn,
   );
   // @cpt-end:cpt-frontx-flow-composed-provenance-scaffold-composed-project:p1:inst-invoke-resolution
 
@@ -92,11 +90,9 @@ export async function scaffoldComposedProject(
       ok: false,
       reason: compositionResult.reason,
       message:
-        compositionResult.reason === 'collision'
-          ? `Scaffold aborted — composition collision on: ${compositionResult.collisions.map((c) => c.path).join(', ')}`
-          : compositionResult.reason === 'cycle'
-            ? `Scaffold aborted — cycle detected in composition graph: ${compositionResult.path.join(' → ')}`
-            : `Scaffold aborted — ${compositionResult.message}`,
+        compositionResult.reason === 'cycle'
+          ? `Scaffold aborted — cycle detected in composition graph: ${compositionResult.path.join(' → ')}`
+          : `Scaffold aborted — ${compositionResult.message}`,
     };
     // @cpt-end:cpt-frontx-flow-composed-provenance-scaffold-composed-project:p1:inst-abort-resolution-error
   }
@@ -117,8 +113,16 @@ export async function scaffoldComposedProject(
   }
 
   // @cpt-begin:cpt-frontx-flow-composed-provenance-scaffold-composed-project:p1:inst-scaffold-composition
-  for (const [, fileEntry] of compositionResult.files) {
-    await writeFileFn(`${targetDir}/${fileEntry.path}`, fileEntry.content);
+  // The resolved per-template composition set carries no file content of its
+  // own (cpt-frontx-algo-composed-provenance-recursive-resolution hands over
+  // identities + installed content paths + boundaries, unarbitrated) — each
+  // applied template's content items are read from its installed content
+  // path at write time, never from the manifest.
+  for (const compositionEntry of compositionResult.templates.values()) {
+    const items = await readContentFn(compositionEntry.installedContentPath);
+    for (const item of items) {
+      await writeFileFn(`${targetDir}/${item.path}`, item.content);
+    }
   }
   // @cpt-end:cpt-frontx-flow-composed-provenance-scaffold-composed-project:p1:inst-scaffold-composition
 
