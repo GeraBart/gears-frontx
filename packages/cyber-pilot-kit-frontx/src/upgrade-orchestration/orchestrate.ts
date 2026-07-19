@@ -12,6 +12,7 @@
 // dependency (DESIGN §3.4; ADR-0027 `cpt-frontx-adr-ai-driven-upgrade-orchestration`).
 import { enrichUpgradeChangeSet } from './enrich.js';
 import { OrchestrationLifecycleState, type OrchestrationLifecycleStateValue } from './state.js';
+import { selectProvenanceRecord } from './types.js';
 import type {
   ChangeSet,
   EnrichedReviewPackage,
@@ -41,14 +42,21 @@ export type OrchestrationResult =
 
 // @cpt-begin:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-request-upgrade
 /**
- * AI-driven upgrade orchestration: reads project provenance, drives the SINGLE
- * F14 CLI change-set engine through its `frontx upgrade` command surface,
+ * AI-driven upgrade orchestration: reads the project's provenance record SET
+ * and selects the NAMED applied template to upgrade, drives the SINGLE F14
+ * CLI change-set engine through its `frontx upgrade` command surface,
  * enriches its output with change-impact analysis and downstream-effect
  * assessment, enforces an unconditional review gate before any apply, and
  * applies or declines (cpt-frontx-flow-ai-upgrade-orchestration-upgrade).
+ *
+ * `appliedTemplateName` is the applied template's identity as recorded in
+ * its own provenance record (`inst-request-upgrade`) — the developer either
+ * names it directly or the AI first lists the applied templates from
+ * provenance so one can be chosen.
  */
 export async function orchestrateAiDrivenUpgrade(
   projectRoot: string,
+  appliedTemplateName: string,
   targetVersion: string,
   deps: OrchestrationDeps,
 ): Promise<OrchestrationResult> {
@@ -57,27 +65,36 @@ export async function orchestrateAiDrivenUpgrade(
   let lifecycleState: OrchestrationLifecycleStateValue = OrchestrationLifecycleState.PROVENANCE_READ;
 
   // @cpt-begin:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-read-provenance
-  const provenance = await deps.readProvenance(projectRoot);
+  // Reads the FULL provenance record SET (one record per applied template —
+  // `cpt-frontx-contract-project-provenance`), never a single
+  // whole-repository origin record.
+  const provenanceSet = await deps.readProvenance(projectRoot);
   // @cpt-end:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-read-provenance
 
   // @cpt-begin:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-check-provenance
-  if (!provenance) {
+  // Selects the record for the NAMED applied template from the set; absent
+  // when provenance is unreadable OR the set holds no matching record.
+  const selectedRecord = provenanceSet ? selectProvenanceRecord(provenanceSet, appliedTemplateName) : undefined;
+  if (!selectedRecord) {
     // @cpt-begin:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-provenance-missing
     return {
       status: 'provenance-missing',
-      message: 'No provenance record found in project — AI-driven upgrade cannot proceed.',
+      message: provenanceSet
+        ? `No provenance record found for applied template "${appliedTemplateName}" — AI-driven upgrade cannot proceed.`
+        : 'No provenance record set found in project — AI-driven upgrade cannot proceed.',
     };
     // @cpt-end:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-provenance-missing
   }
   // @cpt-end:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-check-provenance
 
   // @cpt-begin:cpt-frontx-algo-ai-upgrade-orchestration-enrich:p1:inst-extract-provenance
-  // Provenance is read once, here, by the orchestration layer itself — the
-  // command surface receives only projectRoot/targetVersion and resolves its
-  // own provenance internally when computing the change set.
-  const { templateIdentity, scaffoldedFromVersion } = provenance;
-  void templateIdentity;
-  void scaffoldedFromVersion;
+  // Extract the SELECTED applied template's identity and current version
+  // from its provenance record — the command surface receives only
+  // projectRoot/targetVersion and resolves its own provenance internally
+  // when computing the change set; this orchestration layer's extraction is
+  // what makes the enriched review package reflect the SELECTED template.
+  const { templateIdentity, scaffoldedFromVersion } = selectedRecord;
+  const selectedTemplate = { templateIdentity, currentVersion: scaffoldedFromVersion };
   // @cpt-end:cpt-frontx-algo-ai-upgrade-orchestration-enrich:p1:inst-extract-provenance
 
   let reviewPackage: EnrichedReviewPackage | undefined;
@@ -88,7 +105,7 @@ export async function orchestrateAiDrivenUpgrade(
   const commandResult = await deps.invokeUpgradeCommand(projectRoot, targetVersion, async (changeSet: ChangeSet) => {
     // @cpt-end:cpt-frontx-algo-ai-upgrade-orchestration-enrich:p1:inst-invoke-engine
     // @cpt-begin:cpt-frontx-algo-ai-upgrade-orchestration-enrich:p1:inst-receive-changeset
-    const enrichment = enrichUpgradeChangeSet(changeSet);
+    const enrichment = enrichUpgradeChangeSet(changeSet, selectedTemplate);
     // @cpt-end:cpt-frontx-algo-ai-upgrade-orchestration-enrich:p1:inst-receive-changeset
 
     if (enrichment.status === 'empty') {

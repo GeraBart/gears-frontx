@@ -10,7 +10,14 @@
 // change set the command surface computed into this module's pure
 // enrichment step (inst-receive-changeset onward) — a plain function with no
 // engine dependency of its own.
-import type { ChangeSet, ChangeImpactAnalysis, ChangeImpactEntry, DownstreamEffectAssessment, EnrichmentResult } from './types.js';
+import type {
+  ChangeSet,
+  ChangeImpactAnalysis,
+  ChangeImpactEntry,
+  DownstreamEffectAssessment,
+  EnrichmentResult,
+  SelectedTemplate,
+} from './types.js';
 
 // @cpt-begin:cpt-frontx-algo-ai-upgrade-orchestration-enrich:p1:inst-impact-analysis
 /**
@@ -54,11 +61,15 @@ export function computeDownstreamEffects(changeSet: ChangeSet): DownstreamEffect
  * Enriches an already-computed change set (received from the `frontx
  * upgrade` command surface, cpt-frontx-algo-ai-upgrade-orchestration-enrich
  * `inst-receive-changeset`) with change-impact analysis and downstream-effect
- * assessment. Contains no engine logic of its own — it is a pure function
- * over the change set the SINGLE F14 engine produced
+ * assessment, combined against the SELECTED applied template's identity and
+ * current version (extracted by the caller from that template's provenance
+ * record, `inst-extract-provenance`) so the resulting review package
+ * reflects the SELECTED applied template, not any other record in the
+ * project's provenance set. Contains no engine logic of its own — it is a
+ * pure function over the change set the SINGLE F14 engine produced
  * (cpt-frontx-dod-ai-upgrade-orchestration-single-engine).
  */
-export function enrichUpgradeChangeSet(changeSet: ChangeSet): EnrichmentResult {
+export function enrichUpgradeChangeSet(changeSet: ChangeSet, selectedTemplate: SelectedTemplate): EnrichmentResult {
   // @cpt-begin:cpt-frontx-algo-ai-upgrade-orchestration-enrich:p1:inst-check-empty
   if (changeSet.clean.length === 0 && changeSet.conflicts.length === 0) {
     // @cpt-begin:cpt-frontx-algo-ai-upgrade-orchestration-enrich:p1:inst-empty-signal
@@ -75,7 +86,7 @@ export function enrichUpgradeChangeSet(changeSet: ChangeSet): EnrichmentResult {
   // @cpt-end:cpt-frontx-algo-ai-upgrade-orchestration-enrich:p1:inst-downstream-assess
 
   // @cpt-begin:cpt-frontx-algo-ai-upgrade-orchestration-enrich:p1:inst-combine-results
-  const enriched = { changeSet, impactAnalysis, downstreamAssessment };
+  const enriched = { selectedTemplate, changeSet, impactAnalysis, downstreamAssessment };
   // @cpt-end:cpt-frontx-algo-ai-upgrade-orchestration-enrich:p1:inst-combine-results
 
   // @cpt-begin:cpt-frontx-algo-ai-upgrade-orchestration-enrich:p1:inst-return-enriched

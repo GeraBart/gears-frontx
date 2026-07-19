@@ -11,17 +11,32 @@
 // change set and return a review decision, mirroring exactly how a real
 // process-boundary adapter (spawning the `frontx` CLI, parsing its JSON
 // output) would be wired without ever importing the CLI package.
+//
+// PHASE 8 — multi-record provenance SET: `readProvenance` now returns the
+// project's FULL provenance record set (one record per applied template,
+// `cpt-frontx-contract-project-provenance`); orchestration selects the
+// NAMED applied template's record before invoking the command surface.
 import { describe, it, expect, vi } from 'vitest';
 import { orchestrateAiDrivenUpgrade, type OrchestrationDeps } from '../orchestrate.js';
 import type { ChangeSet, InvokeUpgradeCommandFn, ProvenanceRecord, ReviewDecision } from '../types.js';
 
 const PROJ_ROOT = '/proj';
 
-const PROVENANCE: ProvenanceRecord = {
+const PROVENANCE_RECORD: ProvenanceRecord = {
   templateIdentity: 'my-template',
   scaffoldedFromVersion: '1.0.0',
   sourceSpec: 'local:my-template',
 };
+
+// A second applied template's record — proves selection reaches into a
+// multi-record SET rather than assuming a single whole-repository origin.
+const OTHER_PROVENANCE_RECORD: ProvenanceRecord = {
+  templateIdentity: 'other-template',
+  scaffoldedFromVersion: '3.4.0',
+  sourceSpec: 'local:other-template',
+};
+
+const PROVENANCE_SET: ProvenanceRecord[] = [PROVENANCE_RECORD, OTHER_PROVENANCE_RECORD];
 
 const RESOLVABLE_CHANGESET: ChangeSet = {
   templateIdentity: 'my-template',
@@ -60,7 +75,7 @@ function makeCommandInvoker(options: {
 function baseDeps(overrides: Partial<OrchestrationDeps> = {}): OrchestrationDeps {
   const { invoke } = makeCommandInvoker({});
   return {
-    readProvenance: vi.fn().mockResolvedValue(PROVENANCE),
+    readProvenance: vi.fn().mockResolvedValue(PROVENANCE_SET),
     invokeUpgradeCommand: invoke,
     presentEnrichedReview: vi.fn().mockResolvedValue('declined'),
     ...overrides,
@@ -69,13 +84,47 @@ function baseDeps(overrides: Partial<OrchestrationDeps> = {}): OrchestrationDeps
 
 describe('orchestrateAiDrivenUpgrade (F17 — drives the SINGLE F14 engine through its command surface, never a second one)', () => {
   // inst-request-upgrade / inst-read-provenance / inst-check-provenance / inst-provenance-missing
-  it('returns provenance-missing and never invokes the command surface when provenance is absent', async () => {
+  it('returns provenance-missing and never invokes the command surface when the provenance set is absent', async () => {
     const { invoke } = makeCommandInvoker({});
     const invokeSpy = vi.fn(invoke);
     const deps = baseDeps({ readProvenance: vi.fn().mockResolvedValue(null), invokeUpgradeCommand: invokeSpy });
-    const result = await orchestrateAiDrivenUpgrade(PROJ_ROOT, '2.0.0', deps);
+    const result = await orchestrateAiDrivenUpgrade(PROJ_ROOT, 'my-template', '2.0.0', deps);
     expect(result.status).toBe('provenance-missing');
     expect(invokeSpy).not.toHaveBeenCalled();
+  });
+
+  // inst-read-provenance / inst-check-provenance / inst-provenance-missing — multi-record set, no match
+  it('returns provenance-missing when the provenance SET holds records but none for the named applied template', async () => {
+    const { invoke } = makeCommandInvoker({});
+    const invokeSpy = vi.fn(invoke);
+    const deps = baseDeps({ readProvenance: vi.fn().mockResolvedValue(PROVENANCE_SET), invokeUpgradeCommand: invokeSpy });
+    const result = await orchestrateAiDrivenUpgrade(PROJ_ROOT, 'no-such-template', '2.0.0', deps);
+    expect(result.status).toBe('provenance-missing');
+    if (result.status === 'provenance-missing') {
+      expect(result.message).toContain('no-such-template');
+    }
+    expect(invokeSpy).not.toHaveBeenCalled();
+  });
+
+  // inst-read-provenance / inst-check-provenance — multi-record set, selects the NAMED record (not the first one)
+  it('selects the record for the named applied template out of a multi-record provenance set', async () => {
+    const readProvenance = vi.fn().mockResolvedValue(PROVENANCE_SET);
+    const { invoke } = makeCommandInvoker({});
+    const deps = baseDeps({
+      readProvenance,
+      invokeUpgradeCommand: invoke,
+      presentEnrichedReview: vi.fn().mockResolvedValue('declined'),
+    });
+    // Named template is the SECOND record in the set.
+    const result = await orchestrateAiDrivenUpgrade(PROJ_ROOT, 'other-template', '4.0.0', deps);
+    expect(readProvenance).toHaveBeenCalledWith(PROJ_ROOT);
+    expect(result.status).toBe('declined');
+    if (result.status === 'declined') {
+      expect(result.reviewPackage.selectedTemplate).toEqual({
+        templateIdentity: 'other-template',
+        currentVersion: '3.4.0',
+      });
+    }
   });
 
   // inst-invoke-enrichment / inst-check-changeset / inst-empty-changeset
@@ -83,7 +132,7 @@ describe('orchestrateAiDrivenUpgrade (F17 — drives the SINGLE F14 engine throu
     const { invoke } = makeCommandInvoker({ resolvable: false });
     const presentSpy = vi.fn();
     const deps = baseDeps({ invokeUpgradeCommand: invoke, presentEnrichedReview: presentSpy });
-    const result = await orchestrateAiDrivenUpgrade(PROJ_ROOT, '9.9.9', deps);
+    const result = await orchestrateAiDrivenUpgrade(PROJ_ROOT, 'my-template', '9.9.9', deps);
     expect(result.status).toBe('empty-changeset');
     expect(presentSpy).not.toHaveBeenCalled();
   });
@@ -94,23 +143,27 @@ describe('orchestrateAiDrivenUpgrade (F17 — drives the SINGLE F14 engine throu
     const { invoke } = makeCommandInvoker({ changeSet: emptyChangeSet });
     const presentSpy = vi.fn();
     const deps = baseDeps({ invokeUpgradeCommand: invoke, presentEnrichedReview: presentSpy });
-    const result = await orchestrateAiDrivenUpgrade(PROJ_ROOT, '1.0.0', deps);
+    const result = await orchestrateAiDrivenUpgrade(PROJ_ROOT, 'my-template', '1.0.0', deps);
     expect(result.status).toBe('empty-changeset');
     expect(presentSpy).not.toHaveBeenCalled();
   });
 
-  // inst-present-review / inst-gate-approve / inst-engine-apply / inst-update-provenance / inst-return-applied
-  it('approval triggers the command surface\'s engine apply exactly once', async () => {
+  // inst-extract-provenance / inst-present-review / inst-gate-approve / inst-engine-apply / inst-update-provenance / inst-return-applied
+  it('approval triggers the command surface\'s engine apply exactly once, enrichment reflects the selected template', async () => {
     const { invoke, appliedSpy } = makeCommandInvoker({});
     const deps = baseDeps({
       invokeUpgradeCommand: invoke,
       presentEnrichedReview: vi.fn().mockResolvedValue('approved'),
     });
-    const result = await orchestrateAiDrivenUpgrade(PROJ_ROOT, '2.0.0', deps);
+    const result = await orchestrateAiDrivenUpgrade(PROJ_ROOT, 'my-template', '2.0.0', deps);
     expect(result.status).toBe('applied');
     expect(appliedSpy).toHaveBeenCalledTimes(1);
     if (result.status === 'applied') {
       expect(result.reviewPackage.impactAnalysis.entries.length).toBeGreaterThan(0);
+      expect(result.reviewPackage.selectedTemplate).toEqual({
+        templateIdentity: 'my-template',
+        currentVersion: '1.0.0',
+      });
     }
   });
 
@@ -121,7 +174,7 @@ describe('orchestrateAiDrivenUpgrade (F17 — drives the SINGLE F14 engine throu
       invokeUpgradeCommand: invoke,
       presentEnrichedReview: vi.fn().mockResolvedValue('approved'),
     });
-    const result = await orchestrateAiDrivenUpgrade(PROJ_ROOT, '2.0.0', deps);
+    const result = await orchestrateAiDrivenUpgrade(PROJ_ROOT, 'my-template', '2.0.0', deps);
     expect(result.status).toBe('apply-failed');
     expect(appliedSpy).not.toHaveBeenCalled();
   });
@@ -133,7 +186,7 @@ describe('orchestrateAiDrivenUpgrade (F17 — drives the SINGLE F14 engine throu
       invokeUpgradeCommand: invoke,
       presentEnrichedReview: vi.fn().mockResolvedValue('declined'),
     });
-    const result = await orchestrateAiDrivenUpgrade(PROJ_ROOT, '2.0.0', deps);
+    const result = await orchestrateAiDrivenUpgrade(PROJ_ROOT, 'my-template', '2.0.0', deps);
     expect(result.status).toBe('declined');
     expect(appliedSpy).not.toHaveBeenCalled();
   });
@@ -146,7 +199,7 @@ describe('orchestrateAiDrivenUpgrade (F17 — drives the SINGLE F14 engine throu
       invokeUpgradeCommand: invokeSpy,
       presentEnrichedReview: vi.fn().mockResolvedValue('approved'),
     });
-    await orchestrateAiDrivenUpgrade(PROJ_ROOT, '2.0.0', deps);
+    await orchestrateAiDrivenUpgrade(PROJ_ROOT, 'my-template', '2.0.0', deps);
     expect(invokeSpy).toHaveBeenCalledTimes(1);
   });
 });

@@ -57,6 +57,7 @@ export { OrchestrationLifecycleState } from './upgrade-orchestration/state.js';
 export type { OrchestrationLifecycleStateValue } from './upgrade-orchestration/state.js';
 export { orchestrateAiDrivenUpgrade } from './upgrade-orchestration/orchestrate.js';
 export type { OrchestrationDeps, OrchestrationResult } from './upgrade-orchestration/orchestrate.js';
+export { selectProvenanceRecord } from './upgrade-orchestration/types.js';
 export type {
   ChangeSet,
   ChangeKind,
@@ -72,5 +73,6 @@ export type {
   PresentEnrichedReviewFn,
   ReadProvenanceFn,
   ReviewDecision,
+  SelectedTemplate,
   UpgradeCommandJsonResult,
 } from './upgrade-orchestration/types.js';
