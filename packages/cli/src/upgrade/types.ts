@@ -3,9 +3,10 @@
 // @cpt-dod:cpt-frontx-dod-upgrade-changeset-rollback:p1
 // @cpt-dod:cpt-frontx-dod-upgrade-changeset-single-engine:p1
 import type { ProvenanceRecord } from '../provenance/types';
-import type { InventoryEntry } from '../inventory/types';
+import type { FetchFn } from '../resolver/types';
 
 export type { ProvenanceRecord };
+export type { FetchFn };
 
 export type ChangeKind = 'add' | 'modify' | 'remove';
 
@@ -13,7 +14,12 @@ export type ChangeKind = 'add' | 'modify' | 'remove';
 export interface CleanEntry {
   kind: ChangeKind;
   path: string;
-  content?: string; // undefined for 'remove'
+  content?: string; // undefined for 'remove'; for a region-scoped entry, the NEW
+                     // marker-delimited block only (not the whole file)
+  // Present ONLY when this entry is scoped to one owned region within a
+  // `region-union` shared file (inst-cmp-diff-files / inst-app-apply-entry).
+  // Absent entries are whole-file (exclusive subtree).
+  regionKey?: string;
 }
 
 export interface ConflictEntry {
@@ -21,6 +27,9 @@ export interface ConflictEntry {
   templateKind: ChangeKind;
   templateContent?: string;
   localContent: string; // current developer-modified content
+  // Present ONLY when the conflict was detected within one owned region of a
+  // `region-union` shared file rather than the whole file.
+  regionKey?: string;
 }
 
 export interface ChangeSet {
@@ -41,7 +50,6 @@ export interface ProjectSnapshot {
 
 // Injected dependency types — no direct filesystem access in core logic
 export type ReadProvenanceFn = (projectRoot: string) => Promise<ProvenanceRecord | null>;
-export type VersionedLookupFn = (name: string, version: string) => InventoryEntry | undefined;
 export type ReadProjectFileFn = (absolutePath: string) => Promise<string | null>;
 export type WriteProjectFileFn = (absolutePath: string, content: string) => Promise<void>;
 export type RemoveProjectFileFn = (absolutePath: string) => Promise<void>;

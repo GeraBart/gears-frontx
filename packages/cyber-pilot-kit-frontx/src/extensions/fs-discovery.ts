@@ -2,10 +2,14 @@
 /**
  * Filesystem realization of the AI-extension discovery scan, reading the
  * on-disk bundle convention fixed by the template-ai-extensions FEATURE's
- * §1.5 AI-Extension Bundle Convention: bundle root `.frontx/ai/`, anchor
- * `.frontx/ai/extension.json` (bundle identity + contract version + the
- * `{id, category, path}` entry list), and the four closed-set slot subdirs
- * (`skills/`, `workflows/`, `guidelines/`, `reference-artifacts/`).
+ * §1.5 AI-Extension Bundle Convention: a per-template id-scoped bundle root
+ * `.frontx/ai/<template-identity>/`, its own anchor
+ * `.frontx/ai/<template-identity>/extension.json` (bundle identity +
+ * contract version + the `{id, category, path}` entry list), and the four
+ * closed-set slot subdirs (`skills/`, `workflows/`, `guidelines/`,
+ * `reference-artifacts/`) scoped to that bundle root. Any number of
+ * co-applied templates' bundles co-locate under `.frontx/ai/` as disjoint
+ * id-scoped subtrees, each discovered independently.
  *
  * Pure over an injected `BundleFsReader` (mirrors `ResourceBodyReader`'s DI
  * shape) so the algorithm is testable without touching real disk; production
@@ -31,11 +35,13 @@ export const SLOT_DIR_NAMES: Record<ExtensionCategory, string> = {
 
 const KNOWN_SLOT_DIRS = new Set(Object.values(SLOT_DIR_NAMES));
 
-/** Result of the fs-level scan, prior to feeding conforming entries onward. */
-export interface FsDiscoveryResult {
+/** Discovery result for ONE id-scoped bundle root `.frontx/ai/<template-identity>/`. */
+export interface DiscoveredBundle {
+  /** The `<template-identity>` path segment this bundle root was discovered under. */
+  identity: string;
   /** Conforming raw entries, ready to feed into `scanAndComposeExtensions`. */
   bundle: AiExtensionBundle;
-  /** Structural errors found at the fs level (missing anchor, out-of-set subdir, malformed on-disk shape). */
+  /** Structural errors found at the fs level, scoped to this bundle root. */
   structuralErrors: StructuralError[];
 }
 
@@ -58,7 +64,7 @@ function isSlotCategory(value: unknown): value is ExtensionCategory {
  */
 function validateOnDiskShape(
   raw: unknown,
-  aiRoot: string,
+  bundleRoot: string,
   reader: BundleFsReader,
 ): { ok: true } | { ok: false; error: StructuralError } {
   if (typeof raw !== 'object' || raw === null) {
@@ -86,14 +92,14 @@ function validateOnDiskShape(
   }
 
   if (category === 'skills') {
-    const skillFile = joinPath(aiRoot, path, 'SKILL.md');
+    const skillFile = joinPath(bundleRoot, path, 'SKILL.md');
     if (reader.readFile(skillFile) === undefined) {
       return { ok: false, error: { slot: category, entryId: id, message: `skill "${id}" is missing SKILL.md at "${skillFile}"` } };
     }
     return { ok: true };
   }
 
-  const filePath = joinPath(aiRoot, path);
+  const filePath = joinPath(bundleRoot, path);
   if (reader.readFile(filePath) === undefined) {
     return { ok: false, error: { slot: category, entryId: id, message: `${category} entry "${id}" content not found at "${filePath}"` } };
   }
@@ -101,19 +107,21 @@ function validateOnDiskShape(
 }
 
 /**
- * Scans an installed template's content root for its AI-extension bundle,
- * per the FEATURE's §1.5 on-disk convention, and returns the conforming
- * entries plus any structural errors — ready to be fed into the EXISTING
- * `scanAndComposeExtensions` algorithm (`cpt-frontx-algo-template-ai-extensions-contract-scan-activate`).
+ * Scans ONE id-scoped bundle root `.frontx/ai/<template-identity>/` for its
+ * anchor `extension.json` and closed-set slot subdirs, per the FEATURE's
+ * §1.5 on-disk convention, returning the conforming entries plus any
+ * structural errors — scoped entirely to this bundle root so a malformed
+ * bundle never affects a sibling bundle discovered under the same
+ * `.frontx/ai/`.
  */
-export function discoverExtensionBundleFromFs(contentRoot: string, reader: BundleFsReader): FsDiscoveryResult {
-  const aiRoot = joinPath(contentRoot, '.frontx', 'ai');
-  const anchorPath = joinPath(aiRoot, 'extension.json');
+function discoverSingleBundle(identity: string, bundleRoot: string, reader: BundleFsReader): DiscoveredBundle {
+  const anchorPath = joinPath(bundleRoot, 'extension.json');
 
   // @cpt-begin:cpt-frontx-algo-template-ai-extensions-contract-scan-activate:p1:inst-load-bundle
   const anchorRaw = reader.readFile(anchorPath);
   if (anchorRaw === undefined) {
     return {
+      identity,
       bundle: [],
       structuralErrors: [{ slot: 'unknown', entryId: 'unknown', message: `missing AI-extension bundle anchor at "${anchorPath}"` }],
     };
@@ -124,6 +132,7 @@ export function discoverExtensionBundleFromFs(contentRoot: string, reader: Bundl
     parsedAnchor = JSON.parse(anchorRaw);
   } catch {
     return {
+      identity,
       bundle: [],
       structuralErrors: [{ slot: 'unknown', entryId: 'unknown', message: `AI-extension bundle anchor at "${anchorPath}" is not valid JSON` }],
     };
@@ -136,8 +145,11 @@ export function discoverExtensionBundleFromFs(contentRoot: string, reader: Bundl
     !(parsedAnchor as Record<string, unknown>).id
   ) {
     return {
+      identity,
       bundle: [],
-      structuralErrors: [{ slot: 'unknown', entryId: 'unknown', message: `AI-extension bundle anchor at "${anchorPath}" is missing a bundle identity ("id")` }],
+      structuralErrors: [
+        { slot: 'unknown', entryId: 'unknown', message: `AI-extension bundle anchor at "${anchorPath}" is missing a bundle identity ("id")` },
+      ],
     };
   }
 
@@ -149,13 +161,13 @@ export function discoverExtensionBundleFromFs(contentRoot: string, reader: Bundl
   const structuralErrors: StructuralError[] = [];
 
   // @cpt-begin:cpt-frontx-algo-template-ai-extensions-contract-scan-activate:p1:inst-identify-slot-entries
-  const topLevelDirs = reader.listDir(aiRoot) ?? [];
-  for (const name of topLevelDirs) {
+  const bundleRootDirs = reader.listDir(bundleRoot) ?? [];
+  for (const name of bundleRootDirs) {
     if (!KNOWN_SLOT_DIRS.has(name)) {
       structuralErrors.push({
         slot: name,
         entryId: 'unknown',
-        message: `"${name}" is a subdirectory of "${aiRoot}" outside the closed-set AI-extension categories (${[...KNOWN_SLOT_DIRS].join(', ')})`,
+        message: `"${name}" is a subdirectory of "${bundleRoot}" outside the closed-set AI-extension categories (${[...KNOWN_SLOT_DIRS].join(', ')})`,
       });
     }
   }
@@ -163,7 +175,7 @@ export function discoverExtensionBundleFromFs(contentRoot: string, reader: Bundl
 
   const bundle: unknown[] = [];
   for (const raw of declaredEntries) {
-    const shapeResult = validateOnDiskShape(raw, aiRoot, reader);
+    const shapeResult = validateOnDiskShape(raw, bundleRoot, reader);
     if (!shapeResult.ok) {
       structuralErrors.push(shapeResult.error);
       continue;
@@ -171,5 +183,27 @@ export function discoverExtensionBundleFromFs(contentRoot: string, reader: Bundl
     bundle.push(raw);
   }
 
-  return { bundle, structuralErrors };
+  return { identity, bundle, structuralErrors };
+}
+
+/**
+ * Scans the scaffolded project's `.frontx/ai/` for EACH per-template
+ * id-scoped bundle root `.frontx/ai/<template-identity>/`, discovering every
+ * co-located bundle independently, and returns the conforming entries plus
+ * structural errors for each — ready to be fed into the EXISTING
+ * `scanAndComposeExtensions` algorithm
+ * (`cpt-frontx-algo-template-ai-extensions-contract-scan-activate`). Absent
+ * `.frontx/ai/` (no templates applied yet) yields no discovered bundles,
+ * which is not itself a structural error.
+ */
+export function discoverExtensionBundlesFromFs(contentRoot: string, reader: BundleFsReader): DiscoveredBundle[] {
+  const aiRoot = joinPath(contentRoot, '.frontx', 'ai');
+
+  // @cpt-begin:cpt-frontx-flow-template-ai-extensions-bundle-publish-discover-activate:p1:inst-initiate-discovery
+  // Enumerate each per-template id-scoped bundle root under the scaffolded
+  // project's `.frontx/ai/`; a bundle-root name that is not a real directory
+  // simply is not returned by `listDir` and contributes nothing.
+  const bundleIdentities = (reader.listDir(aiRoot) ?? []).slice().sort();
+  return bundleIdentities.map((identity) => discoverSingleBundle(identity, joinPath(aiRoot, identity), reader));
+  // @cpt-end:cpt-frontx-flow-template-ai-extensions-bundle-publish-discover-activate:p1:inst-initiate-discovery
 }

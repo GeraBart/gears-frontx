@@ -1,6 +1,7 @@
 // @cpt-algo:cpt-frontx-algo-upgrade-changeset-apply:p1
 // @cpt-dod:cpt-frontx-dod-upgrade-changeset-apply:p1
 import { provenancePath } from '../provenance/contract';
+import { locateRegionSpan } from '../scaffold/compose-shared-files';
 import type {
   ChangeSet,
   ProjectSnapshot,
@@ -14,6 +15,30 @@ import type {
 export type ApplyResult =
   | { ok: true; snapshot: ProjectSnapshot }
   | { ok: false; message: string };
+
+// Rewrites ONLY the template's own marker-delimited region within a
+// `region-union` shared file's current content, leaving every other byte —
+// including every co-owning template's region — untouched. `newBlock`
+// undefined removes the region entirely (region-scoped 'remove'); a region
+// absent on disk (first-time 'add') is appended rather than dropped, since
+// there is no existing span to splice into.
+function replaceOwnedRegion(
+  currentContent: string,
+  templateIdentity: string,
+  regionKey: string,
+  newBlock: string | undefined,
+): string {
+  const span = locateRegionSpan(currentContent, templateIdentity, regionKey);
+  if (!span) {
+    if (newBlock === undefined) return currentContent;
+    return currentContent.length > 0 ? `${currentContent}\n${newBlock}` : newBlock;
+  }
+  const lines = currentContent.split('\n');
+  const before = lines.slice(0, span.beginIndex);
+  const after = lines.slice(span.endIndex + 1);
+  const replacement = newBlock !== undefined ? newBlock.split('\n') : [];
+  return [...before, ...replacement, ...after].join('\n');
+}
 
 // @cpt-begin:cpt-frontx-algo-upgrade-changeset-apply:p1:inst-app-snapshot
 export async function applyChangeSet(
@@ -35,9 +60,13 @@ export async function applyChangeSet(
   const provContent = await deps.readProjectFile(provPath);
   snapshot.files.set(provPath, provContent);
 
-  // Snapshot all files affected by clean entries
+  // Snapshot all files affected by clean entries (once per distinct path — a
+  // region-scoped shared file may have several clean entries for the same path).
+  const snapshottedPaths = new Set<string>();
   for (const entry of changeSet.clean) {
     const absolutePath = `${projectRoot}/${entry.path}`;
+    if (snapshottedPaths.has(absolutePath)) continue;
+    snapshottedPaths.add(absolutePath);
     const existingContent = await deps.readProjectFile(absolutePath);
     snapshot.files.set(absolutePath, existingContent);
   }
@@ -49,7 +78,21 @@ export async function applyChangeSet(
     for (const entry of changeSet.clean) {
       const absolutePath = `${projectRoot}/${entry.path}`;
       // @cpt-begin:cpt-frontx-algo-upgrade-changeset-apply:p1:inst-app-apply-entry
-      if (entry.kind === 'remove') {
+      if (entry.regionKey !== undefined) {
+        // `region-union` shared file — rewrite ONLY this template's own
+        // marker-delimited region in place; every co-owning template's
+        // region in the same file is left byte-for-byte untouched.
+        const currentContent = (await deps.readProjectFile(absolutePath)) ?? '';
+        const newBlock = entry.kind === 'remove' ? undefined : entry.content;
+        const updatedContent = replaceOwnedRegion(
+          currentContent,
+          changeSet.templateIdentity,
+          entry.regionKey,
+          newBlock,
+        );
+        await deps.writeProjectFile(absolutePath, updatedContent);
+      } else if (entry.kind === 'remove') {
+        // Exclusive subtree — write or remove the WHOLE file.
         await deps.removeProjectFile(absolutePath);
       } else {
         await deps.writeProjectFile(absolutePath, entry.content!);

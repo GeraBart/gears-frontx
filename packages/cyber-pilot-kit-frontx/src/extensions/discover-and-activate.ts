@@ -1,7 +1,7 @@
 // @cpt-flow:cpt-frontx-flow-template-ai-extensions-bundle-publish-discover-activate:p1
 import { validateExtensionEntry } from './contract.js';
 import { scanAndComposeExtensions, type BaseCapabilities } from './scan.js';
-import { discoverExtensionBundleFromFs, type BundleFsReader } from './fs-discovery.js';
+import { discoverExtensionBundlesFromFs, type BundleFsReader } from './fs-discovery.js';
 import { AiExtensionLifecycleState } from './types.js';
 import type { AiExtensionBundle, LifecycleResult, ScanAndActivateResult, StructuralError } from './types.js';
 
@@ -99,15 +99,17 @@ export function discoverAndActivateForInstalledTemplate(
 
 /**
  * Install-discover-activate leg (Project Developer), FILESYSTEM realization:
- * reads the installed template's on-disk AI-extension bundle at
- * `contentRoot` per the FEATURE's §1.5 AI-Extension Bundle Convention (via
- * `discoverExtensionBundleFromFs`), and feeds the conforming entries into
- * the EXISTING `scanAndComposeExtensions` algorithm — preserving its
- * deterministic precedence + lifecycle behavior. Structural errors found at
- * the fs level (missing/unparseable/identity-less anchor, out-of-set
- * subdir, malformed on-disk slot shape) are merged with the scan's own
- * errors and are surfaced as REJECTED lifecycle results; a fs-level error
- * for the anchor itself means the template contributes nothing.
+ * scans the scaffolded project's `.frontx/ai/` for EACH per-template
+ * id-scoped bundle root `.frontx/ai/<template-identity>/` per the FEATURE's
+ * §1.5 AI-Extension Bundle Convention (via `discoverExtensionBundlesFromFs`),
+ * and feeds every discovered bundle's conforming entries into the EXISTING
+ * `scanAndComposeExtensions` algorithm — preserving its deterministic
+ * precedence + lifecycle behavior. A malformed anchor in one bundle does not
+ * prevent discovery of the others: fs-level structural errors (missing/
+ * unparseable/identity-less anchor, out-of-set bundle-root subdir, malformed
+ * on-disk slot shape) are scoped to their own bundle, merged with the scan's
+ * own errors, and surfaced as REJECTED lifecycle results; a fs-level error
+ * for one bundle's anchor means only that bundle contributes nothing.
  */
 export function discoverAndActivateFromInstalledTemplateFs(
   contentRoot: string,
@@ -117,20 +119,27 @@ export function discoverAndActivateFromInstalledTemplateFs(
 ): ScanAndActivateResult {
   // @cpt-begin:cpt-frontx-flow-template-ai-extensions-bundle-publish-discover-activate:p1:inst-scan-each-slot
   // @cpt-begin:cpt-frontx-flow-template-ai-extensions-bundle-publish-discover-activate:p1:inst-scan-slot-entries
-  const fsResult = discoverExtensionBundleFromFs(contentRoot, reader);
+  const discoveredBundles = discoverExtensionBundlesFromFs(contentRoot, reader);
   // @cpt-end:cpt-frontx-flow-template-ai-extensions-bundle-publish-discover-activate:p1:inst-scan-slot-entries
   // @cpt-end:cpt-frontx-flow-template-ai-extensions-bundle-publish-discover-activate:p1:inst-scan-each-slot
 
-  const scanResult = scanAndComposeExtensions(fsResult.bundle, baseCapabilities, installOrder);
+  // Every co-located id-scoped bundle's conforming entries are fed into the
+  // SAME scan call, in deterministic (sorted-identity) bundle order — no new
+  // scan algorithm is introduced; disjoint bundles simply contribute to one
+  // combined entry list ahead of composition.
+  const combinedBundle: AiExtensionBundle = discoveredBundles.flatMap((discovered) => discovered.bundle);
+  const fsStructuralErrors: StructuralError[] = discoveredBundles.flatMap((discovered) => discovered.structuralErrors);
 
-  const fsRejectedResults: LifecycleResult[] = fsResult.structuralErrors.map((error) => ({
+  const scanResult = scanAndComposeExtensions(combinedBundle, baseCapabilities, installOrder);
+
+  const fsRejectedResults: LifecycleResult[] = fsStructuralErrors.map((error) => ({
     state: AiExtensionLifecycleState.REJECTED,
     error,
   }));
 
   return {
     composed: scanResult.composed,
-    errors: [...fsResult.structuralErrors, ...scanResult.errors],
+    errors: [...fsStructuralErrors, ...scanResult.errors],
     lifecycleResults: [...fsRejectedResults, ...scanResult.lifecycleResults],
   };
 }

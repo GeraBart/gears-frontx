@@ -5,7 +5,7 @@ import type { BundleFsReader } from './fs-discovery.js';
 /**
  * Production `BundleFsReader`: reads the AI-extension bundle straight off
  * disk. Mirrors the kit's `createFsResourceBodyReader` DI shape so the fs
- * discovery algorithm (`discoverExtensionBundleFromFs`) stays testable
+ * discovery algorithm (`discoverExtensionBundlesFromFs`) stays testable
  * without touching real disk in unit tests.
  */
 export function createFsBundleReader(): BundleFsReader {

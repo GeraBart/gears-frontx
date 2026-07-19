@@ -1,6 +1,6 @@
 // @cpt-algo:cpt-frontx-algo-template-ai-extensions-contract-scan-activate:p1
 import { describe, it, expect } from 'vitest';
-import { discoverExtensionBundleFromFs, type BundleFsReader } from '../fs-discovery.js';
+import { discoverExtensionBundlesFromFs, type BundleFsReader } from '../fs-discovery.js';
 
 /**
  * In-memory `BundleFsReader` for fully deterministic, disk-free scan tests.
@@ -32,14 +32,14 @@ function makeFakeReader(files: Record<string, string>): BundleFsReader {
   };
 }
 
-const CONTENT_ROOT = 'installed-templates/my-template';
-const AI_ROOT = `${CONTENT_ROOT}/.frontx/ai`;
+const PROJECT_ROOT = 'scaffolded-project';
+const AI_ROOT = `${PROJECT_ROOT}/.frontx/ai`;
 
-describe('discoverExtensionBundleFromFs (§1.5 AI-Extension Bundle Convention)', () => {
-  it('reads the anchor, resolves conforming per-slot content, and feeds it as a bundle', () => {
+describe('discoverExtensionBundlesFromFs (§1.5 id-scoped AI-Extension Bundle Convention)', () => {
+  it('discovers a single id-scoped bundle root and feeds its conforming entries', () => {
     const reader = makeFakeReader({
-      [`${AI_ROOT}/extension.json`]: JSON.stringify({
-        id: 'my-template-ai-bundle',
+      [`${AI_ROOT}/acme-template/extension.json`]: JSON.stringify({
+        id: 'acme-template-ai-bundle',
         contractVersion: '1.0.0',
         entries: [
           { id: 'skill-1', category: 'skills', path: 'skills/skill-1' },
@@ -48,71 +48,123 @@ describe('discoverExtensionBundleFromFs (§1.5 AI-Extension Bundle Convention)',
           { id: 'ref-1', category: 'reference_artifacts', path: 'reference-artifacts/ref-1.yaml' },
         ],
       }),
-      [`${AI_ROOT}/skills/skill-1/SKILL.md`]: '# Skill 1',
-      [`${AI_ROOT}/workflows/workflow-1.md`]: '# Workflow 1',
-      [`${AI_ROOT}/guidelines/guideline-1.md`]: '# Guideline 1',
-      [`${AI_ROOT}/reference-artifacts/ref-1.yaml`]: 'key: value',
+      [`${AI_ROOT}/acme-template/skills/skill-1/SKILL.md`]: '# Skill 1',
+      [`${AI_ROOT}/acme-template/workflows/workflow-1.md`]: '# Workflow 1',
+      [`${AI_ROOT}/acme-template/guidelines/guideline-1.md`]: '# Guideline 1',
+      [`${AI_ROOT}/acme-template/reference-artifacts/ref-1.yaml`]: 'key: value',
     });
 
-    const result = discoverExtensionBundleFromFs(CONTENT_ROOT, reader);
+    const bundles = discoverExtensionBundlesFromFs(PROJECT_ROOT, reader);
 
-    expect(result.structuralErrors).toHaveLength(0);
-    expect(result.bundle).toHaveLength(4);
-    expect(result.bundle).toContainEqual({ id: 'skill-1', category: 'skills', path: 'skills/skill-1' });
+    expect(bundles).toHaveLength(1);
+    expect(bundles[0].identity).toBe('acme-template');
+    expect(bundles[0].structuralErrors).toHaveLength(0);
+    expect(bundles[0].bundle).toHaveLength(4);
+    expect(bundles[0].bundle).toContainEqual({ id: 'skill-1', category: 'skills', path: 'skills/skill-1' });
+  });
+
+  it('discovers multiple disjoint co-located id-scoped bundles independently', () => {
+    const reader = makeFakeReader({
+      [`${AI_ROOT}/acme-template/extension.json`]: JSON.stringify({
+        id: 'acme-bundle',
+        contractVersion: '1.0.0',
+        entries: [{ id: 'acme-skill', category: 'skills', path: 'skills/acme-skill' }],
+      }),
+      [`${AI_ROOT}/acme-template/skills/acme-skill/SKILL.md`]: '# Acme Skill',
+      [`${AI_ROOT}/other-template/extension.json`]: JSON.stringify({
+        id: 'other-bundle',
+        contractVersion: '1.0.0',
+        entries: [{ id: 'other-skill', category: 'skills', path: 'skills/other-skill' }],
+      }),
+      [`${AI_ROOT}/other-template/skills/other-skill/SKILL.md`]: '# Other Skill',
+    });
+
+    const bundles = discoverExtensionBundlesFromFs(PROJECT_ROOT, reader);
+
+    expect(bundles).toHaveLength(2);
+    const byIdentity = new Map(bundles.map((b) => [b.identity, b]));
+    expect(byIdentity.get('acme-template')?.bundle).toContainEqual({
+      id: 'acme-skill',
+      category: 'skills',
+      path: 'skills/acme-skill',
+    });
+    expect(byIdentity.get('other-template')?.bundle).toContainEqual({
+      id: 'other-skill',
+      category: 'skills',
+      path: 'skills/other-skill',
+    });
+    expect(byIdentity.get('acme-template')?.structuralErrors).toHaveLength(0);
+    expect(byIdentity.get('other-template')?.structuralErrors).toHaveLength(0);
+  });
+
+  it('a malformed anchor in one bundle yields a structural error for it while other bundles still discover', () => {
+    const reader = makeFakeReader({
+      [`${AI_ROOT}/broken-template/extension.json`]: '{not json',
+      [`${AI_ROOT}/good-template/extension.json`]: JSON.stringify({
+        id: 'good-bundle',
+        contractVersion: '1.0.0',
+        entries: [{ id: 'good-skill', category: 'skills', path: 'skills/good-skill' }],
+      }),
+      [`${AI_ROOT}/good-template/skills/good-skill/SKILL.md`]: '# Good Skill',
+    });
+
+    const bundles = discoverExtensionBundlesFromFs(PROJECT_ROOT, reader);
+    const byIdentity = new Map(bundles.map((b) => [b.identity, b]));
+
+    expect(byIdentity.get('broken-template')?.bundle).toHaveLength(0);
+    expect(byIdentity.get('broken-template')?.structuralErrors[0].message).toMatch(/not valid JSON/);
+    expect(byIdentity.get('good-template')?.bundle).toHaveLength(1);
+    expect(byIdentity.get('good-template')?.structuralErrors).toHaveLength(0);
   });
 
   it('a bundle with no extension.json anchor yields a structural error and an empty bundle', () => {
-    const reader = makeFakeReader({});
-    const result = discoverExtensionBundleFromFs(CONTENT_ROOT, reader);
-    expect(result.bundle).toHaveLength(0);
-    expect(result.structuralErrors).toHaveLength(1);
-    expect(result.structuralErrors[0].message).toMatch(/missing AI-extension bundle anchor/);
-  });
-
-  it('an unparseable anchor yields a structural error and an empty bundle', () => {
-    const reader = makeFakeReader({ [`${AI_ROOT}/extension.json`]: '{not json' });
-    const result = discoverExtensionBundleFromFs(CONTENT_ROOT, reader);
-    expect(result.bundle).toHaveLength(0);
-    expect(result.structuralErrors[0].message).toMatch(/not valid JSON/);
+    const reader = makeFakeReader({
+      [`${AI_ROOT}/anchorless-template/skills/x/README.md`]: 'no anchor here',
+    });
+    const bundles = discoverExtensionBundlesFromFs(PROJECT_ROOT, reader);
+    expect(bundles).toHaveLength(1);
+    expect(bundles[0].bundle).toHaveLength(0);
+    expect(bundles[0].structuralErrors[0].message).toMatch(/missing AI-extension bundle anchor/);
   });
 
   it('an identity-less anchor (missing "id") yields a structural error and an empty bundle', () => {
     const reader = makeFakeReader({
-      [`${AI_ROOT}/extension.json`]: JSON.stringify({ contractVersion: '1.0.0', entries: [] }),
+      [`${AI_ROOT}/no-id-template/extension.json`]: JSON.stringify({ contractVersion: '1.0.0', entries: [] }),
     });
-    const result = discoverExtensionBundleFromFs(CONTENT_ROOT, reader);
-    expect(result.bundle).toHaveLength(0);
-    expect(result.structuralErrors[0].message).toMatch(/missing a bundle identity/);
+    const bundles = discoverExtensionBundlesFromFs(PROJECT_ROOT, reader);
+    expect(bundles[0].bundle).toHaveLength(0);
+    expect(bundles[0].structuralErrors[0].message).toMatch(/missing a bundle identity/);
   });
 
-  it('a subdirectory outside the four-slot closed set yields a "category outside the closed set" structural error', () => {
+  it('a bundle-root subdirectory outside the four-slot closed set yields a "category outside the closed set" structural error, scoped to that bundle', () => {
     const reader = makeFakeReader({
-      [`${AI_ROOT}/extension.json`]: JSON.stringify({ id: 'bundle', contractVersion: '1.0.0', entries: [] }),
-      [`${AI_ROOT}/mocks/oob.md`]: 'oob content',
+      [`${AI_ROOT}/my-template/extension.json`]: JSON.stringify({ id: 'bundle', contractVersion: '1.0.0', entries: [] }),
+      [`${AI_ROOT}/my-template/mocks/oob.md`]: 'oob content',
     });
-    const result = discoverExtensionBundleFromFs(CONTENT_ROOT, reader);
-    expect(result.structuralErrors).toHaveLength(1);
-    expect(result.structuralErrors[0].message).toMatch(/outside the closed-set/);
+    const bundles = discoverExtensionBundlesFromFs(PROJECT_ROOT, reader);
+    expect(bundles).toHaveLength(1);
+    expect(bundles[0].structuralErrors).toHaveLength(1);
+    expect(bundles[0].structuralErrors[0].message).toMatch(/outside the closed-set/);
   });
 
   it('a skill entry whose directory is missing SKILL.md is REJECTED, not silently skipped', () => {
     const reader = makeFakeReader({
-      [`${AI_ROOT}/extension.json`]: JSON.stringify({
+      [`${AI_ROOT}/my-template/extension.json`]: JSON.stringify({
         id: 'bundle',
         contractVersion: '1.0.0',
         entries: [{ id: 'broken-skill', category: 'skills', path: 'skills/broken-skill' }],
       }),
-      [`${AI_ROOT}/skills/broken-skill/README.md`]: 'not a skill file',
+      [`${AI_ROOT}/my-template/skills/broken-skill/README.md`]: 'not a skill file',
     });
-    const result = discoverExtensionBundleFromFs(CONTENT_ROOT, reader);
-    expect(result.bundle).toHaveLength(0);
-    expect(result.structuralErrors).toHaveLength(1);
-    expect(result.structuralErrors[0].message).toMatch(/missing SKILL\.md/);
+    const bundles = discoverExtensionBundlesFromFs(PROJECT_ROOT, reader);
+    expect(bundles[0].bundle).toHaveLength(0);
+    expect(bundles[0].structuralErrors).toHaveLength(1);
+    expect(bundles[0].structuralErrors[0].message).toMatch(/missing SKILL\.md/);
   });
 
   it('a malformed entry does not affect conforming entries from the same bundle', () => {
     const reader = makeFakeReader({
-      [`${AI_ROOT}/extension.json`]: JSON.stringify({
+      [`${AI_ROOT}/my-template/extension.json`]: JSON.stringify({
         id: 'bundle',
         contractVersion: '1.0.0',
         entries: [
@@ -120,24 +172,30 @@ describe('discoverExtensionBundleFromFs (§1.5 AI-Extension Bundle Convention)',
           { id: 'ok-skill', category: 'skills', path: 'skills/ok-skill' },
         ],
       }),
-      [`${AI_ROOT}/skills/ok-skill/SKILL.md`]: '# OK Skill',
+      [`${AI_ROOT}/my-template/skills/ok-skill/SKILL.md`]: '# OK Skill',
     });
-    const result = discoverExtensionBundleFromFs(CONTENT_ROOT, reader);
-    expect(result.structuralErrors).toHaveLength(1);
-    expect(result.bundle).toHaveLength(1);
-    expect(result.bundle).toContainEqual({ id: 'ok-skill', category: 'skills', path: 'skills/ok-skill' });
+    const bundles = discoverExtensionBundlesFromFs(PROJECT_ROOT, reader);
+    expect(bundles[0].structuralErrors).toHaveLength(1);
+    expect(bundles[0].bundle).toHaveLength(1);
+    expect(bundles[0].bundle).toContainEqual({ id: 'ok-skill', category: 'skills', path: 'skills/ok-skill' });
   });
 
   it('an entry naming a category outside the closed set is a structural error, not a silent skip', () => {
     const reader = makeFakeReader({
-      [`${AI_ROOT}/extension.json`]: JSON.stringify({
+      [`${AI_ROOT}/my-template/extension.json`]: JSON.stringify({
         id: 'bundle',
         contractVersion: '1.0.0',
         entries: [{ id: 'oob-entry', category: 'mocks', path: 'mocks/oob-entry.md' }],
       }),
     });
-    const result = discoverExtensionBundleFromFs(CONTENT_ROOT, reader);
-    expect(result.bundle).toHaveLength(0);
-    expect(result.structuralErrors[0].message).toMatch(/outside the closed set/);
+    const bundles = discoverExtensionBundlesFromFs(PROJECT_ROOT, reader);
+    expect(bundles[0].bundle).toHaveLength(0);
+    expect(bundles[0].structuralErrors[0].message).toMatch(/outside the closed set/);
+  });
+
+  it('no `.frontx/ai/` directory at all yields no discovered bundles (not an error)', () => {
+    const reader = makeFakeReader({});
+    const bundles = discoverExtensionBundlesFromFs(PROJECT_ROOT, reader);
+    expect(bundles).toHaveLength(0);
   });
 });

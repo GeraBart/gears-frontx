@@ -7,9 +7,8 @@ import { describe, it, expect, vi } from 'vitest';
 // directly.
 import { upgradeCommand } from '../commands/upgrade';
 import { computeChangeSet } from '../upgrade/compute';
-import type { InventoryEntry } from '../inventory/types';
-import { InventoryState } from '../inventory/types';
 import type { ContentItem, ReadContentItemsFn } from '../scaffold/types';
+import type { FetchFn } from '../resolver/types';
 
 // Content items live SEPARATELY from the manifest, in a registry keyed by
 // "name@version", and are read via the injected `readContentItems` seam
@@ -18,48 +17,48 @@ const contentRegistry = new Map<string, ContentItem[]>();
 const readContentItems: ReadContentItemsFn = async (entry) =>
   contentRegistry.get(`${entry.name}@${entry.ref}`) ?? [];
 
-function makeEntry(
+// Manifests, keyed by "name@version" — the shared resolver's fetchable
+// content (never a single-entry local inventory).
+const manifestByVersion = new Map<string, string>();
+
+function registerVersion(
   name: string,
   version: string,
   files: Array<{ path: string; content: string }>,
-): InventoryEntry {
-  const manifest = {
-    name,
-    version,
-    ownershipBoundaries: { exclusiveSubtrees: [], sharedFiles: [] },
-  };
+): void {
+  const manifest = { name, version, ownershipBoundaries: { exclusiveSubtrees: [], sharedFiles: [] } };
   contentRegistry.set(`${name}@${version}`, files);
-  return {
-    name,
-    source: `local:${name}`,
-    ref: version,
-    status: InventoryState.INSTALLED,
-    content: JSON.stringify(manifest),
-  };
+  manifestByVersion.set(`${name}@${version}`, JSON.stringify(manifest));
 }
+
+// The shared resolver's fetch primitive — resolves purely from the URL's
+// trailing "@ref" segment (see resolver/resolve.ts buildFetchUrl).
+const fetchFn: FetchFn = async (url) => {
+  const version = url.slice(url.lastIndexOf('@') + 1);
+  const manifest = manifestByVersion.get(`my-template@${version}`);
+  if (!manifest) {
+    throw new Error(`Template "my-template" not found at version "${version}" via shared resolver.`);
+  }
+  return manifest;
+};
 
 const PROJ_ROOT = '/proj';
 
 const BASE_PROVENANCE = {
   templateIdentity: 'my-template',
   scaffoldedFromVersion: '1.0.0',
-  sourceSpec: 'local:my-template',
+  sourceSpec: 'local:acme/my-template@1.0.0',
 };
 
-const BASELINE = makeEntry('my-template', '1.0.0', [
+registerVersion('my-template', '1.0.0', [
   { path: 'src/App.tsx', content: 'v1 content' },
   { path: 'src/old.ts', content: 'old file' },
 ]);
 
-const TARGET = makeEntry('my-template', '2.0.0', [
+registerVersion('my-template', '2.0.0', [
   { path: 'src/App.tsx', content: 'v2 content' },
   { path: 'src/new.ts', content: 'new file' },
 ]);
-
-function makeLookup(entries: InventoryEntry[]) {
-  return (name: string, version: string) =>
-    entries.find((e) => e.name === name && e.ref === version);
-}
 
 describe('upgradeCommand (F14 command/invocation surface)', () => {
   it('emits the same change set as the library computeChangeSet path, as JSON', async () => {
@@ -69,7 +68,7 @@ describe('upgradeCommand (F14 command/invocation surface)', () => {
     // Library path
     const libraryResult = await computeChangeSet(PROJ_ROOT, '2.0.0', {
       readProvenance: async () => BASE_PROVENANCE,
-      lookupByVersion: makeLookup([BASELINE, TARGET]),
+      fetchFn,
       readProjectFile,
       readContentItems,
     });
@@ -79,7 +78,7 @@ describe('upgradeCommand (F14 command/invocation surface)', () => {
     // Command surface path — no import of compute.js/apply.js/flow.js required by the caller
     const commandResult = await upgradeCommand(PROJ_ROOT, '2.0.0', {
       readProvenance: async () => BASE_PROVENANCE,
-      lookupByVersion: makeLookup([BASELINE, TARGET]),
+      fetchFn,
       readProjectFile,
       readContentItems,
       writeProjectFile: vi.fn(),
@@ -99,7 +98,7 @@ describe('upgradeCommand (F14 command/invocation surface)', () => {
 
     const result = await upgradeCommand(PROJ_ROOT, '2.0.0', {
       readProvenance: async () => BASE_PROVENANCE,
-      lookupByVersion: makeLookup([BASELINE, TARGET]),
+      fetchFn,
       readProjectFile: async () => null,
       readContentItems,
       writeProjectFile: writeFn,
@@ -117,7 +116,7 @@ describe('upgradeCommand (F14 command/invocation surface)', () => {
   it('reports resolution failure via the command surface without a change set', async () => {
     const result = await upgradeCommand(PROJ_ROOT, '99.0.0', {
       readProvenance: async () => BASE_PROVENANCE,
-      lookupByVersion: makeLookup([BASELINE, TARGET]),
+      fetchFn,
       readProjectFile: async () => null,
       readContentItems,
       writeProjectFile: vi.fn(),

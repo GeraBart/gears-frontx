@@ -10,7 +10,7 @@ import { ChangeSetLifecycleState } from './state';
 import type {
   ProjectSnapshot,
   ReadProvenanceFn,
-  VersionedLookupFn,
+  FetchFn,
   ReadProjectFileFn,
   WriteProjectFileFn,
   RemoveProjectFileFn,
@@ -30,7 +30,10 @@ export type UpgradeFlowResult =
 // templateIdentity and versions are resolved at runtime from provenance and local inventory.
 export interface UpgradeFlowDeps {
   readProvenance: ReadProvenanceFn;
-  lookupByVersion: VersionedLookupFn;
+  // Shared resolver's fetch primitive — the ONLY path to baseline/target
+  // content; the engine re-resolves via provenance's source-spec at each
+  // requested version, never from the single-entry local inventory.
+  fetchFn: FetchFn;
   readProjectFile: ReadProjectFileFn;
   readContentItems: ReadContentItemsFn;
   writeProjectFile: WriteProjectFileFn;
@@ -56,7 +59,7 @@ export async function upgradeChangeSetReviewApproval(
   // @cpt-begin:cpt-frontx-flow-upgrade-changeset-review-approval:p1:inst-compute-diff
   const computeResult = await computeChangeSet(projectRoot, targetVersion, {
     readProvenance: deps.readProvenance,
-    lookupByVersion: deps.lookupByVersion,
+    fetchFn: deps.fetchFn,
     readProjectFile: deps.readProjectFile,
     readContentItems: deps.readContentItems,
   });
