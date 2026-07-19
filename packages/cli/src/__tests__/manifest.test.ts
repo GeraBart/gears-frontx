@@ -17,7 +17,7 @@ function validManifest(overrides: Partial<TemplateManifest> = {}): string {
     ownershipBoundaries: {
       exclusiveSubtrees: ['src/generated'],
       sharedFiles: [
-        { path: 'package.json', mergeStrategy: 'deep-merge', ownedRegions: ['scripts.build'] },
+        { path: 'package.json', mergeStrategy: 'region-union', ownedRegions: ['scripts.build'] },
       ],
     },
     referencedTemplates: [{ ref: 'github:acme/mfe-a@v1.0.0', appliedAt: 'packages/mfe-a' }],
@@ -162,6 +162,84 @@ describe('validateManifestContract', () => {
       version: '1.0.0',
       ownershipBoundaries: {
         exclusiveSubtrees: ['src'],
+        sharedFiles: [],
+      },
+    });
+    const result = validateManifestContract(raw);
+    expect(result.status).toBe('VALIDATED');
+  });
+
+  // inst-if-merge-strategy-invalid / inst-add-merge-strategy-violation
+  it('merge strategy outside the closed set (exclusive, region-union) → merge-strategy violation', () => {
+    const raw = JSON.stringify({
+      name: 'my-tpl',
+      version: '1.0.0',
+      ownershipBoundaries: {
+        exclusiveSubtrees: [],
+        sharedFiles: [{ path: 'package.json', mergeStrategy: 'deep-merge', ownedRegions: ['scripts.build'] }],
+      },
+    });
+    const result = validateManifestContract(raw);
+    expect(result.status).toBe('REJECTED');
+    if (result.status !== 'REJECTED') return;
+    expect(result.violations.some((v) => v.field.endsWith('.mergeStrategy'))).toBe(true);
+  });
+
+  // inst-if-region-keys-missing / inst-add-region-keys-violation
+  it('region-union shared-file entry with no owned region keys → region-keys violation', () => {
+    const raw = JSON.stringify({
+      name: 'my-tpl',
+      version: '1.0.0',
+      ownershipBoundaries: {
+        exclusiveSubtrees: [],
+        sharedFiles: [{ path: 'package.json', mergeStrategy: 'region-union', ownedRegions: [] }],
+      },
+    });
+    const result = validateManifestContract(raw);
+    expect(result.status).toBe('REJECTED');
+    if (result.status !== 'REJECTED') return;
+    expect(result.violations.some((v) => v.field.endsWith('.ownedRegions'))).toBe(true);
+  });
+
+  // inst-if-subtree-reserved / inst-add-subtree-reserved-violation
+  it('exclusive subtree under the reserved .frontx/ namespace (not own AI bundle) → subtree-reserved violation', () => {
+    const raw = JSON.stringify({
+      name: 'my-tpl',
+      version: '1.0.0',
+      ownershipBoundaries: {
+        exclusiveSubtrees: ['.frontx/provenance.json'],
+        sharedFiles: [],
+      },
+    });
+    const result = validateManifestContract(raw);
+    expect(result.status).toBe('REJECTED');
+    if (result.status !== 'REJECTED') return;
+    expect(result.violations.some((v) => v.field.startsWith('ownershipBoundaries.exclusiveSubtrees'))).toBe(true);
+  });
+
+  // inst-if-shared-file-reserved / inst-add-shared-file-reserved-violation
+  it('shared-file path under the reserved .frontx/ namespace → shared-file-reserved violation', () => {
+    const raw = JSON.stringify({
+      name: 'my-tpl',
+      version: '1.0.0',
+      ownershipBoundaries: {
+        exclusiveSubtrees: [],
+        sharedFiles: [{ path: '.frontx/provenance.json', mergeStrategy: 'exclusive', ownedRegions: [] }],
+      },
+    });
+    const result = validateManifestContract(raw);
+    expect(result.status).toBe('REJECTED');
+    if (result.status !== 'REJECTED') return;
+    expect(result.violations.some((v) => v.field.startsWith('ownershipBoundaries.sharedFiles') && v.field.endsWith('.path'))).toBe(true);
+  });
+
+  // inst-if-subtree-reserved (negative case) — a template's OWN AI bundle subtree is accepted
+  it("a template's own .frontx/ai/<template-identity>/ exclusive subtree is accepted", () => {
+    const raw = JSON.stringify({
+      name: 'my-tpl',
+      version: '1.0.0',
+      ownershipBoundaries: {
+        exclusiveSubtrees: ['.frontx/ai/my-tpl'],
         sharedFiles: [],
       },
     });

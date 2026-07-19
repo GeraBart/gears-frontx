@@ -5,11 +5,16 @@
 export const MANIFEST_FILENAME = 'frontx-template.json';
 export const MANIFEST_SCHEMA_VERSION = '1.0';
 
+// Closed set of exactly two merge-strategy values (cpt-frontx-algo-template-manifest-validate-contract:p1:inst-if-merge-strategy-invalid).
+// `exclusive` — the template owns the shared file in whole; `region-union` —
+// the template owns one or more named, marker-delimited regions within it.
+export type MergeStrategy = 'exclusive' | 'region-union';
+
 // Ownership category (3b): per shared file, the regions this template owns and
 // the merge strategy applied when another template also writes it.
 export interface SharedFileEntry {
   path: string;           // repository-relative path of the shared file
-  mergeStrategy: string;  // declared merge strategy for this shared file
+  mergeStrategy: string;  // declared merge strategy for this shared file — closed set: MergeStrategy
   ownedRegions: string[]; // the keys/regions this template owns within the file
 }
 

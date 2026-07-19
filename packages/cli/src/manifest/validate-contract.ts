@@ -28,6 +28,18 @@ function isWellFormedRepoRelativePath(value: unknown): value is string {
   return !value.split(/[\\/]/).includes('..');
 }
 
+// Reserved CLI-owned `.frontx/` namespace: `.frontx/provenance.json` and any
+// other `.frontx/` path are reserved and NOT template-declarable, EXCEPT a
+// template's own `.frontx/ai/<template-identity>/` bundle subtree, which is
+// declarable ownership ground for that template (FEATURE §1.2, ADR-0027).
+function isReservedFrontxPath(pathValue: string, templateIdentity: string): boolean {
+  const normalized = pathValue.replace(/\\/g, '/').replace(/\/+$/, '');
+  if (normalized !== '.frontx' && !normalized.startsWith('.frontx/')) return false;
+  const ownBundleSubtree = `.frontx/ai/${templateIdentity}`;
+  if (normalized === ownBundleSubtree || normalized.startsWith(`${ownBundleSubtree}/`)) return false;
+  return true;
+}
+
 // @cpt-begin:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-read-manifest
 // The raw manifest string is passed in by the caller (command layer reads the file).
 // This function is pure: no filesystem access, fully testable.
@@ -58,6 +70,14 @@ export function validateManifestContract(raw: string): ManifestValidationResult 
   }
 
   const obj = parsed as Record<string, unknown>;
+
+  // The template's own identity, used to recognize its own declarable
+  // `.frontx/ai/<template-identity>/` bundle subtree against the reserved
+  // `.frontx/` namespace below. Read ahead of the identity check itself so
+  // the reserved-namespace checks have a value even when identity is later
+  // flagged as missing/malformed.
+  const rawName = obj['name'];
+  const templateIdentity = typeof rawName === 'string' ? rawName : '';
 
   // ── Category 1: identity ──────────────────────────────────────────────────
   // @cpt-begin:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-check-identity
@@ -116,6 +136,16 @@ export function validateManifestContract(raw: string): ManifestValidationResult 
       // @cpt-end:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-add-subtree-violation
     }
     // @cpt-end:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-if-subtree-invalid
+    // @cpt-begin:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-if-subtree-reserved
+    if (typeof subtree === 'string' && isReservedFrontxPath(subtree, templateIdentity)) {
+      // @cpt-begin:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-add-subtree-reserved-violation
+      violations.push({
+        field: `ownershipBoundaries.exclusiveSubtrees[${i}]`,
+        message: 'the reserved CLI-owned .frontx/ metadata namespace is not template-declarable (only .frontx/ai/<template-identity>/ may be claimed)',
+      });
+      // @cpt-end:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-add-subtree-reserved-violation
+    }
+    // @cpt-end:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-if-subtree-reserved
   }
   // @cpt-end:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-for-each-subtree
 
@@ -144,6 +174,41 @@ export function validateManifestContract(raw: string): ManifestValidationResult 
       // @cpt-end:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-add-shared-file-violation
     }
     // @cpt-end:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-if-shared-file-invalid
+
+    const mergeStrategyIsWellFormedString = typeof mergeStrategy === 'string' && mergeStrategy.trim() !== '';
+
+    // @cpt-begin:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-if-merge-strategy-invalid
+    if (mergeStrategyIsWellFormedString && mergeStrategy !== 'exclusive' && mergeStrategy !== 'region-union') {
+      // @cpt-begin:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-add-merge-strategy-violation
+      violations.push({
+        field: `ownershipBoundaries.sharedFiles[${i}].mergeStrategy`,
+        message: 'merge strategy must be one of the closed set "exclusive" or "region-union"',
+      });
+      // @cpt-end:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-add-merge-strategy-violation
+    }
+    // @cpt-end:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-if-merge-strategy-invalid
+
+    // @cpt-begin:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-if-region-keys-missing
+    if (mergeStrategy === 'region-union' && (!Array.isArray(ownedRegions) || ownedRegions.length === 0)) {
+      // @cpt-begin:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-add-region-keys-violation
+      violations.push({
+        field: `ownershipBoundaries.sharedFiles[${i}].ownedRegions`,
+        message: 'a region-union shared-file entry must declare at least one owned region key',
+      });
+      // @cpt-end:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-add-region-keys-violation
+    }
+    // @cpt-end:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-if-region-keys-missing
+
+    // @cpt-begin:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-if-shared-file-reserved
+    if (typeof path === 'string' && isReservedFrontxPath(path, templateIdentity)) {
+      // @cpt-begin:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-add-shared-file-reserved-violation
+      violations.push({
+        field: `ownershipBoundaries.sharedFiles[${i}].path`,
+        message: 'the reserved CLI-owned .frontx/ metadata namespace is not template-declarable',
+      });
+      // @cpt-end:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-add-shared-file-reserved-violation
+    }
+    // @cpt-end:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-if-shared-file-reserved
   }
   // @cpt-end:cpt-frontx-algo-template-manifest-validate-contract:p1:inst-for-each-shared-file
 
