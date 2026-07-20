@@ -2,6 +2,7 @@
 // @cpt-algo:cpt-frontx-algo-template-resolution-bounded-update:p1
 import os from 'node:os';
 import path from 'node:path';
+import zlib from 'node:zlib';
 import type { FetchFn } from '../resolver/types';
 
 // Real network `FetchFn` implementation — the source-registry actor
@@ -11,12 +12,19 @@ import type { FetchFn } from '../resolver/types';
 // already built (`resolveToInventory`'s `buildFetchUrl`,
 // `cpt-frontx-algo-template-resolution-resolve-to-inventory` inst-resolve-addr),
 // this adapter performs the actual HTTP GET against the GitHub source
-// registry and returns the response body as the opaque content string the
-// `FetchFn` seam contract already defines (`packages/cli/src/resolver/types.ts`)
-// — no change to that seam's signature is required. Pure-logic core
-// (`resolver/resolve.ts`, `inventory/TemplateInventory.ts`) is untouched;
-// this file is the IO-only realization plugged in behind the same
-// injected seam.
+// registry, then GUNZIPs + UNTARs the response body (GitHub's tarball
+// endpoint returns a gzipped tar of the repo at the given ref) and returns
+// the `{ "$frontxTemplateFiles": { <relative path>: <file text>, ... } }`
+// bundle envelope that `FsContentStore.writeBundle`
+// (`packages/cli/src/adapters/fs-content-store.ts`) already materializes
+// into the template's actual on-disk files
+// (`cpt-frontx-dod-template-resolution-install-by-spec`, `inst-resolve-write`,
+// `inst-install-materialize`) — never a single opaque blob. The `FetchFn`
+// seam contract's signature (`packages/cli/src/resolver/types.ts`,
+// `Promise<string>`) is unchanged: the envelope is returned as its
+// JSON-serialized string form. Pure-logic core (`resolver/resolve.ts`,
+// `inventory/TemplateInventory.ts`) is untouched; this file is the IO-only
+// realization plugged in behind the same injected seam.
 export interface GithubFetchOptions {
   /** Optional bearer token for authenticated requests against private repos / higher rate limits. */
   token?: string;
@@ -47,10 +55,82 @@ export function createGithubFetchFn(options: GithubFetchOptions = {}): FetchFn {
         `GitHub fetch failed for "${url}": ${response.status} ${response.statusText}`,
       );
     }
-    return await response.text();
+    const tarballBytes = Buffer.from(await response.arrayBuffer());
+    const files = unpackGithubTarball(url, tarballBytes);
+    return JSON.stringify({ [BUNDLE_MARKER]: files });
     // @cpt-end:cpt-frontx-algo-template-resolution-bounded-update:p1:inst-bupd-fetch
     // @cpt-end:cpt-frontx-algo-template-resolution-resolve-to-inventory:p1:inst-resolve-fetch
   };
+}
+
+// The same bundle-envelope marker `FsContentStore.writeBundle`
+// (`packages/cli/src/adapters/fs-content-store.ts`) uses to distinguish a
+// multi-file bundle from an ordinary manifest string — kept in lockstep here
+// so this adapter emits exactly the shape the store already consumes.
+const BUNDLE_MARKER = '$frontxTemplateFiles';
+
+const TAR_BLOCK_SIZE = 512;
+
+/**
+ * GUNZIPs the GitHub tarball response and UNTARs it into a flat map of
+ * `relative path -> file text`, stripping the single top-level
+ * `<owner>-<repo>-<sha>/` directory GitHub always wraps tarball content in.
+ * Fails explicitly (clear error, no silent passthrough) on undecodable gzip
+ * data, a malformed tar stream, or a tarball that yields zero files.
+ */
+function unpackGithubTarball(url: string, tarballBytes: Buffer): Record<string, string> {
+  let tarBytes: Buffer;
+  try {
+    tarBytes = zlib.gunzipSync(tarballBytes);
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    throw new Error(`GitHub tarball for "${url}" is not valid gzip data: ${detail}`);
+  }
+
+  const files: Record<string, string> = {};
+  let offset = 0;
+  while (offset + TAR_BLOCK_SIZE <= tarBytes.length) {
+    const header = tarBytes.subarray(offset, offset + TAR_BLOCK_SIZE);
+    if (header.every((byte) => byte === 0)) break; // end-of-archive marker
+
+    const rawName = header.subarray(0, 100).toString('utf-8').replace(/\0.*$/, '');
+    const sizeField = header.subarray(124, 136).toString('ascii').replace(/\0.*$/, '').trim();
+    const size = sizeField.length > 0 ? parseInt(sizeField, 8) : 0;
+    if (Number.isNaN(size) || size < 0) {
+      throw new Error(`GitHub tarball for "${url}" has a malformed entry size at offset ${offset}.`);
+    }
+    const typeflag = String.fromCharCode(header[156] ?? 0);
+    const magic = header.subarray(257, 263).toString('ascii');
+    const prefix =
+      magic.startsWith('ustar') ? header.subarray(345, 500).toString('utf-8').replace(/\0.*$/, '') : '';
+    const entryName = prefix ? `${prefix}/${rawName}` : rawName;
+
+    offset += TAR_BLOCK_SIZE;
+    if (offset + size > tarBytes.length) {
+      throw new Error(`GitHub tarball for "${url}" is truncated at entry "${entryName}".`);
+    }
+    const content = tarBytes.subarray(offset, offset + size);
+    offset += Math.ceil(size / TAR_BLOCK_SIZE) * TAR_BLOCK_SIZE;
+
+    // '0' and '\0' are regular files; directories ('5'), pax/global-pax
+    // extended headers ('x'/'g'), and other typeflags carry no materializable
+    // file content for this adapter's purposes.
+    if (typeflag !== '0' && typeflag !== '\0') continue;
+
+    // Strip the single top-level `<owner>-<repo>-<sha>/` directory segment
+    // GitHub always wraps tarball content in.
+    const separatorIndex = entryName.indexOf('/');
+    const relativePath = separatorIndex >= 0 ? entryName.slice(separatorIndex + 1) : entryName;
+    if (relativePath.length === 0) continue;
+
+    files[relativePath] = content.toString('utf-8');
+  }
+
+  if (Object.keys(files).length === 0) {
+    throw new Error(`GitHub tarball for "${url}" unpacked to zero files.`);
+  }
+
+  return files;
 }
 
 // Inventory-root path resolution — the local inventory store root
