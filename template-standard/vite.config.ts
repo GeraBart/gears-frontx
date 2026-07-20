@@ -18,7 +18,6 @@ export default defineConfig({
           singleton: true,
           requiredVersion: '^5.90.0',
         },
-        tailwindcss: { singleton: false },
       },
     }),
   ],

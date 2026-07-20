@@ -1,0 +1,128 @@
+// TEST-ONLY — this test file carries NO `@cpt` marker and traces to NO
+// FEATURE instruction. It exercises `createLocalFetchFn`
+// (`packages/cli/src/adapters/local-fetch.ts`), a TEST-ONLY realization of
+// the EXISTING `FetchFn` seam (`packages/cli/src/resolver/types.ts`) that
+// lets `frontx install` + `frontx seed` assemble a template OFFLINE from a
+// local directory instead of the network.
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, beforeEach, describe, it, expect } from 'vitest';
+import { createLocalFetchFn } from '../local-fetch';
+import { TemplateInventory } from '../../inventory/TemplateInventory';
+import { FsInventoryIndex } from '../fs-inventory-index';
+import { FsContentStore } from '../fs-content-store';
+import { createFsReadContentItemsFn } from '../fs-read-content-items';
+import { createFsWriteFileFn } from '../fs-project-io';
+import { createFsProvenanceWriteFn } from '../provenance-io';
+import { installCommand } from '../../commands/install';
+import { seedRepository } from '../../commands/seed-repository';
+
+// The real on-disk template this repository ships — the FIXTURE the P16
+// final done-gate also assembles OFFLINE via this same adapter.
+const TEMPLATE_STANDARD_DIR = path.resolve(__dirname, '../../../../../template-standard');
+
+function makeTmpDir(prefix: string): string {
+  return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+}
+
+describe('createLocalFetchFn — TEST-ONLY local content adapter', () => {
+  let localDir: string;
+
+  beforeEach(() => {
+    localDir = makeTmpDir('frontx-local-fetch-src-');
+  });
+
+  afterEach(() => {
+    fs.rmSync(localDir, { recursive: true, force: true });
+  });
+
+  it('walks a local directory and returns the $frontxTemplateFiles bundle envelope, ignoring the url argument', async () => {
+    fs.writeFileSync(path.join(localDir, 'frontx-template.json'), '{"name":"fixture","version":"1.0.0"}');
+    fs.mkdirSync(path.join(localDir, 'src'));
+    fs.writeFileSync(path.join(localDir, 'src', 'index.ts'), 'export {};');
+
+    const fetchFn = createLocalFetchFn(localDir);
+    const content = await fetchFn('https://this-url-is-ignored.example/anything');
+
+    expect(JSON.parse(content)).toEqual({
+      $frontxTemplateFiles: {
+        'frontx-template.json': '{"name":"fixture","version":"1.0.0"}',
+        [path.join('src', 'index.ts')]: 'export {};',
+      },
+    });
+  });
+
+  it('skips node_modules/dist/dist-lib and other build/dependency artifact directories', async () => {
+    fs.writeFileSync(path.join(localDir, 'frontx-template.json'), '{"name":"fixture","version":"1.0.0"}');
+    fs.mkdirSync(path.join(localDir, 'node_modules', 'some-dep'), { recursive: true });
+    fs.writeFileSync(path.join(localDir, 'node_modules', 'some-dep', 'index.js'), 'module.exports = {};');
+    fs.mkdirSync(path.join(localDir, 'dist'));
+    fs.writeFileSync(path.join(localDir, 'dist', 'index.js'), 'built output');
+
+    const fetchFn = createLocalFetchFn(localDir);
+    const content = await fetchFn('unused://url');
+    const bundle = (JSON.parse(content) as { $frontxTemplateFiles: Record<string, string> }).$frontxTemplateFiles;
+
+    expect(Object.keys(bundle)).toEqual(['frontx-template.json']);
+  });
+
+  it('rejects when the local source directory does not exist', async () => {
+    const fetchFn = createLocalFetchFn(path.join(localDir, 'does-not-exist'));
+    await expect(fetchFn('unused://url')).rejects.toThrow(/does not exist or is not a directory/);
+  });
+});
+
+describe('offline e2e — frontx install + seed assemble the real template-standard/ OFFLINE (no network)', () => {
+  it('materializes template-standard into a project via the local adapter + the real install/seed pipeline', async () => {
+    expect(fs.existsSync(path.join(TEMPLATE_STANDARD_DIR, 'frontx-template.json'))).toBe(true);
+
+    const inventoryRoot = makeTmpDir('frontx-local-fetch-inventory-');
+    const targetDir = makeTmpDir('frontx-local-fetch-target-');
+    try {
+      const inventory = new TemplateInventory(new FsInventoryIndex(inventoryRoot), new FsContentStore(inventoryRoot));
+      const fetchFn = createLocalFetchFn(TEMPLATE_STANDARD_DIR);
+
+      const installResult = await installCommand('local:gears-frontx/frontx-template-standard@offline', inventory, fetchFn);
+      expect(installResult.ok).toBe(true);
+
+      const lookupFn = (name: string) => inventory.lookup(name);
+      const readContentFn = createFsReadContentItemsFn(inventoryRoot);
+      const writeFileFn = createFsWriteFileFn();
+      const provenanceWriteFn = createFsProvenanceWriteFn();
+
+      const seedResult = await seedRepository(
+        'frontx-template-standard',
+        targetDir,
+        lookupFn,
+        readContentFn,
+        writeFileFn,
+        provenanceWriteFn,
+      );
+
+      expect(seedResult.ok).toBe(true);
+      if (!seedResult.ok) return;
+      expect(seedResult.appliedTemplates).toEqual(['frontx-template-standard']);
+
+      // Representative files inside declared exclusive subtrees materialize as REAL on-disk files.
+      expect(fs.existsSync(path.join(targetDir, 'package.json'))).toBe(true);
+      expect(fs.existsSync(path.join(targetDir, 'src', 'index.ts'))).toBe(true);
+      expect(fs.readFileSync(path.join(targetDir, 'src', 'index.ts'), 'utf-8')).toBe(
+        fs.readFileSync(path.join(TEMPLATE_STANDARD_DIR, 'src', 'index.ts'), 'utf-8'),
+      );
+
+      // Provenance was written OFFLINE, per the same materialize path a real install uses.
+      const provenance = JSON.parse(fs.readFileSync(path.join(targetDir, '.frontx', 'provenance.json'), 'utf-8')) as Array<{
+        templateIdentity: string;
+      }>;
+      expect(provenance.map((r) => r.templateIdentity)).toEqual(['frontx-template-standard']);
+
+      // No network / build-artifact directories were ever pulled into the target.
+      expect(fs.existsSync(path.join(targetDir, 'node_modules'))).toBe(false);
+      expect(fs.existsSync(path.join(targetDir, 'dist'))).toBe(false);
+    } finally {
+      fs.rmSync(inventoryRoot, { recursive: true, force: true });
+      fs.rmSync(targetDir, { recursive: true, force: true });
+    }
+  });
+});

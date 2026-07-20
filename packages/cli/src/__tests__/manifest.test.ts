@@ -4,7 +4,7 @@
 // @cpt-dod:cpt-frontx-dod-template-manifest-validate-command:p1
 // @cpt-dod:cpt-frontx-dod-template-manifest-single-description:p1
 import { describe, it, expect, vi } from 'vitest';
-import { validateManifestContract } from '../manifest/validate-contract';
+import { validateManifestContract, readManifestFromContent } from '../manifest/validate-contract';
 import { validateCommand } from '../commands/validate';
 import type { TemplateManifest, ReadFileFn } from '../manifest/types';
 
@@ -287,5 +287,49 @@ describe('single authoritative description', () => {
     // by readManifestFromContent on success — no divergent or partial descriptor exists.
     const result = validateManifestContract(validManifest());
     expect(result.status).toBe('VALIDATED');
+  });
+});
+
+
+describe('readManifestFromContent — bundle envelope unwrap', () => {
+  // Discovered while proving the TEST-ONLY offline local-fetch adapter
+  // (packages/cli/src/adapters/local-fetch.ts) assembles a real multi-file
+  // template end-to-end: every real fetch result (the GitHub adapter's
+  // tarball unpack, and this TEST-ONLY local-directory adapter) returns the
+  // `{ "$frontxTemplateFiles": { <relative path>: <file text>, ... } }`
+  // bundle envelope FsContentStore already materializes to real on-disk
+  // files — never a bare manifest string. `readManifestFromContent` is the
+  // ONE read path composition/uniform-apply/materialize all call on
+  // `InventoryEntry.content`, so it must transparently unwrap that envelope
+  // down to its manifest file before validating — the single authoritative
+  // description (cpt-frontx-dod-template-manifest-single-description) is
+  // unaffected either way.
+  it('unwraps a $frontxTemplateFiles bundle envelope to its frontx-template.json entry before validating', () => {
+    const manifest = validManifest();
+    const bundle = JSON.stringify({
+      $frontxTemplateFiles: { 'frontx-template.json': manifest, 'src/index.ts': 'export {};' },
+    });
+
+    const result = readManifestFromContent(bundle);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.manifest.name).toBe('my-tpl');
+  });
+
+  it('still reads a bare (non-bundle) manifest string exactly as before — legacy single-file content is unaffected', () => {
+    const manifest = validManifest();
+
+    const result = readManifestFromContent(manifest);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.manifest.name).toBe('my-tpl');
+  });
+
+  it('rejects with a clear violation when a bundle envelope has no frontx-template.json entry', () => {
+    const bundle = JSON.stringify({ $frontxTemplateFiles: { 'src/index.ts': 'export {};' } });
+
+    const result = readManifestFromContent(bundle);
+
+    expect(result.ok).toBe(false);
   });
 });

@@ -63,6 +63,71 @@ describe('discoverExtensionBundlesFromFs (§1.5 id-scoped AI-Extension Bundle Co
     expect(bundles[0].bundle).toContainEqual({ id: 'skill-1', category: 'skills', path: 'skills/skill-1' });
   });
 
+  it('discovers a scoped npm-style identity (`@scope/name`) bundle root two path segments deep', () => {
+    const reader = makeFakeReader({
+      [`${AI_ROOT}/@gears-frontx/frontx-template-standard/extension.json`]: JSON.stringify({
+        id: 'frontx-template-standard-ai-bundle',
+        contractVersion: '1.0.0',
+        entries: [{ id: 'skill-1', category: 'skills', path: 'skills/skill-1' }],
+      }),
+      [`${AI_ROOT}/@gears-frontx/frontx-template-standard/skills/skill-1/SKILL.md`]: '# Skill 1',
+    });
+
+    const bundles = discoverExtensionBundlesFromFs(PROJECT_ROOT, reader);
+
+    expect(bundles).toHaveLength(1);
+    expect(bundles[0].identity).toBe('@gears-frontx/frontx-template-standard');
+    expect(bundles[0].structuralErrors).toHaveLength(0);
+    expect(bundles[0].bundle).toContainEqual({ id: 'skill-1', category: 'skills', path: 'skills/skill-1' });
+  });
+
+  it('discovers multiple co-applied scoped bundles under the same npm scope independently', () => {
+    const reader = makeFakeReader({
+      [`${AI_ROOT}/@gears-frontx/template-a/extension.json`]: JSON.stringify({
+        id: 'template-a-bundle',
+        contractVersion: '1.0.0',
+        entries: [{ id: 'skill-a', category: 'skills', path: 'skills/skill-a' }],
+      }),
+      [`${AI_ROOT}/@gears-frontx/template-a/skills/skill-a/SKILL.md`]: '# Skill A',
+      [`${AI_ROOT}/@gears-frontx/template-b/extension.json`]: JSON.stringify({
+        id: 'template-b-bundle',
+        contractVersion: '1.0.0',
+        entries: [{ id: 'skill-b', category: 'skills', path: 'skills/skill-b' }],
+      }),
+      [`${AI_ROOT}/@gears-frontx/template-b/skills/skill-b/SKILL.md`]: '# Skill B',
+    });
+
+    const bundles = discoverExtensionBundlesFromFs(PROJECT_ROOT, reader);
+    const byIdentity = new Map(bundles.map((b) => [b.identity, b]));
+
+    expect(bundles).toHaveLength(2);
+    expect(byIdentity.get('@gears-frontx/template-a')?.structuralErrors).toHaveLength(0);
+    expect(byIdentity.get('@gears-frontx/template-b')?.structuralErrors).toHaveLength(0);
+  });
+
+  it('an npm scope directory with no nested package name yields a missing-anchor structural error under the scope identity', () => {
+    const reader = makeFakeReader({
+      [`${AI_ROOT}/@empty-scope/.keep`]: '',
+    });
+    // makeFakeReader only registers directories that are proper ancestors of
+    // a FILE's parent; give `@empty-scope` itself no listable children by
+    // using a reader that reports it as an existing, empty directory.
+    const emptyScopeReader: BundleFsReader = {
+      readFile: reader.readFile,
+      listDir(path: string) {
+        if (path === AI_ROOT) return ['@empty-scope'];
+        if (path === `${AI_ROOT}/@empty-scope`) return [];
+        return reader.listDir(path);
+      },
+    };
+
+    const bundles = discoverExtensionBundlesFromFs(PROJECT_ROOT, emptyScopeReader);
+
+    expect(bundles).toHaveLength(1);
+    expect(bundles[0].identity).toBe('@empty-scope');
+    expect(bundles[0].structuralErrors[0].message).toMatch(/missing AI-extension bundle anchor/);
+  });
+
   it('discovers multiple disjoint co-located id-scoped bundles independently', () => {
     const reader = makeFakeReader({
       [`${AI_ROOT}/acme-template/extension.json`]: JSON.stringify({

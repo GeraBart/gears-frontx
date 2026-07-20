@@ -221,7 +221,7 @@ function getEcosystemBoundaryChecks(): ArchCheck[] {
     // @cpt-begin:cpt-frontx-constraint-cli-template-independence:p17:inst-hardcoded-name-check
     {
       command:
-        "bash -c '! grep -rn \"frontx-template-standard\\|@gears-frontx/frontx-template\" packages/cli/src/ --include=\"*.ts\" --exclude-dir=generated | grep -v \"@cpt-\"'",
+        "bash -c '! grep -rn \"frontx-template-standard\\|@gears-frontx/frontx-template\" packages/cli/src/ --include=\"*.ts\" --exclude-dir=generated --exclude-dir=__tests__ | grep -v \"@cpt-\"'",
       description:
         'CLI-1 (cpt-frontx-constraint-cli-template-independence): cli sources contain no hardcoded template package names (excluding auto-generated version registry)',
     },

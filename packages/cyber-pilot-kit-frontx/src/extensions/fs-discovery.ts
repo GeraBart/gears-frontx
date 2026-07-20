@@ -187,6 +187,38 @@ function discoverSingleBundle(identity: string, bundleRoot: string, reader: Bund
 }
 
 /**
+ * Resolves every per-template id-scoped bundle root directly under
+ * `aiRoot`. A `<template-identity>` is the template's manifest identity
+ * (`cpt-frontx-feature-template-manifest`), which for a scoped npm-style
+ * name is always two path segments (`@scope/name`) and for a bare name is
+ * exactly one. A first segment starting with `@` is therefore an npm scope,
+ * not a complete identity on its own: its immediate children are the actual
+ * bundle roots (`@scope/name`). When a `@scope` directory has no children,
+ * it is treated as the bundle root itself so a missing/malformed bundle
+ * still surfaces its structural error rather than being silently dropped.
+ */
+function resolveBundleRoots(aiRoot: string, reader: BundleFsReader): { identity: string; root: string }[] {
+  const topNames = (reader.listDir(aiRoot) ?? []).slice().sort();
+  const roots: { identity: string; root: string }[] = [];
+  for (const name of topNames) {
+    if (name.startsWith('@')) {
+      const scopeDir = joinPath(aiRoot, name);
+      const childNames = (reader.listDir(scopeDir) ?? []).slice().sort();
+      if (childNames.length === 0) {
+        roots.push({ identity: name, root: scopeDir });
+      } else {
+        for (const childName of childNames) {
+          roots.push({ identity: `${name}/${childName}`, root: joinPath(scopeDir, childName) });
+        }
+      }
+    } else {
+      roots.push({ identity: name, root: joinPath(aiRoot, name) });
+    }
+  }
+  return roots;
+}
+
+/**
  * Scans the scaffolded project's `.frontx/ai/` for EACH per-template
  * id-scoped bundle root `.frontx/ai/<template-identity>/`, discovering every
  * co-located bundle independently, and returns the conforming entries plus
@@ -201,9 +233,11 @@ export function discoverExtensionBundlesFromFs(contentRoot: string, reader: Bund
 
   // @cpt-begin:cpt-frontx-flow-template-ai-extensions-bundle-publish-discover-activate:p1:inst-initiate-discovery
   // Enumerate each per-template id-scoped bundle root under the scaffolded
-  // project's `.frontx/ai/`; a bundle-root name that is not a real directory
+  // project's `.frontx/ai/`, resolving scoped npm-style identities
+  // (`@scope/name`) to their two-segment bundle root as well as bare
+  // one-segment identities; a bundle-root name that is not a real directory
   // simply is not returned by `listDir` and contributes nothing.
-  const bundleIdentities = (reader.listDir(aiRoot) ?? []).slice().sort();
-  return bundleIdentities.map((identity) => discoverSingleBundle(identity, joinPath(aiRoot, identity), reader));
+  const bundleRoots = resolveBundleRoots(aiRoot, reader).sort((a, b) => a.identity.localeCompare(b.identity));
+  return bundleRoots.map(({ identity, root }) => discoverSingleBundle(identity, root, reader));
   // @cpt-end:cpt-frontx-flow-template-ai-extensions-bundle-publish-discover-activate:p1:inst-initiate-discovery
 }
