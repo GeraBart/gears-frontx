@@ -43,6 +43,7 @@ export type { PrePublishValidationResult } from './extensions/discover-and-activ
 export { discoverExtensionBundlesFromFs, SLOT_DIR_NAMES } from './extensions/fs-discovery.js';
 export type { BundleFsReader, DiscoveredBundle } from './extensions/fs-discovery.js';
 export { createFsBundleReader } from './extensions/fs-bundle-reader.js';
+export { discoverAndActivateFromScaffoldedProject } from './extensions/live-project-discovery.js';
 
 // F17 AI-Driven Upgrade Orchestration
 // PLAN CORRECTION (2026-07-14) — REOPENED: no export here names or re-exports
@@ -57,6 +58,8 @@ export { OrchestrationLifecycleState } from './upgrade-orchestration/state.js';
 export type { OrchestrationLifecycleStateValue } from './upgrade-orchestration/state.js';
 export { orchestrateAiDrivenUpgrade } from './upgrade-orchestration/orchestrate.js';
 export type { OrchestrationDeps, OrchestrationResult } from './upgrade-orchestration/orchestrate.js';
+export { createInvokeUpgradeCommand } from './upgrade-orchestration/invoke-upgrade-command.js';
+export type { InvokeUpgradeCommandOptions, SpawnFn } from './upgrade-orchestration/invoke-upgrade-command.js';
 export { selectProvenanceRecord } from './upgrade-orchestration/types.js';
 export type {
   ChangeSet,
