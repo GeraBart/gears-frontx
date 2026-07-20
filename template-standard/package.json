@@ -22,12 +22,13 @@
     "dist-lib"
   ],
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "src-app/mfe_packages/*"
   ],
   "scripts": {
     "build:mfes": "npx tsx scripts/build-mfes.ts",
     "generate:mfe-manifests": "npx tsx scripts/generate-mfe-manifests.ts",
-    "dev": "npm run build:mfes && npm run generate:mfe-manifests && vite",
+    "dev": "npm run build:package && npm run build:packages && npm run build:mfes && npm run generate:mfe-manifests && vite",
     "dev:mfe:demo": "cd src-app/mfe_packages/demo-mfe && npm run dev",
     "dev:mfe:blank": "cd src-app/mfe_packages/_blank-mfe && npm run dev",
     "dev:all": "npx tsx scripts/dev-all.ts",

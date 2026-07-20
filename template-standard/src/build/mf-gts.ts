@@ -895,8 +895,17 @@ export function frontxMfGts(): Plugin {
           fs.readFileSync(mfeJsonPath, 'utf-8')
         ) as MfeJson;
 
+        const mfManifestPath = path.join(distDir, 'mf-manifest.json');
+        if (!fs.existsSync(mfManifestPath)) {
+          throw new Error(
+            `[frontx-mf-gts] mf-manifest.json not found at '${mfManifestPath}'. ` +
+              `The Module Federation build for this MFE did not complete ` +
+              `successfully — check the MFE's own build output above for ` +
+              `the real failure.`
+          );
+        }
         const mfManifest = JSON.parse(
-          fs.readFileSync(path.join(distDir, 'mf-manifest.json'), 'utf-8')
+          fs.readFileSync(mfManifestPath, 'utf-8')
         ) as MfManifest;
 
         // With shared:{}, the MF 2.0 build no longer produces:
