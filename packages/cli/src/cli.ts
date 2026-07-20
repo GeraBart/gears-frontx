@@ -126,7 +126,7 @@ export function usageText(): string {
     '  validate <templateDir>                  Validate a template manifest for publication',
     '  seed <templateRef> <targetDir>          Seed a new repository from a template',
     '  add <templateRef> <targetDir>            Add a template into an existing repository',
-    '  upgrade <projectRoot> <targetVersion> [--yes]  Upgrade an applied template',
+    '  upgrade <projectRoot> <targetVersion> [--yes] [--json]  Upgrade an applied template',
     '  help                                    Show this usage summary',
     '',
   ].join('\n');
@@ -177,6 +177,30 @@ function createInteractiveApproval(): PresentAndGetApprovalFn {
     try {
       const answer = await rl.question('Apply this change set? [y/N] ');
       return answer.trim().toLowerCase() === 'y' ? 'approved' : 'declined';
+    } finally {
+      rl.close();
+    }
+  };
+}
+
+// --- `--json` command-surface handshake (cpt-frontx-dod-ai-upgrade-orchestration-single-engine) ---
+//
+// The AI Tooling Framework's kit (`@gears-frontx/cyber-pilot-kit-frontx`)
+// coordinates with this CLI over the `frontx upgrade --json` COMMAND SURFACE
+// only (DESIGN §3.4) — it never imports this package. This handshake is the
+// minimal machine-readable protocol that command-surface coupling requires:
+// one JSON line carrying the raw change set BEFORE approval, one decision
+// line read back from stdin, and one final JSON line carrying the
+// `{ ok, status, message? }` result.
+
+/** Writes the raw change set as ONE JSON line to stdout and reads ONE decision line from stdin. */
+function createJsonApproval(): PresentAndGetApprovalFn {
+  return async function presentAndGetApprovalJson(changeSet: ChangeSet): Promise<'approved' | 'declined'> {
+    process.stdout.write(`${JSON.stringify({ changeSet })}\n`);
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: false });
+    try {
+      const answer = await rl.question('');
+      return answer.trim().toLowerCase() === 'approved' ? 'approved' : 'declined';
     } finally {
       rl.close();
     }
@@ -307,6 +331,12 @@ export async function runCommand(command: KnownCommand, args: string[], deps: Cl
         return { exitCode: EXIT_USER_ERROR, stderr: 'upgrade requires <projectRoot> and <targetVersion> arguments.' };
       }
       const autoApprove = rest.includes('--yes');
+      // `--json` switches the change-set-review handshake to the
+      // machine-readable protocol the AI Tooling Framework's
+      // `invokeUpgradeCommand` adapter parses over the command surface
+      // (DESIGN §3.4; cpt-frontx-dod-ai-upgrade-orchestration-single-engine)
+      // instead of the human-facing interactive prompt.
+      const jsonMode = rest.includes('--json');
       const result = await upgradeCommand(projectRoot, targetVersion, {
         readProvenance: deps.readSingleProvenanceFn,
         fetchFn: deps.fetchFn,
@@ -315,16 +345,33 @@ export async function runCommand(command: KnownCommand, args: string[], deps: Cl
         writeProjectFile: deps.writeProjectFile,
         removeProjectFile: deps.removeProjectFile,
         writeProvenance: deps.provenanceWriteFn,
-        presentAndGetApproval: autoApprove ? async () => 'approved' : deps.presentAndGetApproval,
+        presentAndGetApproval: autoApprove
+          ? async () => 'approved'
+          : jsonMode
+            ? createJsonApproval()
+            : deps.presentAndGetApproval,
       });
       switch (result.status) {
         case 'applied':
         case 'declined':
-          return { exitCode: EXIT_SUCCESS, stdout: result.changeSetJson };
+          return {
+            exitCode: EXIT_SUCCESS,
+            stdout: jsonMode ? JSON.stringify({ ok: true, status: result.status }) : result.changeSetJson,
+          };
         case 'resolution-failed':
-          return { exitCode: EXIT_USER_ERROR, stderr: result.message };
+          return {
+            exitCode: EXIT_USER_ERROR,
+            stderr: jsonMode
+              ? JSON.stringify({ ok: false, status: result.status, message: result.message })
+              : result.message,
+          };
         case 'apply-failed':
-          return { exitCode: EXIT_INTERNAL_ERROR, stderr: result.message };
+          return {
+            exitCode: EXIT_INTERNAL_ERROR,
+            stderr: jsonMode
+              ? JSON.stringify({ ok: false, status: result.status, message: result.message })
+              : result.message,
+          };
       }
     }
   }
