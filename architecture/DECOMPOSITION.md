@@ -863,7 +863,7 @@ This decomposition breaks the FROZEN FrontX DESIGN into 18 work-package features
 
 ### 2.18 [CLI Executable Invocation Surface](features/cli-invocation/) - HIGH
 
-- [ ] `p1` - **ID**: `cpt-frontx-feature-cli-invocation`
+- [x] `p1` - **ID**: `cpt-frontx-feature-cli-invocation`
 
 - **Purpose**: Specify the runnable `frontx` executable entrypoint — the cross-command invocation surface that parses argv, selects the named command, and dispatches `frontx <command> [args]` to the internal component that owns that lifecycle behavior — realizing at behavior altitude the command surface the package anchor `cpt-frontx-component-cli` owns and delegates from, and turning the declared `frontx` bin into a runnable command.
 
