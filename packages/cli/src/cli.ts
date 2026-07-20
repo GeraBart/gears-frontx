@@ -48,6 +48,7 @@ import { FsInventoryIndex } from './adapters/fs-inventory-index';
 import { FsContentStore } from './adapters/fs-content-store';
 import { createFsReadContentItemsFn } from './adapters/fs-read-content-items';
 import { createGithubFetchFn, resolveInventoryRoot } from './adapters/github-fetch';
+import { createLocalFetchFn } from './adapters/local-fetch';
 import {
   createFsProvenanceWriteFn,
   readProvenanceRecords,
@@ -155,7 +156,13 @@ export function createRealDeps(): CliDeps {
   const inventory = new TemplateInventory(new FsInventoryIndex(inventoryRoot), new FsContentStore(inventoryRoot));
   return {
     inventory,
-    fetchFn: createGithubFetchFn({ token: process.env.GITHUB_TOKEN }),
+    // TEST-ONLY offline hook: when `FRONTX_TEST_LOCAL_SOURCE_DIR` is set,
+    // `install`/`update-local`/`upgrade` resolve against that local directory
+    // instead of the network, via the SAME `FetchFn` seam. Unset, this is
+    // byte-for-byte the production GitHub-fetch path. Not product behavior.
+    fetchFn: process.env.FRONTX_TEST_LOCAL_SOURCE_DIR
+      ? createLocalFetchFn(process.env.FRONTX_TEST_LOCAL_SOURCE_DIR)
+      : createGithubFetchFn({ token: process.env.GITHUB_TOKEN }),
     readContentFn: createFsReadContentItemsFn(inventoryRoot),
     writeFileFn: createFsWriteFileFn(),
     readFileFn: createFsReadFileFn(),

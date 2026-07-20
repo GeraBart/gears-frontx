@@ -1,4 +1,5 @@
 // @cpt-algo:cpt-frontx-algo-template-manifest-validate-contract:p1
+import { MANIFEST_FILENAME } from './types';
 import type { ManifestViolation, ManifestValidationResult, TemplateManifest } from './types';
 
 // Result type for manifest parsing + validation in one step.
@@ -6,18 +7,50 @@ export type ReadManifestResult =
   | { ok: true; manifest: TemplateManifest }
   | { ok: false; message: string };
 
+// The resolver seam (`FetchFn`, `packages/cli/src/resolver/types.ts`) may
+// hand back either a bare manifest string (legacy single-file content) or a
+// multi-file bundle envelope — `{ "$frontxTemplateFiles": { <relative path>:
+// <file text>, ... } }` — the same envelope `FsContentStore` (adapters
+// layer) already materializes to real on-disk files
+// (`cpt-frontx-dod-template-resolution-install-by-spec`). Every caller of
+// `readManifestFromContent` (composition resolution, uniform-apply,
+// materialize) reads `InventoryEntry.content` — the exact string the
+// resolver/inventory stored — so this single read path unwraps the bundle
+// envelope down to its manifest file BEFORE validating/parsing, keeping
+// every downstream caller's contract ("content is the manifest") unchanged
+// whether the underlying fetch was single-file or multi-file. The literal
+// marker is duplicated (not imported) from `adapters/fs-content-store.ts`
+// deliberately: `manifest/` is core/pure and must not depend on the IO
+// `adapters/` layer.
+const BUNDLE_MARKER = '$frontxTemplateFiles';
+
+function unwrapBundleEnvelope(content: string): string {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    return content;
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return content;
+  const filesValue = (parsed as Record<string, unknown>)[BUNDLE_MARKER];
+  if (typeof filesValue !== 'object' || filesValue === null || Array.isArray(filesValue)) return content;
+  const manifestText = (filesValue as Record<string, unknown>)[MANIFEST_FILENAME];
+  return typeof manifestText === 'string' ? manifestText : content;
+}
+
 // Parse and validate manifest content in one step, returning the typed manifest.
 // This is the single read path — the same authoritative shape consumed at
 // install, apply, and assembly time (cpt-frontx-dod-template-manifest-single-description).
 export function readManifestFromContent(content: string): ReadManifestResult {
-  const validation = validateManifestContract(content);
+  const manifestText = unwrapBundleEnvelope(content);
+  const validation = validateManifestContract(manifestText);
   if (validation.status === 'REJECTED') {
     return {
       ok: false,
       message: validation.violations.map((v) => v.message).join('; '),
     };
   }
-  return { ok: true, manifest: JSON.parse(content) as TemplateManifest };
+  return { ok: true, manifest: JSON.parse(manifestText) as TemplateManifest };
 }
 
 // A well-formed repository-relative path: a non-empty string that is not
