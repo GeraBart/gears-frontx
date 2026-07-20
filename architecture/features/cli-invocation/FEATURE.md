@@ -22,10 +22,10 @@
 
 <!-- /toc -->
 
-- [ ] `p1` - **ID**: `cpt-frontx-featstatus-cli-invocation`
+- [x] `p1` - **ID**: `cpt-frontx-featstatus-cli-invocation`
 ## 1. Feature Context
 
-- [ ] `p1` - `cpt-frontx-feature-cli-invocation`
+- [x] `p1` - `cpt-frontx-feature-cli-invocation`
 
 ### 1.1 Overview
 
@@ -58,7 +58,7 @@ User-facing interactions that start with an actor and describe the end-to-end fl
 
 ### Run a CLI Command
 
-- [ ] `p1` - **ID**: `cpt-frontx-flow-cli-invocation-run-command`
+- [x] `p1` - **ID**: `cpt-frontx-flow-cli-invocation-run-command`
 
 **Actor**: `cpt-frontx-actor-project-developer`
 
@@ -70,17 +70,17 @@ User-facing interactions that start with an actor and describe the end-to-end fl
 - The dispatched behavior fails unexpectedly: the entrypoint surfaces a failure and exits with the internal-error code.
 
 **Steps**:
-1. [ ] - `p1` - Developer runs the `frontx` executable with a command token and its arguments. - `inst-run-invoke`
-2. [ ] - `p1` - The entrypoint parses the invocation and selects the named command (`cpt-frontx-algo-cli-invocation-parse-dispatch`). - `inst-run-parse`
-3. [ ] - `p1` - **IF** the invocation names no recognized command or requests help - `inst-run-if-no-command`
-   1. [ ] - `p1` - **RETURN** usage output is produced through `cpt-frontx-flow-cli-invocation-help`; the run-command flow does not dispatch. - `inst-run-defer-help`
-4. [ ] - `p1` - The entrypoint dispatches the selected command to the internal component that owns its behavior, referenced by ID and not redefined here — install to `cpt-frontx-flow-template-resolution-install`, list to `cpt-frontx-flow-template-resolution-list`, update-local to `cpt-frontx-flow-template-resolution-update-local`, pre-publish validate to `cpt-frontx-flow-template-manifest-validate-for-publication`, seed to `cpt-frontx-flow-cli-scaffolding-seed-repository`, add to `cpt-frontx-flow-cli-scaffolding-add-template`, upgrade to `cpt-frontx-flow-upgrade-changeset-review-approval`, and preset resolution and provenance to `cpt-frontx-feature-composed-provenance` (referenced at feature level because the whole feature realizes the composed-scaffold behavior with no distinct per-command flow). - `inst-run-dispatch`
-5. [ ] - `p1` - The entrypoint maps the dispatched behavior's outcome to an exit code — success, user error, or internal error. - `inst-run-map-exit`
-6. [ ] - `p1` - **RETURN** the process exits with the mapped exit code after the dispatched behavior completes or reports its outcome. - `inst-run-return`
+1. [x] - `p1` - Developer runs the `frontx` executable with a command token and its arguments. - `inst-run-invoke`
+2. [x] - `p1` - The entrypoint parses the invocation and selects the named command (`cpt-frontx-algo-cli-invocation-parse-dispatch`). - `inst-run-parse`
+3. [x] - `p1` - **IF** the invocation names no recognized command or requests help - `inst-run-if-no-command`
+   1. [x] - `p1` - **RETURN** usage output is produced through `cpt-frontx-flow-cli-invocation-help`; the run-command flow does not dispatch. - `inst-run-defer-help`
+4. [x] - `p1` - The entrypoint dispatches the selected command to the internal component that owns its behavior, referenced by ID and not redefined here — install to `cpt-frontx-flow-template-resolution-install`, list to `cpt-frontx-flow-template-resolution-list`, update-local to `cpt-frontx-flow-template-resolution-update-local`, pre-publish validate to `cpt-frontx-flow-template-manifest-validate-for-publication`, seed to `cpt-frontx-flow-cli-scaffolding-seed-repository`, add to `cpt-frontx-flow-cli-scaffolding-add-template`, upgrade to `cpt-frontx-flow-upgrade-changeset-review-approval`, and preset resolution and provenance to `cpt-frontx-feature-composed-provenance` (referenced at feature level because the whole feature realizes the composed-scaffold behavior with no distinct per-command flow). - `inst-run-dispatch`
+5. [x] - `p1` - The entrypoint maps the dispatched behavior's outcome to an exit code — success, user error, or internal error. - `inst-run-map-exit`
+6. [x] - `p1` - **RETURN** the process exits with the mapped exit code after the dispatched behavior completes or reports its outcome. - `inst-run-return`
 
 ### Show Usage or Handle an Unrecognized Command
 
-- [ ] `p1` - **ID**: `cpt-frontx-flow-cli-invocation-help`
+- [x] `p1` - **ID**: `cpt-frontx-flow-cli-invocation-help`
 
 **Actor**: `cpt-frontx-actor-project-developer`
 
@@ -91,11 +91,11 @@ User-facing interactions that start with an actor and describe the end-to-end fl
 - Developer runs the executable with a command token that matches no known command: the entrypoint prints usage and exits with the user-error code.
 
 **Steps**:
-1. [ ] - `p1` - Developer runs the executable with no command, an explicit help request, or an unrecognized command token. - `inst-help-invoke`
-2. [ ] - `p1` - The entrypoint produces the usage summary listing the available commands (`cpt-frontx-algo-cli-invocation-parse-dispatch`). - `inst-help-usage`
-3. [ ] - `p1` - **IF** the invocation was an unrecognized command token - `inst-help-if-unrecognized`
-   1. [ ] - `p1` - **RETURN** usage is emitted and the process exits with the user-error code. - `inst-help-return-user-error`
-4. [ ] - `p1` - **RETURN** for no command or an explicit help request, usage is emitted and the process exits with the success code. - `inst-help-return-success`
+1. [x] - `p1` - Developer runs the executable with no command, an explicit help request, or an unrecognized command token. - `inst-help-invoke`
+2. [x] - `p1` - The entrypoint produces the usage summary listing the available commands (`cpt-frontx-algo-cli-invocation-parse-dispatch`). - `inst-help-usage`
+3. [x] - `p1` - **IF** the invocation was an unrecognized command token - `inst-help-if-unrecognized`
+   1. [x] - `p1` - **RETURN** usage is emitted and the process exits with the user-error code. - `inst-help-return-user-error`
+4. [x] - `p1` - **RETURN** for no command or an explicit help request, usage is emitted and the process exits with the success code. - `inst-help-return-success`
 
 ## 3. Processes / Business Logic (CDSL)
 
@@ -103,47 +103,47 @@ Internal system functions and procedures called by actor flows above.
 
 ### Parse Invocation and Dispatch
 
-- [ ] `p1` - **ID**: `cpt-frontx-algo-cli-invocation-parse-dispatch`
+- [x] `p1` - **ID**: `cpt-frontx-algo-cli-invocation-parse-dispatch`
 
 **Input**: The process invocation arguments passed to the `frontx` executable.
 
 **Output**: The exit code the process returns, after either dispatching to the owning command behavior or producing usage output.
 
 **Steps**:
-1. [ ] - `p1` - Receive the process invocation arguments. - `inst-pd-receive`
-2. [ ] - `p1` - Parse the arguments into a leading command token and the remaining arguments for that command. - `inst-pd-parse`
-3. [ ] - `p1` - **IF** no command token is present or an explicit help request is present - `inst-pd-if-help`
-   1. [ ] - `p1` - Produce the usage summary of the available commands and **RETURN** the success exit code. - `inst-pd-return-help`
-4. [ ] - `p1` - **IF** the command token matches no known command - `inst-pd-if-unknown`
-   1. [ ] - `p1` - Produce the usage summary and **RETURN** the user-error exit code. - `inst-pd-return-unknown`
-5. [ ] - `p1` - Select the internal component that owns the named command's behavior and dispatch the remaining arguments to it — the command-to-behavior mapping references each behavior by ID (install `cpt-frontx-flow-template-resolution-install`, list `cpt-frontx-flow-template-resolution-list`, update-local `cpt-frontx-flow-template-resolution-update-local`, pre-publish validate `cpt-frontx-flow-template-manifest-validate-for-publication`, seed `cpt-frontx-flow-cli-scaffolding-seed-repository`, add `cpt-frontx-flow-cli-scaffolding-add-template`, upgrade `cpt-frontx-flow-upgrade-changeset-review-approval`, and preset resolution and provenance `cpt-frontx-feature-composed-provenance` at feature level with no distinct per-command flow) and adds no second dispatch path. - `inst-pd-dispatch`
-6. [ ] - `p1` - Map the dispatched behavior's outcome to an exit code: success when it completes, user error when it reports a user/input failure, internal error when it fails unexpectedly. - `inst-pd-map-outcome`
-7. [ ] - `p1` - **RETURN** the mapped exit code. - `inst-pd-return-exit`
+1. [x] - `p1` - Receive the process invocation arguments. - `inst-pd-receive`
+2. [x] - `p1` - Parse the arguments into a leading command token and the remaining arguments for that command. - `inst-pd-parse`
+3. [x] - `p1` - **IF** no command token is present or an explicit help request is present - `inst-pd-if-help`
+   1. [x] - `p1` - Produce the usage summary of the available commands and **RETURN** the success exit code. - `inst-pd-return-help`
+4. [x] - `p1` - **IF** the command token matches no known command - `inst-pd-if-unknown`
+   1. [x] - `p1` - Produce the usage summary and **RETURN** the user-error exit code. - `inst-pd-return-unknown`
+5. [x] - `p1` - Select the internal component that owns the named command's behavior and dispatch the remaining arguments to it — the command-to-behavior mapping references each behavior by ID (install `cpt-frontx-flow-template-resolution-install`, list `cpt-frontx-flow-template-resolution-list`, update-local `cpt-frontx-flow-template-resolution-update-local`, pre-publish validate `cpt-frontx-flow-template-manifest-validate-for-publication`, seed `cpt-frontx-flow-cli-scaffolding-seed-repository`, add `cpt-frontx-flow-cli-scaffolding-add-template`, upgrade `cpt-frontx-flow-upgrade-changeset-review-approval`, and preset resolution and provenance `cpt-frontx-feature-composed-provenance` at feature level with no distinct per-command flow) and adds no second dispatch path. - `inst-pd-dispatch`
+6. [x] - `p1` - Map the dispatched behavior's outcome to an exit code: success when it completes, user error when it reports a user/input failure, internal error when it fails unexpectedly. - `inst-pd-map-outcome`
+7. [x] - `p1` - **RETURN** the mapped exit code. - `inst-pd-return-exit`
 
 ## 4. States (CDSL)
 
 ### Invocation Run State Machine
 
-- [ ] `p2` - **ID**: `cpt-frontx-state-cli-invocation-run`
+- [x] `p2` - **ID**: `cpt-frontx-state-cli-invocation-run`
 
 **States**: REQUESTED, PARSED, DISPATCHED, SUCCEEDED, USER_ERROR, INTERNAL_ERROR
 
 **Initial State**: REQUESTED
 
 **Transitions**:
-1. [ ] - `p1` - **FROM** REQUESTED **TO** PARSED **WHEN** the invocation arguments parse to a recognized command token and its arguments. - `inst-st-req-parsed`
-2. [ ] - `p1` - **FROM** REQUESTED **TO** SUCCEEDED **WHEN** no command is present or an explicit help request is present and usage is emitted. - `inst-st-req-help-success`
-3. [ ] - `p1` - **FROM** REQUESTED **TO** USER_ERROR **WHEN** the command token matches no known command and usage is emitted. - `inst-st-req-unknown`
-4. [ ] - `p1` - **FROM** PARSED **TO** DISPATCHED **WHEN** the selected command is dispatched to the internal component that owns its behavior. - `inst-st-parsed-dispatched`
-5. [ ] - `p1` - **FROM** DISPATCHED **TO** SUCCEEDED **WHEN** the dispatched behavior completes and the outcome maps to the success exit code. - `inst-st-dispatched-success`
-6. [ ] - `p1` - **FROM** DISPATCHED **TO** USER_ERROR **WHEN** the dispatched behavior reports a user/input failure and the outcome maps to the user-error exit code. - `inst-st-dispatched-user-error`
-7. [ ] - `p1` - **FROM** DISPATCHED **TO** INTERNAL_ERROR **WHEN** the dispatched behavior fails unexpectedly and the outcome maps to the internal-error exit code. - `inst-st-dispatched-internal-error`
+1. [x] - `p1` - **FROM** REQUESTED **TO** PARSED **WHEN** the invocation arguments parse to a recognized command token and its arguments. - `inst-st-req-parsed`
+2. [x] - `p1` - **FROM** REQUESTED **TO** SUCCEEDED **WHEN** no command is present or an explicit help request is present and usage is emitted. - `inst-st-req-help-success`
+3. [x] - `p1` - **FROM** REQUESTED **TO** USER_ERROR **WHEN** the command token matches no known command and usage is emitted. - `inst-st-req-unknown`
+4. [x] - `p1` - **FROM** PARSED **TO** DISPATCHED **WHEN** the selected command is dispatched to the internal component that owns its behavior. - `inst-st-parsed-dispatched`
+5. [x] - `p1` - **FROM** DISPATCHED **TO** SUCCEEDED **WHEN** the dispatched behavior completes and the outcome maps to the success exit code. - `inst-st-dispatched-success`
+6. [x] - `p1` - **FROM** DISPATCHED **TO** USER_ERROR **WHEN** the dispatched behavior reports a user/input failure and the outcome maps to the user-error exit code. - `inst-st-dispatched-user-error`
+7. [x] - `p1` - **FROM** DISPATCHED **TO** INTERNAL_ERROR **WHEN** the dispatched behavior fails unexpectedly and the outcome maps to the internal-error exit code. - `inst-st-dispatched-internal-error`
 
 ## 5. Definitions of Done
 
 ### Executable Entrypoint Dispatches Every Command
 
-- [ ] `p1` - **ID**: `cpt-frontx-dod-cli-invocation-executable-entrypoint`
+- [x] `p1` - **ID**: `cpt-frontx-dod-cli-invocation-executable-entrypoint`
 
 The system **MUST** provide a single `frontx` executable entrypoint that parses the process invocation and dispatches `frontx <command> [args]` to the one internal component that owns that command's behavior — referenced by ID and not redefined — across the full command surface (template install / list / update, pre-publish validate, seed, add, preset resolution and provenance, and upgrade), adding no second dispatch path (`target`).
 
@@ -160,7 +160,7 @@ The system **MUST** provide a single `frontx` executable entrypoint that parses 
 
 ### Usage and Help Output
 
-- [ ] `p1` - **ID**: `cpt-frontx-dod-cli-invocation-usage-help`
+- [x] `p1` - **ID**: `cpt-frontx-dod-cli-invocation-usage-help`
 
 The system **MUST** emit a usage summary of the available commands when the executable is run with no command, with an explicit help request, or with an unrecognized command token, dispatching no command in those cases (`target`).
 
@@ -176,7 +176,7 @@ The system **MUST** emit a usage summary of the available commands when the exec
 
 ### Exit-Code Convention
 
-- [ ] `p1` - **ID**: `cpt-frontx-dod-cli-invocation-exit-codes`
+- [x] `p1` - **ID**: `cpt-frontx-dod-cli-invocation-exit-codes`
 
 The system **MUST** return a distinct process exit code for each outcome class — success, user error, and internal error — applied consistently across every dispatched command and across the usage/help paths (`target`).
 
@@ -193,10 +193,10 @@ The system **MUST** return a distinct process exit code for each outcome class �
 
 ## 6. Acceptance Criteria
 
-- [ ] `architecture/features/cli-invocation/FEATURE.md` exists with all template sections in order.
-- [ ] Running the `frontx` executable with a recognized command dispatches to the internal component that owns that command's behavior through a single dispatch path. (`target`)
-- [ ] Running the executable with no command or an explicit help request emits the usage summary and exits with the success code. (`target`)
-- [ ] Running the executable with an unrecognized command token emits usage and exits with the user-error code. (`target`)
-- [ ] A dispatched behavior's user/input failure exits with the user-error code and an unexpected failure exits with the internal-error code. (`target`)
-- [ ] No command behavior is redefined in this feature; each dispatched behavior is referenced by its canonical ID. (`target`)
-- [ ] The command surface is part of `cpt-frontx-interface-cli`; an incompatible change to it requires a major version bump per `cpt-frontx-adr-artifact-versioning-and-distribution`. (`target`)
+- [x] `architecture/features/cli-invocation/FEATURE.md` exists with all template sections in order.
+- [x] Running the `frontx` executable with a recognized command dispatches to the internal component that owns that command's behavior through a single dispatch path. (`target`)
+- [x] Running the executable with no command or an explicit help request emits the usage summary and exits with the success code. (`target`)
+- [x] Running the executable with an unrecognized command token emits usage and exits with the user-error code. (`target`)
+- [x] A dispatched behavior's user/input failure exits with the user-error code and an unexpected failure exits with the internal-error code. (`target`)
+- [x] No command behavior is redefined in this feature; each dispatched behavior is referenced by its canonical ID. (`target`)
+- [x] The command surface is part of `cpt-frontx-interface-cli`; an incompatible change to it requires a major version bump per `cpt-frontx-adr-artifact-versioning-and-distribution`. (`target`)

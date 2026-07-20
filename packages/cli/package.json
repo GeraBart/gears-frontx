@@ -14,7 +14,7 @@
     }
   },
   "bin": {
-    "frontx": "./dist/index.js"
+    "frontx": "./dist/cli.js"
   },
   "files": [
     "dist"
