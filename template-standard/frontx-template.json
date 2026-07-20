@@ -23,7 +23,8 @@
       "vitest.shared.ts",
       "eslint.config.js",
       ".dependency-cruiser.cjs",
-      "index.html"
+      "index.html",
+      ".frontx/ai/@gears-frontx/frontx-template-standard"
     ],
     "sharedFiles": []
   }
