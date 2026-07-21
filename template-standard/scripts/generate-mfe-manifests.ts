@@ -255,7 +255,8 @@ class ManifestGenerator {
    * Resolve publicPath for this MFE.
    * Priority:
    *   1. --base-url CLI flag (global override for all packages)
-   *   2. publicPath from enriched mfe-manifest.json manifest.metaData (set by plugin)
+   *   2. publicPath from enriched mfe-manifest.json manifest.metaData (set by plugin) —
+   *      ONLY when it is a concrete, already-resolved value
    *   3. Origin from mfe-manifest.json manifest.remoteEntry URL (per-package default)
    *   4. "/" as final fallback
    */
@@ -270,8 +271,27 @@ class ManifestGenerator {
     }
 
     // Use publicPath from enriched manifest (set by the plugin from mfe-manifest.json).
+    //
+    // "auto" (and its normalized "auto/" form) is Module Federation's own
+    // build-time placeholder meaning "resolve at runtime from wherever the
+    // remoteEntry/manifest was actually served" — it is NEVER a usable base
+    // URL on its own. This is the DEFAULT publicPath value MF emits whenever
+    // an MFE's vite.config.ts does not set `federation({ ... publicPath })`
+    // explicitly (true for every MFE in src-app/mfe_packages/ today). Treating
+    // it as already-resolved (as a naive `!== '/'` truthy check would) writes
+    // the literal string "auto/" into generated-mfe-manifests.json, which the
+    // runtime handler (MfeHandlerMF) then concatenates onto every chunk
+    // filename — producing a same-origin relative URL that Vite's SPA
+    // fallback answers with a 200 index.html instead of a 404, masking the
+    // failure as a silent no-op mount.
     const manifestPublicPath = mfeJson.manifest.metaData.publicPath;
-    if (manifestPublicPath && manifestPublicPath !== '/') {
+    const isUnresolvedAutoPlaceholder =
+      manifestPublicPath === 'auto' || manifestPublicPath === 'auto/';
+    if (
+      manifestPublicPath &&
+      manifestPublicPath !== '/' &&
+      !isUnresolvedAutoPlaceholder
+    ) {
       return manifestPublicPath.endsWith('/')
         ? manifestPublicPath
         : `${manifestPublicPath}/`;

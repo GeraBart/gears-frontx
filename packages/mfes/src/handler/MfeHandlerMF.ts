@@ -378,6 +378,7 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
     // @cpt-begin:cpt-frontx-algo-mfe-loading-manifest-discovery:p1:inst-md-read-public-path
     // publicPath is the authoritative base URL for all chunks in this MFE.
     const baseUrl = manifest.metaData.publicPath;
+    this.assertResolvedPublicPath(baseUrl, entryId);
     // @cpt-end:cpt-frontx-algo-mfe-loading-manifest-discovery:p1:inst-md-read-public-path
 
     // @cpt-begin:cpt-frontx-flow-mfe-loading-on-demand-load:p1:inst-run-manifest-discovery
@@ -443,6 +444,46 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
       baseUrl,
     };
     // @cpt-end:cpt-frontx-state-mfe-isolation-load-blob-state:p1:inst-blob-complete
+  }
+
+  /**
+   * Guard against Module Federation's unresolved `"auto"` publicPath
+   * placeholder reaching the fetch layer.
+   *
+   * `MfManifestMetaData.publicPath` is documented (and by the handler's own
+   * contract, at {@link loadExposedModuleIsolated}) as an already-resolved
+   * absolute URL or `'/'` — never the literal string MF 2.0 emits when a
+   * remote's `vite.config.ts` does not set an explicit `publicPath` (MF's
+   * own runtime resolves `"auto"` from the script tag that loaded
+   * `remoteEntry.js`; this handler never loads `remoteEntry.js` at all, so
+   * that resolution point does not exist here — see the file header comment).
+   *
+   * The handler has no channel to recover the real origin at this point:
+   * `manifest` arrives either inlined in `MfeEntryMF` or looked up by ID from
+   * an in-process cache (see {@link resolveManifest}), with no fetch
+   * response / page-relative context carried alongside it. Resolving
+   * `"auto"` to a concrete origin is therefore the responsibility of
+   * whatever produces the `MfManifest` (e.g. a build-time manifest
+   * aggregator) — NOT this handler.
+   *
+   * Without this guard, `"auto"`/`"auto/"` gets silently concatenated into
+   * every chunk fetch URL, producing a same-origin relative request that a
+   * Vite dev server's SPA fallback answers with a 200 index.html — a load
+   * failure that looks like a `SyntaxError` deep in module evaluation
+   * instead of a clear, fail-fast diagnostic at the point of the actual
+   * misconfiguration.
+   */
+  private assertResolvedPublicPath(publicPath: string, entryId: string): void {
+    if (publicPath === 'auto' || publicPath === 'auto/') {
+      throw new MfeLoadError(
+        `manifest.metaData.publicPath is the unresolved Module Federation ` +
+          `placeholder "${publicPath}". This handler requires an already-` +
+          `resolved absolute URL (or '/') — resolve "auto" to the MFE's real ` +
+          `serving origin when producing the MfManifest (e.g. in the build-time ` +
+          `manifest generator), not at handler load time.`,
+        entryId
+      );
+    }
   }
 
   // @cpt-begin:cpt-frontx-flow-mfe-isolation-load:p1:inst-if-bad-lifecycle
