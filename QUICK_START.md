@@ -1,309 +1,260 @@
 # FrontX Quick Start Guide
 
 > **TARGET AUDIENCE:** Humans
-> **PURPOSE:** Quick start guide for developers
+> **PURPOSE:** Quick start guide for developers using the FrontX ecosystem
 
-This guide will help you get started with FrontX development.
+FrontX is an **ecosystem for AI-driven creation of frontend projects**. It does
+not prescribe what your app looks like — that comes from **templates**. Instead
+it provides three co-equal pillars that let AI agents and their human
+collaborators scaffold, extend, and evolve a project against stable, contracted
+capabilities.
 
-## Installation
+## The Three Pillars
 
-1. **Install dependencies**
-   ```bash
-   npm ci
-   ```
+- **Pillar 1 — Core Framework.** Makes an application runtime-extensible by
+  composable microfrontends over a substrate for typed entities.
+  Packages: `@gears-frontx/mfes`, `@gears-frontx/gts-plugin`, `@gears-frontx/api`.
+- **Pillar 2 — CLI.** Owns the full lifecycle of assembling and evolving a
+  repository from templates. Package: `@gears-frontx/cli` (the `frontx` binary).
+- **Pillar 3 — AI Tooling Framework.** Equips AI agents with ecosystem
+  capabilities and lets templates contribute their own.
+  Package: `@gears-frontx/cyber-pilot-kit-frontx`.
 
-2. **Build packages**
-   ```bash
-   npm run build:packages
-   ```
+Everything below is how you drive those pillars. What each project *becomes* is
+owned by the template you apply, not by the ecosystem.
 
-3. **Start development server**
-   ```bash
-   npm run dev
-   ```
-
-4. **Open browser**
-   Navigate to `http://localhost:5173`
-
-## Project Structure Overview
-
-```text
-packages/                           # Workspace packages
-├── state/                          # SDK L1: Event bus and state primitives
-├── screensets/                     # SDK L1: Screenset and MFE contracts
-├── api/                            # SDK L1: API services and protocols
-├── i18n/                           # SDK L1: Internationalization
-├── framework/                      # L2: Plugin system and registries
-├── react/                          # L3: React bindings and hooks
-├── studio/                         # Development overlay (dev only)
-└── cli/                            # CLI tool for project scaffolding
-
-src/
-├── app/                            # Host application shell
-│   ├── components/ui/              # App-owned UI primitives
-│   ├── layout/                     # Layout components
-│   └── themes/                     # Theme tokens and registries
-└── mfe_packages/                   # Demo and blank MFE packages
-```
-
-## Creating Your First Screen
-
-1. **Create a new screen file**
-   ```bash
-   # Create in a screenset directory
-   touch src/screensets/my-screenset/MyScreen.tsx
-   ```
-
-2. **Write your screen component**
-   ```typescript
-   import React from 'react';
-
-   export const MyScreen: React.FC = () => {
-     return (
-       <div className="p-6">
-         <h1 className="text-2xl font-bold">My Screen</h1>
-         <p>Content goes here</p>
-       </div>
-     );
-   };
-   ```
-
-3. **Use it in App.tsx**
-   ```typescript
-   import { MyScreen } from '@/screensets/my-screenset/MyScreen';
-
-   // In your CoreLayout children
-   <MyScreen />
-   ```
-
-## Using Layout Components
-
-### Header
-```typescript
-<Header
-  logo={<Logo />}
-  actions={<UserMenu />}
-/>
-```
-
-### Menu
-```typescript
-const menuItems: MenuItem[] = [
-  {
-    id: 'home',
-    label: 'Home',
-    icon: <HomeIcon />,
-  },
-];
-
-<Menu items={menuItems} collapsed={false} />
-```
-
-### Sidebar
-```typescript
-<Sidebar
-  position="left"
-  title="Sidebar Title"
-  collapsed={false}
->
-  <div>Sidebar content</div>
-</Sidebar>
-```
-
-### Popup
-```typescript
-const [open, setOpen] = useState(false);
-
-<Popup
-  open={open}
-  onClose={() => setOpen(false)}
-  title="My Popup"
->
-  <div>Popup content</div>
-</Popup>
-```
-
-## Using Redux State
-
-### Read state
-```typescript
-import { useAppSelector } from '@gears-frontx/react';
-
-const MyComponent = () => {
-  const collapsed = useAppSelector(state => state['layout/menu'].collapsed);
-
-  return <div>Menu collapsed: {collapsed}</div>;
-};
-```
-
-### Use event-driven actions (recommended)
-```typescript
-import { useGears FrontXActions } from '@gears-frontx/react';
-
-const MyComponent = () => {
-  const { toggleMenu } = useGears FrontXActions();
-  return <button onClick={toggleMenu}>Toggle Menu</button>;
-};
-```
-
-FrontX uses event-driven architecture. Prefer action creators that emit events over direct dispatch.
-
-## Styling with Tailwind
-
-FrontX uses Tailwind CSS with custom theme tokens:
-
-```typescript
-<div className="bg-background text-foreground">
-  <h1 className="text-2xl font-bold text-primary">Title</h1>
-  <p className="text-muted-foreground">Description</p>
-</div>
-```
-
-### Available Theme Colors
-- `background` - Main background
-- `foreground` - Main text color
-- `primary` - Primary brand color
-- `secondary` - Secondary color
-- `accent` - Accent color
-- `muted` - Muted color
-- `border` - Border color
-
-## Adding a New UI Component
-
-1. **Create component file**
-   ```bash
-   touch src/app/components/ui/button.tsx
-   ```
-
-2. **Implement component**
-   ```typescript
-   import React from 'react';
-   import { cn } from '@/lib/utils';
-
-   export interface ButtonProps {
-     children: React.ReactNode;
-     onClick?: () => void;
-     variant?: 'primary' | 'secondary';
-     className?: string;
-   }
-
-   export const Button: React.FC<ButtonProps> = ({
-     children,
-     onClick,
-     variant = 'primary',
-     className,
-   }) => {
-     return (
-       <button
-         onClick={onClick}
-         className={cn(
-           'px-4 py-2 rounded font-medium transition-colors',
-           variant === 'primary' && 'bg-primary text-primary-foreground',
-           variant === 'secondary' && 'bg-secondary text-secondary-foreground',
-           className
-         )}
-       >
-         {children}
-       </button>
-     );
-   };
-   ```
-
-3. **Import it where needed**
-   ```typescript
-   import { Button } from '@/components/ui/button';
-   ```
-
-## Creating a Screenset
-
-Screensets are vertical slices of your application. Use the FrontX CLI to create them:
+## Install the CLI
 
 ```bash
-# Create a new screenset
-frontx screenset create my-screenset
-
-# Or copy an existing one with transformed IDs
-frontx screenset copy demo myDemo
+npm install -g @gears-frontx/cli
 ```
 
-### Example Screenset Structure:
-```
-my-screenset/
-├── ids.ts                # All IDs centralized here
-├── screens/              # Screen components
-│   └── home/
-│       ├── HomeScreen.tsx
-│       └── i18n/         # Per-screen translations
-├── i18n/                 # Screenset-level translations
-├── components/ui/        # Local UI primitives (optional)
-└── myScreensetScreenset.tsx  # Self-registering config
+Requirements: Node.js 24+, npm 10+. Verify with `frontx help`.
+
+## Using the CLI (Pillar 2)
+
+The CLI resolves templates from a source you name, into a local inventory, then
+applies them to repositories. It bundles no templates of its own.
+
+### 1. Install a template
+
+Templates are addressed by a source-spec, `host:owner/repo@ref`:
+
+```bash
+frontx install github:acme/my-template@v1.0.0
+frontx list          # show installed templates and versions
 ```
 
-Screensets auto-register via Vite glob pattern - no manual import needed.
+### 2. Seed a new repository
+
+```bash
+# frontx seed <templateRef> <targetDir>   (templateRef comes from `frontx list`)
+frontx seed my-template ./my-app
+```
+
+Seeding resolves the template (plus any templates its preset references), runs a
+**pre-flight conflict check** against every template's declared ownership
+boundaries, and only then writes files — recording one provenance record per
+applied template under `./my-app/.frontx/`.
+
+### 3. Add a template to an existing repository
+
+```bash
+frontx add my-template ./existing-repo
+```
+
+A repository can be assembled from **multiple independently-applied templates**.
+Conflicting assembly is detected and prevented before any file is written.
+
+### 4. Upgrade an applied template
+
+```bash
+# Interactive: review the change set, then approve
+frontx upgrade ./my-app 1.1.0
+
+# Non-interactive (CI): accept automatically
+frontx upgrade ./my-app 1.1.0 --yes
+```
+
+Each applied template upgrades **independently**, delivered as a reviewable
+change set. Provenance under `.frontx/` tells the CLI exactly what was
+materialized and by which template.
+
+### 5. Author and validate a template
+
+Validate a template's structure — including that its ownership boundaries are
+well-formed — against the publication contract before publishing:
+
+```bash
+frontx validate ./path/to/template
+```
+
+### CLI command reference
+
+| Command | Purpose |
+|---------|---------|
+| `frontx install <spec>` | Install a template from `host:owner/repo@ref` into the inventory |
+| `frontx list` | List installed templates and versions |
+| `frontx seed <templateRef> <targetDir>` | Seed a **new** repository from a template |
+| `frontx add <templateRef> <targetDir>` | Add a template into an **existing** repository |
+| `frontx upgrade <projectRoot> <version> [--yes] [--json]` | Upgrade an applied template |
+| `frontx validate <templateDir>` | Validate a template for publication |
+| `frontx update-local <name> <spec>` | Refresh a locally installed template from its source |
+| `frontx help` | Show the usage summary |
+
+Exit codes: `0` success, `1` user error, `2` internal error.
+
+## The Core Framework (Pillar 1)
+
+An application built on FrontX becomes **runtime-extensible by microfrontends**.
+The Core Framework provides the substrate; a template wires it into a concrete
+app. Its guarantees:
+
+- **Registration & loading** — microfrontends register with the application and
+  load on demand (`@gears-frontx/mfes`).
+- **Extension domains** — named slots a microfrontend can occupy; a domain may
+  allow one or multiple occupants.
+- **Typed entities** — microfrontends and their extensions are validated against
+  type definitions at registration; applications register their own type
+  definitions at build time or at runtime (`@gears-frontx/gts-plugin`).
+- **Host communication** — microfrontends communicate with the host and react to
+  host state changes over a bridge.
+- **API layer** — typed API protocols and a service registry (`@gears-frontx/api`).
+- **UI-framework-agnostic** — the framework never constrains your UI choice; UI
+  libraries, styling, layout, and state management are the template's concern.
+
+You consume these packages from within a template/application; the ecosystem
+ships no application, host, or UI of its own.
+
+## AI Tooling (Pillar 3)
+
+The AI Tooling Framework is delivered as a **Cypilot kit**
+(`cyber-pilot-kit-frontx`) — the kit *is* the framework's public surface. It is
+distributed as a GitHub tarball and installed and updated through the **Cypilot
+CLI** (`cpt`), not npm. On install, its `frontx_`-prefixed resources register in
+the project's `.cypilot/config/core.toml` and become available to agents at
+session start — no training step.
+
+### Install the kit
+
+```bash
+# Install the FrontX AI Tooling kit into a project (via Cypilot, not the frontx CLI)
+cpt kit install github:gears-frontx/cyber-pilot-kit-frontx
+
+# Update it later to a newer version
+cpt kit update <path-to-installed-kit>
+```
+
+Every resource the kit installs carries the `frontx_` prefix (KIT-1), so it
+cannot collide with other kits (e.g. the SDLC kit) installed in the same
+project. As shipped today the kit provides three concrete capabilities.
+
+### Ecosystem fluency
+
+The kit hands agents ecosystem knowledge at session start: a top-level skill
+(`SKILL.md`) covering the package surface, architecture principles, and key
+concepts; navigation rules (`AGENTS.md`); and boundary guidelines
+(`guidelines/`). This is what lets an agent reason correctly about MFEs,
+extension domains, source-specs, and the ecosystem/template boundary without
+being taught.
+
+### Template-extension discovery & activation
+
+A template can ship its own AI capabilities — skills, workflows, guidelines, and
+reference artifacts. When you `frontx install` such a template, the kit
+**discovers and activates** those extensions in the consuming project
+(`src/extensions/`), with no manual wiring: installed-template capabilities
+simply become available to agents.
+
+### AI-driven upgrade orchestration
+
+Beyond the direct `frontx upgrade` path, the kit **orchestrates** upgrades over
+the CLI's machine-readable command surface (`src/upgrade-orchestration/`):
+
+```bash
+frontx upgrade ./my-app 1.1.0 --json
+```
+
+The `--json` surface emits the raw change set and reads a decision back, so the
+kit can layer review gates, migration analysis, and downstream impact assessment
+onto the change set before it is applied.
+
+> **Not AI skills.** Scaffolding a project (`frontx seed` / `frontx add`) and
+> validating a template (`frontx validate`) are direct **CLI** operations, not
+> kit capabilities.
+
+### Roadmap
+
+The PRD also scopes standalone ecosystem skills — creating a microfrontend,
+generating type definitions, and other ecosystem-scoped operations — to be
+surfaced under the `project` and `mfe` command namespaces. These are declared
+capabilities, not yet shipped as discrete skills; today those operations follow
+the conventions documented in the ecosystem guidelines.
+
+The framework is **template-agnostic** and ships zero template-specific content;
+all template-specific capabilities arrive through template bundles.
+
+## Developing the Ecosystem
+
+To work on the ecosystem packages themselves, clone this repository:
+
+```bash
+git clone https://github.com/cyberfabric/FrontX.git
+cd FrontX
+npm ci
+npm run build:packages   # build every ecosystem package
+```
+
+### Common commands
+
+```bash
+# Build
+npm run build:packages        # build all ecosystem packages
+npm run build --workspace=@gears-frontx/cli   # build a single package
+
+# Validation (run before commits)
+npm run lint                  # ESLint across the repo
+npm run type-check            # type-check all ecosystem packages
+npm run arch:check            # architecture tests (must pass)
+npm run arch:deps             # dependency-boundary rules
+npm run arch:unused           # unused-code report (knip)
+
+# Tests
+npm run test:unit             # all package unit tests (packages/*)
+npm run test:unit:watch       # watch mode
+```
+
+### Boundaries to respect
+
+The ecosystem enforces package boundaries via ESLint + dependency-cruiser +
+`scripts/test-architecture.ts`. In short: the Core Framework packages must not
+carry solution-specific content (type-format literals, shared-property ids, or
+layout-domain values) — those belong to templates and consuming applications.
+Run `npm run arch:check` and `npm run arch:deps` before committing.
 
 ## Development Best Practices
 
-1. **Always use TypeScript types**
-   - No `any` types
-   - Explicit function return types
-   - Proper generics
-
-2. **Use local UI components**
-   - Don't create custom components inline
-   - Extract reusable logic to `components/ui`
-
-3. **Follow Redux patterns**
-   - Actions for all state changes
-   - Selectors for computed state
-   - Keep state normalized
-
-4. **Keep screensets isolated**
-   - No cross-screenset dependencies
-   - Use global state for shared data
-
-5. **Use Tailwind utilities**
-   - Avoid custom CSS when possible
-   - Use theme tokens for colors
-   - Follow spacing conventions
-
-## Common Commands
-
-```bash
-# Development
-npm run dev              # Start dev server
-npm run build            # Build for production
-npm run build:packages   # Build workspace packages only
-npm run preview          # Preview production build
-
-# Validation (run before commits)
-npm run lint             # Run ESLint
-npm run type-check:all   # Check host app, workspace packages, and nested MFEs
-npm run type-check       # Check the host app root tsconfig only
-npm run arch:check       # Architecture tests (must pass)
-npm run arch:deps        # Dependency rules check
-npm run test:unit        # All unit tests (host + workspaces + nested MFEs via monorepo runner)
-npm run test:unit:watch  # Same, watch mode (defaults to host when not narrowed)
-
-# Clean
-npm run clean:deps       # Remove node_modules + reinstall
-npm run clean:build      # Clean + build from scratch
-```
-
-### Unit tests (host vs packages/MFEs)
-
-- **`npm run test:unit`** — runs the repo-wide runner; it fans out to the **host app** (repo root Vitest), **workspace packages** under `packages/*`, and **nested MFEs** under `src/mfe_packages/*` that define a `test:unit` script.
-- To run tests for a single workspace package while iterating: `npm run test:unit --workspace=@gears-frontx/<package>`.
-- Full contract, narrowing options, and internal root-only aliases are documented in [`.ai/project/targets/UNIT_TESTING.md`](.ai/project/targets/UNIT_TESTING.md).
+1. **Keep the ecosystem template-agnostic** — no app, UI, layout, theme, or
+   business-domain content in `packages/*`.
+2. **Type everything** — no `any`, explicit return types, proper generics.
+3. **Respect versioning** — the ecosystem commits to semantic-versioning
+   discipline so breaking changes stay isolated from consumers.
+4. **Prefer the contracts** — target the stable, contracted capabilities rather
+   than internal implementation details.
+5. **Let templates own the app** — screens, styling, and state are template
+   concerns; the ecosystem provides only the substrate and tooling.
 
 ## Next Steps
 
+- Read [PRD.md](./architecture/PRD.md) for the product vision and the full
+  capability inventory across all three pillars
+- Review [DESIGN.md](./architecture/DESIGN.md) for the system design and
+  package boundaries
 - Read [AI Guidelines](./.ai/GUIDELINES.md) for AI coding rules and patterns
-- Review [PRD.md](./architecture/PRD.md) for project philosophy
-- Explore the existing components in `src/app/components/ui/`
-- Build your first screen in `src/screensets/my-screenset/`
+- Explore the pillar packages under `packages/`
 
 ## Getting Help
 
-- Check documentation in `/docs`
-- Review existing components for patterns
-- Refer to TypeScript types for API details
+- Check the AI guidelines and architecture docs under `.ai/` and `architecture/`
+- Run `frontx help` for the CLI command surface
+- Refer to each package's types for its public API

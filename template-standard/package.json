@@ -1,6 +1,6 @@
 {
   "name": "@gears-frontx/frontx-template-standard",
-  "version": "0.3.0-alpha.0",
+  "version": "0.1.0-alpha.0",
   "description": "Standard FrontX application template — target scaffold for non-Pillar-1 code relocation",
   "type": "module",
   "main": "./dist-lib/index.cjs",
