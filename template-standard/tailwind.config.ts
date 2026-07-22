@@ -5,13 +5,14 @@ export default {
   darkMode: ['class'],
   content: [
     './index.html',
+    // Host app chrome (layout, menu, studio, components/ui). MFE packages
+    // under src-app/mfe_packages/* build their own CSS and are intentionally
+    // excluded here (scanning their node_modules/dist OOMs the host).
+    './src-app/app/**/*.{js,ts,jsx,tsx}',
     './src/**/*.{js,ts,jsx,tsx}',
-    '!./src/mfe_packages/*/dist/**/*.{js,ts,jsx,tsx}',
-    // Monorepo: scan local package sources
+    // Workspace package sources + built output (e.g. @gears-frontx/react UI)
     './packages/*/src/**/*.{js,ts,jsx,tsx}',
     './packages/*/dist/**/*.{js,mjs}',
-    // Standalone: scan installed @gears-frontx packages from node_modules
-    './node_modules/@gears-frontx/*/dist/**/*.{js,mjs}',
   ],
   safelist: [
     // RTL utilities used in package components

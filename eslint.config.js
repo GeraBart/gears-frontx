@@ -2,7 +2,7 @@
  * FrontX ESLint Configuration (Ecosystem Root)
  *
  * Covers ONLY the ecosystem packages (mfes, gts-plugin, api, cli,
- * cyber-pilot-kit-frontx) plus screensets (Pillar-1, not yet migrated).
+ * cyber-pilot-kit-frontx).
  * Non-Pillar-1 packages (state, i18n, framework, react, auth, studio) and the
  * host app now live in the self-contained top-level `template-standard/`
  * (see Phase 11 template-move); it ships its own `eslint.config.js` and is
@@ -32,6 +32,10 @@ export default [
       // Disposable Claude Code agent worktrees — full repo checkouts that
       // should never be linted as part of this repo's own source tree.
       '.claude/**',
+      // Disposable seed-test scratch — generated template output produced by
+      // the offline-seed e2e procedure; not this repo's own source.
+      'seeded-test/**',
+      '.seed-test-inventory/**',
     ],
   },
 
@@ -179,7 +183,6 @@ export default [
   {
     files: [
       'packages/api/**/*.ts',
-      'packages/screensets/**/*.ts',
     ],
     rules: {
       'no-restricted-syntax': 'off',
