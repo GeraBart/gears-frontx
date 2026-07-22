@@ -119,18 +119,25 @@ export class GtsPlugin implements TypeSystemPlugin<JSONSchema> {
   // First-class schemas are already registered during construction.
   // registerSchema is for vendor/dynamic schemas only.
 
+  // @cpt-algo:cpt-frontx-algo-gts-type-provider-runtime-registration:p1
   registerSchema(schema: JSONSchema): void {
+    // @cpt-begin:cpt-frontx-algo-gts-type-provider-runtime-registration:p1:inst-rr-01
     const entity: JsonEntity = createJsonEntity(schema);
+    // @cpt-end:cpt-frontx-algo-gts-type-provider-runtime-registration:p1:inst-rr-01
+    // @cpt-begin:cpt-frontx-algo-gts-type-provider-runtime-registration:p1:inst-rr-02
     this.gtsStore.register(entity);
+    // @cpt-end:cpt-frontx-algo-gts-type-provider-runtime-registration:p1:inst-rr-02
   }
 
   getSchema(typeId: string): JSONSchema | undefined {
+    // @cpt-begin:cpt-frontx-algo-gts-type-provider-runtime-registration:p1:inst-rr-05
     const entity = this.gtsStore.get(typeId);
     if (!entity) return undefined;
     if (!entity.content || typeof entity.content !== 'object') {
       return undefined;
     }
     return entity.content as JSONSchema;
+    // @cpt-end:cpt-frontx-algo-gts-type-provider-runtime-registration:p1:inst-rr-05
   }
 
   // === Instance Registry (GTS-native approach) ===
@@ -160,21 +167,33 @@ export class GtsPlugin implements TypeSystemPlugin<JSONSchema> {
    * @throws Error if schema validation fails
    */
   register(entity: unknown): void {
+    // @cpt-begin:cpt-frontx-algo-gts-type-provider-runtime-registration:p1:inst-rr-01
     const jsonEntity: JsonEntity = createJsonEntity(entity);
+    // @cpt-end:cpt-frontx-algo-gts-type-provider-runtime-registration:p1:inst-rr-01
+    // @cpt-begin:cpt-frontx-algo-gts-type-provider-runtime-registration:p1:inst-rr-02
     this.gtsStore.register(jsonEntity);
+    // @cpt-end:cpt-frontx-algo-gts-type-provider-runtime-registration:p1:inst-rr-02
+    // @cpt-begin:cpt-frontx-algo-gts-type-provider-runtime-registration:p1:inst-rr-03
     const result = this.gtsStore.validateInstance(jsonEntity.id);
+    // @cpt-end:cpt-frontx-algo-gts-type-provider-runtime-registration:p1:inst-rr-03
+    // @cpt-begin:cpt-frontx-algo-gts-type-provider-runtime-registration:p1:inst-rr-04
     if (!result.ok || !result.valid) {
+      // @cpt-begin:cpt-frontx-algo-gts-type-provider-runtime-registration:p1:inst-rr-04a
       const reason = result.ok
         ? 'schema validation returned invalid'
         : (result.error ?? 'unknown validation error');
       const schema = jsonEntity.schemaId ? this.getSchema(jsonEntity.schemaId) : undefined;
+      // @cpt-end:cpt-frontx-algo-gts-type-provider-runtime-registration:p1:inst-rr-04a
+      // @cpt-begin:cpt-frontx-algo-gts-type-provider-runtime-registration:p1:inst-rr-04b
       throw new Error(
         `GTS validation failed for instance '${jsonEntity.id || '(anonymous)'}'\n` +
           `Reason: ${reason}\n` +
           `Instance: ${JSON.stringify(entity, null, 2)}\n` +
           `Schema: ${schema ? JSON.stringify(schema, null, 2) : '(schema not resolved)'}`
       );
+      // @cpt-end:cpt-frontx-algo-gts-type-provider-runtime-registration:p1:inst-rr-04b
     }
+    // @cpt-end:cpt-frontx-algo-gts-type-provider-runtime-registration:p1:inst-rr-04
   }
 
   // @cpt-algo:cpt-frontx-algo-gts-type-provider-schema-validation:p1

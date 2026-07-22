@@ -42,7 +42,9 @@ import lifecycleDestroyedInstance from './frontx.mfes/instances/lifecycle/destro
  *
  * @returns Array of JSON schemas for core MFE types
  */
+// @cpt-algo:cpt-frontx-algo-gts-type-provider-infra-registration:p1
 export function loadSchemas(): JSONSchema[] {
+  // @cpt-begin:cpt-frontx-algo-gts-type-provider-infra-registration:p1:inst-ir-02
   return [
     // Core types (8)
     entrySchema as JSONSchema,
@@ -61,6 +63,7 @@ export function loadSchemas(): JSONSchema[] {
     mountExtActionSchema as JSONSchema,
     unmountExtActionSchema as JSONSchema,
   ];
+  // @cpt-end:cpt-frontx-algo-gts-type-provider-infra-registration:p1:inst-ir-02
 }
 
 /**
@@ -70,10 +73,12 @@ export function loadSchemas(): JSONSchema[] {
  * @returns Array of lifecycle stage instances
  */
 export function loadLifecycleStages(): LifecycleStage[] {
+  // @cpt-begin:cpt-frontx-algo-gts-type-provider-infra-registration:p1:inst-ir-04
   return [
     lifecycleInitInstance,
     lifecycleActivatedInstance,
     lifecycleDeactivatedInstance,
     lifecycleDestroyedInstance,
   ] as LifecycleStage[];
+  // @cpt-end:cpt-frontx-algo-gts-type-provider-infra-registration:p1:inst-ir-04
 }

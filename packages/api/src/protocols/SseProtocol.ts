@@ -80,10 +80,12 @@ export class SseProtocol extends ApiProtocol<SsePluginHooks> {
     baseConfig: Readonly<ApiServiceConfig>,
     getExcludedClasses?: () => ReadonlySet<PluginClass>
   ): void {
+    // @cpt-begin:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-obtain-protocol
     this.baseConfig = baseConfig;
     if (getExcludedClasses) {
       this._getExcludedClasses = getExcludedClasses;
     }
+    // @cpt-end:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-obtain-protocol
   }
 
   /**
@@ -108,6 +110,7 @@ export class SseProtocol extends ApiProtocol<SsePluginHooks> {
    * @private
    */
   private getGlobalPlugins(): readonly SsePluginHooks[] {
+    // @cpt-begin:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-run-sse-plugins
     const allGlobalPlugins = protocolPluginRegistry.getAll(SseProtocol);
     const excludedClasses = this._getExcludedClasses();
 
@@ -124,6 +127,7 @@ export class SseProtocol extends ApiProtocol<SsePluginHooks> {
       }
       return true;
     });
+    // @cpt-end:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-run-sse-plugins
   }
 
   /**
@@ -131,10 +135,12 @@ export class SseProtocol extends ApiProtocol<SsePluginHooks> {
    * Required by ApiProtocol interface for ProtocolPluginType inference.
    */
   getPluginsInOrder(): SsePluginHooks[] {
+    // @cpt-begin:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-run-sse-plugins
     return [
       ...this.getGlobalPlugins(),
       ...Array.from(this._instancePlugins),
     ];
+    // @cpt-end:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-run-sse-plugins
   }
 
   /**
@@ -155,9 +161,11 @@ export class SseProtocol extends ApiProtocol<SsePluginHooks> {
         const result = await plugin.onConnect(currentContext);
         // @cpt-end:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-run-sse-plugins
 
+        // @cpt-begin:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-sse-short-circuit
         if (isSseShortCircuit(result)) {
           return result;
         }
+        // @cpt-end:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-sse-short-circuit
 
         currentContext = result;
       }
@@ -247,6 +255,7 @@ export class SseProtocol extends ApiProtocol<SsePluginHooks> {
     onMessage: (event: MessageEvent) => void,
     onComplete?: () => void
   ): void {
+    // @cpt-begin:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-attach-handlers
     // Store connection
     this.connections.set(connectionId, eventSource as EventSource);
 
@@ -264,6 +273,7 @@ export class SseProtocol extends ApiProtocol<SsePluginHooks> {
       if (onComplete) onComplete();
       this.disconnect(connectionId);
     });
+    // @cpt-end:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-attach-handlers
   }
 
   /**
@@ -272,11 +282,13 @@ export class SseProtocol extends ApiProtocol<SsePluginHooks> {
    * @param connectionId - Connection ID returned from connect()
    */
   disconnect(connectionId: string): void {
+    // @cpt-begin:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-receive-events
     const connection = this.connections.get(connectionId);
     if (connection) {
       connection.close();
       this.connections.delete(connectionId);
     }
+    // @cpt-end:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-receive-events
   }
 
   /**

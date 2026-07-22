@@ -74,6 +74,7 @@ function resolveSharedFetchCacheRetainers(host: SharedFetchCacheHost): number {
 }
 
 function createAbortError(reason?: unknown): Error {
+  // @cpt-begin:cpt-frontx-algo-api-protocol-surface-shared-cache:p1:inst-signal-abort
   if (reason instanceof Error && reason.name === 'AbortError') {
     return reason;
   }
@@ -97,6 +98,7 @@ function createAbortError(reason?: unknown): Error {
   const error = new Error('The operation was aborted.');
   error.name = 'AbortError';
   return error;
+  // @cpt-end:cpt-frontx-algo-api-protocol-surface-shared-cache:p1:inst-signal-abort
 }
 
 function compareObjectKeysAlphabetically(a: string, b: string): number {
@@ -143,6 +145,7 @@ function resolveSharedFetchStaleTime(staleTime?: number): number {
 }
 
 function mergeSharedFetchStaleTime(current: number, next: number): number {
+  // @cpt-begin:cpt-frontx-algo-api-protocol-surface-shared-cache:p1:inst-in-flight
   if (current === Number.POSITIVE_INFINITY || next === Number.POSITIVE_INFINITY) {
     return Number.POSITIVE_INFINITY;
   }
@@ -156,9 +159,11 @@ function mergeSharedFetchStaleTime(current: number, next: number): number {
   }
 
   return Math.max(current, next);
+  // @cpt-end:cpt-frontx-algo-api-protocol-surface-shared-cache:p1:inst-in-flight
 }
 
 function isEntryFresh(entry: CacheEntry<unknown>, staleTime: number, now: number): boolean {
+  // @cpt-begin:cpt-frontx-algo-api-protocol-surface-shared-cache:p1:inst-cache-hit
   if (staleTime <= 0 || entry.resolvedAt === undefined) {
     return false;
   }
@@ -168,12 +173,14 @@ function isEntryFresh(entry: CacheEntry<unknown>, staleTime: number, now: number
   }
 
   return entry.resolvedAt + staleTime > now;
+  // @cpt-end:cpt-frontx-algo-api-protocol-surface-shared-cache:p1:inst-cache-hit
 }
 
 function matchesSerializedPrefix(
   cacheKey: string,
   filters: SharedFetchCacheInvalidateFilters
 ): boolean {
+  // @cpt-begin:cpt-frontx-state-api-protocol-surface-fetch-cache-entry:p1:inst-t-cached-idle
   if (filters.key === undefined) {
     return false;
   }
@@ -188,6 +195,7 @@ function matchesSerializedPrefix(
   }
 
   return cacheKey === serializedKey || cacheKey.startsWith(`${serializedKey.slice(0, -1)},`);
+  // @cpt-end:cpt-frontx-state-api-protocol-surface-fetch-cache-entry:p1:inst-t-cached-idle
 }
 
 class SharedFetchCacheImpl implements SharedFetchCache {
@@ -200,6 +208,7 @@ class SharedFetchCacheImpl implements SharedFetchCache {
     key: readonly unknown[],
     options?: SharedFetchCacheLookupOptions
   ): SharedFetchCacheLookupResult<TData> {
+    // @cpt-begin:cpt-frontx-algo-api-protocol-surface-shared-cache:p1:inst-cache-hit
     const cacheKey = resolveCacheKey(key);
     const version = this.versions.get(cacheKey) ?? 0;
     const entry = this.entries.get(cacheKey) as CacheEntry<TData> | undefined;
@@ -212,17 +221,22 @@ class SharedFetchCacheImpl implements SharedFetchCache {
       return { hit: false };
     }
 
+    // @cpt-begin:cpt-frontx-algo-api-protocol-surface-shared-cache:p1:inst-return-cached
     return {
       hit: true,
       data: entry.data as TData,
     };
+    // @cpt-end:cpt-frontx-algo-api-protocol-surface-shared-cache:p1:inst-return-cached
+    // @cpt-end:cpt-frontx-algo-api-protocol-surface-shared-cache:p1:inst-cache-hit
   }
 
   isPending(key: readonly unknown[]): boolean {
+    // @cpt-begin:cpt-frontx-algo-api-protocol-surface-shared-cache:p1:inst-in-flight
     const cacheKey = resolveCacheKey(key);
     const version = this.versions.get(cacheKey) ?? 0;
     const entry = this.entries.get(cacheKey);
     return entry?.version === version && entry.pending === true;
+    // @cpt-end:cpt-frontx-algo-api-protocol-surface-shared-cache:p1:inst-in-flight
   }
 
   getOrFetch<TData>(
@@ -230,9 +244,11 @@ class SharedFetchCacheImpl implements SharedFetchCache {
     fetcher: (options: { signal?: AbortSignal }) => Promise<TData>,
     options?: SharedFetchCacheFetchOptions
   ): Promise<TData> {
+    // @cpt-begin:cpt-frontx-algo-api-protocol-surface-shared-cache:p1:inst-signal-abort
     if (options?.signal?.aborted) {
       return Promise.reject(createAbortError(options.signal.reason));
     }
+    // @cpt-end:cpt-frontx-algo-api-protocol-surface-shared-cache:p1:inst-signal-abort
 
     const cacheKey = resolveCacheKey(key);
     const version = this.versions.get(cacheKey) ?? 0;
@@ -334,6 +350,7 @@ class SharedFetchCacheImpl implements SharedFetchCache {
   }
 
   invalidateMany(filters: SharedFetchCacheInvalidateFilters = {}): void {
+    // @cpt-begin:cpt-frontx-state-api-protocol-surface-fetch-cache-entry:p1:inst-t-cached-idle
     if (filters.key === undefined) {
       return;
     }
@@ -365,9 +382,11 @@ class SharedFetchCacheImpl implements SharedFetchCache {
     matchingKeys.forEach((cacheKey) => {
       this.invalidateCacheKey(cacheKey);
     });
+    // @cpt-end:cpt-frontx-state-api-protocol-surface-fetch-cache-entry:p1:inst-t-cached-idle
   }
 
   clear(): void {
+    // @cpt-begin:cpt-frontx-state-api-protocol-surface-fetch-cache-entry:p1:inst-t-inflight-released
     this.entries.forEach((entry) => {
       if (entry.pending) {
         entry.controller.abort(createAbortError());
@@ -378,6 +397,7 @@ class SharedFetchCacheImpl implements SharedFetchCache {
     this.aliasesByPrimaryKey.clear();
     this.primaryKeysByAlias.clear();
     this.versions.clear();
+    // @cpt-end:cpt-frontx-state-api-protocol-surface-fetch-cache-entry:p1:inst-t-inflight-released
   }
 
   /** @internal Test-only accessor used by `inspectSharedFetchCacheBookkeepingForTest`. */
@@ -441,11 +461,13 @@ class SharedFetchCacheImpl implements SharedFetchCache {
 
         released = true;
         signal?.removeEventListener('abort', onAbort);
+        // @cpt-begin:cpt-frontx-algo-api-protocol-surface-shared-cache:p1:inst-signal-abort
         entry.activeConsumers -= 1;
 
         if (entry.pending && entry.activeConsumers === 0) {
           entry.controller.abort(createAbortError(signal?.reason));
         }
+        // @cpt-end:cpt-frontx-algo-api-protocol-surface-shared-cache:p1:inst-signal-abort
       };
 
       const onAbort = (): void => {
@@ -481,6 +503,7 @@ class SharedFetchCacheImpl implements SharedFetchCache {
   }
 
   private invalidateCacheKey(cacheKey: string): void {
+    // @cpt-begin:cpt-frontx-state-api-protocol-surface-fetch-cache-entry:p1:inst-t-cached-idle
     const entry = this.entries.get(cacheKey);
     if (entry?.pending) {
       entry.controller.abort(createAbortError());
@@ -489,7 +512,6 @@ class SharedFetchCacheImpl implements SharedFetchCache {
       this.versions.delete(cacheKey);
     }
 
-    // @cpt-begin:cpt-frontx-state-api-protocol-surface-fetch-cache-entry:p1:inst-t-cached-idle
     this.entries.delete(cacheKey);
     this.removeAliases(cacheKey);
     // @cpt-end:cpt-frontx-state-api-protocol-surface-fetch-cache-entry:p1:inst-t-cached-idle
@@ -538,7 +560,9 @@ export function getSharedFetchCache(): SharedFetchCache {
 }
 
 export function peekSharedFetchCache(): SharedFetchCache | undefined {
+  // @cpt-begin:cpt-frontx-algo-api-protocol-surface-shared-cache:p1:inst-peek-cache
   return (globalThis as SharedFetchCacheHost)[SHARED_FETCH_CACHE_SYMBOL];
+  // @cpt-end:cpt-frontx-algo-api-protocol-surface-shared-cache:p1:inst-peek-cache
 }
 
 export function retainSharedFetchCache(): SharedFetchCache {
@@ -552,13 +576,14 @@ export function resetSharedFetchCache(): void {
   const host = globalThis as SharedFetchCacheHost;
   // @cpt-begin:cpt-frontx-state-api-protocol-surface-fetch-cache-entry:p1:inst-t-inflight-released
   host[SHARED_FETCH_CACHE_SYMBOL]?.clear();
-  // @cpt-end:cpt-frontx-state-api-protocol-surface-fetch-cache-entry:p1:inst-t-inflight-released
   delete host[SHARED_FETCH_CACHE_SYMBOL];
   delete host[SHARED_FETCH_CACHE_RETAINERS_SYMBOL];
+  // @cpt-end:cpt-frontx-state-api-protocol-surface-fetch-cache-entry:p1:inst-t-inflight-released
 }
 
 export function releaseSharedFetchCache(): void {
   const host = globalThis as SharedFetchCacheHost;
+  // @cpt-begin:cpt-frontx-state-api-protocol-surface-fetch-cache-entry:p1:inst-t-cached-released
   const retainers = resolveSharedFetchCacheRetainers(host);
 
   if (retainers === 0) {
@@ -566,13 +591,12 @@ export function releaseSharedFetchCache(): void {
   }
 
   if (retainers === 1) {
-    // @cpt-begin:cpt-frontx-state-api-protocol-surface-fetch-cache-entry:p1:inst-t-cached-released
     resetSharedFetchCache();
-    // @cpt-end:cpt-frontx-state-api-protocol-surface-fetch-cache-entry:p1:inst-t-cached-released
     return;
   }
 
   host[SHARED_FETCH_CACHE_RETAINERS_SYMBOL] = retainers - 1;
+  // @cpt-end:cpt-frontx-state-api-protocol-surface-fetch-cache-entry:p1:inst-t-cached-released
 }
 
 /**

@@ -26,6 +26,7 @@ import { RestProtocol } from './RestProtocol';
  * This contract is separate from RestProtocol's imperative get/post/put API so
  * services can opt into either or both styles explicitly.
  */
+// @cpt-algo:cpt-frontx-algo-api-protocol-surface-descriptor-derivation:p1
 export class RestEndpointProtocol extends ApiProtocol<BasePluginHooks> {
   private config: Readonly<ApiServiceConfig> | null = null;
 
@@ -53,8 +54,11 @@ export class RestEndpointProtocol extends ApiProtocol<BasePluginHooks> {
     options?: EndpointOptions
   ): EndpointDescriptor<TData> {
     const config = this.getConfig();
+    // @cpt-begin:cpt-frontx-algo-api-protocol-surface-descriptor-derivation:p1:inst-derive-endpoint-key
     const key = [config.baseURL, 'GET', path] as const;
+    // @cpt-end:cpt-frontx-algo-api-protocol-surface-descriptor-derivation:p1:inst-derive-endpoint-key
 
+    // @cpt-begin:cpt-frontx-algo-api-protocol-surface-descriptor-derivation:p1:inst-build-query-descriptor
     return {
       key,
       fetch: ({ signal, staleTime } = {}) => {
@@ -67,6 +71,7 @@ export class RestEndpointProtocol extends ApiProtocol<BasePluginHooks> {
       ...(options?.staleTime !== undefined && { staleTime: options.staleTime }),
       ...(options?.gcTime !== undefined && { gcTime: options.gcTime }),
     };
+    // @cpt-end:cpt-frontx-algo-api-protocol-surface-descriptor-derivation:p1:inst-build-query-descriptor
   }
 
   queryWith<TData, TParams>(
@@ -76,9 +81,12 @@ export class RestEndpointProtocol extends ApiProtocol<BasePluginHooks> {
     const config = this.getConfig();
 
     return (params: TParams): EndpointDescriptor<TData> => {
+      // @cpt-begin:cpt-frontx-algo-api-protocol-surface-descriptor-derivation:p1:inst-resolve-param-path
       const resolvedPath = pathFn(params);
       const key = [config.baseURL, 'GET', resolvedPath, { ...params }] as const;
+      // @cpt-end:cpt-frontx-algo-api-protocol-surface-descriptor-derivation:p1:inst-resolve-param-path
 
+      // @cpt-begin:cpt-frontx-algo-api-protocol-surface-descriptor-derivation:p1:inst-build-query-descriptor
       return {
         key,
         fetch: ({ signal, staleTime } = {}) => {
@@ -91,6 +99,7 @@ export class RestEndpointProtocol extends ApiProtocol<BasePluginHooks> {
         ...(options?.staleTime !== undefined && { staleTime: options.staleTime }),
         ...(options?.gcTime !== undefined && { gcTime: options.gcTime }),
       };
+      // @cpt-end:cpt-frontx-algo-api-protocol-surface-descriptor-derivation:p1:inst-build-query-descriptor
     };
   }
 
@@ -99,8 +108,11 @@ export class RestEndpointProtocol extends ApiProtocol<BasePluginHooks> {
     path: string
   ): MutationDescriptor<TData, TVariables> {
     const config = this.getConfig();
+    // @cpt-begin:cpt-frontx-algo-api-protocol-surface-descriptor-derivation:p1:inst-derive-endpoint-key
     const key = [config.baseURL, method, path] as const;
+    // @cpt-end:cpt-frontx-algo-api-protocol-surface-descriptor-derivation:p1:inst-derive-endpoint-key
 
+    // @cpt-begin:cpt-frontx-algo-api-protocol-surface-descriptor-derivation:p1:inst-build-mutation-descriptor
     return {
       key,
       fetch: (variables: TVariables, options?: { signal?: AbortSignal }) => {
@@ -124,13 +136,16 @@ export class RestEndpointProtocol extends ApiProtocol<BasePluginHooks> {
         }
       },
     };
+    // @cpt-end:cpt-frontx-algo-api-protocol-surface-descriptor-derivation:p1:inst-build-mutation-descriptor
   }
 
   private getConfig(): Readonly<ApiServiceConfig> {
+    // @cpt-begin:cpt-frontx-algo-api-protocol-surface-descriptor-derivation:p1:inst-guard-config
     if (!this.config) {
       throw new Error('RestEndpointProtocol not initialized. Call initialize() first.');
     }
 
     return this.config;
+    // @cpt-end:cpt-frontx-algo-api-protocol-surface-descriptor-derivation:p1:inst-guard-config
   }
 }

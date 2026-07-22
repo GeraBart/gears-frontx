@@ -86,7 +86,7 @@ User-facing interactions that start with an actor (human or external system) and
 2. [ ] - `p1` - Developer calls `registry.registerDomain` with an `ExtensionDomain` declaration and an `ExtensionDomainImplementationFactory` - `inst-flow-rvm-02`
 3. [ ] - `p1` - Registry validates the domain declaration through `typeSystem.register` and synchronously constructs the domain implementation via the factory - `inst-flow-rvm-03`
 4. [ ] - `p1` - **IF** validation fails **THEN** registry throws, domain is not registered, flow ends - `inst-flow-rvm-04`
-5. [ ] - `p1` - Developer calls `registry.registerExtension` with an `Extension` value - `inst-flow-rvm-05`
+5. [x] - `p1` - Developer calls `registry.registerExtension` with an `Extension` value - `inst-flow-rvm-05`
 6. [ ] - `p1` - Registry invokes handler resolution: **FOR EACH** registered handler ordered by descending priority, evaluate `typeSystem.isTypeOf(extension.entry.typeId, handler.handledBaseTypeId)` - `inst-flow-rvm-06`
    1. [ ] - `p1` - **IF** `isTypeOf` returns true, select this handler and stop evaluation - `inst-flow-rvm-06a`
 7. [ ] - `p1` - **IF** no handler matched, registry rejects the extension and flow ends - `inst-flow-rvm-07`
@@ -130,11 +130,11 @@ Internal system functions and procedures that do not interact with actors direct
 **Output**: The matched `MfeHandler`, or a resolution failure
 
 **Steps**:
-1. [ ] - `p1` - Sort the registered handler list by descending `handler.priority` — handlers with equal priority retain insertion order - `inst-algo-hr-01`
+1. [x] - `p1` - Sort the registered handler list by descending `handler.priority` — handlers with equal priority retain insertion order - `inst-algo-hr-01`
 2. [ ] - `p1` - **FOR EACH** handler in sorted order - `inst-algo-hr-02`
    1. [ ] - `p1` - Evaluate `typeSystem.isTypeOf(entryTypeId, handler.handledBaseTypeId)` through the injected `TypeSystemPlugin` - `inst-algo-hr-02a`
-   2. [ ] - `p1` - **IF** `isTypeOf` returns true, **RETURN** this handler as the match — stop iterating - `inst-algo-hr-02b`
-3. [ ] - `p1` - **IF** no handler matched after iterating all handlers, **RETURN** resolution failure indicating no registered handler covers the given entry type - `inst-algo-hr-03`
+   2. [x] - `p1` - **IF** `isTypeOf` returns true, **RETURN** this handler as the match — stop iterating - `inst-algo-hr-02b`
+3. [x] - `p1` - **IF** no handler matched after iterating all handlers, **RETURN** resolution failure indicating no registered handler covers the given entry type - `inst-algo-hr-03`
 
 ### Extension Registration and Entry Storage
 
@@ -149,7 +149,7 @@ Internal system functions and procedures that do not interact with actors direct
 2. [ ] - `p1` - **IF** validation fails, **RETURN** rejection with the validation error - `inst-algo-re-02`
 3. [ ] - `p1` - Invoke handler resolution (see `cpt-frontx-algo-mfe-registry-handler-resolution`) with the entry's `typeId` - `inst-algo-re-03`
 4. [ ] - `p1` - **IF** resolution fails, **RETURN** rejection with a handler-not-found error - `inst-algo-re-04`
-5. [ ] - `p1` - Store the extension in the registry's internal map keyed by `extension.id`, associating it with the resolved handler - `inst-algo-re-05`
+5. [x] - `p1` - Store the extension in the registry's internal map keyed by `extension.id`, associating it with the resolved handler - `inst-algo-re-05`
 6. [ ] - `p1` - Notify the extension's target domain that a new extension has been registered - `inst-algo-re-06`
 7. [ ] - `p1` - **RETURN** success - `inst-algo-re-07`
 
@@ -172,7 +172,7 @@ Internal system functions and procedures that do not interact with actors direct
 6. [ ] - `p1` - **FROM** HANDLER_RESOLVED **TO** REJECTED **WHEN** domain contract matching fails or cardinality is exceeded - `inst-state-el-06`
 7. [ ] - `p1` - **FROM** ADMITTED **TO** MOUNTED **WHEN** `handler.load` completes and the lifecycle is mounted under the domain's mount strategy - `inst-state-el-07`
 8. [ ] - `p1` - **FROM** ADMITTED **TO** REJECTED **WHEN** `handler.load` fails or mount fails - `inst-state-el-08`
-9. [ ] - `p1` - **FROM** MOUNTED **TO** UNREGISTERED **WHEN** `unregisterExtension` is called — the extension is unmounted first, then removed from the registry - `inst-state-el-09`
+9. [x] - `p1` - **FROM** MOUNTED **TO** UNREGISTERED **WHEN** `unregisterExtension` is called — the extension is unmounted first, then removed from the registry - `inst-state-el-09`
 
 ### Factory Cache Lifecycle
 

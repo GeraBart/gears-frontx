@@ -28,6 +28,10 @@ patterns = ["packages/auth/*"]
 reason = "Template-standard package is template territory (Phase 11 template-move); code carries pre-redesign markers that reference archived IDs — no active FEATURE artifact backs this package"
 patterns = ["packages/frontx-template-standard/**"]
 
+[[ignore]]
+reason = "Unmarked build/test tooling in scripts/ has no CDSL backing. NOTE: scripts/ecosystem-version-policy.mjs (ecosystem-distribution F1) and scripts/test-architecture.ts carry @cpt markers and MUST stay scanned — they are deliberately NOT ignored here."
+patterns = ["scripts/test-runner/*", "scripts/manual-auth-tests/*", "scripts/check-test-dependency-versions.mjs", "scripts/run-monorepo-unit-tests.mjs", "scripts/sdk-layer-tests.ts", "scripts/verify-layered-configs.ts"]
+
 [[systems]]
 name = "FrontX Dev Kit"
 slug = "frontx"
@@ -72,4 +76,4 @@ extensions = [".ts"]
 
 [[systems.codebase]]
 path = "scripts/"
-extensions = [".mjs"]
+extensions = [".mjs", ".ts"]

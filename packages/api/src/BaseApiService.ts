@@ -60,6 +60,7 @@ export abstract class BaseApiService {
     this.config = Object.freeze({ ...config });
 
     // Initialize each protocol with config and excluded classes callback
+    // @cpt-begin:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-obtain-protocol
     protocols.forEach((protocol) => {
       protocol.initialize(
         this.config,
@@ -67,6 +68,7 @@ export abstract class BaseApiService {
       );
       this.protocols.set(protocol.constructor.name, protocol);
     });
+    // @cpt-end:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-obtain-protocol
   }
 
   // ============================================================================
@@ -215,7 +217,9 @@ export abstract class BaseApiService {
    * @internal
    */
   protected getExcludedPluginClasses(): ReadonlySet<PluginClass> {
+    // @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-collect-plugins
     return this.excludedPluginClasses;
+    // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-collect-plugins
   }
 
   /**

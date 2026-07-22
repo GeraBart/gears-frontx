@@ -14,6 +14,7 @@
   - [Infrastructure Schema and Lifecycle Instance Registration](#infrastructure-schema-and-lifecycle-instance-registration)
   - [Schema Validation](#schema-validation)
   - [Type-Of Hierarchy Resolution](#type-of-hierarchy-resolution)
+  - [Runtime Application Type Registration](#runtime-application-type-registration)
 - [4. States (CDSL)](#4-states-cdsl)
   - [Provider Initialization State Machine](#provider-initialization-state-machine)
 - [5. Definitions of Done](#5-definitions-of-done)
@@ -149,6 +150,23 @@ Internal system functions and procedures that do not interact with actors direct
    1. [x] - `p1` - **RETURN** true — the type is the same as or derives from the base type. - `inst-tr-02a`
 3. [x] - `p1` - **RETURN** false — no derivation relationship exists. - `inst-tr-03`
 
+### Runtime Application Type Registration
+
+- [x] `p1` - **ID**: `cpt-frontx-algo-gts-type-provider-runtime-registration`
+
+**Input**: `entity` — an application type definition (schema or instance) supplied at runtime through the type-substrate port; or `typeId` — the identifier of a schema to retrieve.
+
+**Output**: The entity registered in the internal GTS store and validated against its schema (an error is raised on validation failure); or the resolved schema for a retrieval request.
+
+**Steps**:
+1. [x] - `p1` - Wrap the supplied application entity as a typed GTS entity. - `inst-rr-01`
+2. [x] - `p1` - Register the wrapped entity in the internal GTS store. - `inst-rr-02`
+3. [x] - `p1` - Request the GTS store to validate the registered instance against its resolved schema. - `inst-rr-03`
+4. [x] - `p1` - **IF** the validation result is not ok or not valid: - `inst-rr-04`
+   1. [x] - `p1` - Compose an error identifying the instance, the failure reason, and the resolved schema. - `inst-rr-04a`
+   2. [x] - `p1` - Raise the error, aborting the registration. - `inst-rr-04b`
+5. [x] - `p1` - Retrieve a registered schema by type identifier, returning undefined when no entity exists or the entity content is not a schema object. - `inst-rr-05`
+
 ## 4. States (CDSL)
 
 ### Provider Initialization State Machine
@@ -192,6 +210,7 @@ The provider **MUST** validate registered instances against their schemas and re
 - `cpt-frontx-flow-gts-type-provider-validate-extension-type`
 - `cpt-frontx-algo-gts-type-provider-schema-validation`
 - `cpt-frontx-algo-gts-type-provider-typof-resolution`
+- `cpt-frontx-algo-gts-type-provider-runtime-registration`
 
 **Constraints**: `cpt-frontx-constraint-gts-plugin-owns-infra-schemas`, `cpt-frontx-constraint-gts-plugin-excludes-solution-schemas`
 

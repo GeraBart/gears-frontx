@@ -189,7 +189,9 @@ export class DefaultMfeRegistry extends MfeRegistry {
       for (const handler of config.mfeHandlers) {
         this.handlers.push(handler);
       }
+      // @cpt-begin:cpt-frontx-algo-mfe-registry-handler-resolution:p1:inst-algo-hr-01
       this.handlers.sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
+      // @cpt-end:cpt-frontx-algo-mfe-registry-handler-resolution:p1:inst-algo-hr-01
     }
   }
 
@@ -237,12 +239,13 @@ export class DefaultMfeRegistry extends MfeRegistry {
 
   // ─── Entry type validation ────────────────────────────────────────────────
 
-  // @cpt-begin:cpt-frontx-algo-mfe-registry-handler-resolution:p1:inst-1
   private validateEntryType(entryTypeId: string): void {
     if (this.handlers.length === 0) {
       return;
     }
 
+    // @cpt-begin:cpt-frontx-algo-mfe-registry-handler-resolution:p1:inst-algo-hr-03
+    // No handler covers the entry type after evaluating all → resolution failure.
     const canHandle = this.handlers.some(handler =>
       this.typeSystem.isTypeOf(entryTypeId, handler.handledBaseTypeId)
     );
@@ -252,13 +255,17 @@ export class DefaultMfeRegistry extends MfeRegistry {
         this.handlers.map(h => h.handledBaseTypeId)
       );
     }
+    // @cpt-end:cpt-frontx-algo-mfe-registry-handler-resolution:p1:inst-algo-hr-03
   }
-  // @cpt-end:cpt-frontx-algo-mfe-registry-handler-resolution:p1:inst-1
 
   private resolveHandler(entryTypeId: string): MfeHandler | undefined {
+    // @cpt-begin:cpt-frontx-algo-mfe-registry-handler-resolution:p1:inst-algo-hr-02b
+    // Iterate handlers (already priority-sorted) and return the first whose
+    // handled base type matches the entry type through the injected type system.
     return this.handlers.find(handler =>
       this.typeSystem.isTypeOf(entryTypeId, handler.handledBaseTypeId)
     );
+    // @cpt-end:cpt-frontx-algo-mfe-registry-handler-resolution:p1:inst-algo-hr-02b
   }
 
   // ─── registerDomain ───────────────────────────────────────────────────────
@@ -552,25 +559,38 @@ export class DefaultMfeRegistry extends MfeRegistry {
     return this.extensionManager.getExtensionState(extensionId)?.bridge ?? null;
   }
 
+  // @cpt-flow:cpt-frontx-flow-mfe-registry-register-validate-mount:p1
+  // @cpt-algo:cpt-frontx-algo-mfe-registry-register-extension:p2
   async registerExtension(extension: Extension): Promise<void> {
     return this.operationSerializer.serializeOperation(extension.id, async () => {
+      // @cpt-begin:cpt-frontx-flow-mfe-registry-register-validate-mount:p1:inst-flow-rvm-05
+      // Developer-invoked registration of an Extension value: delegates entry
+      // type-validation, handler resolution, and entry storage to the manager.
       await this.extensionManager.registerExtension(extension);
+      // @cpt-end:cpt-frontx-flow-mfe-registry-register-validate-mount:p1:inst-flow-rvm-05
 
       try {
+        // @cpt-begin:cpt-frontx-algo-mfe-registry-register-extension:p2:inst-algo-re-05
+        // Store the admitted extension in the registry's internal map keyed by id.
         const packageId = extractGtsPackage(extension.id);
         if (!this.packages.has(packageId)) {
           this.packages.set(packageId, new Set<string>());
         }
         this.packages.get(packageId)!.add(extension.id);
+        // @cpt-end:cpt-frontx-algo-mfe-registry-register-extension:p2:inst-algo-re-05
       } catch {
         // Not a valid GTS ID — skip package tracking.
       }
     });
   }
 
+  // @cpt-state:cpt-frontx-state-mfe-registry-entry-lifecycle:p2
   async unregisterExtension(extensionId: string): Promise<void> {
     return this.operationSerializer.serializeOperation(extensionId, async () => {
+      // @cpt-begin:cpt-frontx-state-mfe-registry-entry-lifecycle:p2:inst-state-el-09
+      // MOUNTED -> UNREGISTERED: extension is unmounted first, then removed.
       await this.extensionManager.unregisterExtension(extensionId);
+      // @cpt-end:cpt-frontx-state-mfe-registry-entry-lifecycle:p2:inst-state-el-09
 
       try {
         const packageId = extractGtsPackage(extensionId);
