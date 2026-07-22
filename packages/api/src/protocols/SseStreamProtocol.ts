@@ -22,6 +22,7 @@ import { SseProtocol } from './SseProtocol';
  * This contract is separate from SseProtocol's imperative connect/disconnect
  * API so services can opt into a descriptor-driven streaming model explicitly.
  */
+// @cpt-algo:cpt-frontx-algo-api-protocol-surface-descriptor-derivation:p1
 export class SseStreamProtocol extends ApiProtocol<BasePluginHooks> {
   private config: Readonly<ApiServiceConfig> | null = null;
 
@@ -49,9 +50,12 @@ export class SseStreamProtocol extends ApiProtocol<BasePluginHooks> {
     options?: { parse?: (event: MessageEvent) => TEvent }
   ): StreamDescriptor<TEvent> {
     const config = this.getConfig();
+    // @cpt-begin:cpt-frontx-algo-api-protocol-surface-descriptor-derivation:p1:inst-derive-endpoint-key
     const key = [config.baseURL, 'SSE', path] as const;
     const parse = options?.parse ?? ((event: MessageEvent) => JSON.parse(event.data) as TEvent);
+    // @cpt-end:cpt-frontx-algo-api-protocol-surface-descriptor-derivation:p1:inst-derive-endpoint-key
 
+    // @cpt-begin:cpt-frontx-algo-api-protocol-surface-descriptor-derivation:p1:inst-build-stream-descriptor
     return {
       key,
       connect: (onEvent, onComplete) =>
@@ -64,13 +68,16 @@ export class SseStreamProtocol extends ApiProtocol<BasePluginHooks> {
         this.sse.disconnect(connectionId);
       },
     };
+    // @cpt-end:cpt-frontx-algo-api-protocol-surface-descriptor-derivation:p1:inst-build-stream-descriptor
   }
 
   private getConfig(): Readonly<ApiServiceConfig> {
+    // @cpt-begin:cpt-frontx-algo-api-protocol-surface-descriptor-derivation:p1:inst-guard-config
     if (!this.config) {
       throw new Error('SseStreamProtocol not initialized. Call initialize() first.');
     }
 
     return this.config;
+    // @cpt-end:cpt-frontx-algo-api-protocol-surface-descriptor-derivation:p1:inst-guard-config
   }
 }

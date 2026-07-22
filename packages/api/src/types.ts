@@ -410,7 +410,9 @@ export type PluginClass<T extends ApiPluginBase = ApiPluginBase> = abstract new 
 export function isShortCircuit(
   result: ApiRequestContext | ShortCircuitResponse | undefined
 ): result is ShortCircuitResponse {
+  // @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-detect-sc
   return result !== undefined && 'shortCircuit' in result;
+  // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-detect-sc
 }
 
 // ============================================================================

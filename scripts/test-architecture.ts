@@ -7,9 +7,7 @@
  */
 
 import { execSync } from 'child_process';
-import { readFileSync } from 'fs';
 import * as path from 'node:path';
-import { join } from 'path';
 import { pathToFileURL } from 'node:url';
 
 // ─── Standalone helpers (previously in packages/cli/template-sources) ───────
@@ -51,34 +49,6 @@ export interface ArchCheck {
   description: string;
 }
 
-type PackageManager = 'npm' | 'pnpm' | 'yarn';
-
-// @cpt-begin:cpt-frontx-algo-cli-tooling-package-manager-policy:p1:inst-detect-package-manager
-function detectPackageManager(): PackageManager {
-  try {
-    const packageJson = JSON.parse(
-      readFileSync(join(process.cwd(), 'package.json'), 'utf-8'),
-    ) as { packageManager?: string };
-    const managerId = packageJson.packageManager?.split('@')[0];
-    if (managerId === 'pnpm' || managerId === 'yarn') {
-      return managerId;
-    }
-  } catch {
-    // ignore and use default
-  }
-  return 'npm';
-}
-// @cpt-end:cpt-frontx-algo-cli-tooling-package-manager-policy:p1:inst-detect-package-manager
-
-// @cpt-begin:cpt-frontx-algo-cli-tooling-package-manager-policy:p1:inst-build-package-manager-commands
-function runScriptCommand(packageManager: PackageManager, scriptName: string): string {
-  if (packageManager === 'yarn') {
-    return `yarn ${scriptName}`;
-  }
-  return `${packageManager} run ${scriptName}`;
-}
-// @cpt-end:cpt-frontx-algo-cli-tooling-package-manager-policy:p1:inst-build-package-manager-commands
-
 export function runCommand(command: string, description: string): boolean {
   log(`🔍 ${description}...`, 'blue');
   try {
@@ -94,15 +64,15 @@ export function runCommand(command: string, description: string): boolean {
   }
 }
 
-export function getStandaloneChecks(packageManager: PackageManager = detectPackageManager()): ArchCheck[] {
+export function getStandaloneChecks(): ArchCheck[] {
   const checks: ArchCheck[] = [
-    { command: runScriptCommand(packageManager, 'lint'), description: 'ESLint rules' },
-    { command: runScriptCommand(packageManager, 'type-check'), description: 'TypeScript type check' },
+    { command: 'npm run lint', description: 'ESLint rules' },
+    { command: 'npm run type-check', description: 'TypeScript type check' },
   ];
 
   const nodeVersion = Number.parseInt(process.versions.node.split('.')[0], 10);
   if (nodeVersion >= 24) {
-    checks.push({ command: runScriptCommand(packageManager, 'arch:deps'), description: 'Dependency rules' });
+    checks.push({ command: 'npm run arch:deps', description: 'Dependency rules' });
   } else {
     log(`⚠️  Dependency rules - SKIPPED (requires Node >= 24, current: ${process.versions.node})`, 'yellow');
   }

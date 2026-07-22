@@ -61,11 +61,13 @@ export function sourceImports(source: string, packageName: string): boolean {
  *         `replacement` is a blob URL produced by `URL.createObjectURL`.
  *         Neither is user input.
  */
+// @cpt-algo:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1
 export function rewriteBareSpecifier(
   source: string,
   packageName: string,
   replacement: string,
 ): string {
+  // @cpt-begin:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-rewrite-shared
   const escaped = packageName.replace(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
   const fromPattern = new RegExp(
     String.raw`(from\s*["'])${escaped}(["'])`,
@@ -78,6 +80,7 @@ export function rewriteBareSpecifier(
   );
   result = result.replace(sideEffectPattern, `$1${replacement}$2`);
   return result;
+  // @cpt-end:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-rewrite-shared
 }
 
 /**

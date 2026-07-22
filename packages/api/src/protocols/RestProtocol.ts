@@ -137,6 +137,7 @@ export class RestProtocol extends ApiProtocol<RestPluginHooks> {
     config: Readonly<ApiServiceConfig>,
     getExcludedClasses?: () => ReadonlySet<PluginClass>
   ): void {
+    // @cpt-begin:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-obtain-protocol
     this.config = config;
     if (getExcludedClasses) {
       this.getExcludedClasses = getExcludedClasses;
@@ -152,6 +153,7 @@ export class RestProtocol extends ApiProtocol<RestPluginHooks> {
       timeout: this.restConfig.timeout ?? config.timeout,
       withCredentials: this.restConfig.withCredentials,
     });
+    // @cpt-end:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-obtain-protocol
   }
 
   /**
@@ -193,6 +195,7 @@ export class RestProtocol extends ApiProtocol<RestPluginHooks> {
    * @internal
    */
   private getGlobalPlugins(): readonly RestPluginHooks[] {
+    // @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-collect-plugins
     const allGlobalPlugins = protocolPluginRegistry.getAll(RestProtocol);
     const excludedClasses = this.getExcludedClasses();
 
@@ -209,6 +212,7 @@ export class RestProtocol extends ApiProtocol<RestPluginHooks> {
       }
       return true;
     });
+    // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-collect-plugins
   }
 
   /**
@@ -217,10 +221,12 @@ export class RestProtocol extends ApiProtocol<RestPluginHooks> {
    * @internal
    */
   getPluginsInOrder(): RestPluginHooks[] {
+    // @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-collect-plugins
     return [
       ...this.getGlobalPlugins(),
       ...Array.from(this._instancePlugins),
     ];
+    // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-collect-plugins
   }
 
   // ============================================================================
@@ -426,12 +432,19 @@ export class RestProtocol extends ApiProtocol<RestPluginHooks> {
     try {
       preparedRequest = await this.prepareRequestContext(requestContext);
     } catch (error) {
+      // @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-check-cancel
+      // @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-rethrow-cancel
       if (axios.isCancel(error)) {
         throw error;
       }
+      // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-rethrow-cancel
+      // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-check-cancel
 
+      // @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-build-error-ctx
       const err = error instanceof Error ? error : new Error(String(error));
       const responseContext = this.extractResponseContext(error);
+      // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-build-error-ctx
+      // @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-error-chain
       const finalResult = await this.executePluginOnError(
         err,
         requestContext,
@@ -440,12 +453,19 @@ export class RestProtocol extends ApiProtocol<RestPluginHooks> {
         retryCount,
         responseContext
       );
+      // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-error-chain
 
+      // @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-error-recovery
       if (this.isApiResponseContext(finalResult)) {
+        // @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-recovered-response
         return this.unwrapResponseData<T>(finalResult, requestContext);
+        // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-recovered-response
       }
+      // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-error-recovery
 
+      // @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-propagate-err
       throw finalResult;
+      // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-propagate-err
     }
 
     // @cpt-begin:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-transport-call
@@ -611,11 +631,13 @@ export class RestProtocol extends ApiProtocol<RestPluginHooks> {
     };
 
     try {
+      // @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-have-sc
       if (preparedRequest.shortCircuitResponse) {
         return {
           responseContext: preparedRequest.shortCircuitResponse,
         };
       }
+      // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-have-sc
 
       const axiosConfig: AxiosRequestConfig = {
         method,
@@ -627,8 +649,11 @@ export class RestProtocol extends ApiProtocol<RestPluginHooks> {
         signal,
       };
 
+      // @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-transport
       const response = await this.client!.request(axiosConfig);
+      // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-transport
 
+      // @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-wrap
       return {
         responseContext: {
           status: response.status,
@@ -636,13 +661,17 @@ export class RestProtocol extends ApiProtocol<RestPluginHooks> {
           data: response.data,
         },
       };
+      // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-wrap
     } catch (error) {
+      // @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-check-cancel
       if (axios.isCancel(error)) {
         throw error;
       }
+      // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-check-cancel
 
       const err = error instanceof Error ? error : new Error(String(error));
       const responseContext = this.extractResponseContext(error);
+      // @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-error-chain
       const finalResult = await this.executePluginOnError(
         err,
         requestContext,
@@ -651,14 +680,19 @@ export class RestProtocol extends ApiProtocol<RestPluginHooks> {
         retryCount,
         responseContext
       );
+      // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-error-chain
 
+      // @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-error-recovery
       if (finalResult && typeof finalResult === 'object' && 'status' in finalResult && 'data' in finalResult) {
         return {
           responseContext: finalResult as ApiResponseContext,
         };
       }
+      // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-error-recovery
 
+      // @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-propagate-err
       throw finalResult;
+      // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-propagate-err
     }
   }
 
@@ -735,6 +769,7 @@ export class RestProtocol extends ApiProtocol<RestPluginHooks> {
     _requestContext: ApiRequestContext
   ): Promise<ApiResponseContext> {
     let currentContext: ApiResponseContext = { ...context };
+    // @cpt-begin:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-run-response-plugins
     // Use protocol-level plugins (global + instance) in reverse order
     const plugins = [...this.getPluginsInOrder()].reverse();
 
@@ -745,6 +780,7 @@ export class RestProtocol extends ApiProtocol<RestPluginHooks> {
     }
 
     return currentContext;
+    // @cpt-end:cpt-frontx-flow-api-protocol-surface-service-call:p1:inst-run-response-plugins
   }
 
   private isApiResponseContext(value: Error | ApiResponseContext): value is ApiResponseContext {
@@ -772,6 +808,7 @@ export class RestProtocol extends ApiProtocol<RestPluginHooks> {
     retryCount: number,
     responseContext?: RestResponseContext
   ): Promise<Error | ApiResponseContext> {
+    // @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-build-error-ctx
     // Create retry function that calls requestInternal with incremented retryCount
     const retry = async (modifiedRequest?: Partial<RestRequestContext>): Promise<RestResponseContext> => {
       const retryContext: RestRequestContext = {
@@ -808,7 +845,9 @@ export class RestProtocol extends ApiProtocol<RestPluginHooks> {
       retryCount,
       retry,
     };
+    // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-build-error-ctx
 
+    // @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-error-chain
     let currentResult: Error | ApiResponseContext = error;
     // Use protocol-level plugins (global + instance) in reverse order
     const plugins = [...this.getPluginsInOrder()].reverse();
@@ -818,9 +857,11 @@ export class RestProtocol extends ApiProtocol<RestPluginHooks> {
         const result = await plugin.onError(errorContext);
 
         // If plugin returns ApiResponseContext, it's a recovery - stop chain
+        // @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-error-recovery
         if (result && typeof result === 'object' && 'status' in result && 'data' in result) {
           return result as ApiResponseContext;
         }
+        // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-error-recovery
 
         // If plugin returns Error, continue chain
         if (result instanceof Error) {
@@ -830,6 +871,7 @@ export class RestProtocol extends ApiProtocol<RestPluginHooks> {
     }
 
     return currentResult;
+    // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-error-chain
   }
 
   private async prepareRequest(
@@ -867,6 +909,7 @@ export class RestProtocol extends ApiProtocol<RestPluginHooks> {
     retryHeaders?: Record<string, string>,
     withCredentials?: boolean
   ): ApiRequestContext {
+    // @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-build-context
     const fullUrl = this.config?.baseURL
       ? `${this.config.baseURL}${url}`.replace(/\/+/g, '/').replace(':/', '://')
       : url;
@@ -881,12 +924,14 @@ export class RestProtocol extends ApiProtocol<RestPluginHooks> {
       withCredentials: withCredentials ?? this.restConfig.withCredentials,
       signal,
     };
+    // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-build-context
   }
 
   private resolveSharedGetCacheKey(
     context: ApiRequestContext,
     params?: Record<string, string>
   ): readonly unknown[] {
+    // @cpt-begin:cpt-frontx-algo-api-protocol-surface-shared-cache:p1:inst-derive-shared-key
     return [
       context.method,
       context.url,
@@ -895,6 +940,7 @@ export class RestProtocol extends ApiProtocol<RestPluginHooks> {
       context.body,
       Boolean(context.withCredentials ?? this.restConfig.withCredentials),
     ] as const;
+    // @cpt-end:cpt-frontx-algo-api-protocol-surface-shared-cache:p1:inst-derive-shared-key
   }
 
   private resolveSharedGetPreparationKey(
@@ -902,6 +948,7 @@ export class RestProtocol extends ApiProtocol<RestPluginHooks> {
     params?: Record<string, string>,
     withCredentials?: boolean
   ): readonly unknown[] {
+    // @cpt-begin:cpt-frontx-algo-api-protocol-surface-shared-cache:p1:inst-derive-prep-key
     const requestContext = this.buildRequestContext('GET', url, undefined, undefined, undefined, withCredentials);
 
     return [
@@ -912,9 +959,11 @@ export class RestProtocol extends ApiProtocol<RestPluginHooks> {
       params ? { ...params } : undefined,
       requestContext.body,
     ] as const;
+    // @cpt-end:cpt-frontx-algo-api-protocol-surface-shared-cache:p1:inst-derive-prep-key
   }
 
   private extractResponseContext(error: unknown): RestResponseContext | undefined {
+    // @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-build-error-ctx
     if (!axios.isAxiosError(error) || !error.response) {
       return undefined;
     }
@@ -924,6 +973,7 @@ export class RestProtocol extends ApiProtocol<RestPluginHooks> {
       headers: error.response.headers as Record<string, string>,
       data: error.response.data,
     };
+    // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-build-error-ctx
   }
 
 }

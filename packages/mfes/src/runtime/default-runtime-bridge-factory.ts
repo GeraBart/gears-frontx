@@ -27,6 +27,7 @@ import { ChildDomainForwardingHandler } from '../bridge/ChildDomainForwardingHan
  *
  * @internal
  */
+// @cpt-algo:cpt-frontx-algo-mfe-host-communication-bridge-delegation:p2
 export class DefaultRuntimeBridgeFactory extends RuntimeBridgeFactory {
   /**
    * Create a bridge connection between host and child MFE.
@@ -68,14 +69,17 @@ export class DefaultRuntimeBridgeFactory extends RuntimeBridgeFactory {
     childBridge.setParentBridge(parentBridgeImpl);
 
     // Wire child action handler (internal wiring, not on public interface)
+    // @cpt-begin:cpt-frontx-algo-mfe-host-communication-bridge-delegation:p2:inst-fwd-exec-chain
     parentBridgeImpl.onChildAction(executeActionsChain);
 
     // Wire registry's executeActionsChain to child bridge as capability pass-through
     childBridge.setExecuteActionsChainCallback(executeActionsChain);
+    // @cpt-end:cpt-frontx-algo-mfe-host-communication-bridge-delegation:p2:inst-fwd-exec-chain
 
     // Wire child domain forwarding callbacks.
     // The forwarding handler is registered as a catch-all because the parent
     // cannot enumerate the child domain's action types at registration time.
+    // @cpt-begin:cpt-frontx-algo-mfe-host-communication-bridge-delegation:p2:inst-fwd-reg-domain
     const registerChildDomainCallback = (domainId: string) => {
       const handler = new ChildDomainForwardingHandler(parentBridgeImpl, domainId);
       registerCatchAllActionHandler(domainId, handler);
@@ -86,15 +90,18 @@ export class DefaultRuntimeBridgeFactory extends RuntimeBridgeFactory {
     };
 
     childBridge.setChildDomainCallbacks(registerChildDomainCallback, unregisterChildDomainCallback);
+    // @cpt-end:cpt-frontx-algo-mfe-host-communication-bridge-delegation:p2:inst-fwd-reg-domain
 
     // Wire per-(extensionId, actionTypeId) handler registration.
     // The bridge captures extensionId and domainId from createBridge params.
     // domainId is required so the mediator can populate targetDomainMap, which
     // allows resolveTimeout() to find the domain's defaultActionTimeout for
     // extension-targeted actions.
+    // @cpt-begin:cpt-frontx-algo-mfe-host-communication-bridge-delegation:p2:inst-fwd-reg-handler
     childBridge.setRegisterActionHandlerCallback((actionTypeId, handler) => {
       registerExtensionActionHandler(extensionId, actionTypeId, handler, domainState.domain.id);
     });
+    // @cpt-end:cpt-frontx-algo-mfe-host-communication-bridge-delegation:p2:inst-fwd-reg-handler
 
     // Populate initial properties from domain state (raw values)
     for (const [propertyTypeId, rawValue] of domainState.properties) {

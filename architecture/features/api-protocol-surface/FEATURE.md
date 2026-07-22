@@ -13,6 +13,7 @@
 - [3. Processes / Business Logic (CDSL)](#3-processes--business-logic-cdsl)
   - [Protocol-Separated Request Dispatch and Plugin Short-Circuit](#protocol-separated-request-dispatch-and-plugin-short-circuit)
   - [Realm-Shared Retainer-Counted Fetch Cache](#realm-shared-retainer-counted-fetch-cache)
+  - [Declarative Endpoint and Stream Descriptor Derivation](#declarative-endpoint-and-stream-descriptor-derivation)
 - [4. States (CDSL)](#4-states-cdsl)
   - [Fetch-Cache Entry State Machine](#fetch-cache-entry-state-machine)
 - [5. Definitions of Done](#5-definitions-of-done)
@@ -153,6 +154,22 @@ No PRD usecase — this flow describes the consumer-issued service-call interact
     1. [x] - `p1` - Remove the entry from the cache immediately after resolution - `inst-remove-after-resolve`
 12. [x] - `p1` - Execute the response plugin chain on the resolved response context and **RETURN** the final data to the consumer - `inst-post-fetch-response-chain`
 
+### Declarative Endpoint and Stream Descriptor Derivation
+
+- [x] `p2` - **ID**: `cpt-frontx-algo-api-protocol-surface-descriptor-derivation`
+
+**Input**: The service base configuration (base URL); an endpoint path (static or parameter-derived); the HTTP method or SSE stream marker; endpoint options (staleTime, gcTime, event parser).
+
+**Output**: A declarative descriptor carrying an auto-derived cache key and a fetch (or connect/disconnect) closure that routes execution through the imperative protocol.
+
+**Steps**:
+1. [x] - `p1` - Guard that the descriptor protocol has been initialized with the service config; throw if it has not - `inst-guard-config`
+2. [x] - `p1` - Derive the endpoint cache key automatically from the service base URL, the method, and the path — no call site defines a cache key manually - `inst-derive-endpoint-key`
+3. [x] - `p1` - **IF** the read endpoint is parameterized, resolve the path from the supplied params and include the params in the derived key - `inst-resolve-param-path`
+4. [x] - `p1` - Build a read (query) descriptor whose fetch closure routes through the shared-cache GET, passing the derived key as the descriptor alias and the resolved stale time - `inst-build-query-descriptor`
+5. [x] - `p1` - Build a write (mutation) descriptor whose fetch closure dispatches the configured HTTP verb through the imperative protocol - `inst-build-mutation-descriptor`
+6. [x] - `p1` - For a stream endpoint, derive the SSE key from the base URL and path and build a stream descriptor whose connect delegates to the streaming protocol with the event parser and whose disconnect closes the connection - `inst-build-stream-descriptor`
+
 ## 4. States (CDSL)
 
 ### Fetch-Cache Entry State Machine
@@ -200,6 +217,7 @@ The system **MUST** implement a shared fetch cache stored on the realm global vi
 **Implements**:
 - `cpt-frontx-algo-api-protocol-surface-shared-cache`
 - `cpt-frontx-state-api-protocol-surface-fetch-cache-entry`
+- `cpt-frontx-algo-api-protocol-surface-descriptor-derivation`
 
 **Constraints**: `cpt-frontx-constraint-api-no-solution-content`
 

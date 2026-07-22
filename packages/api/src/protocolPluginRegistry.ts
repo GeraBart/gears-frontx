@@ -63,9 +63,11 @@ class ProtocolPluginRegistry {
     return false;
   }
 
+  // @cpt-algo:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1
   getAll<T extends ApiProtocol>(
     protocolClass: new (...args: never[]) => T
   ): readonly ProtocolPluginType<T>[] {
+    // @cpt-begin:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-collect-plugins
     const plugins = this.protocolPlugins.get(protocolClass);
     if (!plugins) {
       return [];
@@ -74,6 +76,7 @@ class ProtocolPluginRegistry {
     return Array.from(plugins).filter((_plugin): _plugin is ProtocolPluginType<T> => {
       return true;
     });
+    // @cpt-end:cpt-frontx-algo-api-protocol-surface-protocol-dispatch:p1:inst-collect-plugins
   }
 
   clear<T extends ApiProtocol>(
