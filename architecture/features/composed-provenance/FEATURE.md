@@ -205,5 +205,5 @@ The system **MUST** write one in-repository provenance record per applied templa
 - [x] When an unresolvable collision is detected, the CLI reports the conflicting target path and contributing unit identities, and no files are written to disk.
 - [x] When a reference cycle is detected in the preset tree, the CLI reports the cycle and aborts before writing any files.
 - [x] An assembled repository contains one provenance record per applied template, each capturing that template's identity, its applied-from version, a re-resolvable source-spec, and its occupied ownership boundary — with no single whole-repository origin record.
-- [x] `cpt --json validate --artifact architecture/features/composed-provenance/FEATURE.md --skip-code` returns PASS.
-- [x] `cpt --json validate-toc architecture/features/composed-provenance/FEATURE.md` returns PASS.
+- [x] `cfs --json validate --artifact architecture/features/composed-provenance/FEATURE.md --skip-code` returns PASS.
+- [x] `cfs --json validate-toc architecture/features/composed-provenance/FEATURE.md` returns PASS.

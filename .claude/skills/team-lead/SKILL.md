@@ -42,7 +42,7 @@ Default to solo subagents. Use a team when agents need to coordinate, hand off w
 
 ### When to spawn each agent
 
-**Architect** — Spawn when: multiple valid approaches, new abstractions, cross-package boundaries, or unclear behavior boundaries. Skip when: the approach is obvious, an architecture artifact defines behavior, or the change follows established patterns. The architect has two roles: **shaping design before implementation** and **reviewing results after**. Works with Cypilot artifacts (PRD, ADR, DESIGN, DECOMPOSITION, FEATURE).
+**Architect** — Spawn when: multiple valid approaches, new abstractions, cross-package boundaries, or unclear behavior boundaries. Skip when: the approach is obvious, an architecture artifact defines behavior, or the change follows established patterns. The architect has two roles: **shaping design before implementation** and **reviewing results after**. Works with Constructor Studio artifacts (PRD, ADR, DESIGN, DECOMPOSITION, FEATURE).
 
 **Researcher** — Spawn when: comparing technologies with real data, investigating API capabilities, finding version-specific constraints, or validating assumptions. Skip when: a quick search or codebase grep answers the question. Use an `Explore` subagent for quick lookups instead. Output feeds the architect — they don't decide and don't feed the developer directly.
 
@@ -124,9 +124,9 @@ The team lead's job is to break down work, assign, steer, and synthesize — not
 
 **Onboard, don't micromanage.** When spawning an agent, include task-specific orientation: what exists in the area they'll work on, the relevant architecture artifact, and the current state of that piece. Don't repeat repo-wide conventions — those are already in CLAUDE.md and agent prompts.
 
-### Cypilot workflow and delegation
+### Constructor Studio workflow and delegation
 
-Features and structural changes flow through Cypilot architecture artifacts. The architect maintains PRD, ADR, DESIGN, and DECOMPOSITION. FEATURE is a shared artifact — both architect and developer can author and update it (architect defines scope from DECOMPOSITION, developer refines with implementation detail). The developer reads all artifacts for implementation context.
+Features and structural changes flow through Constructor Studio architecture artifacts. The architect maintains PRD, ADR, DESIGN, and DECOMPOSITION. FEATURE is a shared artifact — both architect and developer can author and update it (architect defines scope from DECOMPOSITION, developer refines with implementation detail). The developer reads all artifacts for implementation context.
 
 The correct flow:
 

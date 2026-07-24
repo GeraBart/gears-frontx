@@ -1,14 +1,14 @@
 {
   "permissions": {
     "allow": [
-      "Bash(cpt validate:*)",
-      "Bash(cpt validate-toc:*)",
-      "Bash(cpt info:*)",
-      "Bash(cpt list-ids:*)",
-      "Bash(cpt toc:*)",
-      "Skill(cypilot-generate)",
-      "Skill(cypilot-analyze)",
-      "Skill(cypilot)"
+      "Bash(cfs validate:*)",
+      "Bash(cfs validate-toc:*)",
+      "Bash(cfs info:*)",
+      "Bash(cfs list-ids:*)",
+      "Bash(cfs toc:*)",
+      "Skill(cf-generate)",
+      "Skill(cf-analyze)",
+      "Skill(cf)"
     ]
   },
   "hooks": {
