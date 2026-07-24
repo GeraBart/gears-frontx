@@ -71,11 +71,22 @@ packages/cli/src/generated/
 coverage/
 **/coverage/
 
+# Python bytecode cache (kit scripts under .cf-studio/ may be executed locally)
+__pycache__/
+*.pyc
+
 # Studio execution plans
 .cf-studio/.plans/
 
 # Studio archived plans (lifecycle = archive)
 .cf-studio/.plans/.archive/
+
+# Studio sdlc kit content — tool-managed, regenerated via `cfs update --with-kits yes`.
+# Placed outside the BEGIN/END Constructor Studio block below because that block
+# is fully rewritten on every `cfs update`/`cfs generate-agents` run and does not
+# preserve manual additions.
+.cf-studio/config/kits/sdlc/*
+.cf-studio/.cache/explore/*
 
 # BEGIN Constructor Studio
 # Generated Constructor Studio runtime and agent integration files.
