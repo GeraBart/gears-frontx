@@ -1,5 +1,4 @@
 ---
-cpt: true
 kind: FEATURE
 system: frontx
 slug: type-substrate-port

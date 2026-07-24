@@ -7,15 +7,15 @@ repos:
   - repo: builtin
     hooks:
       - id: trailing-whitespace
-        exclude: \.cypilot/(\.core|\.gen|config/kits)/
+        exclude: \.cf-studio/(\.core|\.gen|config/kits)/
       - id: end-of-file-fixer
-        exclude: \.cypilot/(\.core|\.gen|config/kits)/
+        exclude: \.cf-studio/(\.core|\.gen|config/kits)/
       - id: check-yaml
-        exclude: \.cypilot/(\.core|\.gen|config/kits)/
+        exclude: \.cf-studio/(\.core|\.gen|config/kits)/
       - id: check-json
-        exclude: (tsconfig\.json$|\.cypilot/(\.core|\.gen|config/kits)/)
+        exclude: (tsconfig\.json$|\.cf-studio/(\.core|\.gen|config/kits)/)
       - id: check-toml
-        exclude: \.cypilot/(\.core|\.gen|config/kits)/
+        exclude: \.cf-studio/(\.core|\.gen|config/kits)/
       - id: check-added-large-files
         args: ['--maxkb=500']
         exclude: package-lock\.json$

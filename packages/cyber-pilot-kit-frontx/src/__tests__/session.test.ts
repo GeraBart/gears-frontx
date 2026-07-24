@@ -6,7 +6,7 @@ import { loadKitSession, KitLifecycleState } from '../session.js';
 import type { KitRegistration } from '../types.js';
 
 const validRegistration: KitRegistration = {
-  format: 'Cypilot',
+  format: 'CFS',
   path: '/fake/kit/path',
   version: '0.1.0',
   source: 'npm:@gears-frontx/cyber-pilot-kit-frontx',

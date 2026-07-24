@@ -40,13 +40,13 @@ exclude_paths:
   # Generated MFE manifest (build artifact).
   - "src/app/mfe/generated-mfe-manifests.json"
 
-  # Architecture artifacts (PRD/ADR/DESIGN/FEATURE/etc.) — cypilot owns
+  # Architecture artifacts (PRD/ADR/DESIGN/FEATURE/etc.) — studio owns
   # markdown validation for these via its own validator (TOC anchors,
   # cross-refs, traceability). Codacy's markdownlint rules (notably
   # MD051 link-fragment validity) use GitHub-style slugification that
-  # disagrees with cypilot's slug rule on edge cases (e.g. headings
+  # disagrees with studio's slug rule on edge cases (e.g. headings
   # starting with `_`), producing duplicate-but-conflicting findings.
-  # cypilot is the authoritative validator for this tree.
+  # studio is the authoritative validator for this tree.
   - "architecture/**"
 
   # CLI ai-sync command + project generator — construct every fs path

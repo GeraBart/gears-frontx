@@ -727,7 +727,7 @@ The system **MUST** place no architectural upper limit on the number of microfro
 - [ ] Pillar balance is maintained in the §5 distribution: each pillar has at least 5 functional requirements and the maximum-to-minimum ratio is at most 2 — verifiable by counting §5 entries per pillar.
 - [ ] All four public components have a §7.1 entry with a stability level and a breaking-change policy — verifiable via the §7.1 enumeration.
 - [ ] All six external integration contracts are documented with party, direction, and a compatibility commitment in §7.2 — verifiable via the §7.2 enumeration.
-- [ ] The PRD is structurally valid and internally consistent: `cpt validate --artifact architecture/PRD.md --skip-code` returns PASS, and the standing content-quality checks — citation discipline, design-agnostic prose, controlled product vocabulary, and external-system-name scope, together with pillar balance — all clear.
+- [ ] The PRD is structurally valid and internally consistent: `cfs validate --artifact architecture/PRD.md --skip-code` returns PASS, and the standing content-quality checks — citation discipline, design-agnostic prose, controlled product vocabulary, and external-system-name scope, together with pillar balance — all clear.
 - [ ] Downstream SDLC artifacts authored against this PRD trace back to specific functional-requirement IDs (`cpt-frontx-fr-*`) and component or contract IDs (`cpt-frontx-interface-*` / `cpt-frontx-contract-*`).
 
 ## 10. Dependencies

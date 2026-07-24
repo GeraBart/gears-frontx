@@ -71,8 +71,8 @@ jobs:
     - name: Run architecture validation
       run: npm run arch:check
 
-  cypilot-validate:
-    name: Cypilot Validate Artifacts
+  studio-validate:
+    name: Studio Validate Artifacts
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -82,12 +82,20 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: '3.12'
+
+      - name: Install Constructor Studio CLI
+        run: pipx install "git+https://github.com/constructorfabric/studio.git@v1.6.2"
+
+      # .cf-studio/.core is gitignored (Constructor-Studio-owned, regenerated
+      # on demand) — materialize it before invoking studio.py directly.
+      - name: Bootstrap Constructor Studio runtime
+        run: cfs update -y --no-interactive
 
       - name: Validate artifacts and traceability
-        run: python3 .cypilot/.core/skills/cypilot/scripts/cypilot.py validate
+        run: python3 .cf-studio/.core/skills/studio/scripts/studio.py validate
 
-  cypilot-validate-kits:
-    name: Cypilot Validate Kits
+  studio-validate-kits:
+    name: Studio Validate Kits
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -97,12 +105,18 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: '3.12'
+
+      - name: Install Constructor Studio CLI
+        run: pipx install "git+https://github.com/constructorfabric/studio.git@v1.6.2"
+
+      - name: Bootstrap Constructor Studio runtime
+        run: cfs update -y --no-interactive
 
       - name: Validate installed kits
-        run: python3 .cypilot/.core/skills/cypilot/scripts/cypilot.py validate-kits
+        run: python3 .cf-studio/.core/skills/studio/scripts/studio.py validate-kits
 
-  cypilot-spec-coverage:
-    name: Cypilot Spec Coverage
+  studio-spec-coverage:
+    name: Studio Spec Coverage
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -112,6 +126,12 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: '3.12'
+
+      - name: Install Constructor Studio CLI
+        run: pipx install "git+https://github.com/constructorfabric/studio.git@v1.6.2"
+
+      - name: Bootstrap Constructor Studio runtime
+        run: cfs update -y --no-interactive
 
       - name: Check spec coverage thresholds
         # Threshold rebased for the post-split ecosystem repo. The framework/
@@ -123,7 +143,7 @@ jobs:
         # honest coverage is ~41%; the bar sits just below it with headroom.
         # Raise it as Pillar-1 traceability density improves over time.
         run: >-
-          python3 .cypilot/.core/skills/cypilot/scripts/cypilot.py
+          python3 .cf-studio/.core/skills/studio/scripts/studio.py
           spec-coverage
           --min-coverage 38
           --min-granularity 0.28

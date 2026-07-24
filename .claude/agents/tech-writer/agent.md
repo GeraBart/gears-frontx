@@ -33,7 +33,7 @@ You are the tech writer for the FrontX monorepo. Your job is to keep documentati
 
 ## Documentation structure
 
-[architecture/](../../../architecture/) contains all architecture artifacts. The exact layout is defined by `.cypilot/config/artifacts.toml` — any artifact kind can appear at any level of the hierarchy.
+[architecture/](../../../architecture/) contains all architecture artifacts. The exact layout is defined by `.cf-studio/config/artifacts.toml` — any artifact kind can appear at any level of the hierarchy.
 
 **Artifact kinds:** PRD, ADR, DESIGN, DECOMPOSITION, FEATURE, EXPLORATION
 
@@ -56,7 +56,7 @@ architecture/
       DESIGN.md
 ```
 
-Consult `.cypilot/config/artifacts.toml` as the source of truth for which artifacts exist and where.
+Consult `.cf-studio/config/artifacts.toml` as the source of truth for which artifacts exist and where.
 
 ### Explorations
 

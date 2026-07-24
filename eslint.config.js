@@ -32,6 +32,11 @@ export default [
       // Disposable Claude Code agent worktrees — full repo checkouts that
       // should never be linted as part of this repo's own source tree.
       '.claude/**',
+      // Constructor Studio vendored/generated runtime — kit-managed tool
+      // internals (e.g. bundled browser-side assets), not this repo's own
+      // source. Regenerated via `cfs update`/`cfs generate-agents`.
+      '.cf-studio/.core/**',
+      '.cf-studio/.gen/**',
       // Disposable seed-test scratch — generated template output produced by
       // the offline-seed e2e procedure; not this repo's own source.
       'seeded-test/**',

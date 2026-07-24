@@ -1,5 +1,4 @@
 ---
-cpt: true
 type: DESIGN
 system: frontx
 status: final
