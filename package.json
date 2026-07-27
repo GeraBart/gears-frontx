@@ -85,7 +85,7 @@
       "@swc/core-win32-x64-msvc": "1.15.7"
     },
     "picomatch": "4.0.4",
-    "brace-expansion": "2.1.2",
+    "brace-expansion": "5.0.8",
     "fast-uri": "3.1.4",
     "esbuild": "0.25.12",
     "js-yaml": "4.3.0",
@@ -95,7 +95,7 @@
     "@testing-library/react": "16.3.2"
   },
   "devDependencies": {
-    "@eslint/js": "9.27.0",
+    "@eslint/js": "10.0.1",
     "@j178/prek": "0.2.25",
     "@testing-library/react": "16.3.2",
     "@types/lodash": "4.17.20",
@@ -103,9 +103,9 @@
     "@vitest/coverage-v8": "4.1.4",
     "ajv": "8.18.0",
     "dependency-cruiser": "17.3.10",
-    "eslint": "9.27.0",
-    "eslint-plugin-react-hooks": "5.0.0",
-    "eslint-plugin-unused-imports": "4.1.4",
+    "eslint": "10.8.0",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "eslint-plugin-unused-imports": "4.4.1",
     "globals": "15.12.0",
     "js-yaml": "4.3.0",
     "jsdom": "26.1.0",
@@ -114,7 +114,7 @@
     "promptfoo": "^0.120.16",
     "tsx": "4.20.6",
     "typescript": "5.4.2",
-    "typescript-eslint": "8.32.1",
+    "typescript-eslint": "8.65.0",
     "vitest": "4.1.4"
   }
 }

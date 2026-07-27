@@ -149,6 +149,9 @@ Internal system functions and procedures that do not interact with actors direct
 2. [x] - `p1` - **IF** `typeId` equals `baseTypeId` or `typeId` starts with `baseTypeId`: - `inst-tr-02`
    1. [x] - `p1` - **RETURN** true — the type is the same as or derives from the base type. - `inst-tr-02a`
 3. [x] - `p1` - **RETURN** false — no derivation relationship exists. - `inst-tr-03`
+4. [x] - `p1` - Resolve this plugin's own GTS action-type ID for the framework's well-known `load_ext` lifecycle action - `inst-tr-04`
+5. [x] - `p1` - Resolve this plugin's own GTS action-type ID for the framework's well-known `mount_ext` lifecycle action - `inst-tr-05`
+6. [x] - `p1` - Resolve this plugin's own GTS action-type ID for the framework's well-known `unmount_ext` lifecycle action - `inst-tr-06`
 
 ### Runtime Application Type Registration
 

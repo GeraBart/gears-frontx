@@ -55,7 +55,7 @@ class FakeContainerHooks implements ContainerHooks {
 
 // Minimal MfeRegistry stub for strategy tests — only getMountedExtensions matters here.
 class FakeRegistry extends MfeRegistry {
-  readonly typeSystem: TypeSystemPlugin = { name: 'fake', version: '0', register: () => {}, registerSchema: () => {}, getSchema: () => undefined, isTypeOf: () => false, validateInstance: () => ({ valid: true, errors: [] }) };
+  readonly typeSystem: TypeSystemPlugin = { name: 'fake', version: '0', register: () => {}, registerSchema: () => {}, getSchema: () => undefined, isTypeOf: () => false, validateInstance: () => ({ valid: true, errors: [] }), resolveLoadExtActionId: () => 'load_ext', resolveMountExtActionId: () => 'mount_ext', resolveUnmountExtActionId: () => 'unmount_ext' };
   private readonly mountedByDomain = new Map<string, string[]>();
 
   setMounted(domainId: string, ids: string[]): void {

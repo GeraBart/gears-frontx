@@ -63,6 +63,7 @@ export async function orchestrateAiDrivenUpgrade(
   // @cpt-end:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-request-upgrade
 
   let lifecycleState: OrchestrationLifecycleStateValue = OrchestrationLifecycleState.PROVENANCE_READ;
+  void lifecycleState; // lifecycle state held for observability
 
   // @cpt-begin:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-read-provenance
   // Reads the FULL provenance record SET (one record per applied template —
@@ -157,6 +158,7 @@ export async function orchestrateAiDrivenUpgrade(
 
     // @cpt-begin:cpt-frontx-state-ai-upgrade-orchestration-lifecycle:p1:inst-to-applied
     lifecycleState = OrchestrationLifecycleState.APPLIED;
+    void lifecycleState; // lifecycle state held for observability
     // @cpt-end:cpt-frontx-state-ai-upgrade-orchestration-lifecycle:p1:inst-to-applied
 
     // @cpt-begin:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-return-applied

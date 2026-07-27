@@ -137,18 +137,26 @@ Internal system functions and procedures that do not interact with actors direct
 
 **Steps**:
 1. [x] - `p1` - Identify the mount strategy instance composed inside the domain's implementation factory - `inst-sc-identify-strategy`
+   1. [x] - `p1` - **IF** no MountStrategy instance was captured by the domain implementation, **RETURN** domain rejected with a missing-strategy error - `inst-sc-no-strategy-reject`
+   2. [x] - `p1` - **IF** more than one MountStrategy instance was captured, use the first captured instance as the representative for cardinality matching; mixed-strategy domains (multiple distinct strategy instances) are not supported - `inst-sc-first-strategy-representative`
 2. [x] - `p1` - **MATCH** the strategy instance type - `inst-sc-match-strategy`
-   1. [x] - `p1` - **CASE** ConcurrentMountStrategy: the domain's action declaration must include mount_ext AND unmount_ext - `inst-sc-concurrent-row`
-   2. [x] - `p1` - **CASE** OptionalMountStrategy: the domain's action declaration must include mount_ext AND unmount_ext - `inst-sc-optional-row`
-   3. [x] - `p1` - **CASE** ExclusiveMountStrategy: the domain's action declaration must include mount_ext AND must NOT include unmount_ext - `inst-sc-exclusive-row`
+   1. [x] - `p1` - **CASE** ConcurrentMountStrategy: the domain's action declaration must include an action that is-a mount_ext AND an action that is-a unmount_ext - `inst-sc-concurrent-row`
+   2. [x] - `p1` - **CASE** OptionalMountStrategy: the domain's action declaration must include an action that is-a mount_ext AND an action that is-a unmount_ext - `inst-sc-optional-row`
+   3. [x] - `p1` - **CASE** ExclusiveMountStrategy: the domain's action declaration must include an action that is-a mount_ext AND must NOT include any action that is-a unmount_ext - `inst-sc-exclusive-row`
    4. [x] - `p1` - **DEFAULT**: the strategy is unrecognized; **RETURN** domain rejected with an unrecognized-strategy error - `inst-sc-unknown-reject`
 3. [x] - `p1` - **FOR EACH** action required by the matched cardinality row - `inst-sc-required-check-loop`
-   1. [x] - `p1` - **IF** the domain's declared actions do not contain this required action - `inst-sc-missing-required`
+   1. [x] - `p1` - **IF** the domain's declared actions do not contain an action that is-a this required action (the base action type ID resolved from the injected type-system plugin via its dedicated `resolveMountExtActionId`/`resolveUnmountExtActionId` method), per the type system's hierarchy-aware is-a check - `inst-sc-missing-required`
       1. [x] - `p1` - **RETURN** domain rejected, naming the missing required action - `inst-sc-required-fail`
 4. [x] - `p1` - **FOR EACH** action forbidden by the matched cardinality row - `inst-sc-forbidden-check-loop`
-   1. [x] - `p1` - **IF** the domain's declared actions contain this forbidden action - `inst-sc-forbidden-present`
+   1. [x] - `p1` - **IF** the domain's declared actions contain an action that is-a this forbidden action (the base action type ID resolved from the injected type-system plugin via its dedicated `resolveMountExtActionId`/`resolveUnmountExtActionId` method), per the type system's hierarchy-aware is-a check - `inst-sc-forbidden-present`
       1. [x] - `p1` - **RETURN** domain rejected, naming the forbidden action that was declared - `inst-sc-forbidden-fail`
-5. [x] - `p1` - **RETURN** domain accepted; the strategy instance is registered as the domain's mount executor - `inst-sc-accept`
+5. [x] - `p1` - **FOR EACH** action listed in declaration.actions - `inst-sc-handler-required-loop`
+   1. [x] - `p1` - **IF** no handler was registered (via `ctx.registerHandler`) for this action - `inst-sc-handler-missing-check`
+      1. [x] - `p1` - **RETURN** domain rejected, naming the declared action with no registered handler - `inst-sc-handler-missing-fail`
+6. [x] - `p1` - **FOR EACH** handler registered via `ctx.registerHandler`, excluding handlers pre-populated by the registry itself (e.g. the infrastructure `load_ext` handler) - `inst-sc-handler-extra-loop`
+   1. [x] - `p1` - **IF** this handler's action is not present in declaration.actions - `inst-sc-handler-extra-check`
+      1. [x] - `p1` - **RETURN** domain rejected, naming the handler-registered action absent from the declaration - `inst-sc-handler-extra-fail`
+7. [x] - `p1` - **RETURN** domain accepted; the strategy instance is registered as the domain's mount executor - `inst-sc-accept`
 
 ### Strategy Mount Execution
 

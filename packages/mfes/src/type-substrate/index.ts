@@ -145,4 +145,43 @@ export interface TypeSystemPlugin<TSchema = unknown> {
   // @cpt-end:cpt-frontx-algo-type-substrate-port-type-of-resolution:p2:inst-delegate-hierarchy
   // @cpt-end:cpt-frontx-algo-type-substrate-port-schema-validation-delegation:p2:inst-call-is-type-of
   // @cpt-end:cpt-frontx-flow-type-substrate-port-register-validate:p1:inst-delegate-is-type-of
+
+  // === Well-Known Lifecycle Actions ===
+  //
+  // The MFE Runtime's mount/unmount/load lifecycle is a fixed, framework-owned
+  // concept — every plugin MUST supply its own notation-native type ID for
+  // each one. Modeled as three explicit methods (not a single method keyed by
+  // a string) so implementers get a compile-time-enforced, discoverable
+  // contract: TypeScript rejects an incomplete `implements TypeSystemPlugin`
+  // rather than letting an unsupported string key silently resolve to nothing.
+
+  /**
+   * Resolve this plugin's concrete type ID for the framework's `load_ext`
+   * lifecycle action (pre-populated on every domain by the runtime).
+   *
+   * @returns This plugin's concrete type ID for `load_ext`
+   */
+  // @cpt-begin:cpt-frontx-algo-type-substrate-port-type-of-resolution:p2:inst-resolve-load-ext
+  resolveLoadExtActionId(): string;
+  // @cpt-end:cpt-frontx-algo-type-substrate-port-type-of-resolution:p2:inst-resolve-load-ext
+
+  /**
+   * Resolve this plugin's concrete type ID for the framework's `mount_ext`
+   * lifecycle action (required by every mount strategy's cardinality rule).
+   *
+   * @returns This plugin's concrete type ID for `mount_ext`
+   */
+  // @cpt-begin:cpt-frontx-algo-type-substrate-port-type-of-resolution:p2:inst-resolve-mount-ext
+  resolveMountExtActionId(): string;
+  // @cpt-end:cpt-frontx-algo-type-substrate-port-type-of-resolution:p2:inst-resolve-mount-ext
+
+  /**
+   * Resolve this plugin's concrete type ID for the framework's `unmount_ext`
+   * lifecycle action (required or forbidden depending on mount strategy).
+   *
+   * @returns This plugin's concrete type ID for `unmount_ext`
+   */
+  // @cpt-begin:cpt-frontx-algo-type-substrate-port-type-of-resolution:p2:inst-resolve-unmount-ext
+  resolveUnmountExtActionId(): string;
+  // @cpt-end:cpt-frontx-algo-type-substrate-port-type-of-resolution:p2:inst-resolve-unmount-ext
 }
