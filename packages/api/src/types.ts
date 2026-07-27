@@ -36,6 +36,7 @@ export type JsonObject = { [key: string]: JsonValue };
  * Broader than JsonValue to accept objects without index signatures.
  * Intentionally permissive to avoid type errors while maintaining runtime JSON-serializability.
  */
+// eslint-disable-next-line @typescript-eslint/no-restricted-types -- intentionally accepts any non-primitive shape, including objects without index signatures
 export type JsonCompatible = JsonValue | object;
 
 // ============================================================================
@@ -74,7 +75,7 @@ export const MOCK_PLUGIN = Symbol.for('frontx:plugin:mock');
  */
 export function isMockPlugin(plugin: unknown): boolean {
   if (!plugin || typeof plugin !== 'object') return false;
-  const constructor = (plugin as object).constructor;
+  const constructor = plugin.constructor;
   return MOCK_PLUGIN in constructor;
 }
 

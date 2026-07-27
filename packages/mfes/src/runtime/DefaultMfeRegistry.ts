@@ -37,7 +37,6 @@ import { RuntimeBridgeFactory } from './runtime-bridge-factory';
 import { DefaultRuntimeBridgeFactory } from './default-runtime-bridge-factory';
 import { LoadExtHandler } from './extension-lifecycle-action-handler';
 import { INFRASTRUCTURE_LIFECYCLE_ACTIONS } from '../validation/contract';
-import { FRONTX_ACTION_LOAD_EXT, FRONTX_ACTION_MOUNT_EXT, FRONTX_ACTION_UNMOUNT_EXT } from '../constants';
 import { EntryTypeNotHandledError } from '../errors';
 import { extractGtsPackage } from '../gts/extract-package';
 import { DefaultExtensionMounter } from './DefaultExtensionMounter';
@@ -302,7 +301,7 @@ export class DefaultMfeRegistry extends MfeRegistry {
     // Step 3: Build DomainContext and pre-populate LoadExtHandler.
     const ctx = new InvalidatableDomainContext(mounter, lifecycleTrigger);
     ctx.prepopulateHandler(
-      FRONTX_ACTION_LOAD_EXT,
+      this.typeSystem.resolveLoadExtActionId(),
       new LoadExtHandler(this.operationSerializer, this.mountManager)
     );
 
@@ -385,14 +384,18 @@ export class DefaultMfeRegistry extends MfeRegistry {
     strategies: import('./mount-strategy').MountStrategy[],
     ctx: InvalidatableDomainContext
   ): void {
+    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-no-strategy-reject
     if (strategies.length === 0) {
       throw new Error(
         `Domain '${declaration.id}': domain implementation must capture at least one MountStrategy instance.`
       );
     }
+    // @cpt-end:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-no-strategy-reject
 
+    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-first-strategy-representative
     // Use the first strategy as the representative — mixed-strategy domains are not supported.
     const strategy = strategies[0];
+    // @cpt-end:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-first-strategy-representative
     // @cpt-end:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-identify-strategy
 
     // Identify strategy class and look up cardinality row.
@@ -428,7 +431,7 @@ export class DefaultMfeRegistry extends MfeRegistry {
       throw new Error(
         `Domain '${declaration.id}': unrecognized MountStrategy class. ` +
         'The cardinality matrix only handles ConcurrentMountStrategy, OptionalMountStrategy, and ExclusiveMountStrategy. ' +
-        'Custom strategy classes are not supported (per ADR-0020).'
+        'Custom strategy classes are not supported (per ADR-0009).'
       );
       // @cpt-end:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-unknown-reject
     }
@@ -436,32 +439,56 @@ export class DefaultMfeRegistry extends MfeRegistry {
 
     const declaredActions = declaration.actions;
 
+    // Resolve the framework's well-known lifecycle action IDs through the
+    // injected plugin — the runtime never spells a concrete type-format
+    // literal for these concepts (MFES-1).
+    const mountExtActionId = this.typeSystem.resolveMountExtActionId();
+    const unmountExtActionId = this.typeSystem.resolveUnmountExtActionId();
+
     // @cpt-begin:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-required-check-loop
     // Enforce REQUIRED actions in declaration.
-    if (requireMount && !declaredActions.includes(FRONTX_ACTION_MOUNT_EXT)) {
-      // @cpt-begin:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-missing-required
-      throw new Error(
-        `Domain '${declaration.id}': ${strategyName} requires '${FRONTX_ACTION_MOUNT_EXT}' in declaration.actions.`
-      );
-      // @cpt-end:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-missing-required
-    }
-    if (requireUnmount && !declaredActions.includes(FRONTX_ACTION_UNMOUNT_EXT)) {
+    // Non-string entries are treated as non-matching (F-009 hardening) rather than
+    // letting typeSystem.isTypeOf throw on a malformed declaredActions entry.
+    const hasMountExtOrDerivative = declaredActions.some(
+      (id) => typeof id === 'string' && this.typeSystem.isTypeOf(id, mountExtActionId)
+    );
+    const hasUnmountExtOrDerivative = declaredActions.some(
+      (id) => typeof id === 'string' && this.typeSystem.isTypeOf(id, unmountExtActionId)
+    );
+    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-missing-required
+    if (requireMount && !hasMountExtOrDerivative) {
       // @cpt-begin:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-required-fail
       throw new Error(
-        `Domain '${declaration.id}': ${strategyName} requires '${FRONTX_ACTION_UNMOUNT_EXT}' in declaration.actions.`
+        `Domain '${declaration.id}': ${strategyName} requires '${mountExtActionId}' in declaration.actions.`
       );
       // @cpt-end:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-required-fail
     }
+    // @cpt-end:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-missing-required
+    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-missing-required
+    if (requireUnmount && !hasUnmountExtOrDerivative) {
+      // @cpt-begin:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-required-fail
+      throw new Error(
+        `Domain '${declaration.id}': ${strategyName} requires '${unmountExtActionId}' in declaration.actions.`
+      );
+      // @cpt-end:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-required-fail
+    }
+    // @cpt-end:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-missing-required
     // @cpt-end:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-required-check-loop
 
     // @cpt-begin:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-forbidden-check-loop
     // Enforce FORBIDDEN actions in declaration.
     // @cpt-begin:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-forbidden-present
-    if (forbidUnmount && declaredActions.includes(FRONTX_ACTION_UNMOUNT_EXT)) {
+    if (forbidUnmount && hasUnmountExtOrDerivative) {
     // @cpt-end:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-forbidden-present
       // @cpt-begin:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-forbidden-fail
+      // Name the actual declared action that triggered the violation (may be a
+      // hierarchy-derived id, not necessarily the plugin-resolved base id) for debuggability.
+      const offendingAction = declaredActions.find(
+        (id) => typeof id === 'string' && this.typeSystem.isTypeOf(id, unmountExtActionId)
+      );
       throw new Error(
-        `Domain '${declaration.id}': ${strategyName} forbids '${FRONTX_ACTION_UNMOUNT_EXT}' in declaration.actions.`
+        `Domain '${declaration.id}': ${strategyName} forbids '${unmountExtActionId}' in declaration.actions, ` +
+        `but declared action '${String(offendingAction)}' violates this rule.`
       );
       // @cpt-end:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-forbidden-fail
     }
@@ -469,30 +496,42 @@ export class DefaultMfeRegistry extends MfeRegistry {
 
     const collectedHandlers = ctx.getCollectedHandlers();
 
+    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-handler-required-loop
     // Every action in declaration.actions must have a handler.
+    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-handler-missing-check
     for (const actionType of declaredActions) {
       if (!collectedHandlers.has(actionType)) {
+    // @cpt-end:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-handler-missing-check
+        // @cpt-begin:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-handler-missing-fail
         throw new Error(
           `Domain '${declaration.id}': declaration lists '${actionType}' but no handler was registered via ctx.registerHandler.`
         );
+        // @cpt-end:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-handler-missing-fail
       }
     }
+    // @cpt-end:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-handler-required-loop
 
+    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-handler-extra-loop
     // Every handler registered via ctx.registerHandler must be in
     // declaration.actions. Per the spec (inst-enforce-no-extra-handlers), this
     // check is scoped to handlers REGISTERED by the factory, not handlers
-    // PREPOPULATED by the registry itself (e.g., FRONTX_ACTION_LOAD_EXT supplied
-    // by LoadExtHandler injection). The registry-supplied handlers are infrastructure
+    // PREPOPULATED by the registry itself (e.g., the plugin-resolved 'load_ext'
+    // action id supplied by LoadExtHandler injection). The registry-supplied handlers are infrastructure
     // and need not appear in declaration.actions for every domain.
     const prepopulated = ctx.getPrepopulatedActionTypes();
+    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-handler-extra-check
     for (const [actionType] of collectedHandlers) {
       if (prepopulated.has(actionType)) continue;
       if (!declaredActions.includes(actionType)) {
+    // @cpt-end:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-handler-extra-check
+        // @cpt-begin:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-handler-extra-fail
         throw new Error(
           `Domain '${declaration.id}': handler registered for '${actionType}' but '${actionType}' is not declared in declaration.actions.`
         );
+        // @cpt-end:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-handler-extra-fail
       }
     }
+    // @cpt-end:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-handler-extra-loop
     // @cpt-begin:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-accept
     // domain accepted — strategy registered as mount executor (implicit; execution continues in registerDomain)
     // @cpt-end:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-accept

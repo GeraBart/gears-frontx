@@ -26,6 +26,11 @@ import {
   type JsonEntity,
 } from '@globaltypesystem/gts-ts';
 import type { TypeSystemPlugin, ValidationResult } from '@gears-frontx/mfes';
+import {
+  FRONTX_ACTION_LOAD_EXT,
+  FRONTX_ACTION_MOUNT_EXT,
+  FRONTX_ACTION_UNMOUNT_EXT,
+} from '@gears-frontx/mfes';
 import type { JSONSchema } from './types';
 import { loadSchemas, loadLifecycleStages } from './loader';
 
@@ -305,6 +310,27 @@ export class GtsPlugin implements TypeSystemPlugin<JSONSchema> {
     return false;
     // @cpt-end:cpt-frontx-algo-gts-type-provider-typof-resolution:p1:inst-tr-03
   }
+
+  // Resolve this plugin's GTS action-type IDs for the framework's
+  // well-known lifecycle actions. Keeps every GTS-notation literal for
+  // load/mount/unmount owned here, never in the generic runtime.
+  // @cpt-begin:cpt-frontx-algo-gts-type-provider-typof-resolution:p1:inst-tr-04
+  resolveLoadExtActionId(): string {
+    return FRONTX_ACTION_LOAD_EXT;
+  }
+  // @cpt-end:cpt-frontx-algo-gts-type-provider-typof-resolution:p1:inst-tr-04
+
+  // @cpt-begin:cpt-frontx-algo-gts-type-provider-typof-resolution:p1:inst-tr-05
+  resolveMountExtActionId(): string {
+    return FRONTX_ACTION_MOUNT_EXT;
+  }
+  // @cpt-end:cpt-frontx-algo-gts-type-provider-typof-resolution:p1:inst-tr-05
+
+  // @cpt-begin:cpt-frontx-algo-gts-type-provider-typof-resolution:p1:inst-tr-06
+  resolveUnmountExtActionId(): string {
+    return FRONTX_ACTION_UNMOUNT_EXT;
+  }
+  // @cpt-end:cpt-frontx-algo-gts-type-provider-typof-resolution:p1:inst-tr-06
 }
 
 /**

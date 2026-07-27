@@ -121,7 +121,7 @@ export class SseProtocol extends ApiProtocol<SsePluginHooks> {
     // Filter out excluded plugin classes
     return allGlobalPlugins.filter((plugin) => {
       for (const excludedClass of excludedClasses) {
-        if ((plugin as object) instanceof excludedClass) {
+        if ((plugin as unknown) instanceof excludedClass) {
           return false;
         }
       }

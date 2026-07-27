@@ -506,7 +506,7 @@ async function main(): Promise<void> {
 // path, .../dist/cli.js) under a plain URL comparison — which made the globally
 // installed CLI silently no-op. Resolve BOTH to real paths before comparing so
 // the CLI actually runs when invoked through a symlinked global bin.
-let isMainModule = false;
+let isMainModule: boolean;
 try {
   isMainModule =
     !!process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));

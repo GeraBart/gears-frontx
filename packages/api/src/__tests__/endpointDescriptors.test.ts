@@ -62,8 +62,8 @@ class TestApiService extends BaseApiService {
         mockMap: {
           'GET /api/test/user/current': () => ({ id: '1', name: 'Alice' }),
           'GET /api/test/user/42': () => ({ id: '42', name: 'Bob' }),
-          'PUT /api/test/user/profile': (body) => ({ id: '1', ...(body as object) }),
-          'POST /api/test/items': (body) => ({ id: 'new', ...(body as object) }),
+          'PUT /api/test/user/profile': (body) => ({ id: '1', ...(body as Record<string, unknown>) }),
+          'POST /api/test/items': (body) => ({ id: 'new', ...(body as Record<string, unknown>) }),
           'DELETE /api/test/items': (body) => ({
             ok: true,
             ids: (body as { ids: string[] }).ids,

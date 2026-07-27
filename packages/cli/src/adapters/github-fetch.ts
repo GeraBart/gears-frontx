@@ -84,7 +84,10 @@ function unpackGithubTarball(url: string, tarballBytes: Buffer): Record<string, 
     tarBytes = zlib.gunzipSync(tarballBytes);
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
-    throw new Error(`GitHub tarball for "${url}" is not valid gzip data: ${detail}`);
+    throw Object.assign(
+      new Error(`GitHub tarball for "${url}" is not valid gzip data: ${detail}`),
+      { cause: err }
+    );
   }
 
   const files: Record<string, string> = {};

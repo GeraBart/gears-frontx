@@ -131,6 +131,9 @@ Internal system functions and procedures that do not interact with actors direct
 1. [ ] - `p1` - Receive declared type identifier and required base type identifier as opaque strings - `inst-recv-ids`
 2. [x] - `p1` - Delegate hierarchy resolution to the injected port (runtime performs no identifier parsing, grammar interpretation, or format knowledge) - `inst-delegate-hierarchy`
 3. [ ] - `p1` - **RETURN** the boolean result received from the port unchanged - `inst-return-bool`
+4. [x] - `p1` - For the framework's well-known `load_ext` lifecycle action, delegate resolution of its base type identifier to the injected port's dedicated method, rather than the runtime holding any concrete type-format literal for this concept - `inst-resolve-load-ext`
+5. [x] - `p1` - For the framework's well-known `mount_ext` lifecycle action, delegate resolution of its base type identifier to the injected port's dedicated method, rather than the runtime holding any concrete type-format literal for this concept - `inst-resolve-mount-ext`
+6. [x] - `p1` - For the framework's well-known `unmount_ext` lifecycle action, delegate resolution of its base type identifier to the injected port's dedicated method, rather than the runtime holding any concrete type-format literal for this concept - `inst-resolve-unmount-ext`
 
 ## 4. States (CDSL)
 
