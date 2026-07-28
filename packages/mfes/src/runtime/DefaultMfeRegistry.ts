@@ -36,7 +36,6 @@ import { OperationSerializer } from './operation-serializer';
 import { RuntimeBridgeFactory } from './runtime-bridge-factory';
 import { DefaultRuntimeBridgeFactory } from './default-runtime-bridge-factory';
 import { LoadExtHandler } from './extension-lifecycle-action-handler';
-import { INFRASTRUCTURE_LIFECYCLE_ACTIONS } from '../validation/contract';
 import { EntryTypeNotHandledError } from '../errors';
 import { extractGtsPackage } from '../gts/extract-package';
 import { DefaultExtensionMounter } from './DefaultExtensionMounter';
@@ -141,7 +140,6 @@ export class DefaultMfeRegistry extends MfeRegistry {
       getDomainState: (domainId) => this.extensionManager.getDomainState(domainId),
       getExtensionEntry: (extensionId) =>
         this.extensionManager.getExtensionState(extensionId)?.entry,
-      infrastructureActionTypes: INFRASTRUCTURE_LIFECYCLE_ACTIONS,
     });
 
     this.extensionManager = new DefaultExtensionManager({
@@ -299,7 +297,7 @@ export class DefaultMfeRegistry extends MfeRegistry {
     const lifecycleTrigger = new DefaultDomainLifecycleTrigger(declaration.id, this.lifecycleManager);
 
     // Step 3: Build DomainContext and pre-populate LoadExtHandler.
-    const ctx = new InvalidatableDomainContext(mounter, lifecycleTrigger);
+    const ctx = new InvalidatableDomainContext(mounter, lifecycleTrigger, this.typeSystem);
     ctx.prepopulateHandler(
       this.typeSystem.resolveLoadExtActionId(),
       new LoadExtHandler(this.operationSerializer, this.mountManager)

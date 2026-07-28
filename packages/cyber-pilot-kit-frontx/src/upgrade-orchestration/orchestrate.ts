@@ -11,7 +11,6 @@
 // SURFACE (`InvokeUpgradeCommandFn`) — never a compile-time package
 // dependency (DESIGN §3.4; ADR-0027 `cpt-frontx-adr-ai-driven-upgrade-orchestration`).
 import { enrichUpgradeChangeSet } from './enrich.js';
-import { OrchestrationLifecycleState, type OrchestrationLifecycleStateValue } from './state.js';
 import { selectProvenanceRecord } from './types.js';
 import type {
   ChangeSet,
@@ -62,8 +61,7 @@ export async function orchestrateAiDrivenUpgrade(
 ): Promise<OrchestrationResult> {
   // @cpt-end:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-request-upgrade
 
-  let lifecycleState: OrchestrationLifecycleStateValue = OrchestrationLifecycleState.PROVENANCE_READ;
-  void lifecycleState; // lifecycle state held for observability
+  // State: PROVENANCE_READ
 
   // @cpt-begin:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-read-provenance
   // Reads the FULL provenance record SET (one record per applied template —
@@ -120,7 +118,7 @@ export async function orchestrateAiDrivenUpgrade(
     reviewPackage = enrichment.package;
 
     // @cpt-begin:cpt-frontx-state-ai-upgrade-orchestration-lifecycle:p1:inst-to-analyzed
-    lifecycleState = OrchestrationLifecycleState.ANALYZED;
+    // Transition: PROVENANCE_READ → ANALYZED
     // @cpt-end:cpt-frontx-state-ai-upgrade-orchestration-lifecycle:p1:inst-to-analyzed
 
     // @cpt-begin:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-present-review
@@ -128,7 +126,7 @@ export async function orchestrateAiDrivenUpgrade(
     // @cpt-end:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-present-review
 
     // @cpt-begin:cpt-frontx-state-ai-upgrade-orchestration-lifecycle:p1:inst-to-reviewed
-    lifecycleState = OrchestrationLifecycleState.REVIEWED;
+    // Transition: ANALYZED → REVIEWED
     // @cpt-end:cpt-frontx-state-ai-upgrade-orchestration-lifecycle:p1:inst-to-reviewed
 
     return decision;
@@ -157,8 +155,7 @@ export async function orchestrateAiDrivenUpgrade(
     // @cpt-end:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-update-provenance
 
     // @cpt-begin:cpt-frontx-state-ai-upgrade-orchestration-lifecycle:p1:inst-to-applied
-    lifecycleState = OrchestrationLifecycleState.APPLIED;
-    void lifecycleState; // lifecycle state held for observability
+    // Transition: REVIEWED → APPLIED
     // @cpt-end:cpt-frontx-state-ai-upgrade-orchestration-lifecycle:p1:inst-to-applied
 
     // @cpt-begin:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-return-applied
@@ -179,11 +176,10 @@ export async function orchestrateAiDrivenUpgrade(
   // @cpt-end:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-no-write
 
   // @cpt-begin:cpt-frontx-state-ai-upgrade-orchestration-lifecycle:p1:inst-to-declined
-  lifecycleState = OrchestrationLifecycleState.DECLINED;
+  // Transition: REVIEWED → DECLINED
   // @cpt-end:cpt-frontx-state-ai-upgrade-orchestration-lifecycle:p1:inst-to-declined
 
   // @cpt-begin:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-return-declined
-  void lifecycleState; // lifecycle state held for observability
   return { status: 'declined', reviewPackage };
   // @cpt-end:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-return-declined
   // @cpt-end:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-gate-decline

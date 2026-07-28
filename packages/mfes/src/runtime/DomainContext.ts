@@ -15,6 +15,7 @@
 import type { ExtensionMounter } from './ExtensionMounter';
 import type { DomainLifecycleTrigger } from './DomainLifecycleTrigger';
 import type { ActionHandler } from '../mediator/types';
+import type { TypeSystemPlugin } from '../type-substrate';
 
 /**
  * Construction-time context exposed to `ExtensionDomainImplementationFactory.build`.
@@ -45,12 +46,21 @@ export interface DomainContext {
   readonly lifecycleTrigger: DomainLifecycleTrigger;
 
   /**
+   * The injected type-system plugin. Use `typeSystem.resolveMountExtActionId()`
+   * / `resolveUnmountExtActionId()` / `resolveLoadExtActionId()` to obtain the
+   * framework's well-known lifecycle action IDs in the active plugin's own
+   * notation — domain authors never import a concrete type-format literal.
+   * Does not throw after invalidation (read-only reference, not a mutator).
+   */
+  readonly typeSystem: TypeSystemPlugin;
+
+  /**
    * Register an `ActionHandler` for the given action type in this domain.
    *
    * Called inside `factory.build(ctx)` for each action type the domain handles.
    * Throws after `registerDomain` returns.
    *
-   * @param actionType - GTS action type ID (e.g., `FRONTX_ACTION_MOUNT_EXT`).
+   * @param actionType - The action type ID, e.g. `ctx.typeSystem.resolveMountExtActionId()`.
    * @param handler - `ActionHandler` instance to invoke when the action fires.
    */
   registerHandler(actionType: string, handler: ActionHandler): void;
@@ -80,7 +90,8 @@ export class InvalidatableDomainContext implements DomainContext {
 
   constructor(
     private readonly _mounter: ExtensionMounter,
-    private readonly _lifecycleTrigger: DomainLifecycleTrigger
+    private readonly _lifecycleTrigger: DomainLifecycleTrigger,
+    public readonly typeSystem: TypeSystemPlugin
   ) {}
 
   get mounter(): ExtensionMounter {

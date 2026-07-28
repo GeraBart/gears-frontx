@@ -15,12 +15,15 @@ import {
 } from '../mount-strategies';
 import type { ContainerHooks, ActionPayload, MountStrategy } from '../mount-strategy';
 import { ActionHandler } from '../../mediator/types';
-import {
-  FRONTX_ACTION_LOAD_EXT,
-  FRONTX_ACTION_MOUNT_EXT,
-  FRONTX_ACTION_UNMOUNT_EXT,
-} from '../../constants';
 import { ExtensionMounter } from '../ExtensionMounter';
+
+// Mock-plugin-local stand-ins for the framework's well-known lifecycle action
+// IDs. Deliberately NOT imported from any real type-system plugin (mfes must
+// not hold a concrete type-format literal, and this mock exercises its own
+// made-up notation) — the mock's `resolveLoadExtActionId()` etc. return these.
+const FRONTX_ACTION_LOAD_EXT = 'mock.action.v1~load_ext.v1~';
+const FRONTX_ACTION_MOUNT_EXT = 'mock.action.v1~mount_ext.v1~';
+const FRONTX_ACTION_UNMOUNT_EXT = 'mock.action.v1~unmount_ext.v1~';
 
 // ─── Minimal TypeSystemPlugin mock matching current interface ─────────────────
 //
@@ -443,6 +446,62 @@ describe('DefaultMfeRegistry', () => {
       expect(() =>
         reg.registerDomain(makeOptionalDerivedDomain(), new OptionalDomainFactoryDerived(reg))
       ).not.toThrow();
+    });
+  });
+
+  describe('hierarchy-aware dispatch (end-to-end, not just registerDomain admission)', () => {
+    // Registration passing is necessary but not sufficient — a domain that
+    // registers its handler under a hierarchy-derived action id must still be
+    // reachable when an action is actually DISPATCHED under the framework's
+    // base id (or vice versa). This exercises the full
+    // registerDomain -> executeActionsChain -> mediator.resolveHandler path.
+    // Uses a plain flag-setting handler (not the real ExclusiveMountStrategy.mount,
+    // which needs a DOM-attached mounter) — an ExclusiveMountStrategy instance is
+    // still captured so cardinality classification (`instanceof` check) applies.
+    it('a handler registered under a DERIVED mount_ext id actually fires when dispatched with the BASE literal', async () => {
+      class FlagHandlerImpl extends ExtensionDomainImplementation {
+        readonly strategy: ExclusiveMountStrategy;
+        mountHandlerFired = false;
+
+        constructor(ctx: DomainContext, registry: MfeRegistry) {
+          super();
+          this.strategy = new ExclusiveMountStrategy(ctx.mounter, new TestHooks(), registry, DOMAIN_EXCL_DERIVED_ID);
+          ctx.registerHandler(
+            DERIVED_MOUNT_EXT,
+            ActionHandler.fromFunction(async () => {
+              this.mountHandlerFired = true;
+            })
+          );
+        }
+
+        protected getMountStrategies(): MountStrategy[] {
+          return [this.strategy];
+        }
+      }
+
+      class FlagHandlerFactory extends ExtensionDomainImplementationFactory {
+        lastImpl: FlagHandlerImpl | null = null;
+        constructor(private readonly reg: MfeRegistry) { super(); }
+        build(ctx: DomainContext): FlagHandlerImpl {
+          const impl = new FlagHandlerImpl(ctx, this.reg);
+          this.lastImpl = impl;
+          return impl;
+        }
+      }
+
+      const reg = freshRegistry();
+      const factory = new FlagHandlerFactory(reg);
+      reg.registerDomain(makeExclusiveDerivedDomain(), factory);
+
+      await reg.executeActionsChain({
+        action: {
+          type: FRONTX_ACTION_MOUNT_EXT,
+          target: DOMAIN_EXCL_DERIVED_ID,
+          payload: { subject: 'ext-1' },
+        },
+      });
+
+      expect(factory.lastImpl?.mountHandlerFired).toBe(true);
     });
   });
 

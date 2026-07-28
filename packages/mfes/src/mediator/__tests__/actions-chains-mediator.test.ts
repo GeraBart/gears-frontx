@@ -1,0 +1,156 @@
+import { describe, it, expect } from 'vitest';
+import { DefaultActionsChainsMediator } from '../actions-chains-mediator';
+import { ActionHandler } from '../types';
+import type { TypeSystemPlugin } from '../../type-substrate';
+import type { MfeEntry } from '../../types';
+import type { ExtensionDomainState } from '../../runtime/extension-manager';
+
+// Mock-plugin-local stand-ins for the framework's well-known lifecycle action
+// IDs, deliberately NOT the real GTS strings — proves the mediator's
+// hierarchy-aware paths never assume any particular notation.
+const MOUNT_EXT = 'mock.action.v1~mount_ext.v1~';
+const UNMOUNT_EXT = 'mock.action.v1~unmount_ext.v1~';
+const LOAD_EXT = 'mock.action.v1~load_ext.v1~';
+// A domain-declared "is-a" derivative of mount_ext — NOT string-equal to
+// MOUNT_EXT, but recognized as derived from it by the mock's isTypeOf.
+const DERIVED_MOUNT_EXT = `${MOUNT_EXT}vendor.v1~`;
+
+function createMockPlugin(): TypeSystemPlugin<unknown> {
+  return {
+    name: 'MockPlugin',
+    version: '1.0.0',
+    registerSchema(): void {},
+    getSchema(): undefined {
+      return undefined;
+    },
+    register(): void {},
+    isTypeOf(typeId: string, baseTypeId: string): boolean {
+      return typeId === baseTypeId || typeId.startsWith(baseTypeId);
+    },
+    validateInstance() {
+      return { valid: true, errors: [] };
+    },
+    resolveLoadExtActionId(): string {
+      return LOAD_EXT;
+    },
+    resolveMountExtActionId(): string {
+      return MOUNT_EXT;
+    },
+    resolveUnmountExtActionId(): string {
+      return UNMOUNT_EXT;
+    },
+  };
+}
+
+function makeDomainState(): ExtensionDomainState {
+  return {
+    domain: {
+      id: 'domain-1',
+      actions: [],
+      extensionsActions: [],
+      sharedProperties: [],
+      defaultActionTimeout: 5000,
+      lifecycleStages: [],
+      extensionsLifecycleStages: [],
+      extensionsTypeId: '',
+    },
+    properties: new Map(),
+    extensions: new Set(),
+    propertySubscribers: new Map(),
+    mountedExtensions: [],
+    mounter: null,
+    lifecycleTrigger: null,
+    implementation: null,
+  };
+}
+
+function makeMediator(getExtensionEntry: (id: string) => MfeEntry | undefined = () => undefined) {
+  return new DefaultActionsChainsMediator({
+    typeSystem: createMockPlugin(),
+    getDomainState: () => makeDomainState(),
+    getExtensionEntry,
+  });
+}
+
+describe('DefaultActionsChainsMediator — hierarchy-aware handler resolution', () => {
+  it('resolves a handler registered under a DERIVED mount_ext id when dispatched with the BASE id', async () => {
+    const mediator = makeMediator();
+    let handled = false;
+    mediator.registerHandler(
+      'domain-1',
+      DERIVED_MOUNT_EXT,
+      ActionHandler.fromFunction(async () => {
+        handled = true;
+      })
+    );
+
+    const result = await mediator.executeActionsChain({
+      action: { type: MOUNT_EXT, target: 'domain-1', payload: { subject: 'ext-1' } },
+    });
+
+    expect(result.completed).toBe(true);
+    expect(handled).toBe(true);
+  });
+
+  it('resolves a handler registered under the BASE mount_ext id when dispatched with a DERIVED id', async () => {
+    const mediator = makeMediator();
+    let handled = false;
+    mediator.registerHandler(
+      'domain-1',
+      MOUNT_EXT,
+      ActionHandler.fromFunction(async () => {
+        handled = true;
+      })
+    );
+
+    const result = await mediator.executeActionsChain({
+      action: { type: DERIVED_MOUNT_EXT, target: 'domain-1', payload: { subject: 'ext-1' } },
+    });
+
+    expect(result.completed).toBe(true);
+    expect(handled).toBe(true);
+  });
+
+  it('still fails with NoHandlerForActionTargetError semantics for a genuinely unrelated action type', async () => {
+    const mediator = makeMediator();
+    mediator.registerHandler('domain-1', MOUNT_EXT, ActionHandler.fromFunction(async () => {}));
+
+    const result = await mediator.executeActionsChain({
+      action: { type: 'mock.action.v1~unrelated.v1~', target: 'domain-1' },
+    });
+
+    expect(result.completed).toBe(false);
+    expect(result.error).toContain('No handler found');
+  });
+
+  it('exempts a DERIVED infrastructure action from entry declaration validation', async () => {
+    // Entry declares NO actions at all — if the derived load_ext id were
+    // treated as a regular (non-infrastructure) action, this would throw
+    // "Action type ... is not declared by target entry" before dispatch.
+    const entry: MfeEntry = {
+      id: 'ext-1',
+      entry: 'ext-1',
+      domain: 'domain-1',
+      actions: [],
+      domainActions: [],
+      requiredProperties: [],
+    } as unknown as MfeEntry;
+
+    const mediator = makeMediator(() => entry);
+    let handled = false;
+    mediator.registerHandler(
+      'ext-1',
+      `${LOAD_EXT}vendor.v1~`,
+      ActionHandler.fromFunction(async () => {
+        handled = true;
+      })
+    );
+
+    const result = await mediator.executeActionsChain({
+      action: { type: `${LOAD_EXT}vendor.v1~`, target: 'ext-1' },
+    });
+
+    expect(result.completed).toBe(true);
+    expect(handled).toBe(true);
+  });
+});

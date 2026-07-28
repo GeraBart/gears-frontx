@@ -30,7 +30,7 @@ import {
   FRONTX_ACTION_LOAD_EXT,
   FRONTX_ACTION_MOUNT_EXT,
   FRONTX_ACTION_UNMOUNT_EXT,
-} from '@gears-frontx/mfes';
+} from './constants';
 import type { JSONSchema } from './types';
 import { loadSchemas, loadLifecycleStages } from './loader';
 

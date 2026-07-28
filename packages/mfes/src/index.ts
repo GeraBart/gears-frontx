@@ -18,6 +18,7 @@ export type {
   ValidationResult,
   TypeSystemPlugin,
 } from './type-substrate';
+export { isInfrastructureLifecycleAction } from './type-substrate';
 
 // Domain types (Phase 3)
 export type {
@@ -73,13 +74,6 @@ export { ChildMfeBridgeImpl, ParentMfeBridgeImpl, ChildDomainForwardingHandler }
 // Bridge error classes (Phase 6)
 export { NoActionsChainHandlerError, BridgeDisposedError } from './bridge/errors';
 
-// Infrastructure action constants (Phase 7)
-export {
-  FRONTX_ACTION_LOAD_EXT,
-  FRONTX_ACTION_MOUNT_EXT,
-  FRONTX_ACTION_UNMOUNT_EXT,
-} from './constants';
-
 // Error classes (Phase 7)
 export {
   MfeError,
@@ -102,7 +96,6 @@ export type { ShadowRootOptions } from './shadow';
 export {
   validateContract,
   formatContractErrors,
-  INFRASTRUCTURE_LIFECYCLE_ACTIONS,
   type ContractValidationResult,
   type ContractErrorType,
 } from './validation/contract';
