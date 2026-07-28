@@ -11,6 +11,7 @@
 // SURFACE (`InvokeUpgradeCommandFn`) — never a compile-time package
 // dependency (DESIGN §3.4; ADR-0027 `cpt-frontx-adr-ai-driven-upgrade-orchestration`).
 import { enrichUpgradeChangeSet } from './enrich.js';
+import { OrchestrationLifecycleState, type OrchestrationLifecycleStateValue } from './state.js';
 import { selectProvenanceRecord } from './types.js';
 import type {
   ChangeSet,
@@ -33,11 +34,11 @@ export interface OrchestrationDeps {
 }
 
 export type OrchestrationResult =
-  | { status: 'applied'; targetVersion: string; reviewPackage: EnrichedReviewPackage }
-  | { status: 'declined'; reviewPackage: EnrichedReviewPackage }
+  | { status: 'applied'; targetVersion: string; reviewPackage: EnrichedReviewPackage; lifecycleHistory: readonly OrchestrationLifecycleStateValue[] }
+  | { status: 'declined'; reviewPackage: EnrichedReviewPackage; lifecycleHistory: readonly OrchestrationLifecycleStateValue[] }
   | { status: 'provenance-missing'; message: string }
   | { status: 'empty-changeset' }
-  | { status: 'apply-failed'; message: string };
+  | { status: 'apply-failed'; message: string; lifecycleHistory: readonly OrchestrationLifecycleStateValue[] };
 
 // @cpt-begin:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-request-upgrade
 /**
@@ -61,7 +62,7 @@ export async function orchestrateAiDrivenUpgrade(
 ): Promise<OrchestrationResult> {
   // @cpt-end:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-request-upgrade
 
-  // State: PROVENANCE_READ
+  const lifecycleHistory: OrchestrationLifecycleStateValue[] = [OrchestrationLifecycleState.PROVENANCE_READ];
 
   // @cpt-begin:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-read-provenance
   // Reads the FULL provenance record SET (one record per applied template —
@@ -118,7 +119,7 @@ export async function orchestrateAiDrivenUpgrade(
     reviewPackage = enrichment.package;
 
     // @cpt-begin:cpt-frontx-state-ai-upgrade-orchestration-lifecycle:p1:inst-to-analyzed
-    // Transition: PROVENANCE_READ → ANALYZED
+    lifecycleHistory.push(OrchestrationLifecycleState.ANALYZED);
     // @cpt-end:cpt-frontx-state-ai-upgrade-orchestration-lifecycle:p1:inst-to-analyzed
 
     // @cpt-begin:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-present-review
@@ -126,7 +127,7 @@ export async function orchestrateAiDrivenUpgrade(
     // @cpt-end:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-present-review
 
     // @cpt-begin:cpt-frontx-state-ai-upgrade-orchestration-lifecycle:p1:inst-to-reviewed
-    // Transition: ANALYZED → REVIEWED
+    lifecycleHistory.push(OrchestrationLifecycleState.REVIEWED);
     // @cpt-end:cpt-frontx-state-ai-upgrade-orchestration-lifecycle:p1:inst-to-reviewed
 
     return decision;
@@ -155,17 +156,17 @@ export async function orchestrateAiDrivenUpgrade(
     // @cpt-end:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-update-provenance
 
     // @cpt-begin:cpt-frontx-state-ai-upgrade-orchestration-lifecycle:p1:inst-to-applied
-    // Transition: REVIEWED → APPLIED
+    lifecycleHistory.push(OrchestrationLifecycleState.APPLIED);
     // @cpt-end:cpt-frontx-state-ai-upgrade-orchestration-lifecycle:p1:inst-to-applied
 
     // @cpt-begin:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-return-applied
-    return { status: 'applied', targetVersion, reviewPackage };
+    return { status: 'applied', targetVersion, reviewPackage, lifecycleHistory };
     // @cpt-end:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-return-applied
   }
   // @cpt-end:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-gate-approve
 
   if (commandResult.status === 'apply-failed') {
-    return { status: 'apply-failed', message: commandResult.message ?? 'Engine apply failed.' };
+    return { status: 'apply-failed', message: commandResult.message ?? 'Engine apply failed.', lifecycleHistory };
   }
 
   // @cpt-begin:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-gate-decline
@@ -176,11 +177,11 @@ export async function orchestrateAiDrivenUpgrade(
   // @cpt-end:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-no-write
 
   // @cpt-begin:cpt-frontx-state-ai-upgrade-orchestration-lifecycle:p1:inst-to-declined
-  // Transition: REVIEWED → DECLINED
+  lifecycleHistory.push(OrchestrationLifecycleState.DECLINED);
   // @cpt-end:cpt-frontx-state-ai-upgrade-orchestration-lifecycle:p1:inst-to-declined
 
   // @cpt-begin:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-return-declined
-  return { status: 'declined', reviewPackage };
+  return { status: 'declined', reviewPackage, lifecycleHistory };
   // @cpt-end:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-return-declined
   // @cpt-end:cpt-frontx-flow-ai-upgrade-orchestration-upgrade:p1:inst-gate-decline
 }
