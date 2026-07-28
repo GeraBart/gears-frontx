@@ -134,7 +134,7 @@ export class DefaultExtensionManager extends ExtensionManager {
     }
 
     // @cpt-begin:cpt-frontx-flow-extension-domain-governance-admission:p1:inst-contract-match
-    const contractResult = validateContract(entry, domainState.domain);
+    const contractResult = validateContract(entry, domainState.domain, this.typeSystem);
     // @cpt-begin:cpt-frontx-flow-extension-domain-governance-admission:p1:inst-contract-fail-check
     // @cpt-begin:cpt-frontx-state-extension-domain-governance-admission:p1:inst-adm-t1
     if (!contractResult.valid) {

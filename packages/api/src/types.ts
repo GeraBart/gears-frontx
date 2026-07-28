@@ -76,6 +76,9 @@ export const MOCK_PLUGIN = Symbol.for('frontx:plugin:mock');
 export function isMockPlugin(plugin: unknown): boolean {
   if (!plugin || typeof plugin !== 'object') return false;
   const constructor = plugin.constructor;
+  if (constructor === null || (typeof constructor !== 'object' && typeof constructor !== 'function')) {
+    return false;
+  }
   return MOCK_PLUGIN in constructor;
 }
 

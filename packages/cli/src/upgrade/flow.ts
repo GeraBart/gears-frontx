@@ -6,7 +6,6 @@
 // @cpt-dod:cpt-frontx-dod-upgrade-changeset-single-engine:p1
 import { computeChangeSet } from './compute';
 import { applyChangeSet } from './apply';
-import { ChangeSetLifecycleState } from './state';
 import type {
   ProjectSnapshot,
   ReadProvenanceFn,
@@ -76,8 +75,6 @@ export async function upgradeChangeSetReviewApproval(
 
   // State: COMPUTED — change set has been built
   // @cpt-begin:cpt-frontx-state-upgrade-changeset-lifecycle:p1:inst-st-computed-to-presented
-  let lifecycleState: ChangeSetLifecycleState = ChangeSetLifecycleState.COMPUTED;
-  void lifecycleState; // lifecycle state held for observability
   // @cpt-end:cpt-frontx-state-upgrade-changeset-lifecycle:p1:inst-st-computed-to-presented
 
   const { changeSet, provenance } = computeResult;
@@ -85,15 +82,12 @@ export async function upgradeChangeSetReviewApproval(
   // @cpt-begin:cpt-frontx-flow-upgrade-changeset-review-approval:p1:inst-present-changeset
   const approval = await deps.presentAndGetApproval(changeSet);
   // Transition: COMPUTED → PRESENTED
-  lifecycleState = ChangeSetLifecycleState.PRESENTED;
-  void lifecycleState; // lifecycle state held for observability
   // @cpt-end:cpt-frontx-flow-upgrade-changeset-review-approval:p1:inst-present-changeset
 
   // @cpt-begin:cpt-frontx-flow-upgrade-changeset-review-approval:p1:inst-if-approved
   if (approval === 'approved') {
     // @cpt-begin:cpt-frontx-state-upgrade-changeset-lifecycle:p1:inst-st-presented-to-approved
-    lifecycleState = ChangeSetLifecycleState.APPROVED;
-    void lifecycleState; // lifecycle state held for observability
+    // Transition: PRESENTED → APPROVED
     // @cpt-end:cpt-frontx-state-upgrade-changeset-lifecycle:p1:inst-st-presented-to-approved
 
     // @cpt-begin:cpt-frontx-flow-upgrade-changeset-review-approval:p1:inst-apply-changeset
@@ -110,8 +104,7 @@ export async function upgradeChangeSetReviewApproval(
     }
 
     // @cpt-begin:cpt-frontx-state-upgrade-changeset-lifecycle:p1:inst-st-approved-to-applied
-    lifecycleState = ChangeSetLifecycleState.APPLIED;
-    void lifecycleState; // lifecycle state held for observability
+    // Transition: APPROVED → APPLIED
     // @cpt-end:cpt-frontx-state-upgrade-changeset-lifecycle:p1:inst-st-approved-to-applied
 
     // @cpt-begin:cpt-frontx-flow-upgrade-changeset-review-approval:p1:inst-update-provenance
@@ -126,7 +119,7 @@ export async function upgradeChangeSetReviewApproval(
 
   // @cpt-begin:cpt-frontx-flow-upgrade-changeset-review-approval:p1:inst-else-declined
   // @cpt-begin:cpt-frontx-state-upgrade-changeset-lifecycle:p1:inst-st-presented-to-rejected
-  lifecycleState = ChangeSetLifecycleState.REJECTED;
+  // Transition: PRESENTED → REJECTED
   // @cpt-end:cpt-frontx-state-upgrade-changeset-lifecycle:p1:inst-st-presented-to-rejected
 
   // @cpt-begin:cpt-frontx-flow-upgrade-changeset-review-approval:p1:inst-no-write-on-decline
@@ -134,7 +127,6 @@ export async function upgradeChangeSetReviewApproval(
   // @cpt-end:cpt-frontx-flow-upgrade-changeset-review-approval:p1:inst-no-write-on-decline
 
   // @cpt-begin:cpt-frontx-flow-upgrade-changeset-review-approval:p1:inst-return-declined
-  void lifecycleState; // lifecycle state held for observability
   return { status: 'declined' };
   // @cpt-end:cpt-frontx-flow-upgrade-changeset-review-approval:p1:inst-return-declined
   // @cpt-end:cpt-frontx-flow-upgrade-changeset-review-approval:p1:inst-else-declined

@@ -12,11 +12,7 @@
 
 import type { MfeEntry } from '../types';
 import type { ExtensionDomain } from '../types';
-import {
-  FRONTX_ACTION_LOAD_EXT,
-  FRONTX_ACTION_MOUNT_EXT,
-  FRONTX_ACTION_UNMOUNT_EXT,
-} from '../constants';
+import { isInfrastructureLifecycleAction, type TypeSystemPlugin } from '../type-substrate';
 
 export type ContractErrorType =
   | 'missing_property'
@@ -34,26 +30,21 @@ export interface ContractValidationResult {
 }
 
 /**
- * Infrastructure lifecycle actions wired by the registry and mount strategies.
- * Exempted from rule-3 validation. MFES-2 safe — no shared-property identity.
- */
-export const INFRASTRUCTURE_LIFECYCLE_ACTIONS = new Set<string>([
-  FRONTX_ACTION_LOAD_EXT,
-  FRONTX_ACTION_MOUNT_EXT,
-  FRONTX_ACTION_UNMOUNT_EXT,
-]);
-
-/**
  * Validate that an MFE entry is compatible with an extension domain.
  *
  * Rules:
  * 1. entry.requiredProperties ⊆ domain.sharedProperties
  * 2. domain.extensionsActions ⊆ entry.actions
- * 3. entry.domainActions \ INFRASTRUCTURE_LIFECYCLE_ACTIONS ⊆ domain.actions
+ * 3. entry.domainActions \ {infrastructure lifecycle actions} ⊆ domain.actions
+ *
+ * @param typeSystem - Injected plugin used to hierarchy-aware match rule 3's
+ * infrastructure-action exemption (load_ext/mount_ext/unmount_ext and any
+ * derived variant) — never a literal comparison.
  */
 export function validateContract(
   entry: MfeEntry,
-  domain: ExtensionDomain
+  domain: ExtensionDomain,
+  typeSystem: TypeSystemPlugin
 ): ContractValidationResult {
   // @cpt-begin:cpt-frontx-algo-extension-domain-governance-contract-matching:p1:inst-cm-init
   const errors: ContractError[] = [];
@@ -95,7 +86,7 @@ export function validateContract(
   // @cpt-begin:cpt-frontx-algo-extension-domain-governance-contract-matching:p1:inst-cm-rule3-loop
   for (const action of entry.domainActions) {
     // @cpt-begin:cpt-frontx-algo-extension-domain-governance-contract-matching:p1:inst-cm-rule3-exempt
-    if (INFRASTRUCTURE_LIFECYCLE_ACTIONS.has(action)) {
+    if (isInfrastructureLifecycleAction(action, typeSystem)) {
       // @cpt-begin:cpt-frontx-algo-extension-domain-governance-contract-matching:p1:inst-cm-rule3-skip
       continue;
       // @cpt-end:cpt-frontx-algo-extension-domain-governance-contract-matching:p1:inst-cm-rule3-skip

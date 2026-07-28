@@ -11,7 +11,7 @@
  * @packageDocumentation
  */
 
-import type { TypeSystemPlugin } from '../type-substrate';
+import { isInfrastructureLifecycleAction, type TypeSystemPlugin } from '../type-substrate';
 import type { ActionsChain, ExtensionDomain, MfeEntry } from '../types';
 import type { ExtensionDomainState } from '../runtime/extension-manager';
 import {
@@ -112,24 +112,15 @@ export class DefaultActionsChainsMediator extends ActionsChainsMediator {
    */
   private readonly pendingActions = new Map<string, Set<Promise<void>>>();
 
-  /**
-   * Action types exempt from declaration validation (e.g. infrastructure lifecycle actions).
-   * Injected by the host registry to keep the mediator format-agnostic (MFES-1).
-   */
-  private readonly infrastructureActionTypes: ReadonlySet<string>;
-
   constructor(config: {
     typeSystem: TypeSystemPlugin;
     getDomainState: (domainId: string) => ExtensionDomainState | undefined;
     getExtensionEntry: (extensionId: string) => MfeEntry | undefined;
-    /** Action types exempt from entry declaration validation (e.g. load/mount/unmount). */
-    infrastructureActionTypes?: ReadonlySet<string>;
   }) {
     super();
     this.typeSystem = config.typeSystem;
     this.getDomainState = config.getDomainState;
     this.getExtensionEntry = config.getExtensionEntry;
-    this.infrastructureActionTypes = config.infrastructureActionTypes ?? new Set();
   }
 
   /**
@@ -216,11 +207,13 @@ export class DefaultActionsChainsMediator extends ActionsChainsMediator {
     // is a different contract (it names domain actions the entry REQUIRES from its
     // parent domain, not actions the entry can receive) and is NOT consulted here.
     // Infrastructure lifecycle actions target domains (not extensions) and are exempt.
-    // If the target has no registered entry (domain target, or unregistered extension
-    // in bypassed-registration test setups) the check is a no-op — domain targets are
-    // validated by GTS `x-gts-ref`, and unregistered targets surface via handler
-    // resolution later in executeAction.
-    if (!this.infrastructureActionTypes.has(action.type)) {
+    // Checked hierarchy-aware via the injected typeSystem (not a literal Set) so a
+    // domain-declared derived variant of load_ext/mount_ext/unmount_ext is still
+    // recognized as infrastructure. If the target has no registered entry (domain
+    // target, or unregistered extension in bypassed-registration test setups) the
+    // check is a no-op — domain targets are validated by GTS `x-gts-ref`, and
+    // unregistered targets surface via handler resolution later in executeAction.
+    if (!isInfrastructureLifecycleAction(action.type, this.typeSystem)) {
       const entry = this.getExtensionEntry(action.target);
       if (entry) {
         if (!entry.actions.includes(action.type)) {
@@ -378,8 +371,17 @@ export class DefaultActionsChainsMediator extends ActionsChainsMediator {
    * Resolve the handler for a (targetId, actionTypeId) pair.
    *
    * Resolution order:
-   * 1. Check actionHandlers[targetId][actionTypeId] (specific handler)
-   * 2. Check catchAllHandlers[targetId] (bridge forwarding fallback)
+   * 1. Check actionHandlers[targetId][actionTypeId] (exact match — the common case)
+   * 2. Hierarchy-aware scan of actionHandlers[targetId]'s registered keys, matching
+   *    a dispatched ID against a handler registered under a derived (or base) variant
+   * 3. Check catchAllHandlers[targetId] (bridge forwarding fallback)
+   *
+   * Step 2 exists because a domain may register a handler under a
+   * hierarchy-derived action ID (e.g. a non-GTS-notation "is-a" mount_ext)
+   * while a dispatched action arrives under the framework's base ID, or vice
+   * versa — `crossValidateHandlers` already admits such domains via
+   * `typeSystem.isTypeOf`, so dispatch must resolve them the same way or the
+   * registered handler would be unreachable.
    *
    * @param targetId - The target type ID (domain or extension)
    * @param actionTypeId - The action type ID
@@ -394,6 +396,19 @@ export class DefaultActionsChainsMediator extends ActionsChainsMediator {
       if (handler) {
         return handler;
       }
+
+      // @cpt-begin:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-hierarchy-lookup
+      // Hierarchy-aware fallback: match the dispatched ID against each
+      // registered key in either derivation direction.
+      for (const [registeredActionTypeId, registeredHandler] of targetHandlers) {
+        if (
+          this.typeSystem.isTypeOf(actionTypeId, registeredActionTypeId) ||
+          this.typeSystem.isTypeOf(registeredActionTypeId, actionTypeId)
+        ) {
+          return registeredHandler;
+        }
+      }
+      // @cpt-end:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-hierarchy-lookup
     }
 
     // @cpt-begin:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-catchall-lookup
