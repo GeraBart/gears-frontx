@@ -311,21 +311,37 @@ export class GtsPlugin implements TypeSystemPlugin<JSONSchema> {
     // @cpt-end:cpt-frontx-algo-gts-type-provider-typof-resolution:p1:inst-tr-03
   }
 
-  // Resolve this plugin's GTS action-type IDs for the framework's
-  // well-known lifecycle actions. Keeps every GTS-notation literal for
-  // load/mount/unmount owned here, never in the generic runtime.
+  /**
+   * Resolve this plugin's GTS action-type ID for the framework's well-known
+   * `load_ext` lifecycle action. Keeps the GTS-notation literal owned here,
+   * never in the generic runtime.
+   *
+   * @returns The GTS action-type ID for `load_ext`
+   */
   // @cpt-begin:cpt-frontx-algo-gts-type-provider-typof-resolution:p1:inst-tr-04
   resolveLoadExtActionId(): string {
     return FRONTX_ACTION_LOAD_EXT;
   }
   // @cpt-end:cpt-frontx-algo-gts-type-provider-typof-resolution:p1:inst-tr-04
 
+  /**
+   * Resolve this plugin's GTS action-type ID for the framework's well-known
+   * `mount_ext` lifecycle action.
+   *
+   * @returns The GTS action-type ID for `mount_ext`
+   */
   // @cpt-begin:cpt-frontx-algo-gts-type-provider-typof-resolution:p1:inst-tr-05
   resolveMountExtActionId(): string {
     return FRONTX_ACTION_MOUNT_EXT;
   }
   // @cpt-end:cpt-frontx-algo-gts-type-provider-typof-resolution:p1:inst-tr-05
 
+  /**
+   * Resolve this plugin's GTS action-type ID for the framework's well-known
+   * `unmount_ext` lifecycle action.
+   *
+   * @returns The GTS action-type ID for `unmount_ext`
+   */
   // @cpt-begin:cpt-frontx-algo-gts-type-provider-typof-resolution:p1:inst-tr-06
   resolveUnmountExtActionId(): string {
     return FRONTX_ACTION_UNMOUNT_EXT;

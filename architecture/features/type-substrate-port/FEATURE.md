@@ -134,6 +134,7 @@ Internal system functions and procedures that do not interact with actors direct
 4. [x] - `p1` - For the framework's well-known `load_ext` lifecycle action, delegate resolution of its base type identifier to the injected port's dedicated method, rather than the runtime holding any concrete type-format literal for this concept - `inst-resolve-load-ext`
 5. [x] - `p1` - For the framework's well-known `mount_ext` lifecycle action, delegate resolution of its base type identifier to the injected port's dedicated method, rather than the runtime holding any concrete type-format literal for this concept - `inst-resolve-mount-ext`
 6. [x] - `p1` - For the framework's well-known `unmount_ext` lifecycle action, delegate resolution of its base type identifier to the injected port's dedicated method, rather than the runtime holding any concrete type-format literal for this concept - `inst-resolve-unmount-ext`
+7. [x] - `p1` - Determine whether a given action type is (or derives from) one of the framework's well-known infrastructure lifecycle actions (load_ext, mount_ext, unmount_ext) by resolving each base ID from the injected port and delegating each comparison to `isTypeOf` — shared by contract-matching and mediator entry-declaration exemption so both stay consistent - `inst-is-infrastructure-action`
 
 ## 4. States (CDSL)
 
