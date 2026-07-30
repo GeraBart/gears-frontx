@@ -9,7 +9,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { WriteFileFn } from '../scaffold/types';
-import type { ListSubtreeFilesFn, ReadFileFn } from '../manifest/types';
+import type { ListContentOwnedFilesFn, ReadFileFn } from '../manifest/types';
 import type { ReadProjectFileFn, WriteProjectFileFn, RemoveProjectFileFn } from '../upgrade/types';
 
 /** Real `WriteFileFn` — writes a destination file, creating parent dirs. */
@@ -53,21 +53,25 @@ export function createFsRemoveProjectFileFn(): RemoveProjectFileFn {
 }
 
 /**
- * Real `ListSubtreeFilesFn` — enumerates every regular file reachable under
- * one exclusive-subtree entry, POSIX-relative to `templateDir`. Never
- * descends into `node_modules` (install-time output, never committed
- * template content) or a dot-prefixed directory (the subtree entry itself
- * may legitimately be one, e.g. `.frontx/ai/<identity>` — only NESTED
- * dot-directories encountered while walking are skipped).
+ * Real `ListContentOwnedFilesFn` — enumerates every regular file reachable
+ * under one exclusive-subtree or shared-file entry, POSIX-relative to
+ * `templateDir`. Never descends into `node_modules` (install-time output,
+ * never committed template content). DOES descend into a dot-prefixed
+ * directory and DOES include a dot-file: a template legitimately ships
+ * dotfiles (`.gitignore`, its own `.frontx/ai/<identity>` bundle) as real
+ * content, and a carrier nested under one (a `package.json` inside a hidden
+ * directory) must still be inspected — skipping dot-prefixed entries would
+ * open exactly the completeness hole the content self-containment check
+ * exists to close (CodeRabbit review finding on #493).
  */
-export function createFsListSubtreeFilesFn(): ListSubtreeFilesFn {
-  return async function listSubtreeFiles(templateDir: string, subtreeEntry: string): Promise<string[]> {
-    const absoluteEntry = path.join(templateDir, subtreeEntry);
+export function createFsListContentOwnedFilesFn(): ListContentOwnedFilesFn {
+  return async function listContentOwnedFiles(templateDir: string, contentOwnedPath: string): Promise<string[]> {
+    const absoluteEntry = path.join(templateDir, contentOwnedPath);
     if (!fs.existsSync(absoluteEntry)) return [];
     const stat = fs.statSync(absoluteEntry);
-    if (stat.isFile()) return [toPosixPath(subtreeEntry)];
+    if (stat.isFile()) return [toPosixPath(contentOwnedPath)];
     if (!stat.isDirectory()) return [];
-    return walkFiles(templateDir, subtreeEntry);
+    return walkFiles(templateDir, contentOwnedPath);
   };
 }
 
@@ -80,7 +84,10 @@ function walkFiles(templateDir: string, relativeDir: string): string[] {
   const entries = fs.readdirSync(absoluteDir, { withFileTypes: true });
   const files: string[] = [];
   for (const entry of entries) {
-    if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue;
+    // node_modules is the ONE exclusion: install-time output, never
+    // committed template content. A dot-prefixed entry is ordinary content
+    // (see the doc comment above) and is walked/included like any other.
+    if (entry.name === 'node_modules') continue;
     const relativePath = `${relativeDir}/${entry.name}`;
     if (entry.isDirectory()) {
       files.push(...walkFiles(templateDir, relativePath));

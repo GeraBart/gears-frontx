@@ -66,20 +66,55 @@ describe('readEcosystemTruthVersions', () => {
       '@gears-frontx/gts-plugin': '0.3.0-alpha.0',
     });
   });
+
+  // CodeRabbit review finding on #493: an undefined/empty `name` or
+  // `version` must fail CLOSED, not silently poison the truth map. A missing
+  // `name` would key the truth entry as the literal string "undefined" and
+  // leave the real package with NO entry at all — `findDriftedSites` treats
+  // "no entry" as "not drifted", so every pinned site for that package would
+  // silently stop being checked.
+  it('throws, naming the offending file, when an ecosystem package.json has no valid "name"', async () => {
+    const root = await makeRoot();
+    await writeEcosystemPackages(root);
+    await writeJson(path.join(root, 'packages', 'api', 'package.json'), { version: '0.3.0-alpha.0' });
+
+    expect(() => readEcosystemTruthVersions(root)).toThrow(/packages[/\\]api[/\\]package\.json.*"name"/);
+  });
+
+  it('throws, naming the offending file, when an ecosystem package.json has no valid "version"', async () => {
+    const root = await makeRoot();
+    await writeEcosystemPackages(root);
+    await writeJson(path.join(root, 'packages', 'mfes', 'package.json'), { name: '@gears-frontx/mfes', version: '' });
+
+    expect(() => readEcosystemTruthVersions(root)).toThrow(/packages[/\\]mfes[/\\]package\.json.*"version"/);
+  });
 });
 
 describe('findPackageJsonFiles / findTemplateDirs', () => {
-  it('finds every package.json under a directory, skipping node_modules and dot-dirs', async () => {
+  it('finds every package.json under a directory, skipping node_modules', async () => {
     const root = await makeRoot();
     const templateDir = path.join(root, 'template-standard');
     await writeJson(path.join(templateDir, 'package.json'), { name: 'tpl' });
     await writeJson(path.join(templateDir, 'packages', 'framework', 'package.json'), { name: 'framework' });
     await writeJson(path.join(templateDir, 'node_modules', 'some-dep', 'package.json'), { name: 'some-dep' });
-    await writeJson(path.join(templateDir, '.turbo', 'package.json'), { name: 'ignored' });
 
     const files = findPackageJsonFiles(templateDir).map((f) => path.relative(templateDir, f)).sort();
 
     expect(files).toEqual(['package.json', 'packages/framework/package.json']);
+  });
+
+  // CodeRabbit review finding on #493: a pinned dependency site inside a
+  // hidden directory is exactly as real as one anywhere else — skipping
+  // dot-prefixed directories would silently stop checking it, the same
+  // completeness hole found in `createFsListContentOwnedFilesFn`.
+  it('does NOT skip a package.json nested under a dot-prefixed directory', async () => {
+    const root = await makeRoot();
+    const templateDir = path.join(root, 'template-standard');
+    await writeJson(path.join(templateDir, '.hidden-workspace', 'package.json'), { name: 'hidden' });
+
+    const files = findPackageJsonFiles(templateDir).map((f) => path.relative(templateDir, f)).sort();
+
+    expect(files).toEqual(['.hidden-workspace/package.json']);
   });
 
   // A5 review finding: discovery is by manifest presence (ADR-0018), never
@@ -100,6 +135,22 @@ describe('findPackageJsonFiles / findTemplateDirs', () => {
     await mkdir(path.join(root, 'template-empty'), { recursive: true });
 
     expect(findTemplateDirs(root)).toEqual([]);
+  });
+
+  it('ignores node_modules even if it somehow carries a manifest', async () => {
+    const root = await makeRoot();
+    await writeManifest(path.join(root, 'node_modules', 'something'));
+
+    expect(findTemplateDirs(root)).toEqual([]);
+  });
+
+  // CodeRabbit review finding on #493: matches validate-templates.mjs's
+  // same node_modules-only exclusion rule.
+  it('does NOT ignore a dot-prefixed top-level directory that carries a manifest', async () => {
+    const root = await makeRoot();
+    await writeManifest(path.join(root, '.hidden-template'));
+
+    expect(findTemplateDirs(root).map((d) => path.basename(d))).toEqual(['.hidden-template']);
   });
 });
 

@@ -50,14 +50,25 @@ describe('findTemplateDirs', () => {
     expect(findTemplateDirs(root, 'frontx-template.json')).toEqual([]);
   });
 
-  it('ignores node_modules and dot-prefixed directories even if they somehow carry a manifest', async () => {
+  it('ignores node_modules even if it somehow carries a manifest', async () => {
     const root = await makeRoot();
     await mkdir(path.join(root, 'node_modules', 'something'), { recursive: true });
     await writeFile(path.join(root, 'node_modules', 'something', 'frontx-template.json'), validManifest());
-    await mkdir(path.join(root, '.hidden'), { recursive: true });
-    await writeFile(path.join(root, '.hidden', 'frontx-template.json'), validManifest());
 
     expect(findTemplateDirs(root, 'frontx-template.json')).toEqual([]);
+  });
+
+  // CodeRabbit review finding on #493: excluding every dot-prefixed
+  // directory from discovery reintroduces a location assumption the
+  // manifest-presence principle (A5 round) exists to drop. node_modules is
+  // the one true exclusion; a dot-prefixed directory carrying a real
+  // manifest IS a template.
+  it('does NOT ignore a dot-prefixed top-level directory that carries a manifest', async () => {
+    const root = await makeRoot();
+    await mkdir(path.join(root, '.hidden-template'), { recursive: true });
+    await writeFile(path.join(root, '.hidden-template', 'frontx-template.json'), validManifest());
+
+    expect(findTemplateDirs(root, 'frontx-template.json').map((d) => path.basename(d))).toEqual(['.hidden-template']);
   });
 
   it('respects the manifest filename passed in, independent of any real CLI constant', async () => {

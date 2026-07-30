@@ -41,10 +41,10 @@ export type {
   ManifestValidationResult,
   ManifestValidationState,
   ReadFileFn,
-  ListSubtreeFilesFn,
+  ListContentOwnedFilesFn,
 } from './manifest/types';
 export type { ReadManifestResult } from './manifest/validate-contract';
-export { createFsReadFileFn, createFsListSubtreeFilesFn } from './adapters/fs-project-io';
+export { createFsReadFileFn, createFsListContentOwnedFilesFn } from './adapters/fs-project-io';
 export type { ValidateCommandResult } from './commands/validate';
 export { MANIFEST_FILENAME, MANIFEST_SCHEMA_VERSION } from './manifest/types';
 

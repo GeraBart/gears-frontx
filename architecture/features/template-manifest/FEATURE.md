@@ -161,7 +161,7 @@ This algorithm inspects the actual on-disk content of every declared content-own
 
 **Steps**:
 1. [x] - `p2` - **FOR EACH** declared content-owning path (every exclusive subtree, plus every shared-file path) - `inst-csc-for-each-subtree`
-   1. [x] - `p2` - Enumerate every regular file reachable under the path (the path itself, when it addresses a single file), never descending into a `node_modules` directory or any dot-prefixed directory other than the path itself - `inst-csc-enumerate-files`
+   1. [x] - `p2` - Enumerate every regular file reachable under the path (the path itself, when it addresses a single file), including a dot-prefixed directory or dot-file (legitimate template content, e.g. `.gitignore` or a `.frontx/ai/<identity>` bundle), never descending into a `node_modules` directory (install-time output, never committed template content) - `inst-csc-enumerate-files`
 2. [x] - `p2` - **FOR EACH** enumerated file whose name identifies it as a carrier of filesystem-path specifiers (`package.json`, a `tsconfig*.json` file, or an npm lockfile) - `inst-csc-for-each-carrier`
    1. [x] - `p2` - Parse the carrier file's content structurally — never by pattern-matching the raw text - `inst-csc-parse-carrier`
    2. [x] - `p2` - Extract every path-like specifier the carrier's shape declares, per the known-carrier registry (currently: a `file:` dependency specifier in `package.json`; a `compilerOptions.paths` mapping entry (resolved against `baseUrl`), an `extends` target, or a `references[].path` entry in a tsconfig file; or a workspace-member key or a non-registry `resolved` entry in a lockfile) - `inst-csc-extract-specifiers`

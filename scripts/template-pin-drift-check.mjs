@@ -56,7 +56,15 @@ export const MANIFEST_FILENAME = 'frontx-template.json';
 
 /**
  * Reads the ACTUAL on-disk version of every ecosystem package a template
- * pins — the truth a pinned site is compared against.
+ * pins — the truth a pinned site is compared against. FAILS CLOSED: a
+ * missing/empty `name` or `version` doesn't silently poison the truth map
+ * (an undefined `name` would key the entry as the literal string
+ * `"undefined"`, and the real package would then have NO truth entry at
+ * all — `findDriftedSites` treats "no truth entry" as "not drifted", so
+ * every pinned site for that package would silently stop being checked;
+ * CodeRabbit review finding on #493). Throws naming the offending file
+ * instead, so a malformed ecosystem manifest halts the check loudly rather
+ * than quietly disabling it.
  *
  * @param {string} rootDir monorepo root
  * @returns {Record<string, string>} package name (e.g. "@gears-frontx/api") -> its current version
@@ -66,16 +74,29 @@ export function readEcosystemTruthVersions(rootDir) {
   const truth = {};
   for (const dir of templatePinnedEcosystemPackageDirs) {
     const packageJsonPath = path.join(rootDir, 'packages', dir, 'package.json');
+    /** @type {unknown} */
     const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
-    truth[packageJson.name] = packageJson.version;
+    const name = /** @type {{ name?: unknown }} */ (packageJson).name;
+    const version = /** @type {{ version?: unknown }} */ (packageJson).version;
+    if (typeof name !== 'string' || name.trim() === '') {
+      throw new Error(`[template-pin-drift-check] ${packageJsonPath} has no valid "name" — cannot build the ecosystem truth map.`);
+    }
+    if (typeof version !== 'string' || version.trim() === '') {
+      throw new Error(`[template-pin-drift-check] ${packageJsonPath} has no valid "version" — cannot build the ecosystem truth map.`);
+    }
+    truth[name] = version;
   }
   return truth;
 }
 
 /**
  * Recursively finds every `package.json` under `dir`, never descending into
- * `node_modules` or a dot-prefixed directory (neither is committed template
- * content this policy needs to inspect).
+ * `node_modules` (install-time output, never committed template content).
+ * DOES descend into a dot-prefixed directory: a pinned dependency site inside
+ * a hidden directory is exactly as real as one anywhere else, and skipping it
+ * would silently stop checking it — the same completeness hole CodeRabbit's
+ * review found in `createFsListContentOwnedFilesFn` (#493), fixed here for
+ * consistency before it recurred as a separate finding.
  *
  * @param {string} dir
  * @returns {string[]} absolute paths
@@ -84,7 +105,7 @@ export function findPackageJsonFiles(dir) {
   /** @type {string[]} */
   const results = [];
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue;
+    if (entry.name === 'node_modules') continue;
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
       results.push(...findPackageJsonFiles(full));
@@ -158,13 +179,22 @@ export function findDriftedSites(sites, truthVersions) {
  * a name-prefix glob would vacuously stop finding a renamed/relocated
  * template instead of failing).
  *
+ * `node_modules` is the ONE exclusion (install-time output, never something
+ * this repo's own tree defines); a dot-prefixed top-level directory (`.git`,
+ * `.github`, `.cf-studio`, ...) is NOT excluded — filtering it out would
+ * reintroduce exactly the naming/location assumption the manifest-presence
+ * principle exists to drop, and the one `fs.existsSync` check per top-level
+ * entry this costs is negligible (CodeRabbit review finding on #493 —
+ * matches the same node_modules-only rule `validate-templates.mjs` and
+ * `createFsListContentOwnedFilesFn` apply).
+ *
  * @param {string} rootDir
  * @returns {string[]} absolute paths, sorted
  */
 export function findTemplateDirs(rootDir) {
   return fs
     .readdirSync(rootDir, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() && entry.name !== 'node_modules' && !entry.name.startsWith('.'))
+    .filter((entry) => entry.isDirectory() && entry.name !== 'node_modules')
     .map((entry) => path.join(rootDir, entry.name))
     .filter((dir) => fs.existsSync(path.join(dir, MANIFEST_FILENAME)))
     .sort();
@@ -211,8 +241,9 @@ export function runCli(options = {}) {
       );
     }
     console.error(
-      '\nBump the pinned site(s) above to match the package(s)\' actual version, or run ' +
-        '`npm run dev:template:link` to confirm the mismatch before committing a fix.',
+      '\nBump the pinned site(s) above to match the package(s)\' actual version, then rerun ' +
+        '`npm run policy:template-pin-drift` to confirm. Do NOT run `npm run dev:template:link` to ' +
+        'investigate this — it links local sources regardless of what is pinned and would mask the drift.',
     );
     return 1;
   }

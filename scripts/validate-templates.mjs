@@ -43,6 +43,16 @@ import { pathToFileURL } from 'node:url';
  * or what it's named. `manifestFilename` is passed in (rather than imported)
  * so this function stays independent of whether `@gears-frontx/cli` loaded.
  *
+ * `node_modules` is the ONE exclusion (install-time output, never something
+ * this repo's own tree defines); a dot-prefixed top-level directory (`.git`,
+ * `.github`, `.cf-studio`, ...) is NOT excluded — filtering it out would
+ * reintroduce exactly the kind of naming/location assumption the
+ * manifest-presence principle exists to drop (A5 review round on #493), and
+ * the one `fs.existsSync` check per top-level entry this costs is negligible
+ * (CodeRabbit review finding on #493 — matches the same node_modules-only
+ * rule `createFsListContentOwnedFilesFn` applies when walking a template's
+ * own content).
+ *
  * @param {string} rootDir
  * @param {string} manifestFilename
  * @returns {string[]} absolute paths, sorted
@@ -50,7 +60,7 @@ import { pathToFileURL } from 'node:url';
 export function findTemplateDirs(rootDir, manifestFilename) {
   return fs
     .readdirSync(rootDir, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() && entry.name !== 'node_modules' && !entry.name.startsWith('.'))
+    .filter((entry) => entry.isDirectory() && entry.name !== 'node_modules')
     .map((entry) => path.join(rootDir, entry.name))
     .filter((dir) => fs.existsSync(path.join(dir, manifestFilename)))
     .sort();
@@ -95,7 +105,7 @@ export async function loadCliModule(importFn = (specifier) => import(specifier))
  *   rootDir?: string;
  *   loadCliModule?: typeof loadCliModule;
  *   readFileFn?: import('@gears-frontx/cli').ReadFileFn;
- *   listSubtreeFilesFn?: import('@gears-frontx/cli').ListSubtreeFilesFn;
+ *   listContentOwnedFilesFn?: import('@gears-frontx/cli').ListContentOwnedFilesFn;
  *   log?: (line: string) => void;
  *   logError?: (line: string) => void;
  * }} [options]
@@ -111,10 +121,10 @@ export async function runCli(options = {}) {
     logError(`[validate-templates] FAIL: ${loaded.message}`);
     return 1;
   }
-  const { createFsListSubtreeFilesFn, createFsReadFileFn, MANIFEST_FILENAME, validateCommand } = loaded.module;
+  const { createFsListContentOwnedFilesFn, createFsReadFileFn, MANIFEST_FILENAME, validateCommand } = loaded.module;
 
   const readFileFn = options.readFileFn ?? createFsReadFileFn();
-  const listSubtreeFilesFn = options.listSubtreeFilesFn ?? createFsListSubtreeFilesFn();
+  const listContentOwnedFilesFn = options.listContentOwnedFilesFn ?? createFsListContentOwnedFilesFn();
 
   const templateDirs = findTemplateDirs(rootDir, MANIFEST_FILENAME);
 
@@ -131,7 +141,7 @@ export async function runCli(options = {}) {
 
   for (const templateDir of templateDirs) {
     const templateName = path.basename(templateDir);
-    const result = await validateCommand(templateDir, readFileFn, listSubtreeFilesFn);
+    const result = await validateCommand(templateDir, readFileFn, listContentOwnedFilesFn);
     if (result.ok) {
       log(`[validate-templates] PASS: ${templateName}`);
     } else {

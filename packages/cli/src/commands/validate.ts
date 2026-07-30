@@ -1,7 +1,7 @@
 // @cpt-flow:cpt-frontx-flow-template-manifest-validate-for-publication:p1
 // @cpt-dod:cpt-frontx-dod-template-manifest-validate-command:p1
 // @cpt-dod:cpt-frontx-dod-template-manifest-content-self-containment:p2
-import type { ListSubtreeFilesFn, ManifestViolation, ReadFileFn } from '../manifest/types';
+import type { ListContentOwnedFilesFn, ManifestViolation, ReadFileFn } from '../manifest/types';
 import { MANIFEST_FILENAME } from '../manifest/types';
 import { validateManifestContract } from '../manifest/validate-contract';
 import { validateContentSelfContainment } from '../manifest/validate-content-self-containment';
@@ -17,7 +17,7 @@ export interface ValidateCommandResult {
 export async function validateCommand(
   templateDir: string,
   readFileFn: ReadFileFn,
-  listSubtreeFilesFn: ListSubtreeFilesFn,
+  listContentOwnedFilesFn: ListContentOwnedFilesFn,
 ): Promise<ValidateCommandResult> {
   // @cpt-end:cpt-frontx-flow-template-manifest-validate-for-publication:p1:inst-invoke-validate
 
@@ -63,7 +63,7 @@ export async function validateCommand(
   // @cpt-end:cpt-frontx-flow-template-manifest-validate-for-publication:p1:inst-if-rejected
 
   // @cpt-begin:cpt-frontx-flow-template-manifest-validate-for-publication:p2:inst-delegate-to-content-algo
-  const contentResult = await validateContentSelfContainment(templateDir, raw, listSubtreeFilesFn, readFileFn);
+  const contentResult = await validateContentSelfContainment(templateDir, raw, listContentOwnedFilesFn, readFileFn);
   // @cpt-end:cpt-frontx-flow-template-manifest-validate-for-publication:p2:inst-delegate-to-content-algo
 
   // @cpt-begin:cpt-frontx-flow-template-manifest-validate-for-publication:p2:inst-if-content-violations

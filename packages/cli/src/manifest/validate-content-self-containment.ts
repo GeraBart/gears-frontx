@@ -21,7 +21,7 @@
 // count is hardcoded, so this stays safe for
 // `cpt-frontx-constraint-cli-template-independence` (CLI-1) — the check
 // inspects whatever candidate it is pointed at and knows nothing else.
-import type { ListSubtreeFilesFn, ManifestViolation, ManifestValidationResult, ReadFileFn } from './types';
+import type { ListContentOwnedFilesFn, ManifestViolation, ManifestValidationResult, ReadFileFn } from './types';
 
 // A path-like specifier a carrier file declares, plus the directory it is
 // relative to (POSIX, itself relative to the template root — never an
@@ -52,14 +52,28 @@ function carrierKind(fileRelPath: string): CarrierKind | null {
 }
 // @cpt-end:cpt-frontx-algo-template-manifest-validate-content-self-containment:p2:inst-csc-for-each-carrier
 
+// Untrusted carrier JSON may spell a path with Windows separators (authored
+// on Windows, or simply copied verbatim from a Windows machine) — a
+// backslash-separated relative escape (`..\..\shared`) split ONLY on `/`
+// survives as one opaque segment that never matches `..`, so the escape is
+// missed entirely (CodeRabbit review finding on #493). Every path-arithmetic
+// helper below normalizes to POSIX separators as its first step, so this is
+// the one place backslash-vs-forward-slash is ever decided.
+function toPosixSeparators(value: string): string {
+  return value.replace(/\\/g, '/');
+}
+
 function posixDirname(relPath: string): string {
-  const segments = relPath.split('/');
+  const segments = toPosixSeparators(relPath).split('/');
   segments.pop();
   return segments.length === 0 ? '.' : segments.join('/');
 }
 
 function posixJoin(...segments: string[]): string {
-  const joined = segments.filter((s) => s !== '' && s !== '.').join('/');
+  const joined = segments
+    .map((s) => toPosixSeparators(s))
+    .filter((s) => s !== '' && s !== '.')
+    .join('/');
   return joined === '' ? '.' : joined;
 }
 
@@ -72,10 +86,14 @@ function posixJoin(...segments: string[]): string {
 // sources for exactly this shape: `npm install /abs/path` and `npm link`
 // both write an absolute `file:` specifier into `package.json`, and a
 // tsconfig `baseUrl` may itself be set to an absolute path.
-const ABSOLUTE_OR_HOME_RELATIVE_RE = /^(\/|[A-Za-z]:[\\/]|~(?:[\\/]|$))/;
+const ABSOLUTE_OR_HOME_RELATIVE_RE = /^(\/|[A-Za-z]:\/|~(?:\/|$))/;
 
+// Normalizes to POSIX separators first (`toPosixSeparators`) so this
+// classifies a backslash-spelled value (`C:\repo`, `~\repo`) exactly like
+// its forward-slash equivalent — one separator convention decides both this
+// check and the segment-splitting `resolvesOutsideRoot` does below.
 function isAbsoluteOrHomeRelative(value: string): boolean {
-  return ABSOLUTE_OR_HOME_RELATIVE_RE.test(value);
+  return ABSOLUTE_OR_HOME_RELATIVE_RE.test(toPosixSeparators(value));
 }
 
 // @cpt-begin:cpt-frontx-algo-template-manifest-validate-content-self-containment:p2:inst-csc-extract-specifiers
@@ -247,7 +265,11 @@ function resolvesOutsideRoot(baseDir: string, rawPath: string): boolean {
   // on their own — joining first would corrupt the segment count instead of
   // rejecting outright (see A1 review finding on #493).
   if (isAbsoluteOrHomeRelative(baseDir) || isAbsoluteOrHomeRelative(rawPath)) return true;
-  const combined = posixJoin(baseDir, rawPath);
+  // `posixJoin` already normalizes each segment it's given; normalizing the
+  // joined result again here is a deliberate belt-and-suspenders step right
+  // at the split, so this line never again depends on every upstream caller
+  // having normalized correctly (CodeRabbit review finding on #493).
+  const combined = toPosixSeparators(posixJoin(baseDir, rawPath));
   const segments: string[] = [];
   for (const segment of combined.split('/')) {
     if (segment === '' || segment === '.') continue;
@@ -266,16 +288,16 @@ function resolvesOutsideRoot(baseDir: string, rawPath: string): boolean {
 export async function validateContentSelfContainment(
   templateDir: string,
   manifestRaw: string,
-  listSubtreeFiles: ListSubtreeFilesFn,
+  listContentOwnedFiles: ListContentOwnedFilesFn,
   readFile: ReadFileFn,
 ): Promise<ManifestValidationResult> {
   const contentOwningPaths = extractDeclaredContentPaths(manifestRaw);
   const violations: ManifestViolation[] = [];
   const seenFiles = new Set<string>();
 
-  for (const subtreeEntry of contentOwningPaths) {
+  for (const contentOwnedPath of contentOwningPaths) {
     // @cpt-begin:cpt-frontx-algo-template-manifest-validate-content-self-containment:p2:inst-csc-enumerate-files
-    const files = await listSubtreeFiles(templateDir, subtreeEntry);
+    const files = await listContentOwnedFiles(templateDir, contentOwnedPath);
     // @cpt-end:cpt-frontx-algo-template-manifest-validate-content-self-containment:p2:inst-csc-enumerate-files
     // @cpt-end:cpt-frontx-algo-template-manifest-validate-content-self-containment:p2:inst-csc-for-each-subtree
     for (const fileRelPath of files) {

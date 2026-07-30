@@ -14,7 +14,7 @@ import type { FetchFn } from '../resolver/types';
 import type { ContentItem, ReadContentItemsFn, WriteFileFn } from '../scaffold/types';
 import type { ProvenanceRecord, ProvenanceWriteFn } from '../provenance/types';
 import type { ReadProvenanceRecordsFn } from '../scaffold/materialize';
-import type { ListSubtreeFilesFn, ReadFileFn, TemplateManifest } from '../manifest/types';
+import type { ListContentOwnedFilesFn, ReadFileFn, TemplateManifest } from '../manifest/types';
 
 // F18: cpt-frontx-flow-cli-invocation-run-command,
 // cpt-frontx-flow-cli-invocation-help,
@@ -64,7 +64,7 @@ function makeDeps(overrides: Partial<CliDeps> = {}): DepsFixture {
   // Default fixture finds no carrier files, so `validate` dispatch tests that
   // don't care about content self-containment exercise only the manifest-
   // contract path (matching this file's existing coverage before #493).
-  const listSubtreeFilesFn: ListSubtreeFilesFn = vi.fn(async () => []);
+  const listContentOwnedFilesFn: ListContentOwnedFilesFn = vi.fn(async () => []);
 
   const deps: CliDeps = {
     inventory: new TemplateInventory(),
@@ -72,7 +72,7 @@ function makeDeps(overrides: Partial<CliDeps> = {}): DepsFixture {
     readContentFn,
     writeFileFn,
     readFileFn,
-    listSubtreeFilesFn,
+    listContentOwnedFilesFn,
     provenanceWriteFn,
     readProvenanceRecordsFn,
     readSingleProvenanceFn: vi.fn(async () => null),
