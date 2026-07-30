@@ -531,7 +531,7 @@ This decomposition breaks the FROZEN FrontX DESIGN into 18 work-package features
 
 - **Scope**:
   - Template manifest shape/contract.
-  - Pre-publish structure validation against the contract, including content self-containment of the manifest's declared exclusive subtrees and shared-file paths (no file referencing a filesystem path outside the template root).
+  - Pre-publish structure validation against the contract, including content self-containment of the manifest's declared exclusive subtrees and shared-file paths (no detected reference in registered, structurally parsed carriers resolving outside the template root).
   - Manifest consumed at install + scaffold.
 
 - **Out of scope**:
