@@ -3,7 +3,7 @@ import path from 'node:path';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it } from 'vitest';
-import { findTemplateDirs, runCli } from './validate-templates.mjs';
+import { findTemplateDirs, loadCliModule, runCli } from './validate-templates.mjs';
 
 let rootDir;
 
@@ -38,7 +38,7 @@ describe('findTemplateDirs', () => {
     await writeFile(path.join(root, 'a-renamed-template', 'frontx-template.json'), validManifest());
     await mkdir(path.join(root, 'packages'), { recursive: true }); // no manifest — not a template
 
-    const dirs = findTemplateDirs(root).map((d) => path.basename(d)).sort();
+    const dirs = findTemplateDirs(root, 'frontx-template.json').map((d) => path.basename(d)).sort();
 
     expect(dirs).toEqual(['a-renamed-template', 'template-standard']);
   });
@@ -47,7 +47,7 @@ describe('findTemplateDirs', () => {
     const root = await makeRoot();
     await mkdir(path.join(root, 'template-empty'), { recursive: true });
 
-    expect(findTemplateDirs(root)).toEqual([]);
+    expect(findTemplateDirs(root, 'frontx-template.json')).toEqual([]);
   });
 
   it('ignores node_modules and dot-prefixed directories even if they somehow carry a manifest', async () => {
@@ -57,7 +57,16 @@ describe('findTemplateDirs', () => {
     await mkdir(path.join(root, '.hidden'), { recursive: true });
     await writeFile(path.join(root, '.hidden', 'frontx-template.json'), validManifest());
 
-    expect(findTemplateDirs(root)).toEqual([]);
+    expect(findTemplateDirs(root, 'frontx-template.json')).toEqual([]);
+  });
+
+  it('respects the manifest filename passed in, independent of any real CLI constant', async () => {
+    const root = await makeRoot();
+    await mkdir(path.join(root, 'template-standard'), { recursive: true });
+    await writeFile(path.join(root, 'template-standard', 'a-different-manifest-name.json'), validManifest());
+
+    expect(findTemplateDirs(root, 'frontx-template.json')).toEqual([]);
+    expect(findTemplateDirs(root, 'a-different-manifest-name.json').map((d) => path.basename(d))).toEqual(['template-standard']);
   });
 });
 
@@ -121,5 +130,62 @@ describe('runCli', () => {
 
     expect(exitCode).toBe(1);
     expect(errors.some((l) => l.includes('no template found'))).toBe(true);
+  });
+
+  // #492 review finding 3 ("confusing module-resolution error instead of a
+  // clear message"), reproduced here for @gears-frontx/cli: a fresh clone or
+  // a `clean:artifacts` run leaves packages/cli/dist missing, and a plain
+  // `import('@gears-frontx/cli')` would throw node's raw ERR_MODULE_NOT_FOUND.
+  // `loadCliModule` is injected here rather than actually deleting dist/,
+  // which would make this test destructive to every other suite sharing the
+  // built package.
+  it('fails with a clear, actionable message — not a raw stack trace — when the CLI build is missing', async () => {
+    const root = await makeRoot();
+    await mkdir(path.join(root, 'template-standard'), { recursive: true });
+    await writeFile(path.join(root, 'template-standard', 'frontx-template.json'), validManifest());
+    const errors = [];
+
+    const exitCode = await runCli({
+      rootDir: root,
+      logError: (l) => errors.push(l),
+      loadCliModule: async () => ({
+        ok: false,
+        message: 'built @gears-frontx/cli not found (packages/cli/dist is missing) — run `npm run build:packages:cli` first.',
+      }),
+    });
+
+    expect(exitCode).toBe(1);
+    expect(errors.some((l) => l.includes('run `npm run build:packages:cli` first'))).toBe(true);
+  });
+});
+
+describe('loadCliModule', () => {
+  it('returns the loaded module on success', async () => {
+    const fakeModule = { MANIFEST_FILENAME: 'frontx-template.json' };
+    const result = await loadCliModule(async () => fakeModule);
+
+    expect(result).toEqual({ ok: true, module: fakeModule });
+  });
+
+  it('maps ERR_MODULE_NOT_FOUND to a clear, actionable message instead of the raw error', async () => {
+    const moduleNotFound = Object.assign(new Error("Cannot find module '@gears-frontx/cli'"), {
+      code: 'ERR_MODULE_NOT_FOUND',
+    });
+
+    const result = await loadCliModule(async () => {
+      throw moduleNotFound;
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.message).toContain('run `npm run build:packages:cli` first');
+  });
+
+  it('rethrows any other import error unchanged — only a missing build gets the friendly message', async () => {
+    const otherError = new Error('unexpected syntax error in dist/index.js');
+
+    await expect(loadCliModule(async () => {
+      throw otherError;
+    })).rejects.toThrow(otherError);
   });
 });

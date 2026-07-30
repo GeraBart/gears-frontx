@@ -35,14 +35,24 @@ import { pathToFileURL } from 'node:url';
 import { isExactPin } from './ecosystem-version-policy.mjs';
 import { templatePinnedEcosystemPackageDirs } from './template-ecosystem-packages.mjs';
 
-const DEPENDENCY_FIELDS = ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies'];
+// Mirrors `DEPENDENCY_FIELDS` (`packages/cli/src/manifest/validate-content-
+// self-containment.ts`) — kept as a local literal, not an import, so this
+// script never depends on `@gears-frontx/cli` being built (unlike
+// `validate-templates.mjs`, which already needs the built CLI for
+// `validateCommand` and pays that cost deliberately). Exported so
+// `template-pin-drift-check.test.mjs` can assert it stays in sync with the
+// TypeScript source (#492 review finding 2's "unguarded duplicated literal"
+// class — a guard test is the affordable way to keep two copies honest
+// without adding a build dependency to either script).
+export const DEPENDENCY_FIELDS = ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies'];
 
 // Mirrors `MANIFEST_FILENAME` (`packages/cli/src/manifest/types.ts`) — kept
 // as a local literal rather than an import so this script keeps working
 // straight after `npm ci`, with no `build:packages:cli` prerequisite; a
 // single stable filename literal is a far smaller duplication risk than the
 // package-list duplication `template-ecosystem-packages.mjs` exists to close.
-const MANIFEST_FILENAME = 'frontx-template.json';
+// Exported for the same sync-guard-test reason as `DEPENDENCY_FIELDS` above.
+export const MANIFEST_FILENAME = 'frontx-template.json';
 
 /**
  * Reads the ACTUAL on-disk version of every ecosystem package a template

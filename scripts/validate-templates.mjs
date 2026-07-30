@@ -19,7 +19,14 @@
  * Imports `@gears-frontx/cli`'s command directly rather than spawning the
  * built `frontx` binary as a child process — one less path assumption, and it
  * runs against the exact in-repo build `npm run build:packages:cli` just
- * produced.
+ * produced. That import is DYNAMIC (`loadCliModule` below), not a static
+ * top-level `import`: a static import fails module EVALUATION itself with
+ * node's raw `ERR_MODULE_NOT_FOUND` stack trace the instant `packages/cli/dist`
+ * is missing (a fresh clone, a `clean:artifacts` run) — before this script's
+ * own code ever runs, so it can't be caught or turned into a clear message.
+ * The dynamic import runs inside `runCli`, where a missing build is caught
+ * and reported as an actionable instruction instead (the #492 review's
+ * "confusing module-resolution error" class, finding 3).
  *
  * CLI entry: `node scripts/validate-templates.mjs` (exit 0 on success).
  * Core logic is exported for unit tests in
@@ -29,28 +36,64 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { pathToFileURL } from 'node:url';
-import { createFsListSubtreeFilesFn, createFsReadFileFn, MANIFEST_FILENAME, validateCommand } from '@gears-frontx/cli';
 
 /**
- * Every top-level directory at the repo root that carries `frontx-template.json`
+ * Every top-level directory at the repo root that carries `manifestFilename`
  * — a template is defined by its manifest (ADR-0018), not by where it lives
- * or what it's named.
+ * or what it's named. `manifestFilename` is passed in (rather than imported)
+ * so this function stays independent of whether `@gears-frontx/cli` loaded.
  *
  * @param {string} rootDir
+ * @param {string} manifestFilename
  * @returns {string[]} absolute paths, sorted
  */
-export function findTemplateDirs(rootDir) {
+export function findTemplateDirs(rootDir, manifestFilename) {
   return fs
     .readdirSync(rootDir, { withFileTypes: true })
     .filter((entry) => entry.isDirectory() && entry.name !== 'node_modules' && !entry.name.startsWith('.'))
     .map((entry) => path.join(rootDir, entry.name))
-    .filter((dir) => fs.existsSync(path.join(dir, MANIFEST_FILENAME)))
+    .filter((dir) => fs.existsSync(path.join(dir, manifestFilename)))
     .sort();
+}
+
+/**
+ * @param {unknown} error
+ * @returns {boolean} whether `error` is node's "module not found" error —
+ *   the shape a missing `packages/cli/dist` produces on `import('@gears-frontx/cli')`.
+ */
+function isModuleNotFoundError(error) {
+  return Boolean(error) && typeof error === 'object' && 'code' in error && error.code === 'ERR_MODULE_NOT_FOUND';
+}
+
+/**
+ * Dynamically imports `@gears-frontx/cli`, mapping a missing build to a
+ * clear, actionable result instead of letting node's raw
+ * `ERR_MODULE_NOT_FOUND` stack trace reach the caller unexplained (#492
+ * review finding 3's "confusing module-resolution error" class).
+ *
+ * @param {(specifier: string) => Promise<unknown>} [importFn] injected for testing
+ * @returns {Promise<{ ok: true; module: typeof import('@gears-frontx/cli') } | { ok: false; message: string }>}
+ */
+export async function loadCliModule(importFn = (specifier) => import(specifier)) {
+  try {
+    const module = /** @type {typeof import('@gears-frontx/cli')} */ (await importFn('@gears-frontx/cli'));
+    return { ok: true, module };
+  } catch (error) {
+    if (isModuleNotFoundError(error)) {
+      return {
+        ok: false,
+        message:
+          'built @gears-frontx/cli not found (packages/cli/dist is missing) — run `npm run build:packages:cli` first.',
+      };
+    }
+    throw error;
+  }
 }
 
 /**
  * @param {{
  *   rootDir?: string;
+ *   loadCliModule?: typeof loadCliModule;
  *   readFileFn?: import('@gears-frontx/cli').ReadFileFn;
  *   listSubtreeFilesFn?: import('@gears-frontx/cli').ListSubtreeFilesFn;
  *   log?: (line: string) => void;
@@ -60,12 +103,20 @@ export function findTemplateDirs(rootDir) {
  */
 export async function runCli(options = {}) {
   const rootDir = options.rootDir ?? process.cwd();
-  const readFileFn = options.readFileFn ?? createFsReadFileFn();
-  const listSubtreeFilesFn = options.listSubtreeFilesFn ?? createFsListSubtreeFilesFn();
   const log = options.log ?? console.log;
   const logError = options.logError ?? console.error;
 
-  const templateDirs = findTemplateDirs(rootDir);
+  const loaded = await (options.loadCliModule ?? loadCliModule)();
+  if (!loaded.ok) {
+    logError(`[validate-templates] FAIL: ${loaded.message}`);
+    return 1;
+  }
+  const { createFsListSubtreeFilesFn, createFsReadFileFn, MANIFEST_FILENAME, validateCommand } = loaded.module;
+
+  const readFileFn = options.readFileFn ?? createFsReadFileFn();
+  const listSubtreeFilesFn = options.listSubtreeFilesFn ?? createFsListSubtreeFilesFn();
+
+  const templateDirs = findTemplateDirs(rootDir, MANIFEST_FILENAME);
 
   // A5 review finding: an empty result is never a silent pass. It means
   // either no template exists (unexpected — this repo always ships at least

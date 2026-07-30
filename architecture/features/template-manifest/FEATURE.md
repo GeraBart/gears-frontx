@@ -91,7 +91,7 @@ User-facing interactions that start with an actor (human or external system) and
 5. [x] - `p1` - **IF** the validation result is REJECTED - `inst-if-rejected`
    1. [x] - `p1` - CLI reports all violations to the developer with their locations - `inst-report-violations`
    2. [x] - `p1` - **RETURN** FAIL exit code - `inst-return-fail`
-6. [x] - `p2` - **ELSE** (manifest contract is VALIDATED), CLI additionally delegates to the content self-containment algorithm (`cpt-frontx-algo-template-manifest-validate-content-self-containment`), which inspects every file inside the manifest's declared exclusive subtrees - `inst-delegate-to-content-algo`
+6. [x] - `p2` - **ELSE** (manifest contract is VALIDATED), CLI additionally delegates to the content self-containment algorithm (`cpt-frontx-algo-template-manifest-validate-content-self-containment`), which inspects every file inside the manifest's declared content-owning paths — every exclusive subtree, plus every shared-file path - `inst-delegate-to-content-algo`
 7. [x] - `p2` - **IF** the content self-containment result carries violations - `inst-if-content-violations`
    1. [x] - `p2` - CLI reports all content violations to the developer, naming the offending file and the escaping path - `inst-report-content-violations`
    2. [x] - `p2` - **RETURN** FAIL exit code - `inst-return-content-fail`

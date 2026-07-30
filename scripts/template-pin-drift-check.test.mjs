@@ -1,9 +1,13 @@
 // @cpt-dod:cpt-frontx-dod-unit-test-generation-and-agent-verification-standard-test-convention:p1
 import path from 'node:path';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  DEPENDENCY_FIELDS,
+  MANIFEST_FILENAME,
   findDriftedSites,
   findPackageJsonFiles,
   findPinSites,
@@ -210,5 +214,39 @@ describe('runCli', () => {
     // No frontx-template.json anywhere — discovery must find nothing.
 
     expect(runCli({ rootDir: root })).toBe(1);
+  });
+});
+
+// #492 review finding 2's "unguarded duplicated literal" class, reproduced
+// by this script itself: MANIFEST_FILENAME and DEPENDENCY_FIELDS are each
+// deliberately kept as a local literal (not an import from `@gears-frontx/cli`
+// or `validate-content-self-containment.ts`) so this script never depends on
+// the CLI package being built. That's a real property worth keeping — but a
+// duplicated literal that can silently drift needs a guard. These tests read
+// the CANONICAL TypeScript source as text (never `import`ed — a `.ts` file
+// isn't loadable by plain node, and importing the built `dist/` would
+// reintroduce exactly the build dependency this script exists to avoid) and
+// assert the local copy still matches.
+describe('duplicated-literal sync guards (#492 review finding 2)', () => {
+  function readCliSource(relativePath) {
+    const sourcePath = fileURLToPath(new URL(`../${relativePath}`, import.meta.url));
+    return readFileSync(sourcePath, 'utf8');
+  }
+
+  it('MANIFEST_FILENAME stays in sync with the canonical export in packages/cli/src/manifest/types.ts', () => {
+    const source = readCliSource('packages/cli/src/manifest/types.ts');
+    const match = /export const MANIFEST_FILENAME = '([^']+)';/.exec(source);
+
+    expect(match, 'canonical MANIFEST_FILENAME export not found — did types.ts change shape?').not.toBeNull();
+    expect(MANIFEST_FILENAME).toBe(match[1]);
+  });
+
+  it('DEPENDENCY_FIELDS stays in sync with validate-content-self-containment.ts', () => {
+    const source = readCliSource('packages/cli/src/manifest/validate-content-self-containment.ts');
+    const match = /const DEPENDENCY_FIELDS = (\[[^\]]*\])/.exec(source);
+
+    expect(match, 'canonical DEPENDENCY_FIELDS declaration not found — did the algorithm module change shape?').not.toBeNull();
+    const canonicalFields = JSON.parse(match[1].replace(/'/g, '"'));
+    expect(DEPENDENCY_FIELDS).toEqual(canonicalFields);
   });
 });
