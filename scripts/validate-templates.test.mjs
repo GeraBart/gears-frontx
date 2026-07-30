@@ -26,15 +26,38 @@ function validManifest(overrides = {}) {
 }
 
 describe('findTemplateDirs', () => {
-  it('finds every template-* directory at the repo root, ignoring unrelated directories', async () => {
+  // A5 review finding: a template is discovered by its manifest
+  // (`frontx-template.json`, ADR-0018), never by a `template-*` name prefix —
+  // location- and name-independent, so a #470-renamed/relocated template is
+  // still found.
+  it('finds every top-level directory carrying frontx-template.json, regardless of its name', async () => {
     const root = await makeRoot();
     await mkdir(path.join(root, 'template-standard'), { recursive: true });
-    await mkdir(path.join(root, 'template-mfe'), { recursive: true });
-    await mkdir(path.join(root, 'packages'), { recursive: true });
+    await writeFile(path.join(root, 'template-standard', 'frontx-template.json'), validManifest());
+    await mkdir(path.join(root, 'a-renamed-template'), { recursive: true });
+    await writeFile(path.join(root, 'a-renamed-template', 'frontx-template.json'), validManifest());
+    await mkdir(path.join(root, 'packages'), { recursive: true }); // no manifest — not a template
 
     const dirs = findTemplateDirs(root).map((d) => path.basename(d)).sort();
 
-    expect(dirs).toEqual(['template-mfe', 'template-standard']);
+    expect(dirs).toEqual(['a-renamed-template', 'template-standard']);
+  });
+
+  it('ignores a directory named template-* that carries no manifest', async () => {
+    const root = await makeRoot();
+    await mkdir(path.join(root, 'template-empty'), { recursive: true });
+
+    expect(findTemplateDirs(root)).toEqual([]);
+  });
+
+  it('ignores node_modules and dot-prefixed directories even if they somehow carry a manifest', async () => {
+    const root = await makeRoot();
+    await mkdir(path.join(root, 'node_modules', 'something'), { recursive: true });
+    await writeFile(path.join(root, 'node_modules', 'something', 'frontx-template.json'), validManifest());
+    await mkdir(path.join(root, '.hidden'), { recursive: true });
+    await writeFile(path.join(root, '.hidden', 'frontx-template.json'), validManifest());
+
+    expect(findTemplateDirs(root)).toEqual([]);
   });
 });
 
@@ -84,5 +107,19 @@ describe('runCli', () => {
 
     expect(exitCode).toBe(1);
     expect(errors.some((l) => l.includes('not self-contained'))).toBe(true);
+  });
+
+  // A5 review finding: zero templates found must never be a silent pass —
+  // it means discovery is broken (wrong root, renamed manifest) or every
+  // template vanished, either of which needs a human's attention.
+  it('fails loudly, not vacuously, when no template is found', async () => {
+    const root = await makeRoot();
+    await mkdir(path.join(root, 'packages'), { recursive: true }); // no manifest anywhere
+    const errors = [];
+
+    const exitCode = await runCli({ rootDir: root, logError: (l) => errors.push(l) });
+
+    expect(exitCode).toBe(1);
+    expect(errors.some((l) => l.includes('no template found'))).toBe(true);
   });
 });

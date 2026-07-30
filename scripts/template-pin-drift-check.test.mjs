@@ -28,6 +28,12 @@ async function writeJson(filePath, value) {
   await writeFile(filePath, JSON.stringify(value));
 }
 
+// A minimal marker manifest — discovery only checks for the file's
+// presence (`findTemplateDirs`), never its content.
+async function writeManifest(templateDir) {
+  await writeJson(path.join(templateDir, 'frontx-template.json'), {});
+}
+
 async function writeEcosystemPackages(root, versions = {}) {
   await writeJson(path.join(root, 'packages', 'api', 'package.json'), {
     name: '@gears-frontx/api',
@@ -72,15 +78,24 @@ describe('findPackageJsonFiles / findTemplateDirs', () => {
     expect(files).toEqual(['package.json', 'packages/framework/package.json']);
   });
 
-  it('finds every template-* directory at the repo root, ignoring unrelated directories', async () => {
+  // A5 review finding: discovery is by manifest presence (ADR-0018), never
+  // by a `template-*` name prefix — location- and name-independent.
+  it('finds every top-level directory carrying frontx-template.json, regardless of its name', async () => {
     const root = await makeRoot();
-    await mkdir(path.join(root, 'template-standard'), { recursive: true });
-    await mkdir(path.join(root, 'template-mfe'), { recursive: true });
-    await mkdir(path.join(root, 'packages'), { recursive: true });
+    await writeManifest(path.join(root, 'template-standard'));
+    await writeManifest(path.join(root, 'a-renamed-template'));
+    await mkdir(path.join(root, 'packages'), { recursive: true }); // no manifest — not a template
 
     const dirs = findTemplateDirs(root).map((d) => path.basename(d)).sort();
 
-    expect(dirs).toEqual(['template-mfe', 'template-standard']);
+    expect(dirs).toEqual(['a-renamed-template', 'template-standard']);
+  });
+
+  it('ignores a directory named template-* that carries no manifest', async () => {
+    const root = await makeRoot();
+    await mkdir(path.join(root, 'template-empty'), { recursive: true });
+
+    expect(findTemplateDirs(root)).toEqual([]);
   });
 });
 
@@ -153,6 +168,7 @@ describe('runCli', () => {
   it('passes when every pinned site across every template matches the ecosystem truth', async () => {
     const root = await makeRoot();
     await writeEcosystemPackages(root);
+    await writeManifest(path.join(root, 'template-standard'));
     await writeJson(path.join(root, 'template-standard', 'package.json'), {
       dependencies: {
         '@gears-frontx/api': '0.3.0-alpha.0',
@@ -167,6 +183,7 @@ describe('runCli', () => {
   it('fails when a template pin has drifted from the ecosystem\'s actual version', async () => {
     const root = await makeRoot();
     await writeEcosystemPackages(root, { api: '0.4.0-alpha.0' });
+    await writeManifest(path.join(root, 'template-standard'));
     await writeJson(path.join(root, 'template-standard', 'packages', 'framework', 'package.json'), {
       devDependencies: { '@gears-frontx/api': '0.3.0-alpha.0' },
     });
@@ -177,10 +194,20 @@ describe('runCli', () => {
   it('catches a drifted site nested arbitrarily deep, e.g. an MFE fixture package', async () => {
     const root = await makeRoot();
     await writeEcosystemPackages(root, { mfes: '0.4.0-alpha.0' });
+    await writeManifest(path.join(root, 'template-standard'));
     await writeJson(
       path.join(root, 'template-standard', 'src-app', 'mfe_packages', 'widgets-fixture-a', 'package.json'),
       { dependencies: { '@gears-frontx/mfes': '0.3.0-alpha.0' } },
     );
+
+    expect(runCli({ rootDir: root })).toBe(1);
+  });
+
+  // A5 review finding: zero templates found must never be a silent pass.
+  it('fails loudly, not vacuously, when no template is found', async () => {
+    const root = await makeRoot();
+    await writeEcosystemPackages(root);
+    // No frontx-template.json anywhere — discovery must find nothing.
 
     expect(runCli({ rootDir: root })).toBe(1);
   });

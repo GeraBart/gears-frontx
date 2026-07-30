@@ -15,10 +15,14 @@
  * itself would be exactly the kind of duplicated knowledge this guard exists
  * to prevent, and it would silently stop covering new sites the #470
  * template split introduces. Instead it discovers every pin site
- * structurally: for every `package.json` under every `template-*` directory
- * (excluding `node_modules`), any exact-pinned dependency naming one of the
- * governed ecosystem packages is a site, compared against that package's
- * actual on-disk version under `packages/`.
+ * structurally: for every `package.json` under every template directory
+ * (a directory carrying `frontx-template.json`, excluding `node_modules`),
+ * any exact-pinned dependency naming one of the governed ecosystem packages
+ * is a site, compared against that package's actual on-disk version under
+ * `packages/`. Templates themselves are discovered by manifest presence
+ * (ADR-0018), not by a `template-*` name prefix, so a renamed or relocated
+ * template is still covered — and zero templates found is a hard failure,
+ * never a vacuous pass.
  *
  * CLI entry: `node scripts/template-pin-drift-check.mjs` (exit 0 on success).
  * Core logic is exported for unit tests in
@@ -32,6 +36,13 @@ import { isExactPin } from './ecosystem-version-policy.mjs';
 import { templatePinnedEcosystemPackageDirs } from './template-ecosystem-packages.mjs';
 
 const DEPENDENCY_FIELDS = ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies'];
+
+// Mirrors `MANIFEST_FILENAME` (`packages/cli/src/manifest/types.ts`) — kept
+// as a local literal rather than an import so this script keeps working
+// straight after `npm ci`, with no `build:packages:cli` prerequisite; a
+// single stable filename literal is a far smaller duplication risk than the
+// package-list duplication `template-ecosystem-packages.mjs` exists to close.
+const MANIFEST_FILENAME = 'frontx-template.json';
 
 /**
  * Reads the ACTUAL on-disk version of every ecosystem package a template
@@ -130,19 +141,23 @@ export function findDriftedSites(sites, truthVersions) {
 }
 
 /**
- * Every top-level `template-*` directory at the repo root. Matches the
- * naming convention `template-standard/` already establishes and the #470
- * split (`template-shell/`, `template-mfe/`) will follow — no template name
- * hardcoded here either.
+ * Every top-level directory at the repo root that carries `frontx-template.json`
+ * — a template is defined by its manifest (ADR-0018), not by a `template-*`
+ * name prefix. Location- and name-independent: the #470 split is covered
+ * whatever the resulting templates end up named (A5 review finding on #493 —
+ * a name-prefix glob would vacuously stop finding a renamed/relocated
+ * template instead of failing).
  *
  * @param {string} rootDir
- * @returns {string[]} absolute paths
+ * @returns {string[]} absolute paths, sorted
  */
 export function findTemplateDirs(rootDir) {
   return fs
     .readdirSync(rootDir, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() && entry.name.startsWith('template-'))
-    .map((entry) => path.join(rootDir, entry.name));
+    .filter((entry) => entry.isDirectory() && entry.name !== 'node_modules' && !entry.name.startsWith('.'))
+    .map((entry) => path.join(rootDir, entry.name))
+    .filter((dir) => fs.existsSync(path.join(dir, MANIFEST_FILENAME)))
+    .sort();
 }
 
 /**
@@ -157,9 +172,21 @@ export function runCli(options = {}) {
   const truthVersions = readEcosystemTruthVersions(rootDir);
   const governedPackageNames = Object.keys(truthVersions);
 
+  const templateDirs = findTemplateDirs(rootDir);
+
+  // A5 review finding: zero templates found is never a silent pass — a glob
+  // that stops matching (a rename, a relocation) would otherwise report
+  // "0 drifted sites" as success. Either no template exists (unexpected —
+  // this repo always ships at least one) or discovery is broken; either way
+  // a human needs to see it.
+  if (templateDirs.length === 0) {
+    console.error(`[template-pin-drift-check] FAIL: no template found under ${rootDir} (looked for a top-level directory carrying ${MANIFEST_FILENAME}).`);
+    return 1;
+  }
+
   /** @type {Array<PinSite & { actualVersion: string; templateName: string }>} */
   const allDrifted = [];
-  for (const templateDir of findTemplateDirs(rootDir)) {
+  for (const templateDir of templateDirs) {
     const sites = findPinSites(templateDir, governedPackageNames);
     const drifted = findDriftedSites(sites, truthVersions);
     allDrifted.push(...drifted.map((site) => ({ ...site, templateName: path.basename(templateDir) })));
