@@ -39,6 +39,7 @@ import fsDefault from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { templatePinnedEcosystemPackageDirs } from './template-ecosystem-packages.mjs';
 
 /** Template whose `node_modules` the links are written into. */
 export const templateDirName = 'template-shell';
@@ -46,9 +47,12 @@ export const templateDirName = 'template-shell';
 /**
  * Only the packages the template pins to the registry. The rest of
  * `@gears-frontx/*` inside the template either lives in its own subtree or is
- * already linked by npm, and must keep whatever npm gave it.
+ * already linked by npm, and must keep whatever npm gave it. Re-exported from
+ * the shared declaration so this script and the pin-drift CI guard
+ * (`template-pin-drift-check.mjs`) can never list the set twice and drift
+ * apart from each other.
  */
-export const linkedPackageDirs = ['api', 'mfes', 'gts-plugin'];
+export const linkedPackageDirs = templatePinnedEcosystemPackageDirs;
 
 /**
  * Suffix of the directory an installed package is moved to while its symlink
