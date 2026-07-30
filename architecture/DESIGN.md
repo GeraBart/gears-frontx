@@ -64,7 +64,7 @@ Requirements that significantly influence architecture decisions. Each driver be
 | `cpt-frontx-fr-cli-template-install` | The CLI resolves and installs templates by versioned source-spec at runtime (`cpt-frontx-adr-template-acquisition-and-location`, `cpt-frontx-adr-source-spec-syntax`), and a reference may address a template occupying a subtree of a repository. |
 | `cpt-frontx-fr-cli-template-list` | Template inventory and versions are reported from the externalized, source-spec-resolved template store (`cpt-frontx-adr-template-acquisition-and-location`). |
 | `cpt-frontx-fr-cli-template-update-local` | Local template updates operate on the externalized template store without touching any repository (`cpt-frontx-adr-template-acquisition-and-location`). |
-| `cpt-frontx-fr-cli-template-validate-prepublish` | Pre-publish structure validation runs against the template manifest publication contract, including that the template's declared ownership boundaries are well-formed (`cpt-frontx-adr-template-manifest-contract`, `cpt-frontx-adr-template-ownership-boundary-declaration`). |
+| `cpt-frontx-fr-cli-template-validate-prepublish` | Pre-publish structure validation runs against the template manifest publication contract, including that the template's declared ownership boundaries are well-formed and that no file within a declared exclusive subtree or shared-file path references a filesystem path resolving outside the template root (`cpt-frontx-adr-template-manifest-contract`, `cpt-frontx-adr-template-ownership-boundary-declaration`). |
 | `cpt-frontx-fr-cli-seed-repository` | An installed template is applied to seed a new repository through one uniform apply-and-assemble path that operates over any template (`cpt-frontx-adr-uniform-template-mechanism`, `cpt-frontx-adr-composed-template-resolution`). |
 | `cpt-frontx-fr-cli-add-template-to-repository` | An installed template is added into an existing repository through the same apply path, its declared boundaries checked against the templates already applied before any write (`cpt-frontx-adr-uniform-template-mechanism`, `cpt-frontx-adr-assembly-conflict-prevention`). |
 | `cpt-frontx-fr-cli-composed-template-resolution` | A repository is assembled from one or more templates, and a preset's referenced templates are resolved transitively and applied in one operation (`cpt-frontx-adr-composed-template-resolution`). |
@@ -623,7 +623,7 @@ A template must be checked against the manifest publication contract before it i
 
 ##### Responsibility scope
 
-- Owns pre-publish template-structure validation against the template-manifest contract (`cpt-frontx-contract-template-manifest`), including that the template's declared ownership boundaries are well-formed, producing a structural pass/fail conformance result (`cpt-frontx-adr-template-manifest-contract`, `cpt-frontx-adr-template-ownership-boundary-declaration`).
+- Owns pre-publish template-structure validation against the template-manifest contract (`cpt-frontx-contract-template-manifest`), including that the template's declared ownership boundaries are well-formed and that the content those boundaries own is self-contained (no file referencing a filesystem path outside the template root), producing a structural pass/fail conformance result (`cpt-frontx-adr-template-manifest-contract`, `cpt-frontx-adr-template-ownership-boundary-declaration`).
 
 ##### Responsibility boundaries
 

@@ -23,11 +23,14 @@ function fakeTemplate(files: Record<string, string>): { listSubtreeFiles: ListSu
   return { listSubtreeFiles, readFile };
 }
 
-function manifest(exclusiveSubtrees: string[]): string {
+function manifest(exclusiveSubtrees: string[], sharedFilePaths: string[] = []): string {
   return JSON.stringify({
     name: 'my-tpl',
     version: '1.0.0',
-    ownershipBoundaries: { exclusiveSubtrees, sharedFiles: [] },
+    ownershipBoundaries: {
+      exclusiveSubtrees,
+      sharedFiles: sharedFilePaths.map((path) => ({ path, mergeStrategy: 'exclusive', ownedRegions: [] })),
+    },
   });
 }
 
@@ -86,6 +89,47 @@ describe('validateContentSelfContainment — package.json `file:` specifiers', (
   });
 });
 
+describe('validateContentSelfContainment — absolute / drive-prefixed / home-relative specifiers (A1)', () => {
+  // Every specifier this algorithm resolves is CONTRACTUALLY root-relative;
+  // an absolute, drive-prefixed, or home-relative value can never actually
+  // be root-relative, so it is outside the root by definition regardless of
+  // `..`-segment counting. Real-world source: `npm install /abs/path` and
+  // `npm link` both write an absolute `file:` specifier.
+  it('an absolute POSIX `file:` specifier is a violation', async () => {
+    const { listSubtreeFiles, readFile } = fakeTemplate({
+      'package.json': JSON.stringify({ dependencies: { '@gears-frontx/api': 'file:/Users/me/monorepo/packages/api' } }),
+    });
+    const result = await validateContentSelfContainment('template', manifest(['package.json']), listSubtreeFiles, readFile);
+    expect(result.status).toBe('REJECTED');
+  });
+
+  it('a Windows drive-prefixed `file:` specifier is a violation', async () => {
+    const { listSubtreeFiles, readFile } = fakeTemplate({
+      'package.json': JSON.stringify({ dependencies: { '@gears-frontx/api': 'file:C:\\repo\\packages\\api' } }),
+    });
+    const result = await validateContentSelfContainment('template', manifest(['package.json']), listSubtreeFiles, readFile);
+    expect(result.status).toBe('REJECTED');
+  });
+
+  it('a home-relative (`~`) `file:` specifier is a violation', async () => {
+    const { listSubtreeFiles, readFile } = fakeTemplate({
+      'package.json': JSON.stringify({ dependencies: { '@gears-frontx/api': 'file:~/repo/packages/api' } }),
+    });
+    const result = await validateContentSelfContainment('template', manifest(['package.json']), listSubtreeFiles, readFile);
+    expect(result.status).toBe('REJECTED');
+  });
+
+  it('an absolute `compilerOptions.baseUrl` is a violation, even for an otherwise in-root `paths` entry', async () => {
+    const { listSubtreeFiles, readFile } = fakeTemplate({
+      'tsconfig.json': JSON.stringify({
+        compilerOptions: { baseUrl: '/Users/me/monorepo/template-standard', paths: { '@gears-frontx/state': ['./packages/state/src/index.ts'] } },
+      }),
+    });
+    const result = await validateContentSelfContainment('template', manifest(['tsconfig.json']), listSubtreeFiles, readFile);
+    expect(result.status).toBe('REJECTED');
+  });
+});
+
 describe('validateContentSelfContainment — tsconfig `paths` mappings', () => {
   // inst-csc-extract-specifiers (tsconfig) / inst-csc-resolve-specifier
   it('a `paths` entry resolving outside the template root is a violation, wildcard included', async () => {
@@ -136,6 +180,45 @@ describe('validateContentSelfContainment — tsconfig `paths` mappings', () => {
       listSubtreeFiles,
       readFile,
     );
+    expect(result.status).toBe('VALIDATED');
+  });
+
+  // A2 review finding — `extends` and `references[].path` are carriers with
+  // the same escape semantics as `paths`, resolved relative to the
+  // tsconfig's own directory (not `baseUrl`).
+  it('an `extends` target escaping the template root is a violation', async () => {
+    const { listSubtreeFiles, readFile } = fakeTemplate({
+      'packages/framework/tsconfig.json': JSON.stringify({ extends: '../../../tsconfig.base.json' }),
+    });
+    const result = await validateContentSelfContainment('template', manifest(['packages']), listSubtreeFiles, readFile);
+    expect(result.status).toBe('REJECTED');
+    if (result.status !== 'REJECTED') return;
+    expect(result.violations[0]?.field).toContain('extends[0]');
+  });
+
+  it('a bare-package `extends` target (npm-resolved, not a filesystem path) is NOT a violation', async () => {
+    const { listSubtreeFiles, readFile } = fakeTemplate({
+      'tsconfig.json': JSON.stringify({ extends: '@tsconfig/node20/tsconfig.json' }),
+    });
+    const result = await validateContentSelfContainment('template', manifest(['tsconfig.json']), listSubtreeFiles, readFile);
+    expect(result.status).toBe('VALIDATED');
+  });
+
+  it('a `references[].path` entry escaping the template root is a violation', async () => {
+    const { listSubtreeFiles, readFile } = fakeTemplate({
+      'packages/framework/tsconfig.json': JSON.stringify({ references: [{ path: '../../../other-repo/shared' }] }),
+    });
+    const result = await validateContentSelfContainment('template', manifest(['packages']), listSubtreeFiles, readFile);
+    expect(result.status).toBe('REJECTED');
+    if (result.status !== 'REJECTED') return;
+    expect(result.violations[0]?.field).toContain('references[0].path');
+  });
+
+  it('a `references[].path` entry resolving to a sibling package inside the template root is NOT a violation', async () => {
+    const { listSubtreeFiles, readFile } = fakeTemplate({
+      'packages/framework/tsconfig.json': JSON.stringify({ references: [{ path: '../state' }] }),
+    });
+    const result = await validateContentSelfContainment('template', manifest(['packages']), listSubtreeFiles, readFile);
     expect(result.status).toBe('VALIDATED');
   });
 });
@@ -276,5 +359,37 @@ describe('validateContentSelfContainment — carrier discovery and edge cases', 
     expect(result.status).toBe('REJECTED');
     if (result.status !== 'REJECTED') return;
     expect(result.violations).toHaveLength(2);
+  });
+
+  // A3 review finding — after the #470 split, package.json/lockfile/tsconfig
+  // are expected to move to `sharedFiles` for at least one template
+  // (ADR-0031's own worked example); enumeration must not silently stop
+  // covering the highest-value carriers when that happens.
+  it('a carrier declared only as a shared-file path (not an exclusive subtree) is still inspected', async () => {
+    const { listSubtreeFiles, readFile } = fakeTemplate({
+      'package.json': JSON.stringify({ dependencies: { '@gears-frontx/api': 'file:../packages/api' } }),
+    });
+    const result = await validateContentSelfContainment(
+      'template',
+      manifest([], ['package.json']),
+      listSubtreeFiles,
+      readFile,
+    );
+    expect(result.status).toBe('REJECTED');
+  });
+
+  it('a carrier declared as both an exclusive subtree and a shared-file path is inspected once, not double-reported', async () => {
+    const { listSubtreeFiles, readFile } = fakeTemplate({
+      'package.json': JSON.stringify({ dependencies: { '@gears-frontx/api': 'file:../packages/api' } }),
+    });
+    const result = await validateContentSelfContainment(
+      'template',
+      manifest(['package.json'], ['package.json']),
+      listSubtreeFiles,
+      readFile,
+    );
+    expect(result.status).toBe('REJECTED');
+    if (result.status !== 'REJECTED') return;
+    expect(result.violations).toHaveLength(1);
   });
 });
