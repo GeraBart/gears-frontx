@@ -70,3 +70,10 @@ export type ManifestValidationState = 'DRAFT' | 'VALIDATED' | 'REJECTED' | 'PUBL
 
 // ReadFileFn — injected for testability (no fs calls in core logic)
 export type ReadFileFn = (path: string) => Promise<string>;
+
+// ListSubtreeFilesFn — enumerates every regular file reachable under one
+// declared exclusive-subtree entry (a bare directory or a single file),
+// POSIX-relative to `templateDir` (cpt-frontx-algo-template-manifest-validate-
+// content-self-containment:p2:inst-csc-enumerate-files). Injected so the
+// content self-containment algorithm never touches a real filesystem itself.
+export type ListSubtreeFilesFn = (templateDir: string, subtreeEntry: string) => Promise<string[]>;

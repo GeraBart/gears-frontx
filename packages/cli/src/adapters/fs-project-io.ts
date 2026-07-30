@@ -9,7 +9,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { WriteFileFn } from '../scaffold/types';
-import type { ReadFileFn } from '../manifest/types';
+import type { ListSubtreeFilesFn, ReadFileFn } from '../manifest/types';
 import type { ReadProjectFileFn, WriteProjectFileFn, RemoveProjectFileFn } from '../upgrade/types';
 
 /** Real `WriteFileFn` — writes a destination file, creating parent dirs. */
@@ -50,4 +50,43 @@ export function createFsRemoveProjectFileFn(): RemoveProjectFileFn {
       fs.rmSync(absolutePath, { force: true });
     }
   };
+}
+
+/**
+ * Real `ListSubtreeFilesFn` — enumerates every regular file reachable under
+ * one exclusive-subtree entry, POSIX-relative to `templateDir`. Never
+ * descends into `node_modules` (install-time output, never committed
+ * template content) or a dot-prefixed directory (the subtree entry itself
+ * may legitimately be one, e.g. `.frontx/ai/<identity>` — only NESTED
+ * dot-directories encountered while walking are skipped).
+ */
+export function createFsListSubtreeFilesFn(): ListSubtreeFilesFn {
+  return async function listSubtreeFiles(templateDir: string, subtreeEntry: string): Promise<string[]> {
+    const absoluteEntry = path.join(templateDir, subtreeEntry);
+    if (!fs.existsSync(absoluteEntry)) return [];
+    const stat = fs.statSync(absoluteEntry);
+    if (stat.isFile()) return [toPosixPath(subtreeEntry)];
+    if (!stat.isDirectory()) return [];
+    return walkFiles(templateDir, subtreeEntry);
+  };
+}
+
+function toPosixPath(relativePath: string): string {
+  return relativePath.split(path.sep).join('/');
+}
+
+function walkFiles(templateDir: string, relativeDir: string): string[] {
+  const absoluteDir = path.join(templateDir, relativeDir);
+  const entries = fs.readdirSync(absoluteDir, { withFileTypes: true });
+  const files: string[] = [];
+  for (const entry of entries) {
+    if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue;
+    const relativePath = `${relativeDir}/${entry.name}`;
+    if (entry.isDirectory()) {
+      files.push(...walkFiles(templateDir, relativePath));
+    } else if (entry.isFile()) {
+      files.push(toPosixPath(relativePath));
+    }
+  }
+  return files;
 }

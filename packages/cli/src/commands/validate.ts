@@ -1,8 +1,10 @@
 // @cpt-flow:cpt-frontx-flow-template-manifest-validate-for-publication:p1
 // @cpt-dod:cpt-frontx-dod-template-manifest-validate-command:p1
-import type { ManifestViolation, ReadFileFn } from '../manifest/types';
+// @cpt-dod:cpt-frontx-dod-template-manifest-content-self-containment:p2
+import type { ListSubtreeFilesFn, ManifestViolation, ReadFileFn } from '../manifest/types';
 import { MANIFEST_FILENAME } from '../manifest/types';
 import { validateManifestContract } from '../manifest/validate-contract';
+import { validateContentSelfContainment } from '../manifest/validate-content-self-containment';
 
 export interface ValidateCommandResult {
   ok: boolean;
@@ -15,6 +17,7 @@ export interface ValidateCommandResult {
 export async function validateCommand(
   templateDir: string,
   readFileFn: ReadFileFn,
+  listSubtreeFilesFn: ListSubtreeFilesFn,
 ): Promise<ValidateCommandResult> {
   // @cpt-end:cpt-frontx-flow-template-manifest-validate-for-publication:p1:inst-invoke-validate
 
@@ -58,6 +61,28 @@ export async function validateCommand(
     // @cpt-end:cpt-frontx-flow-template-manifest-validate-for-publication:p1:inst-return-fail
   }
   // @cpt-end:cpt-frontx-flow-template-manifest-validate-for-publication:p1:inst-if-rejected
+
+  // @cpt-begin:cpt-frontx-flow-template-manifest-validate-for-publication:p2:inst-delegate-to-content-algo
+  const contentResult = await validateContentSelfContainment(templateDir, raw, listSubtreeFilesFn, readFileFn);
+  // @cpt-end:cpt-frontx-flow-template-manifest-validate-for-publication:p2:inst-delegate-to-content-algo
+
+  // @cpt-begin:cpt-frontx-flow-template-manifest-validate-for-publication:p2:inst-if-content-violations
+  if (contentResult.status === 'REJECTED') {
+    // @cpt-begin:cpt-frontx-flow-template-manifest-validate-for-publication:p2:inst-report-content-violations
+    const contentSummary = contentResult.violations
+      .map((v) => `  [${v.field}] ${v.message}`)
+      .join('\n');
+    // @cpt-end:cpt-frontx-flow-template-manifest-validate-for-publication:p2:inst-report-content-violations
+    // @cpt-begin:cpt-frontx-flow-template-manifest-validate-for-publication:p2:inst-return-content-fail
+    return {
+      ok: false,
+      exitCode: 1,
+      message: `FAIL: template content is not self-contained — ${contentResult.violations.length} violation(s):\n${contentSummary}`,
+      violations: contentResult.violations,
+    };
+    // @cpt-end:cpt-frontx-flow-template-manifest-validate-for-publication:p2:inst-return-content-fail
+  }
+  // @cpt-end:cpt-frontx-flow-template-manifest-validate-for-publication:p2:inst-if-content-violations
 
   // @cpt-begin:cpt-frontx-flow-template-manifest-validate-for-publication:p1:inst-else-pass
   // @cpt-begin:cpt-frontx-flow-template-manifest-validate-for-publication:p1:inst-report-pass

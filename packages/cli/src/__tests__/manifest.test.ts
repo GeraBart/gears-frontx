@@ -6,7 +6,15 @@
 import { describe, it, expect, vi } from 'vitest';
 import { validateManifestContract, readManifestFromContent } from '../manifest/validate-contract';
 import { validateCommand } from '../commands/validate';
-import type { TemplateManifest, ReadFileFn } from '../manifest/types';
+import type { TemplateManifest, ReadFileFn, ListSubtreeFilesFn } from '../manifest/types';
+
+// These tests exercise the manifest-CONTRACT path only (cpt-frontx-algo-
+// template-manifest-validate-contract, p1); the content self-containment
+// check (p2, packages/cli/src/__tests__/manifest-content-self-containment.test.ts)
+// has its own dedicated coverage, so a stub that finds no files is the
+// correct fixture here — it keeps these cases from depending on behavior
+// that isn't what they're testing.
+const noSubtreeFiles: ListSubtreeFilesFn = async () => [];
 
 // Helper: build a valid four-category manifest JSON string.
 // Categories: (1) identity, (2) version, (3) ownership boundaries, (4) referenced templates.
@@ -252,7 +260,7 @@ describe('validateCommand', () => {
   // inst-if-manifest-absent / inst-return-manifest-absent
   it('returns FAIL + non-zero exit code when manifest absent', async () => {
     const readFileFn: ReadFileFn = vi.fn().mockRejectedValue(new Error('ENOENT: no such file'));
-    const result = await validateCommand('/some/template', readFileFn);
+    const result = await validateCommand('/some/template', readFileFn, noSubtreeFiles);
     expect(result.ok).toBe(false);
     expect(result.exitCode).toBe(1);
     expect(result.message).toMatch(/manifest not found/i);
@@ -261,7 +269,7 @@ describe('validateCommand', () => {
   // inst-else-pass / inst-return-pass
   it('returns PASS + zero exit code for conforming manifest', async () => {
     const readFileFn: ReadFileFn = vi.fn().mockResolvedValue(validManifest());
-    const result = await validateCommand('/some/template', readFileFn);
+    const result = await validateCommand('/some/template', readFileFn, noSubtreeFiles);
     expect(result.ok).toBe(true);
     expect(result.exitCode).toBe(0);
   });
@@ -271,7 +279,7 @@ describe('validateCommand', () => {
     // Missing identity, version, and ownership boundaries — multiple violations expected.
     const raw = JSON.stringify({});
     const readFileFn: ReadFileFn = vi.fn().mockResolvedValue(raw);
-    const result = await validateCommand('/some/template', readFileFn);
+    const result = await validateCommand('/some/template', readFileFn, noSubtreeFiles);
     expect(result.ok).toBe(false);
     expect(result.exitCode).toBe(1);
     expect(result.violations).toBeDefined();
