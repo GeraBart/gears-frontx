@@ -12,7 +12,7 @@ import type { TemplateManifest, ReadFileFn, ListContentOwnedFilesFn } from '../m
 // template-manifest-validate-contract, p1); the content self-containment
 // check (p2, packages/cli/src/__tests__/manifest-content-self-containment.test.ts)
 // has its own dedicated coverage, so a stub that finds no files is the
-// correct fixture here — it keeps these cases from depending on behavior
+// correct fixture here - it keeps these cases from depending on behavior
 // that isn't what they're testing.
 const noContentOwnedFiles: ListContentOwnedFilesFn = async () => [];
 

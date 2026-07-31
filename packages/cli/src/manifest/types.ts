@@ -71,13 +71,13 @@ export type ManifestValidationState = 'DRAFT' | 'VALIDATED' | 'REJECTED' | 'PUBL
 // ReadFileFn — injected for testability (no fs calls in core logic)
 export type ReadFileFn = (path: string) => Promise<string>;
 
-// ListContentOwnedFilesFn — enumerates every regular file reachable under one
-// declared content-owning path (an exclusive subtree OR a shared-file path —
+// ListContentOwnedFilesFn - enumerates every regular file reachable under one
+// declared content-owning path (an exclusive subtree OR a shared-file path -
 // a bare directory or a single file either way), POSIX-relative to
 // `templateDir` (cpt-frontx-algo-template-manifest-validate-content-self-
 // containment:p2:inst-csc-enumerate-files). Named for what it actually
 // enumerates since the A3 review round widened enumeration to both
-// ownership-boundary kinds (CodeRabbit review finding on #493 — the prior
+// ownership-boundary kinds (CodeRabbit review finding on #493 - the prior
 // `ListSubtreeFilesFn` name undersold what the function already did).
 // Injected so the content self-containment algorithm never touches a real
 // filesystem itself.

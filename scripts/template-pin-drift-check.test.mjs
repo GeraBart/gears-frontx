@@ -32,7 +32,7 @@ async function writeJson(filePath, value) {
   await writeFile(filePath, JSON.stringify(value));
 }
 
-// A minimal marker manifest — discovery only checks for the file's
+// A minimal marker manifest - discovery only checks for the file's
 // presence (`findTemplateDirs`), never its content.
 async function writeManifest(templateDir) {
   await writeJson(path.join(templateDir, 'frontx-template.json'), {});
@@ -70,7 +70,7 @@ describe('readEcosystemTruthVersions', () => {
   // CodeRabbit review finding on #493: an undefined/empty `name` or
   // `version` must fail CLOSED, not silently poison the truth map. A missing
   // `name` would key the truth entry as the literal string "undefined" and
-  // leave the real package with NO entry at all — `findDriftedSites` treats
+  // leave the real package with NO entry at all - `findDriftedSites` treats
   // "no entry" as "not drifted", so every pinned site for that package would
   // silently stop being checked.
   it('throws, naming the offending file, when an ecosystem package.json has no valid "name"', async () => {
@@ -115,8 +115,8 @@ describe('readEcosystemTruthVersions', () => {
 });
 
 // The guard's own truth about what it governs. `isExactPin` (the ecosystem
-// version policy's helper) answers a DIFFERENT question — "does this range
-// carry a range operator" — which a monorepo-local `file:` specifier also
+// version policy's helper) answers a DIFFERENT question - "does this range
+// carry a range operator" - which a monorepo-local `file:` specifier also
 // answers "no" to, so reusing it made every `file:../../../packages/mfes` in
 // template-mfe report as a pinned site drifted from a version it never
 // expressed.
@@ -133,7 +133,7 @@ describe('isExactRegistryVersionPin', () => {
     expect(isExactRegistryVersionPin('git+https://example.com/x.git')).toBe(false);
   });
 
-  it('rejects a range — that is the ecosystem edge-compatibility policy\'s concern', () => {
+  it('rejects a range - that is the ecosystem edge-compatibility policy\'s concern', () => {
     expect(isExactRegistryVersionPin('^0.3.0')).toBe(false);
     expect(isExactRegistryVersionPin('*')).toBe(false);
     expect(isExactRegistryVersionPin('>=0.2.0-0')).toBe(false);
@@ -154,7 +154,7 @@ describe('findPackageJsonFiles', () => {
   });
 
   // CodeRabbit review finding on #493: a pinned dependency site inside a
-  // hidden directory is exactly as real as one anywhere else — skipping
+  // hidden directory is exactly as real as one anywhere else - skipping
   // dot-prefixed directories would silently stop checking it, the same
   // completeness hole found in `createFsListContentOwnedFilesFn`.
   it('does NOT skip a package.json nested under a dot-prefixed directory', async () => {
@@ -184,7 +184,7 @@ describe('findPinSites', () => {
     expect(sites.map((s) => s.packageName).sort()).toEqual(['@gears-frontx/api', '@gears-frontx/mfes']);
   });
 
-  it('ignores a range (non-exact-pin) declaration — that is the ecosystem edge-compatibility policy\'s concern, not this one', async () => {
+  it('ignores a range (non-exact-pin) declaration - that is the ecosystem edge-compatibility policy\'s concern, not this one', async () => {
     const root = await makeRoot();
     await writeJson(path.join(root, 'package.json'), {
       peerDependencies: { '@gears-frontx/gts-plugin': '^0.3.0-alpha.0' },
@@ -199,7 +199,7 @@ describe('findPinSites', () => {
   // template-mfe's MFE fixtures declare exactly this shape. Reading it as a
   // pinned site produced a nonsense report ("pinned file:../../../packages/mfes,
   // actual 0.3.0-alpha.1") for a declaration that names no version.
-  it('ignores a monorepo-local file: specifier — it expresses a path, not a pinned version', async () => {
+  it('ignores a monorepo-local file: specifier - it expresses a path, not a pinned version', async () => {
     const root = await makeRoot();
     await writeJson(path.join(root, 'package.json'), {
       devDependencies: {
@@ -356,7 +356,7 @@ describe('runCli', () => {
   it('fails loudly, not vacuously, when no template is found', async () => {
     const root = await makeRoot();
     await writeEcosystemPackages(root);
-    // No frontx-template.json anywhere — discovery must find nothing.
+    // No frontx-template.json anywhere - discovery must find nothing.
 
     expect(runCli({ rootDir: root })).toBe(1);
   });

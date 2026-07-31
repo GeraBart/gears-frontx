@@ -53,28 +53,28 @@ export function createFsRemoveProjectFileFn(): RemoveProjectFileFn {
 }
 
 /**
- * Real `ListContentOwnedFilesFn` — enumerates every regular file reachable
+ * Real `ListContentOwnedFilesFn` - enumerates every regular file reachable
  * under one exclusive-subtree or shared-file entry, POSIX-relative to
  * `templateDir`. Never descends into `node_modules` (install-time output,
  * never committed template content). DOES descend into a dot-prefixed
  * directory and DOES include a dot-file: a template legitimately ships
  * dotfiles (`.gitignore`, its own `.frontx/ai/<identity>` bundle) as real
  * content, and a carrier nested under one (a `package.json` inside a hidden
- * directory) must still be inspected — skipping dot-prefixed entries would
+ * directory) must still be inspected - skipping dot-prefixed entries would
  * open exactly the completeness hole the content self-containment check
  * exists to close (CodeRabbit review finding on #493).
  *
  * A SYMLINK is resolved, not skipped. `readdirSync(..., { withFileTypes:
  * true })` reports a symlink's own type, for which `isDirectory()` and
- * `isFile()` are BOTH false, so a symlinked carrier — or a whole symlinked
- * directory of them — used to be silently dropped from the enumeration and
+ * `isFile()` are BOTH false, so a symlinked carrier - or a whole symlinked
+ * directory of them - used to be silently dropped from the enumeration and
  * therefore never inspected (CodeRabbit review finding on #493). What the
  * link POINTS at decides, via `statSync`, which follows it.
  *
  * The one thing a resolved symlink must not do is take the walk outside the
  * template: a link to `../../shared` is exactly the escape this check exists
  * to catch, and walking into it would report files that are not the
- * template's content as if they were. Such a link is skipped here — its
+ * template's content as if they were. Such a link is skipped here - its
  * existence as an escape is the CONTENT check's business only in so far as a
  * carrier declares it, and this adapter's contract is to enumerate the
  * template's own files, not to judge them.

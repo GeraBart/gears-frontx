@@ -77,7 +77,7 @@ export async function validateCommand(
     return {
       ok: false,
       exitCode: 1,
-      message: `FAIL: template content is not self-contained — ${contentResult.violations.length} violation(s):\n${contentSummary}`,
+      message: `FAIL: template content is not self-contained - ${contentResult.violations.length} violation(s):\n${contentSummary}`,
       violations: contentResult.violations,
     };
     // @cpt-end:cpt-frontx-flow-template-manifest-validate-for-publication:p2:inst-return-content-fail

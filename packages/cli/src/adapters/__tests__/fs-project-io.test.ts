@@ -62,7 +62,7 @@ describe('createFsListContentOwnedFilesFn', () => {
   });
 
   // CodeRabbit review finding on #493: skipping every dot-prefixed entry
-  // opened a completeness hole in the exact guard this branch adds — a
+  // opened a completeness hole in the exact guard this branch adds - a
   // carrier (`package.json`) nested under a hidden directory inside a
   // declared subtree went uninspected. `node_modules` is the only exclusion;
   // a dot-prefixed directory is ordinary template content and is walked.
@@ -90,7 +90,7 @@ describe('createFsListContentOwnedFilesFn', () => {
     expect(files.sort()).toEqual(['packages/.gitignore', 'packages/package.json']);
   });
 
-  it('inspects a carrier (package.json) nested under a dot-prefixed directory — the completeness hole this fix closes', async () => {
+  it('inspects a carrier (package.json) nested under a dot-prefixed directory - the completeness hole this fix closes', async () => {
     const dir = await makeTemplate();
     await mkdir(path.join(dir, 'packages', '.hidden-workspace'), { recursive: true });
     await writeFile(path.join(dir, 'packages', '.hidden-workspace', 'package.json'), '{}');
@@ -123,7 +123,7 @@ describe('createFsListContentOwnedFilesFn', () => {
 
   // CodeRabbit review finding on #493: `readdirSync(..., { withFileTypes: true })`
   // reports a symlink's OWN type, for which isDirectory() and isFile() are both
-  // false — so every symlinked carrier fell through the walk and was never
+  // false - so every symlinked carrier fell through the walk and was never
   // inspected. What the link points at decides.
   describe('symlinks', () => {
     // A symlinked carrier is the whole point of the fix: this file WOULD have

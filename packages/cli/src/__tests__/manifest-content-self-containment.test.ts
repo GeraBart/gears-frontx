@@ -7,7 +7,7 @@ import type { ListContentOwnedFilesFn, ReadFileFn } from '../manifest/types';
 // Builds a fake in-memory candidate template: `files` maps a POSIX-relative
 // path to its raw text content. `listContentOwnedFiles` returns every fixture
 // path that falls under the requested content-owning path (directory prefix
-// match, or exact match for a single-file entry) — a minimal stand-in for
+// match, or exact match for a single-file entry) - a minimal stand-in for
 // the real fs walk (`createFsListContentOwnedFilesFn`) that keeps these
 // tests independent of any real filesystem.
 function fakeTemplate(files: Record<string, string>): { listContentOwnedFiles: ListContentOwnedFilesFn; readFile: ReadFileFn } {
@@ -34,7 +34,7 @@ function manifest(exclusiveSubtrees: string[], sharedFilePaths: string[] = []): 
   });
 }
 
-describe('validateContentSelfContainment — package.json `file:` specifiers', () => {
+describe('validateContentSelfContainment - package.json `file:` specifiers', () => {
   // inst-csc-extract-specifiers / inst-csc-resolve-specifier / inst-csc-if-outside-root
   it('a `file:` specifier resolving outside the template root is a violation', async () => {
     // Mirrors #485's actual escape: `packages/framework/package.json` sits
@@ -57,7 +57,7 @@ describe('validateContentSelfContainment — package.json `file:` specifiers', (
     expect(result.violations[0]?.field).toContain('packages/framework/package.json');
   });
 
-  // false-positive guard (#485's "stays inside" class) — a relative `file:`
+  // false-positive guard (#485's "stays inside" class) - a relative `file:`
   // specifier that stays inside the template root is legitimate, not flagged.
   it("a `file:` specifier resolving to the template's own subpackage is NOT a violation", async () => {
     const { listContentOwnedFiles, readFile } = fakeTemplate({
@@ -89,7 +89,7 @@ describe('validateContentSelfContainment — package.json `file:` specifiers', (
   });
 });
 
-describe('validateContentSelfContainment — absolute / drive-prefixed / home-relative specifiers (A1)', () => {
+describe('validateContentSelfContainment - absolute / drive-prefixed / home-relative specifiers (A1)', () => {
   // Every specifier this algorithm resolves is CONTRACTUALLY root-relative;
   // an absolute, drive-prefixed, or home-relative value can never actually
   // be root-relative, so it is outside the root by definition regardless of
@@ -130,7 +130,7 @@ describe('validateContentSelfContainment — absolute / drive-prefixed / home-re
   });
 });
 
-describe('validateContentSelfContainment — backslash / mixed-separator specifiers (CodeRabbit review)', () => {
+describe('validateContentSelfContainment - backslash / mixed-separator specifiers (CodeRabbit review)', () => {
   // `resolvesOutsideRoot` splits on `/` to count `..` segments; a
   // backslash-separated relative escape written by a Windows author (or
   // pasted from a Windows machine) must not survive as one opaque, non-`..`
@@ -180,7 +180,7 @@ describe('validateContentSelfContainment — backslash / mixed-separator specifi
   });
 });
 
-describe('validateContentSelfContainment — tsconfig `paths` mappings', () => {
+describe('validateContentSelfContainment - tsconfig `paths` mappings', () => {
   // inst-csc-extract-specifiers (tsconfig) / inst-csc-resolve-specifier
   it('a `paths` entry resolving outside the template root is a violation, wildcard included', async () => {
     const { listContentOwnedFiles, readFile } = fakeTemplate({
@@ -233,7 +233,7 @@ describe('validateContentSelfContainment — tsconfig `paths` mappings', () => {
     expect(result.status).toBe('VALIDATED');
   });
 
-  // A2 review finding — `extends` and `references[].path` are carriers with
+  // A2 review finding - `extends` and `references[].path` are carriers with
   // the same escape semantics as `paths`, resolved relative to the
   // tsconfig's own directory (not `baseUrl`).
   it('an `extends` target escaping the template root is a violation', async () => {
@@ -274,7 +274,7 @@ describe('validateContentSelfContainment — tsconfig `paths` mappings', () => {
 
   // CodeRabbit review finding on #493: `files`/`include`/`exclude` and
   // `compilerOptions.typeRoots`/`outDir` name paths too. `include` is the
-  // sharpest of them — it is how a tsconfig pulls source files from outside the
+  // sharpest of them - it is how a tsconfig pulls source files from outside the
   // template straight into its own program, which is the same escape a `paths`
   // mapping expresses with a different spelling.
   it('an `include` glob anchored outside the template root is a violation', async () => {
@@ -347,7 +347,7 @@ describe('validateContentSelfContainment — tsconfig `paths` mappings', () => {
   });
 });
 
-describe('validateContentSelfContainment — lockfile entries', () => {
+describe('validateContentSelfContainment - lockfile entries', () => {
   // inst-csc-extract-specifiers (lockfile, lockfileVersion >= 2 "packages" map)
   it('a lockfileVersion-3 workspace-member key escaping the template root is a violation', async () => {
     const { listContentOwnedFiles, readFile } = fakeTemplate({
@@ -443,7 +443,7 @@ describe('validateContentSelfContainment — lockfile entries', () => {
   });
 });
 
-describe('validateContentSelfContainment — carrier discovery and edge cases', () => {
+describe('validateContentSelfContainment - carrier discovery and edge cases', () => {
   it('no declared exclusive subtrees → VALIDATED trivially', async () => {
     const { listContentOwnedFiles, readFile } = fakeTemplate({});
     const result = await validateContentSelfContainment('template', manifest([]), listContentOwnedFiles, readFile);
@@ -485,7 +485,7 @@ describe('validateContentSelfContainment — carrier discovery and edge cases', 
     expect(result.violations).toHaveLength(2);
   });
 
-  // A3 review finding — ADR-0031's own worked example puts
+  // A3 review finding - ADR-0031's own worked example puts
   // package.json/lockfile/tsconfig in `sharedFiles`. No template ships that
   // shape yet (both post-#470 templates declare them as exclusive subtrees),
   // which is exactly why this needs a test: enumeration must not silently stop

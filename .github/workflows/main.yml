@@ -73,7 +73,7 @@ jobs:
 
     # #493: prepublish manifest+content validation (`frontx validate`) against
     # every template at the repo root (a directory carrying
-    # `frontx-template.json`, ADR-0018 — not a `template-*` name guess) —
+    # `frontx-template.json`, ADR-0018 - not a `template-*` name guess) -
     # nothing ran this command in CI before. Generic by construction: no
     # template name is hardcoded here or in the script, which is why #470's
     # split of `template-standard/` into `template-shell/` plus `template-mfe/`
@@ -85,7 +85,7 @@ jobs:
 
     # #493: every site pinning an ecosystem package (`@gears-frontx/api`,
     # `mfes`, `gts-plugin`, #485/PR #492) to an exact registry version must
-    # still match that package's actual on-disk version — across every
+    # still match that package's actual on-disk version - across every
     # template's `package.json` files (found the same manifest-presence way)
     # AND across the ecosystem's own manifests, since `packages/gts-plugin`
     # pins `mfes` exactly. Catches a version bump to `packages/*` that missed

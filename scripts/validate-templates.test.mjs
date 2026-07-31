@@ -73,7 +73,7 @@ describe('runCli', () => {
     expect(errors.some((l) => l.includes('not self-contained'))).toBe(true);
   });
 
-  // A5 review finding: zero templates found must never be a silent pass —
+  // A5 review finding: zero templates found must never be a silent pass -
   // it means discovery is broken (wrong root, renamed manifest) or every
   // template vanished, either of which needs a human's attention.
   it('fails loudly, not vacuously, when no template is found', async () => {
@@ -94,7 +94,7 @@ describe('runCli', () => {
   // `loadCliModule` is injected here rather than actually deleting dist/,
   // which would make this test destructive to every other suite sharing the
   // built package.
-  it('fails with a clear, actionable message — not a raw stack trace — when the CLI build is missing', async () => {
+  it('fails with a clear, actionable message - not a raw stack trace - when the CLI build is missing', async () => {
     const root = await makeRoot();
     await mkdir(path.join(root, 'template-shell'), { recursive: true });
     await writeFile(path.join(root, 'template-shell', 'frontx-template.json'), validManifest());
@@ -105,7 +105,7 @@ describe('runCli', () => {
       logError: (l) => errors.push(l),
       loadCliModule: async () => ({
         ok: false,
-        message: 'built @gears-frontx/cli not found (packages/cli/dist is missing) — run `npm run build:packages:cli` first.',
+        message: 'built @gears-frontx/cli not found (packages/cli/dist is missing) - run `npm run build:packages:cli` first.',
       }),
     });
 
@@ -136,7 +136,7 @@ describe('loadCliModule', () => {
     expect(result.message).toContain('run `npm run build:packages:cli` first');
   });
 
-  it('rethrows any other import error unchanged — only a missing build gets the friendly message', async () => {
+  it('rethrows any other import error unchanged - only a missing build gets the friendly message', async () => {
     const otherError = new Error('unexpected syntax error in dist/index.js');
 
     await expect(loadCliModule(async () => {

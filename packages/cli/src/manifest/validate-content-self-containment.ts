@@ -5,26 +5,26 @@
 // boundaries, but nothing there inspects the *content* those boundaries own.
 // A file inside a declared exclusive subtree OR shared-file path can carry a
 // filesystem-path reference that resolves outside the candidate template
-// directory — a `package.json` `file:` specifier; a tsconfig `paths`
+// directory - a `package.json` `file:` specifier; a tsconfig `paths`
 // mapping, `extends` target, or `references[].path` entry; or a lockfile
-// workspace-member/`resolved` entry — and the contract check has no way to
+// workspace-member/`resolved` entry - and the contract check has no way to
 // see it. This is exactly how the #485 escaping-`file:` bug class lived
 // undetected through pre-publish validation. The carrier set above is a
 // registry, not a closed list: adding a carrier is a code change here, not a
 // spec rewrite (deliberately excluded: `package.json` `workspaces` globs and
-// any non-JSON carrier — this module parses structurally and never scans
+// any non-JSON carrier - this module parses structurally and never scans
 // raw text).
 //
 // Generic by construction: every input here is the manifest's OWN declared
 // content-owning paths (exclusive subtrees plus shared-file paths) and the
 // candidate directory's own files. No template name, no file path, no site
 // count is hardcoded, so this stays safe for
-// `cpt-frontx-constraint-cli-template-independence` (CLI-1) — the check
+// `cpt-frontx-constraint-cli-template-independence` (CLI-1) - the check
 // inspects whatever candidate it is pointed at and knows nothing else.
 import type { ListContentOwnedFilesFn, ManifestViolation, ManifestValidationResult, ReadFileFn } from './types';
 
 // A path-like specifier a carrier file declares, plus the directory it is
-// relative to (POSIX, itself relative to the template root — never an
+// relative to (POSIX, itself relative to the template root - never an
 // absolute filesystem path). Keeping both pieces of the resolution intact,
 // rather than pre-resolving here, is what lets `resolvesOutsideRoot` work
 // entirely in a virtual root-relative path space with no real fs calls.
@@ -37,7 +37,7 @@ interface PathSpecifier {
 const DEPENDENCY_FIELDS = ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies'] as const;
 
 // @cpt-begin:cpt-frontx-algo-template-manifest-validate-content-self-containment:p2:inst-csc-for-each-carrier
-// A file counts as a carrier only by name — not by directory — so a
+// A file counts as a carrier only by name - not by directory - so a
 // `package.json` nested arbitrarily deep inside a declared content-owning
 // path (a workspace member, an MFE fixture) is inspected exactly like the
 // template's root manifest.
@@ -53,7 +53,7 @@ function carrierKind(fileRelPath: string): CarrierKind | null {
 // @cpt-end:cpt-frontx-algo-template-manifest-validate-content-self-containment:p2:inst-csc-for-each-carrier
 
 // Untrusted carrier JSON may spell a path with Windows separators (authored
-// on Windows, or simply copied verbatim from a Windows machine) — a
+// on Windows, or simply copied verbatim from a Windows machine) - a
 // backslash-separated relative escape (`..\..\shared`) split ONLY on `/`
 // survives as one opaque segment that never matches `..`, so the escape is
 // missed entirely (CodeRabbit review finding on #493). Every path-arithmetic
@@ -78,7 +78,7 @@ function posixJoin(...segments: string[]): string {
 }
 
 // Every `baseDir`/`rawPath` this module resolves is CONTRACTUALLY relative to
-// the template root (see `resolvesOutsideRoot` below) — the resolution never
+// the template root (see `resolvesOutsideRoot` below) - the resolution never
 // touches a real absolute filesystem path. An absolute POSIX path (`/...`), a
 // Windows drive-prefixed path (`C:\...` or `C:/...`), or a home-relative path
 // (`~` or `~/...`) therefore cannot BE root-relative, and is outside the
@@ -90,14 +90,14 @@ const ABSOLUTE_OR_HOME_RELATIVE_RE = /^(\/|[A-Za-z]:\/|~(?:\/|$))/;
 
 // Normalizes to POSIX separators first (`toPosixSeparators`) so this
 // classifies a backslash-spelled value (`C:\repo`, `~\repo`) exactly like
-// its forward-slash equivalent — one separator convention decides both this
+// its forward-slash equivalent - one separator convention decides both this
 // check and the segment-splitting `resolvesOutsideRoot` does below.
 function isAbsoluteOrHomeRelative(value: string): boolean {
   return ABSOLUTE_OR_HOME_RELATIVE_RE.test(toPosixSeparators(value));
 }
 
 // @cpt-begin:cpt-frontx-algo-template-manifest-validate-content-self-containment:p2:inst-csc-extract-specifiers
-// `file:` dependency specifiers in `package.json` — relative to the manifest
+// `file:` dependency specifiers in `package.json` - relative to the manifest
 // file's OWN directory (npm's own resolution rule for a `file:` range).
 function extractPackageJsonSpecifiers(fileRelPath: string, parsed: unknown): PathSpecifier[] {
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return [];
@@ -117,7 +117,7 @@ function extractPackageJsonSpecifiers(fileRelPath: string, parsed: unknown): Pat
 }
 
 // A glob pattern (`include`/`exclude`) is cut at its first wildcard segment,
-// leaving the directory prefix the pattern is ANCHORED at — which is the only
+// leaving the directory prefix the pattern is ANCHORED at - which is the only
 // part containment can be decided from, and the only part that carries an
 // escape. Cutting rather than keeping the wildcard also stops a `**` segment
 // from behaving like a real directory name that a later `..` could pop off.
@@ -133,7 +133,7 @@ function globAnchorPrefix(pattern: string): string {
 // Every path-like specifier a tsconfig file's own shape declares (A2 review
 // finding on #493 widened this from `paths` alone to `extends` and
 // `references[].path`; a CodeRabbit finding widened it again to the file-list
-// and output fields — same file, same parse, same escape semantics).
+// and output fields - same file, same parse, same escape semantics).
 // `paths` mapping entries resolve against `baseUrl` (default `.`); everything
 // else here resolves against the tsconfig file's OWN directory instead, per
 // TypeScript's own resolution rule for each.
@@ -149,7 +149,7 @@ function extractTsconfigSpecifiers(fileRelPath: string, parsed: unknown): PathSp
     const rawBaseUrl = typeof co['baseUrl'] === 'string' ? co['baseUrl'] : '.';
     // An absolute/home-relative `baseUrl` REPLACES the tsconfig directory
     // entirely rather than being joined onto it (matching real path
-    // resolution) — joining first would hide the escape inside a
+    // resolution) - joining first would hide the escape inside a
     // concatenated string that no longer looks absolute (A1 review finding).
     const baseDir = isAbsoluteOrHomeRelative(rawBaseUrl) ? rawBaseUrl : posixJoin(tsconfigDir, rawBaseUrl);
 
@@ -168,7 +168,7 @@ function extractTsconfigSpecifiers(fileRelPath: string, parsed: unknown): PathSp
     }
 
     // `typeRoots` and `outDir` resolve against the tsconfig's OWN directory,
-    // not `baseUrl` — an output directory or a type-root outside the template
+    // not `baseUrl` - an output directory or a type-root outside the template
     // makes the template's build depend on, or write into, a tree it does not
     // own.
     const typeRoots = co['typeRoots'];
@@ -188,7 +188,7 @@ function extractTsconfigSpecifiers(fileRelPath: string, parsed: unknown): PathSp
   // The file lists: `files` is a plain path list (TypeScript forbids globs
   // there), `include`/`exclude` are glob patterns. All three resolve against
   // the tsconfig's own directory, and all three are how a tsconfig pulls
-  // source files from outside the template into its own program — the same
+  // source files from outside the template into its own program - the same
   // escape a `paths` mapping expresses, spelled differently.
   const fileListFields: Array<{ field: 'files' | 'include' | 'exclude'; glob: boolean }> = [
     { field: 'files', glob: false },
@@ -202,7 +202,7 @@ function extractTsconfigSpecifiers(fileRelPath: string, parsed: unknown): PathSp
       if (typeof value !== 'string') return;
       const rawPath = glob ? globAnchorPrefix(value) : value;
       // A pattern anchored at the tsconfig's own directory (`**/*.ts`) cuts to
-      // nothing — no path is being named, so there is nothing to contain.
+      // nothing - no path is being named, so there is nothing to contain.
       if (rawPath === '') return;
       results.push({ description: `${field}[${i}]`, rawPath, baseDir: tsconfigDir });
     });
@@ -210,7 +210,7 @@ function extractTsconfigSpecifiers(fileRelPath: string, parsed: unknown): PathSp
 
   // `extends` may be a single string or (TS 5.5+) an array of strings. A bare
   // package specifier (`"@tsconfig/node20/tsconfig.json"`) is npm-resolved,
-  // not a filesystem reference — it never starts with `.`/`..`/`/`, so it can
+  // not a filesystem reference - it never starts with `.`/`..`/`/`, so it can
   // never contain an escaping `..` segment and is harmless to leave unfiltered.
   const extendsValue = obj['extends'];
   const extendsList = typeof extendsValue === 'string' ? [extendsValue] : Array.isArray(extendsValue) ? extendsValue : [];
@@ -219,7 +219,7 @@ function extractTsconfigSpecifiers(fileRelPath: string, parsed: unknown): PathSp
     results.push({ description: `extends[${i}]`, rawPath: value, baseDir: tsconfigDir });
   });
 
-  // `references[].path` — TS project references, each pointing at a sibling
+  // `references[].path` - TS project references, each pointing at a sibling
   // project directory (or its tsconfig file directly) relative to this
   // tsconfig's own directory.
   const references = obj['references'];
@@ -235,7 +235,7 @@ function extractTsconfigSpecifiers(fileRelPath: string, parsed: unknown): PathSp
   return results;
 }
 
-// A registry/VCS reference is never a local filesystem escape — only a bare
+// A registry/VCS reference is never a local filesystem escape - only a bare
 // (or `file:`-prefixed) relative path is a candidate for containment.
 function isRegistryOrVcsReference(value: string): boolean {
   return /^(https?:|git\+|git:|github:|npm:)/i.test(value);
@@ -274,7 +274,7 @@ function extractLockfileSpecifiers(fileRelPath: string, parsed: unknown): PathSp
     return results;
   }
 
-  // lockfileVersion 1 — `packages` is absent; walk the legacy nested tree.
+  // lockfileVersion 1 - `packages` is absent; walk the legacy nested tree.
   const legacyDeps = obj['dependencies'];
   if (typeof legacyDeps === 'object' && legacyDeps !== null && !Array.isArray(legacyDeps)) {
     collectLegacyLockEntries(legacyDeps as Record<string, unknown>, baseDir, results);
@@ -309,7 +309,7 @@ function collectLegacyLockEntries(deps: Record<string, unknown>, baseDir: string
 // @cpt-begin:cpt-frontx-algo-template-manifest-validate-content-self-containment:p2:inst-csc-resolve-specifier
 // Resolves `baseDir/rawPath` against the template root by working entirely
 // in a virtual, root-relative POSIX path space (the template root is always
-// "."; `baseDir` and `rawPath` are always relative to it) — never against a
+// "."; `baseDir` and `rawPath` are always relative to it) - never against a
 // real absolute filesystem path. `..`-segment counting, not text matching,
 // decides containment, so a benign `./foo/../bar` is not mistaken for an
 // escape and a disguised escape is not missed.
@@ -317,7 +317,7 @@ function resolvesOutsideRoot(baseDir: string, rawPath: string): boolean {
   // Checked independently, before combining: an absolute `baseDir` (e.g. an
   // absolute tsconfig `baseUrl`) or an absolute `rawPath` (e.g. an
   // `npm install`/`npm link`-written absolute `file:` specifier) each escape
-  // on their own — joining first would corrupt the segment count instead of
+  // on their own - joining first would corrupt the segment count instead of
   // rejecting outright (see A1 review finding on #493).
   if (isAbsoluteOrHomeRelative(baseDir) || isAbsoluteOrHomeRelative(rawPath)) return true;
   // `posixJoin` already normalizes each segment it's given; normalizing the
@@ -368,7 +368,7 @@ export async function validateContentSelfContainment(
       try {
         raw = await readFile(`${templateDir}/${fileRelPath}`);
       } catch {
-        continue; // vanished between listing and reading — not this check's concern
+        continue; // vanished between listing and reading - not this check's concern
       }
 
       // @cpt-begin:cpt-frontx-algo-template-manifest-validate-content-self-containment:p2:inst-csc-parse-carrier
@@ -427,7 +427,7 @@ export async function validateContentSelfContainment(
 // so enumerating `exclusiveSubtrees` alone would silently stop inspecting the
 // highest-value carriers the first time a template took that shape.
 // Malformed input yields an empty
-// list rather than throwing — the manifest CONTRACT check
+// list rather than throwing - the manifest CONTRACT check
 // (`validate-contract.ts`) is the one authority for reporting a malformed
 // manifest; this algorithm only runs at all once that check has already
 // passed (see `commands/validate.ts`), so this is a defensive fallback, not

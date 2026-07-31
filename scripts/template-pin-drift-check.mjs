@@ -10,7 +10,7 @@
  * of what's pinned, so the drift is invisible until a real `npm install`
  * outside the monorepo.
  *
- * This check is deliberately NOT a static list of file paths — the list
+ * This check is deliberately NOT a static list of file paths - the list
  * itself would be exactly the kind of duplicated knowledge this guard exists
  * to prevent, and it stopped covering new sites the moment the #470 template
  * split moved them (`template-standard/` became `template-shell/` plus
@@ -21,14 +21,14 @@
  * against that package's actual on-disk version under `packages/`. Templates
  * themselves are discovered by manifest presence (ADR-0018), not by a
  * `template-*` name prefix, so a renamed or relocated template is still
- * covered — and zero templates found is a hard failure, never a vacuous pass.
+ * covered - and zero templates found is a hard failure, never a vacuous pass.
  *
  * The same rule then runs over the governed packages' OWN manifests, because
  * an intra-ecosystem exact pin drifts the same way and with a worse blame
  * radius: `packages/gts-plugin` runtime-depends on `@gears-frontx/mfes` at an
  * exact version, so a bump that misses it installs two different MFE runtime
  * copies into one tree (reviewer ask on #492). No extra package list is
- * introduced for it — the governed set is the same one, read once from
+ * introduced for it - the governed set is the same one, read once from
  * `template-ecosystem-packages.mjs`.
  *
  * CLI entry: `node scripts/template-pin-drift-check.mjs` (exit 0 on success).
@@ -43,13 +43,13 @@ import { templatePinnedEcosystemPackageDirs } from './template-ecosystem-package
 import { MANIFEST_FILENAME, findTemplateDirs } from './template-discovery.mjs';
 
 // Mirrors `DEPENDENCY_FIELDS` (`packages/cli/src/manifest/validate-content-
-// self-containment.ts`) — kept as a local literal, not an import, so this
+// self-containment.ts`) - kept as a local literal, not an import, so this
 // script never depends on `@gears-frontx/cli` being built (unlike
 // `validate-templates.mjs`, which already needs the built CLI for
 // `validateCommand` and pays that cost deliberately). Exported so
 // `template-pin-drift-check.test.mjs` can assert it stays in sync with the
 // TypeScript source (#492 review finding 2's "unguarded duplicated literal"
-// class — a guard test is the affordable way to keep two copies honest
+// class - a guard test is the affordable way to keep two copies honest
 // without adding a build dependency to either script).
 export const DEPENDENCY_FIELDS = ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies'];
 
@@ -79,7 +79,7 @@ function readGovernedPackageJson(packageJsonPath) {
     raw = fs.readFileSync(packageJsonPath, 'utf8');
   } catch (error) {
     throw new Error(
-      `[template-pin-drift-check] cannot read ${packageJsonPath} (${error instanceof Error ? error.message : String(error)}) — ` +
+      `[template-pin-drift-check] cannot read ${packageJsonPath} (${error instanceof Error ? error.message : String(error)}) - ` +
         'the ecosystem truth map cannot be built, so no pinned site can be checked.',
     );
   }
@@ -90,13 +90,13 @@ function readGovernedPackageJson(packageJsonPath) {
     parsed = JSON.parse(raw);
   } catch (error) {
     throw new Error(
-      `[template-pin-drift-check] cannot parse ${packageJsonPath} as JSON (${error instanceof Error ? error.message : String(error)}) — ` +
+      `[template-pin-drift-check] cannot parse ${packageJsonPath} as JSON (${error instanceof Error ? error.message : String(error)}) - ` +
         'the ecosystem truth map cannot be built, so no pinned site can be checked.',
     );
   }
 
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-    throw new Error(`[template-pin-drift-check] ${packageJsonPath} is not a JSON object — cannot build the ecosystem truth map.`);
+    throw new Error(`[template-pin-drift-check] ${packageJsonPath} is not a JSON object - cannot build the ecosystem truth map.`);
   }
   return /** @type {Record<string, unknown>} */ (parsed);
 }
@@ -105,7 +105,7 @@ function readGovernedPackageJson(packageJsonPath) {
  * A dependency range is a pin THIS guard governs only when it is a bare exact
  * registry version (`0.3.0-alpha.1`). `isExactPin` alone is the wrong
  * question: it answers "does this range carry a range operator", and a
- * `file:`/`link:`/`workspace:`/`git+…` specifier carries none either — so it
+ * `file:`/`link:`/`workspace:`/`git+…` specifier carries none either - so it
  * classified every monorepo-local `file:../../../packages/mfes` as a pinned
  * site and reported it as drifted from a version it was never expressing.
  * A local-path specifier is the CONTENT self-containment check's subject
@@ -120,11 +120,11 @@ export function isExactRegistryVersionPin(range) {
 
 /**
  * Reads the ACTUAL on-disk version of every ecosystem package a template
- * pins — the truth a pinned site is compared against. FAILS CLOSED: a
+ * pins - the truth a pinned site is compared against. FAILS CLOSED: a
  * missing/empty `name` or `version` doesn't silently poison the truth map
  * (an undefined `name` would key the entry as the literal string
  * `"undefined"`, and the real package would then have NO truth entry at
- * all — `findDriftedSites` treats "no truth entry" as "not drifted", so
+ * all - `findDriftedSites` treats "no truth entry" as "not drifted", so
  * every pinned site for that package would silently stop being checked;
  * CodeRabbit review finding on #493). Throws naming the offending file
  * instead, so a malformed ecosystem manifest halts the check loudly rather
@@ -142,10 +142,10 @@ export function readEcosystemTruthVersions(rootDir) {
     const name = /** @type {{ name?: unknown }} */ (packageJson).name;
     const version = /** @type {{ version?: unknown }} */ (packageJson).version;
     if (typeof name !== 'string' || name.trim() === '') {
-      throw new Error(`[template-pin-drift-check] ${packageJsonPath} has no valid "name" — cannot build the ecosystem truth map.`);
+      throw new Error(`[template-pin-drift-check] ${packageJsonPath} has no valid "name" - cannot build the ecosystem truth map.`);
     }
     if (typeof version !== 'string' || version.trim() === '') {
-      throw new Error(`[template-pin-drift-check] ${packageJsonPath} has no valid "version" — cannot build the ecosystem truth map.`);
+      throw new Error(`[template-pin-drift-check] ${packageJsonPath} has no valid "version" - cannot build the ecosystem truth map.`);
     }
     truth[name] = version;
   }
@@ -157,7 +157,7 @@ export function readEcosystemTruthVersions(rootDir) {
  * `node_modules` (install-time output, never committed template content).
  * DOES descend into a dot-prefixed directory: a pinned dependency site inside
  * a hidden directory is exactly as real as one anywhere else, and skipping it
- * would silently stop checking it — the same completeness hole CodeRabbit's
+ * would silently stop checking it - the same completeness hole CodeRabbit's
  * review found in `createFsListContentOwnedFilesFn` (#493), fixed here for
  * consistency before it recurred as a separate finding.
  *
@@ -219,7 +219,7 @@ function pinSitesIn(packageJson, reportedFile, governedPackageNames) {
 /**
  * Finds every exact-registry-version pin site, across every `package.json`
  * under `templateDir`, that names one of the governed ecosystem packages.
- * Generic by construction: no template name, no file path is hardcoded — a
+ * Generic by construction: no template name, no file path is hardcoded - a
  * future template inherits the check unchanged by simply existing at the repo
  * root.
  *
@@ -255,7 +255,7 @@ export function findPinSites(templateDir, governedPackageNames) {
  * manifests, that names another governed package. `packages/gts-plugin`
  * runtime-depends on `@gears-frontx/mfes` at an exact version, so a bump that
  * moves `packages/mfes` and misses that line is a drift no template-only walk
- * can see — and its failure mode is worse than a template's: npm satisfies
+ * can see - and its failure mode is worse than a template's: npm satisfies
  * both the template's pin and gts-plugin's pin by installing two MFE runtime
  * copies into one tree, which is the one thing a single-runtime framework
  * cannot survive (reviewer ask on #492).
@@ -263,7 +263,7 @@ export function findPinSites(templateDir, governedPackageNames) {
  * Only each package's own root manifest is read, not its whole subtree: that
  * manifest is the published dependency declaration, whereas a nested
  * `package.json` under `packages/*` is a build artifact or test fixture whose
- * pins nobody installs. Reads FAIL CLOSED, the same way the truth map does —
+ * pins nobody installs. Reads FAIL CLOSED, the same way the truth map does -
  * an unreadable governed manifest cannot be allowed to read as "no pins here".
  *
  * @param {string} rootDir monorepo root
@@ -309,9 +309,9 @@ export function runCli(options = {}) {
 
   const templateDirs = findTemplateDirs(rootDir);
 
-  // A5 review finding: zero templates found is never a silent pass — a glob
+  // A5 review finding: zero templates found is never a silent pass - a glob
   // that stops matching (a rename, a relocation) would otherwise report
-  // "0 drifted sites" as success. Either no template exists (unexpected —
+  // "0 drifted sites" as success. Either no template exists (unexpected -
   // this repo always ships at least one) or discovery is broken; either way
   // a human needs to see it.
   if (templateDirs.length === 0) {
@@ -347,7 +347,7 @@ export function runCli(options = {}) {
     console.error(
       '\nBump the pinned site(s) above to match the package(s)\' actual version, then rerun ' +
         '`npm run policy:template-pin-drift` to confirm. Do NOT run `npm run dev:template:link` to ' +
-        'investigate this — it links local sources regardless of what is pinned and would mask the drift.',
+        'investigate this - it links local sources regardless of what is pinned and would mask the drift.',
     );
     return 1;
   }
