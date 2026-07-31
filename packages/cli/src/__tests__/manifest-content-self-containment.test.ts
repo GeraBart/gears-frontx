@@ -271,6 +271,80 @@ describe('validateContentSelfContainment — tsconfig `paths` mappings', () => {
     const result = await validateContentSelfContainment('template', manifest(['packages']), listContentOwnedFiles, readFile);
     expect(result.status).toBe('VALIDATED');
   });
+
+  // CodeRabbit review finding on #493: `files`/`include`/`exclude` and
+  // `compilerOptions.typeRoots`/`outDir` name paths too. `include` is the
+  // sharpest of them — it is how a tsconfig pulls source files from outside the
+  // template straight into its own program, which is the same escape a `paths`
+  // mapping expresses with a different spelling.
+  it('an `include` glob anchored outside the template root is a violation', async () => {
+    const { listContentOwnedFiles, readFile } = fakeTemplate({
+      'packages/framework/tsconfig.json': JSON.stringify({ include: ['src/**/*', '../../../shared/**/*'] }),
+    });
+    const result = await validateContentSelfContainment('template', manifest(['packages']), listContentOwnedFiles, readFile);
+    expect(result.status).toBe('REJECTED');
+    if (result.status !== 'REJECTED') return;
+    expect(result.violations).toHaveLength(1);
+    expect(result.violations[0]?.field).toContain('include[1]');
+  });
+
+  it('a `files` entry escaping the template root is a violation', async () => {
+    const { listContentOwnedFiles, readFile } = fakeTemplate({
+      'tsconfig.json': JSON.stringify({ files: ['src/index.ts', '../global.d.ts'] }),
+    });
+    const result = await validateContentSelfContainment('template', manifest(['tsconfig.json']), listContentOwnedFiles, readFile);
+    expect(result.status).toBe('REJECTED');
+    if (result.status !== 'REJECTED') return;
+    expect(result.violations[0]?.field).toContain('files[1]');
+  });
+
+  it('an `exclude` pattern escaping the template root is a violation', async () => {
+    const { listContentOwnedFiles, readFile } = fakeTemplate({
+      'tsconfig.json': JSON.stringify({ exclude: ['node_modules', '../dist'] }),
+    });
+    const result = await validateContentSelfContainment('template', manifest(['tsconfig.json']), listContentOwnedFiles, readFile);
+    expect(result.status).toBe('REJECTED');
+    if (result.status !== 'REJECTED') return;
+    expect(result.violations[0]?.field).toContain('exclude[1]');
+  });
+
+  it('a `typeRoots` or `outDir` outside the template root is a violation', async () => {
+    const { listContentOwnedFiles, readFile } = fakeTemplate({
+      'tsconfig.json': JSON.stringify({
+        compilerOptions: { typeRoots: ['./types', '../../shared-types'], outDir: '../build' },
+      }),
+    });
+    const result = await validateContentSelfContainment('template', manifest(['tsconfig.json']), listContentOwnedFiles, readFile);
+    expect(result.status).toBe('REJECTED');
+    if (result.status !== 'REJECTED') return;
+    expect(result.violations.map((v) => v.field).join(' ')).toContain('compilerOptions.typeRoots[1]');
+    expect(result.violations.map((v) => v.field).join(' ')).toContain('compilerOptions.outDir');
+  });
+
+  // False-positive guard, and the reason globs are cut at their first wildcard
+  // rather than counted as path segments: every tsconfig the real templates
+  // ship looks like this, and none of it names anything outside the root.
+  it('the ordinary in-template file-list shapes are NOT violations', async () => {
+    const { listContentOwnedFiles, readFile } = fakeTemplate({
+      'tsconfig.json': JSON.stringify({
+        include: ['src/**/*'],
+        exclude: ['node_modules', 'dist', '**/__tests__/**', '**/*.test.ts'],
+        compilerOptions: { outDir: './dist', typeRoots: ['./node_modules/@types'] },
+      }),
+      // `rootDir: '../..'` climbs exactly to the template root, no further.
+      'packages/react/tsconfig.test.json': JSON.stringify({
+        include: ['src/**/*', '__tests__/**/*'],
+        compilerOptions: { rootDir: '../..' },
+      }),
+    });
+    const result = await validateContentSelfContainment(
+      'template',
+      manifest(['tsconfig.json', 'packages']),
+      listContentOwnedFiles,
+      readFile,
+    );
+    expect(result.status).toBe('VALIDATED');
+  });
 });
 
 describe('validateContentSelfContainment — lockfile entries', () => {

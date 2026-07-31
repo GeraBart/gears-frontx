@@ -116,12 +116,27 @@ function extractPackageJsonSpecifiers(fileRelPath: string, parsed: unknown): Pat
   return results;
 }
 
+// A glob pattern (`include`/`exclude`) is cut at its first wildcard segment,
+// leaving the directory prefix the pattern is ANCHORED at — which is the only
+// part containment can be decided from, and the only part that carries an
+// escape. Cutting rather than keeping the wildcard also stops a `**` segment
+// from behaving like a real directory name that a later `..` could pop off.
+function globAnchorPrefix(pattern: string): string {
+  const segments: string[] = [];
+  for (const segment of toPosixSeparators(pattern).split('/')) {
+    if (/[*?]/.test(segment)) break;
+    segments.push(segment);
+  }
+  return segments.join('/');
+}
+
 // Every path-like specifier a tsconfig file's own shape declares (A2 review
 // finding on #493 widened this from `paths` alone to `extends` and
-// `references[].path` too — same file, same parse, same escape semantics).
-// `paths` mapping entries resolve against `baseUrl` (default `.`); `extends`
-// and `references[].path` resolve against the tsconfig file's OWN directory
-// instead, per TypeScript's own resolution rules for each.
+// `references[].path`; a CodeRabbit finding widened it again to the file-list
+// and output fields — same file, same parse, same escape semantics).
+// `paths` mapping entries resolve against `baseUrl` (default `.`); everything
+// else here resolves against the tsconfig file's OWN directory instead, per
+// TypeScript's own resolution rule for each.
 function extractTsconfigSpecifiers(fileRelPath: string, parsed: unknown): PathSpecifier[] {
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return [];
   const obj = parsed as Record<string, unknown>;
@@ -151,6 +166,46 @@ function extractTsconfigSpecifiers(fileRelPath: string, parsed: unknown): PathSp
         });
       }
     }
+
+    // `typeRoots` and `outDir` resolve against the tsconfig's OWN directory,
+    // not `baseUrl` — an output directory or a type-root outside the template
+    // makes the template's build depend on, or write into, a tree it does not
+    // own.
+    const typeRoots = co['typeRoots'];
+    if (Array.isArray(typeRoots)) {
+      typeRoots.forEach((value, i) => {
+        if (typeof value !== 'string') return;
+        results.push({ description: `compilerOptions.typeRoots[${i}]`, rawPath: value, baseDir: tsconfigDir });
+      });
+    }
+
+    const outDir = co['outDir'];
+    if (typeof outDir === 'string') {
+      results.push({ description: 'compilerOptions.outDir', rawPath: outDir, baseDir: tsconfigDir });
+    }
+  }
+
+  // The file lists: `files` is a plain path list (TypeScript forbids globs
+  // there), `include`/`exclude` are glob patterns. All three resolve against
+  // the tsconfig's own directory, and all three are how a tsconfig pulls
+  // source files from outside the template into its own program — the same
+  // escape a `paths` mapping expresses, spelled differently.
+  const fileListFields: Array<{ field: 'files' | 'include' | 'exclude'; glob: boolean }> = [
+    { field: 'files', glob: false },
+    { field: 'include', glob: true },
+    { field: 'exclude', glob: true },
+  ];
+  for (const { field, glob } of fileListFields) {
+    const values = obj[field];
+    if (!Array.isArray(values)) continue;
+    values.forEach((value, i) => {
+      if (typeof value !== 'string') return;
+      const rawPath = glob ? globAnchorPrefix(value) : value;
+      // A pattern anchored at the tsconfig's own directory (`**/*.ts`) cuts to
+      // nothing — no path is being named, so there is nothing to contain.
+      if (rawPath === '') return;
+      results.push({ description: `${field}[${i}]`, rawPath, baseDir: tsconfigDir });
+    });
   }
 
   // `extends` may be a single string or (TS 5.5+) an array of strings. A bare
