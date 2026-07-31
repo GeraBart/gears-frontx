@@ -348,6 +348,7 @@ describe('linkEcosystemPackages', () => {
       reason: 'link-failed',
       failedPackage: second,
       restored: [first, second],
+      cleared: [],
       unrestored: [],
     });
     expect(result.message).toContain(`creating the @gears-frontx/${second} symlink failed`);
@@ -372,6 +373,7 @@ describe('linkEcosystemPackages', () => {
       // The package that failed is absent: nothing of it moved, so the rollback
       // had nothing of its own to undo.
       restored: [first],
+      cleared: [],
       unrestored: [],
     });
     expect(result.message).toContain(
@@ -395,6 +397,7 @@ describe('linkEcosystemPackages', () => {
       ok: false,
       reason: 'link-failed',
       restored: [first],
+      cleared: [],
       unrestored: [second],
     });
     expect(result.message).toContain('npm ci');
@@ -405,19 +408,47 @@ describe('linkEcosystemPackages', () => {
     delete surviving[second];
     expect(scopeEntries(tree)).toEqual(surviving);
   });
+
+  // Review round 3 on #492: a package the scope never had installed has no
+  // version to come back to, so reporting it as restored named one that never
+  // existed. Its rollback is the removal of the symlink alone.
+  it('separates a package that was never installed from the ones it rolled back', () => {
+    const { fs, tree } = builtTree();
+    const [first, second, third] = linkedPackageDirs;
+    tree.delete(path.join(scopeDir, first));
+    fs.symlinkSync = failSymlinkAt(fs, path.join(scopeDir, third));
+
+    const result = linkEcosystemPackages({ repoRoot, fs, platform: 'linux' });
+
+    expect(result).toMatchObject({
+      ok: false,
+      reason: 'link-failed',
+      failedPackage: third,
+      restored: [second, third],
+      cleared: [first],
+      unrestored: [],
+    });
+    expect(result.message).toContain(`rolled @gears-frontx/${second}, @gears-frontx/${third} back to the installed versions`);
+    expect(result.message).toContain(`removed the @gears-frontx/${first} symlink, where nothing had been installed to put back`);
+    // The absent package stays absent; the other two are back at their installed content.
+    const expected = { ...installedScope };
+    delete expected[first];
+    expect(scopeEntries(tree)).toEqual(expected);
+  });
 });
 
 describe('runCli', () => {
-  // The published 0.3.0-alpha.0 tarballs cannot build the template, so a
-  // successful link must not read as "the pinned tree is fine".
-  it('exits 0 and warns about the pinned-surface drift on success', () => {
+  // With the pins on 0.3.0-alpha.1 the template builds without these links, so
+  // a stale link no longer announces itself - success is the case that needs the
+  // warning now.
+  it('exits 0 and warns that a stale link is silent on success', () => {
     const { fs } = builtTree();
     const log = vi.fn();
 
     const exitCode = runCli({ repoRoot, fs, platform: 'linux', log, error: vi.fn() });
 
     expect(exitCode).toBe(0);
-    expect(log.mock.calls.flat().join('\n')).toContain('FRONTX_ACTION_*');
+    expect(log.mock.calls.flat().join('\n')).toContain('nothing will tell you when these');
   });
 
   it('exits 1 and prints the refusal without listing any link as done', () => {

@@ -59,7 +59,25 @@ jobs:
             echo "packages=[]" >> $GITHUB_OUTPUT
             echo "has_changes=false" >> $GITHUB_OUTPUT
           else
-            JSON_ARRAY=$(printf '%s\n' "${PACKAGES[@]}" | jq -sc '.')
+            # PUBLISH ORDER: @gears-frontx/gts-plugin declares an EXACT
+            # dependency on @gears-frontx/mfes, so publishing it first puts a
+            # tarball on the registry whose own dependency does not resolve yet.
+            # Anyone installing gts-plugin in that window gets an ETARGET; the
+            # window closes only when mfes lands. Directory-glob order above is
+            # alphabetical, which puts gts-plugin BEFORE mfes - precisely the
+            # wrong way round (review round 3 on #492).
+            #
+            # mfes first, gts-plugin last, everything else in between: the two
+            # ranks encode the one intra-ecosystem exact pin that exists, and
+            # `policy:template-pin-drift` is what keeps that pin honest, so a
+            # second such edge cannot appear here unnoticed.
+            JSON_ARRAY=$(printf '%s\n' "${PACKAGES[@]}" | jq -sc '
+              def publishRank:
+                if . == "@gears-frontx/mfes" then 0
+                elif . == "@gears-frontx/gts-plugin" then 2
+                else 1 end;
+              sort_by((.name | publishRank), .name)')
+            echo "Publish order: $(echo "$JSON_ARRAY" | jq -r '[.[].name] | join(" -> ")')"
             echo "packages=$JSON_ARRAY" >> $GITHUB_OUTPUT
             echo "has_changes=true" >> $GITHUB_OUTPUT
           fi
@@ -137,7 +155,10 @@ jobs:
             echo "All $max_attempts attempts failed"; return 1
           }
 
-          # Independent publication — no ordering.
+          # Independent VERSIONING - each artifact publishes on its own semver
+          # line, with no matched-version gate. That is not the same as
+          # independent ORDER: `detect-ecosystem` hands this list over already
+          # sorted so mfes precedes gts-plugin, which pins it exactly.
           for row in $(echo "$PACKAGES" | jq -r '.[] | @base64'); do
             _jq() { echo "${row}" | base64 --decode | jq -r "${1}"; }
             NAME=$(_jq '.name'); PKG_PATH=$(_jq '.path'); VERSION=$(_jq '.version')

@@ -21,13 +21,21 @@
  * is a second full copy of this repo: an unanchored glob collects every test
  * file twice and reports a suite size that depends on the developer's local
  * worktrees.
+ *
+ * It matches both `.mjs` and `.ts` because `scripts/` holds both kinds of source
+ * (`test-architecture.ts`, `sdk-layer-tests.ts`, `verify-layered-configs.ts`
+ * alongside the `.mjs` tooling). Every test here happens to be `.mjs` today, so
+ * this changes nothing now - which is the point: a `.ts` test added next to a
+ * `.ts` script would otherwise be collected by no project at all and report as
+ * a pass, the same silent gap that left this whole directory untested until
+ * #483 (review round 3 on #492).
  */
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
     environment: 'node',
-    include: ['scripts/**/*.test.mjs'],
+    include: ['scripts/**/*.test.{mjs,ts}'],
     exclude: ['**/node_modules/**', '**/dist/**'],
     passWithNoTests: false,
   },

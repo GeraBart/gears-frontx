@@ -66,25 +66,22 @@ export const linkedPackageDirs = templatePinnedEcosystemPackageDirs;
 export const backupSuffix = '.frontx-link-backup';
 
 /**
- * The template's own code imports `FRONTX_ACTION_*` from
- * `@gears-frontx/gts-plugin` and reads `DomainContext.typeSystem`, neither of
- * which exists in the published `0.3.0-alpha.0` tarballs — the constants still
- * sit in `@gears-frontx/mfes` there. Linking is what makes the template compile
- * at all until the pins move onto `0.3.0-alpha.1`, so the warning is printed on
- * success: it explains why the pinned tree is red, not why linking failed.
+ * Printed on SUCCESS, because success is now the dangerous case.
  *
- * The warning names the failing exports and not a count of errors. The count
- * moves with every ecosystem change, and `type-check` chains its sub-steps with
- * `&&`, so the number a developer sees also depends on which sub-step
- * short-circuits first — a figure quoted here would be wrong more often than
- * right.
+ * While the pins sat on `0.3.0-alpha.0` this warning said the opposite: those
+ * tarballs predated the `FRONTX_ACTION_*`/`DomainContext.typeSystem` move into
+ * `@gears-frontx/gts-plugin`, so the template did not compile without these
+ * links and forgetting to relink announced itself as a wall of type errors.
+ * With the pins on `0.3.0-alpha.1` (#485) the template builds from the registry
+ * on its own - which removes the error AND the signal. A stale link now costs
+ * nothing visible and silently tests the published code instead of the working
+ * copy, so the note names that trade rather than a build failure.
  */
-const pinnedSurfaceDriftWarning =
-  'Note: the pinned registry versions cannot build template-shell right now — the published\n' +
-  '0.3.0-alpha.0 tarballs predate the FRONTX_ACTION_*/DomainContext.typeSystem move into\n' +
-  '@gears-frontx/gts-plugin, so type-check and build:packages fail on those exports without\n' +
-  'these links. Linking is the only working path until the template pins move onto the\n' +
-  '0.3.0-alpha.1 packages this branch publishes (#485).';
+const silentStalenessNote =
+  'Note: the template also builds from its pins alone, so nothing will tell you when these\n' +
+  'links go stale - `npm install` inside template-shell and `clean:artifacts` both undo them\n' +
+  'silently. A template result that contradicts an edit you just made in packages/* is the\n' +
+  'symptom; re-run this command before believing it.';
 
 /**
  * @typedef {{ ok: true; linked: string[]; warning: string }} LinkSuccess
@@ -100,13 +97,21 @@ const pinnedSurfaceDriftWarning =
  * The only failure that can be raised after the first write, and the reason the
  * caller has to read fields rather than just the message.
  *
- * `restored` names the packages the rollback returned to the state `npm ci` left
- * them in: every package whose installed directory had already been moved aside.
- * That includes the package that failed when its symlink was refused, and
- * excludes it when the move aside itself was refused - nothing of it had moved,
- * so it appears in neither list. `unrestored` names the packages the rollback
- * could not put back, and a non-empty `unrestored` is the only outcome of this
- * script that needs `npm ci` to repair.
+ * `restored` names the packages whose installed directory the rollback moved
+ * back: those, and only those, are at the version `npm ci` had put there. That
+ * includes the package that failed when its symlink was refused, and excludes
+ * it when the move aside itself was refused - nothing of it had moved, so it
+ * appears in no list at all.
+ *
+ * `cleared` names the packages that had NOTHING installed when the run started
+ * (a hand-pruned scope, a partial install). Their rollback is the removal of
+ * the symlink alone, which already returns the scope to the state `npm ci` left
+ * it in - there is no version to come back to, so reporting them as `restored`
+ * would name one that never existed.
+ *
+ * `unrestored` names the packages the rollback could not put back, and a
+ * non-empty `unrestored` is the only outcome of this script that needs
+ * `npm ci` to repair.
  *
  * @typedef {{
  *   ok: false;
@@ -114,6 +119,7 @@ const pinnedSurfaceDriftWarning =
  *   message: string;
  *   failedPackage: string;
  *   restored: string[];
+ *   cleared: string[];
  *   unrestored: string[];
  * }} LinkRollback
  */
@@ -261,6 +267,8 @@ function restoreInstalledTree({ fs, staged, failedPackage, failedStep, cause }) 
   /** @type {string[]} */
   const restored = [];
   /** @type {string[]} */
+  const cleared = [];
+  /** @type {string[]} */
   const unrestored = [];
 
   for (const { name, linkPath, backupPath } of [...staged].reverse()) {
@@ -270,11 +278,16 @@ function restoreInstalledTree({ fs, staged, failedPackage, failedStep, cause }) 
       // also not exist, which is the case this run failed on.
       fs.rmSync(linkPath, { recursive: true, force: true });
 
-      if (backupPath !== null) {
+      if (backupPath === null) {
+        // Nothing was installed here, so nothing was moved aside and there is
+        // nothing to put back - taking the symlink away already returned the
+        // scope to the state `npm ci` left it in. Calling that "restored to the
+        // installed version" would name a version that never existed.
+        cleared.push(name);
+      } else {
         fs.renameSync(backupPath, linkPath);
+        restored.push(name);
       }
-
-      restored.push(name);
     } catch {
       unrestored.push(name);
     }
@@ -282,6 +295,7 @@ function restoreInstalledTree({ fs, staged, failedPackage, failedStep, cause }) 
 
   // Reported in the order the packages are linked, not the order they were undone.
   restored.reverse();
+  cleared.reverse();
   unrestored.reverse();
 
   /** @type {string} */
@@ -294,11 +308,19 @@ function restoreInstalledTree({ fs, staged, failedPackage, failedStep, cause }) 
       `Rollback could not restore ${describePackages(unrestored)} - the installed ` +
       `content is still there under \`${backupSuffix}\`.`;
     recoveryLine = `Run \`npm ci\` inside ${templateDirName} to repair the tree.`;
+  } else if (restored.length > 0 || cleared.length > 0) {
+    // Two different true statements, and saying only the first of them about a
+    // package that was never installed is the wording this fixes.
+    const parts = [];
+    if (restored.length > 0) {
+      parts.push(`rolled ${describePackages(restored)} back to the installed versions`);
+    }
+    if (cleared.length > 0) {
+      parts.push(`removed the ${describePackages(cleared)} symlink, where nothing had been installed to put back`);
+    }
+    stateLine = `Rollback ${parts.join(' and ')}; nothing was left half-removed.`;
   } else {
-    stateLine =
-      restored.length > 0
-        ? `Rolled ${describePackages(restored)} back to the installed versions; nothing was left half-removed.`
-        : 'Nothing had been written yet, so the installed tree is untouched.';
+    stateLine = 'Nothing had been written yet, so the installed tree is untouched.';
     recoveryLine =
       `Fix the cause and re-run, or run \`npm ci\` inside ${templateDirName} to rebuild ` +
       'the tree from the lockfile.';
@@ -324,6 +346,7 @@ function restoreInstalledTree({ fs, staged, failedPackage, failedStep, cause }) 
     ].join('\n'),
     failedPackage,
     restored,
+    cleared,
     unrestored,
   };
 }
@@ -478,7 +501,7 @@ export function linkEcosystemPackages({
   return {
     ok: true,
     linked: plan.map(({ name }) => name),
-    warning: pinnedSurfaceDriftWarning,
+    warning: silentStalenessNote,
   };
 }
 
