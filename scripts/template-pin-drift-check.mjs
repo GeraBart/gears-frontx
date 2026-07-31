@@ -251,8 +251,8 @@ export function findPinSites(templateDir, governedPackageNames) {
 }
 
 /**
- * Finds every exact-registry-version pin, in the governed packages' OWN
- * manifests, that names another governed package. `packages/gts-plugin`
+ * Finds every exact-registry-version pin, in the monorepo's OWN
+ * `packages/*` manifests, that names a governed package. `packages/gts-plugin`
  * runtime-depends on `@gears-frontx/mfes` at an exact version, so a bump that
  * moves `packages/mfes` and misses that line is a drift no template-only walk
  * can see - and its failure mode is worse than a template's: npm satisfies
@@ -260,21 +260,35 @@ export function findPinSites(templateDir, governedPackageNames) {
  * copies into one tree, which is the one thing a single-runtime framework
  * cannot survive (reviewer ask on #492).
  *
+ * EVERY `packages/*` manifest is read, not just the governed three. The
+ * governed set says which packages are a version TRUTH; it does not say who is
+ * allowed to pin them, and restricting the scan to it would have made this
+ * guard's coverage depend on which packages happened to exist when it was
+ * written. #496 added `packages/telemetry` while this branch was in review -
+ * it pins nothing today, but nothing would have reported it if it did.
+ *
  * Only each package's own root manifest is read, not its whole subtree: that
  * manifest is the published dependency declaration, whereas a nested
  * `package.json` under `packages/*` is a build artifact or test fixture whose
- * pins nobody installs. Reads FAIL CLOSED, the same way the truth map does -
- * an unreadable governed manifest cannot be allowed to read as "no pins here".
+ * pins nobody installs. A directory with no manifest at all is skipped, but a
+ * manifest that IS there and cannot be read or parsed FAILS CLOSED the same
+ * way the truth map does - "unreadable" must never be allowed to read as
+ * "no pins here".
  *
  * @param {string} rootDir monorepo root
  * @param {string[]} governedPackageNames
  * @returns {PinSite[]}
  */
 export function findEcosystemPinSites(rootDir, governedPackageNames) {
+  const packagesDir = path.join(rootDir, 'packages');
+  if (!fs.existsSync(packagesDir)) return [];
+
   /** @type {PinSite[]} */
   const sites = [];
-  for (const dir of templatePinnedEcosystemPackageDirs) {
-    const filePath = path.join(rootDir, 'packages', dir, 'package.json');
+  for (const entry of fs.readdirSync(packagesDir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+    if (!entry.isDirectory() || entry.name === 'node_modules') continue;
+    const filePath = path.join(packagesDir, entry.name, 'package.json');
+    if (!fs.existsSync(filePath)) continue;
     const packageJson = readGovernedPackageJson(filePath);
     sites.push(...pinSitesIn(packageJson, path.relative(rootDir, filePath), governedPackageNames));
   }

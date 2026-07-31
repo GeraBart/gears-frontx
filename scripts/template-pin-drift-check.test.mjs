@@ -270,12 +270,44 @@ describe('findEcosystemPinSites', () => {
     expect(findEcosystemPinSites(root, governed)).toEqual([]);
   });
 
-  it('fails closed when a governed manifest cannot be read, rather than reporting no pins', async () => {
+  // #496 added packages/telemetry mid-review. The governed set says which
+  // packages are a version TRUTH, not who may pin them, so the scan covers
+  // every packages/* manifest rather than depending on which packages happened
+  // to exist when it was written.
+  it('finds an exact governed pin in a NON-governed package', async () => {
     const root = await makeRoot();
     await writeEcosystemPackages(root);
-    await rm(path.join(root, 'packages', 'mfes', 'package.json'));
+    await writeJson(path.join(root, 'packages', 'telemetry', 'package.json'), {
+      name: '@gears-frontx/telemetry',
+      version: '0.3.0-alpha.0',
+      dependencies: { '@gears-frontx/mfes': '0.2.0' },
+    });
 
-    expect(() => findEcosystemPinSites(root, governed)).toThrow(/cannot read/);
+    const sites = findEcosystemPinSites(root, governed);
+
+    expect(sites).toContainEqual({
+      file: path.join('packages', 'telemetry', 'package.json'),
+      field: 'dependencies',
+      packageName: '@gears-frontx/mfes',
+      pinnedVersion: '0.2.0',
+    });
+    expect(runCli({ rootDir: root })).toBe(1);
+  });
+
+  it('skips a packages/* directory that carries no manifest at all', async () => {
+    const root = await makeRoot();
+    await writeEcosystemPackages(root);
+    await mkdir(path.join(root, 'packages', 'not-a-package'), { recursive: true });
+
+    expect(() => findEcosystemPinSites(root, governed)).not.toThrow();
+  });
+
+  it('fails closed when a manifest that IS there cannot be read, rather than reporting no pins', async () => {
+    const root = await makeRoot();
+    await writeEcosystemPackages(root);
+    await writeFile(path.join(root, 'packages', 'mfes', 'package.json'), '{ broken');
+
+    expect(() => findEcosystemPinSites(root, governed)).toThrow(/cannot parse/);
   });
 });
 
