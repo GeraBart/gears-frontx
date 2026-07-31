@@ -485,10 +485,11 @@ describe('validateContentSelfContainment — carrier discovery and edge cases', 
     expect(result.violations).toHaveLength(2);
   });
 
-  // A3 review finding — after the #470 split, package.json/lockfile/tsconfig
-  // are expected to move to `sharedFiles` for at least one template
-  // (ADR-0031's own worked example); enumeration must not silently stop
-  // covering the highest-value carriers when that happens.
+  // A3 review finding — ADR-0031's own worked example puts
+  // package.json/lockfile/tsconfig in `sharedFiles`. No template ships that
+  // shape yet (both post-#470 templates declare them as exclusive subtrees),
+  // which is exactly why this needs a test: enumeration must not silently stop
+  // covering the highest-value carriers the first time one does.
   it('a carrier declared only as a shared-file path (not an exclusive subtree) is still inspected', async () => {
     const { listContentOwnedFiles, readFile } = fakeTemplate({
       'package.json': JSON.stringify({ dependencies: { '@gears-frontx/api': 'file:../packages/api' } }),

@@ -419,11 +419,14 @@ export async function validateContentSelfContainment(
 
 // Reads the manifest's OWN declared content-owning paths: every exclusive
 // subtree, PLUS every shared-file path (A3 review finding on #493). Either
-// ownership-boundary kind can own a carrier file — after the #470 split,
-// `package.json`/lockfile/tsconfig are expected to move to `sharedFiles` for
-// at least one of the resulting templates (ADR-0031's own worked example),
-// and enumerating `exclusiveSubtrees` alone would then silently stop
-// inspecting the highest-value carriers. Malformed input yields an empty
+// ownership-boundary kind can own a carrier file, and which one a given
+// template uses is not this algorithm's business to predict: `template-shell`
+// and `template-mfe` both ship `sharedFiles: []` today and declare their
+// `package.json`/lockfile/tsconfig carriers as exclusive subtrees, but
+// ADR-0031's own worked example puts exactly those carriers in `sharedFiles`,
+// so enumerating `exclusiveSubtrees` alone would silently stop inspecting the
+// highest-value carriers the first time a template took that shape.
+// Malformed input yields an empty
 // list rather than throwing — the manifest CONTRACT check
 // (`validate-contract.ts`) is the one authority for reporting a malformed
 // manifest; this algorithm only runs at all once that check has already
