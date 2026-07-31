@@ -32,15 +32,15 @@ describe('findTemplateDirs', () => {
   // still found.
   it('finds every top-level directory carrying frontx-template.json, regardless of its name', async () => {
     const root = await makeRoot();
-    await mkdir(path.join(root, 'template-standard'), { recursive: true });
-    await writeFile(path.join(root, 'template-standard', 'frontx-template.json'), validManifest());
+    await mkdir(path.join(root, 'template-shell'), { recursive: true });
+    await writeFile(path.join(root, 'template-shell', 'frontx-template.json'), validManifest());
     await mkdir(path.join(root, 'a-renamed-template'), { recursive: true });
     await writeFile(path.join(root, 'a-renamed-template', 'frontx-template.json'), validManifest());
     await mkdir(path.join(root, 'packages'), { recursive: true }); // no manifest — not a template
 
     const dirs = findTemplateDirs(root, 'frontx-template.json').map((d) => path.basename(d)).sort();
 
-    expect(dirs).toEqual(['a-renamed-template', 'template-standard']);
+    expect(dirs).toEqual(['a-renamed-template', 'template-shell']);
   });
 
   it('ignores a directory named template-* that carries no manifest', async () => {
@@ -73,33 +73,33 @@ describe('findTemplateDirs', () => {
 
   it('respects the manifest filename passed in, independent of any real CLI constant', async () => {
     const root = await makeRoot();
-    await mkdir(path.join(root, 'template-standard'), { recursive: true });
-    await writeFile(path.join(root, 'template-standard', 'a-different-manifest-name.json'), validManifest());
+    await mkdir(path.join(root, 'template-shell'), { recursive: true });
+    await writeFile(path.join(root, 'template-shell', 'a-different-manifest-name.json'), validManifest());
 
     expect(findTemplateDirs(root, 'frontx-template.json')).toEqual([]);
-    expect(findTemplateDirs(root, 'a-different-manifest-name.json').map((d) => path.basename(d))).toEqual(['template-standard']);
+    expect(findTemplateDirs(root, 'a-different-manifest-name.json').map((d) => path.basename(d))).toEqual(['template-shell']);
   });
 });
 
 describe('runCli', () => {
   it('passes when every template directory validates', async () => {
     const root = await makeRoot();
-    await mkdir(path.join(root, 'template-standard'), { recursive: true });
-    await writeFile(path.join(root, 'template-standard', 'frontx-template.json'), validManifest());
+    await mkdir(path.join(root, 'template-shell'), { recursive: true });
+    await writeFile(path.join(root, 'template-shell', 'frontx-template.json'), validManifest());
     const logs = [];
 
     const exitCode = await runCli({ rootDir: root, log: (line) => logs.push(line) });
 
     expect(exitCode).toBe(0);
-    expect(logs.some((l) => l.includes('PASS') && l.includes('template-standard'))).toBe(true);
+    expect(logs.some((l) => l.includes('PASS') && l.includes('template-shell'))).toBe(true);
   });
 
   it('fails when one template directory fails validation, and still checks the rest', async () => {
     const root = await makeRoot();
     await mkdir(path.join(root, 'template-mfe'), { recursive: true });
     await writeFile(path.join(root, 'template-mfe', 'frontx-template.json'), JSON.stringify({}));
-    await mkdir(path.join(root, 'template-standard'), { recursive: true });
-    await writeFile(path.join(root, 'template-standard', 'frontx-template.json'), validManifest());
+    await mkdir(path.join(root, 'template-shell'), { recursive: true });
+    await writeFile(path.join(root, 'template-shell', 'frontx-template.json'), validManifest());
     const logs = [];
     const errors = [];
 
@@ -107,18 +107,18 @@ describe('runCli', () => {
 
     expect(exitCode).toBe(1);
     expect(errors.some((l) => l.includes('FAIL') && l.includes('template-mfe'))).toBe(true);
-    expect(logs.some((l) => l.includes('PASS') && l.includes('template-standard'))).toBe(true);
+    expect(logs.some((l) => l.includes('PASS') && l.includes('template-shell'))).toBe(true);
   });
 
   it('fails when a template carries a content self-containment violation', async () => {
     const root = await makeRoot();
-    await mkdir(path.join(root, 'template-standard'), { recursive: true });
+    await mkdir(path.join(root, 'template-shell'), { recursive: true });
     await writeFile(
-      path.join(root, 'template-standard', 'frontx-template.json'),
+      path.join(root, 'template-shell', 'frontx-template.json'),
       validManifest({ ownershipBoundaries: { exclusiveSubtrees: ['package.json'], sharedFiles: [] } }),
     );
     await writeFile(
-      path.join(root, 'template-standard', 'package.json'),
+      path.join(root, 'template-shell', 'package.json'),
       JSON.stringify({ dependencies: { '@gears-frontx/api': 'file:../../packages/api' } }),
     );
     const errors = [];
@@ -152,8 +152,8 @@ describe('runCli', () => {
   // built package.
   it('fails with a clear, actionable message — not a raw stack trace — when the CLI build is missing', async () => {
     const root = await makeRoot();
-    await mkdir(path.join(root, 'template-standard'), { recursive: true });
-    await writeFile(path.join(root, 'template-standard', 'frontx-template.json'), validManifest());
+    await mkdir(path.join(root, 'template-shell'), { recursive: true });
+    await writeFile(path.join(root, 'template-shell', 'frontx-template.json'), validManifest());
     const errors = [];
 
     const exitCode = await runCli({

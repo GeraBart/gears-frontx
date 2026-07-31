@@ -9,9 +9,11 @@ import {
   DEPENDENCY_FIELDS,
   MANIFEST_FILENAME,
   findDriftedSites,
+  findEcosystemPinSites,
   findPackageJsonFiles,
   findPinSites,
   findTemplateDirs,
+  isExactRegistryVersionPin,
   readEcosystemTruthVersions,
   runCli,
 } from './template-pin-drift-check.mjs';
@@ -88,12 +90,62 @@ describe('readEcosystemTruthVersions', () => {
 
     expect(() => readEcosystemTruthVersions(root)).toThrow(/packages[/\\]mfes[/\\]package\.json.*"version"/);
   });
+
+  // CodeRabbit review finding on #493: the read and the parse must fail
+  // closed the same way a missing field does. Node's bare ENOENT/SyntaxError
+  // names neither this guard nor (for the parse) anything actionable, so a
+  // red build would read as a broken script rather than a broken manifest.
+  it('throws, naming the offending file, when an ecosystem package.json is missing entirely', async () => {
+    const root = await makeRoot();
+    await writeEcosystemPackages(root);
+    await rm(path.join(root, 'packages', 'gts-plugin', 'package.json'));
+
+    expect(() => readEcosystemTruthVersions(root)).toThrow(
+      /cannot read .*packages[/\\]gts-plugin[/\\]package\.json/,
+    );
+  });
+
+  it('throws, naming the offending file, when an ecosystem package.json is not valid JSON', async () => {
+    const root = await makeRoot();
+    await writeEcosystemPackages(root);
+    await writeFile(path.join(root, 'packages', 'api', 'package.json'), '{ "name": broken');
+
+    expect(() => readEcosystemTruthVersions(root)).toThrow(
+      /cannot parse .*packages[/\\]api[/\\]package\.json as JSON/,
+    );
+  });
+});
+
+// The guard's own truth about what it governs. `isExactPin` (the ecosystem
+// version policy's helper) answers a DIFFERENT question — "does this range
+// carry a range operator" — which a monorepo-local `file:` specifier also
+// answers "no" to, so reusing it made every `file:../../../packages/mfes` in
+// template-mfe report as a pinned site drifted from a version it never
+// expressed.
+describe('isExactRegistryVersionPin', () => {
+  it('accepts a bare exact registry version, prerelease included', () => {
+    expect(isExactRegistryVersionPin('0.3.0-alpha.1')).toBe(true);
+    expect(isExactRegistryVersionPin('1.2.3')).toBe(true);
+  });
+
+  it('rejects a local-path or protocol specifier, which expresses no version at all', () => {
+    expect(isExactRegistryVersionPin('file:../../../packages/mfes')).toBe(false);
+    expect(isExactRegistryVersionPin('link:../mfes')).toBe(false);
+    expect(isExactRegistryVersionPin('workspace:*')).toBe(false);
+    expect(isExactRegistryVersionPin('git+https://example.com/x.git')).toBe(false);
+  });
+
+  it('rejects a range — that is the ecosystem edge-compatibility policy\'s concern', () => {
+    expect(isExactRegistryVersionPin('^0.3.0')).toBe(false);
+    expect(isExactRegistryVersionPin('*')).toBe(false);
+    expect(isExactRegistryVersionPin('>=0.2.0-0')).toBe(false);
+  });
 });
 
 describe('findPackageJsonFiles / findTemplateDirs', () => {
   it('finds every package.json under a directory, skipping node_modules', async () => {
     const root = await makeRoot();
-    const templateDir = path.join(root, 'template-standard');
+    const templateDir = path.join(root, 'template-shell');
     await writeJson(path.join(templateDir, 'package.json'), { name: 'tpl' });
     await writeJson(path.join(templateDir, 'packages', 'framework', 'package.json'), { name: 'framework' });
     await writeJson(path.join(templateDir, 'node_modules', 'some-dep', 'package.json'), { name: 'some-dep' });
@@ -109,7 +161,7 @@ describe('findPackageJsonFiles / findTemplateDirs', () => {
   // completeness hole found in `createFsListContentOwnedFilesFn`.
   it('does NOT skip a package.json nested under a dot-prefixed directory', async () => {
     const root = await makeRoot();
-    const templateDir = path.join(root, 'template-standard');
+    const templateDir = path.join(root, 'template-shell');
     await writeJson(path.join(templateDir, '.hidden-workspace', 'package.json'), { name: 'hidden' });
 
     const files = findPackageJsonFiles(templateDir).map((f) => path.relative(templateDir, f)).sort();
@@ -121,13 +173,13 @@ describe('findPackageJsonFiles / findTemplateDirs', () => {
   // by a `template-*` name prefix — location- and name-independent.
   it('finds every top-level directory carrying frontx-template.json, regardless of its name', async () => {
     const root = await makeRoot();
-    await writeManifest(path.join(root, 'template-standard'));
+    await writeManifest(path.join(root, 'template-shell'));
     await writeManifest(path.join(root, 'a-renamed-template'));
     await mkdir(path.join(root, 'packages'), { recursive: true }); // no manifest — not a template
 
     const dirs = findTemplateDirs(root).map((d) => path.basename(d)).sort();
 
-    expect(dirs).toEqual(['a-renamed-template', 'template-standard']);
+    expect(dirs).toEqual(['a-renamed-template', 'template-shell']);
   });
 
   it('ignores a directory named template-* that carries no manifest', async () => {
@@ -182,6 +234,21 @@ describe('findPinSites', () => {
     expect(sites).toHaveLength(0);
   });
 
+  // template-mfe's MFE fixtures declare exactly this shape. Reading it as a
+  // pinned site produced a nonsense report ("pinned file:../../../packages/mfes,
+  // actual 0.3.0-alpha.1") for a declaration that names no version.
+  it('ignores a monorepo-local file: specifier — it expresses a path, not a pinned version', async () => {
+    const root = await makeRoot();
+    await writeJson(path.join(root, 'package.json'), {
+      devDependencies: {
+        '@gears-frontx/mfes': 'file:../../../packages/mfes',
+        '@gears-frontx/api': 'file:../../../packages/api',
+      },
+    });
+
+    expect(findPinSites(root, governed)).toHaveLength(0);
+  });
+
   it('ignores a package.json naming an ungoverned package', async () => {
     const root = await makeRoot();
     await writeJson(path.join(root, 'package.json'), { dependencies: { react: '19.2.4' } });
@@ -198,6 +265,55 @@ describe('findPinSites', () => {
 
     expect(() => findPinSites(root, governed)).not.toThrow();
     expect(findPinSites(root, governed)).toHaveLength(0);
+  });
+});
+
+// Reviewer ask on #492 (gs-layer): the templates are not the only place an
+// exact ecosystem pin lives. `packages/gts-plugin` runtime-depends on
+// `@gears-frontx/mfes` at an exact version, and a bump that misses it makes
+// npm install two MFE runtime copies into one tree.
+describe('findEcosystemPinSites', () => {
+  const governed = ['@gears-frontx/api', '@gears-frontx/mfes', '@gears-frontx/gts-plugin'];
+
+  it('finds the exact mfes pin inside gts-plugin\'s own dependencies', async () => {
+    const root = await makeRoot();
+    await writeEcosystemPackages(root);
+    await writeJson(path.join(root, 'packages', 'gts-plugin', 'package.json'), {
+      name: '@gears-frontx/gts-plugin',
+      version: '0.3.0-alpha.0',
+      dependencies: { '@gears-frontx/mfes': '0.3.0-alpha.0' },
+    });
+
+    const sites = findEcosystemPinSites(root, governed);
+
+    expect(sites).toEqual([
+      {
+        file: path.join('packages', 'gts-plugin', 'package.json'),
+        field: 'dependencies',
+        packageName: '@gears-frontx/mfes',
+        pinnedVersion: '0.3.0-alpha.0',
+      },
+    ]);
+  });
+
+  it('does not report a governed package pinning itself', async () => {
+    const root = await makeRoot();
+    await writeEcosystemPackages(root);
+    await writeJson(path.join(root, 'packages', 'mfes', 'package.json'), {
+      name: '@gears-frontx/mfes',
+      version: '0.3.0-alpha.0',
+      dependencies: { '@gears-frontx/mfes': '0.3.0-alpha.0' },
+    });
+
+    expect(findEcosystemPinSites(root, governed)).toEqual([]);
+  });
+
+  it('fails closed when a governed manifest cannot be read, rather than reporting no pins', async () => {
+    const root = await makeRoot();
+    await writeEcosystemPackages(root);
+    await rm(path.join(root, 'packages', 'mfes', 'package.json'));
+
+    expect(() => findEcosystemPinSites(root, governed)).toThrow(/cannot read/);
   });
 });
 
@@ -223,8 +339,8 @@ describe('runCli', () => {
   it('passes when every pinned site across every template matches the ecosystem truth', async () => {
     const root = await makeRoot();
     await writeEcosystemPackages(root);
-    await writeManifest(path.join(root, 'template-standard'));
-    await writeJson(path.join(root, 'template-standard', 'package.json'), {
+    await writeManifest(path.join(root, 'template-shell'));
+    await writeJson(path.join(root, 'template-shell', 'package.json'), {
       dependencies: {
         '@gears-frontx/api': '0.3.0-alpha.0',
         '@gears-frontx/mfes': '0.3.0-alpha.0',
@@ -238,8 +354,8 @@ describe('runCli', () => {
   it('fails when a template pin has drifted from the ecosystem\'s actual version', async () => {
     const root = await makeRoot();
     await writeEcosystemPackages(root, { api: '0.4.0-alpha.0' });
-    await writeManifest(path.join(root, 'template-standard'));
-    await writeJson(path.join(root, 'template-standard', 'packages', 'framework', 'package.json'), {
+    await writeManifest(path.join(root, 'template-shell'));
+    await writeJson(path.join(root, 'template-shell', 'packages', 'framework', 'package.json'), {
       devDependencies: { '@gears-frontx/api': '0.3.0-alpha.0' },
     });
 
@@ -249,11 +365,27 @@ describe('runCli', () => {
   it('catches a drifted site nested arbitrarily deep, e.g. an MFE fixture package', async () => {
     const root = await makeRoot();
     await writeEcosystemPackages(root, { mfes: '0.4.0-alpha.0' });
-    await writeManifest(path.join(root, 'template-standard'));
+    await writeManifest(path.join(root, 'template-shell'));
     await writeJson(
-      path.join(root, 'template-standard', 'src-app', 'mfe_packages', 'widgets-fixture-a', 'package.json'),
+      path.join(root, 'template-shell', 'src-app', 'mfe_packages', 'widgets-fixture-a', 'package.json'),
       { dependencies: { '@gears-frontx/mfes': '0.3.0-alpha.0' } },
     );
+
+    expect(runCli({ rootDir: root })).toBe(1);
+  });
+
+  it('fails when the ecosystem\'s own intra-ecosystem pin has drifted, even with every template clean', async () => {
+    const root = await makeRoot();
+    await writeEcosystemPackages(root, { mfes: '0.3.0-alpha.1' });
+    await writeJson(path.join(root, 'packages', 'gts-plugin', 'package.json'), {
+      name: '@gears-frontx/gts-plugin',
+      version: '0.3.0-alpha.0',
+      dependencies: { '@gears-frontx/mfes': '0.3.0-alpha.0' },
+    });
+    await writeManifest(path.join(root, 'template-shell'));
+    await writeJson(path.join(root, 'template-shell', 'package.json'), {
+      dependencies: { '@gears-frontx/api': '0.3.0-alpha.0' },
+    });
 
     expect(runCli({ rootDir: root })).toBe(1);
   });
