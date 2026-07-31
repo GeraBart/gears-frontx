@@ -63,15 +63,39 @@ export function createFsRemoveProjectFileFn(): RemoveProjectFileFn {
  * directory) must still be inspected — skipping dot-prefixed entries would
  * open exactly the completeness hole the content self-containment check
  * exists to close (CodeRabbit review finding on #493).
+ *
+ * A SYMLINK is resolved, not skipped. `readdirSync(..., { withFileTypes:
+ * true })` reports a symlink's own type, for which `isDirectory()` and
+ * `isFile()` are BOTH false, so a symlinked carrier — or a whole symlinked
+ * directory of them — used to be silently dropped from the enumeration and
+ * therefore never inspected (CodeRabbit review finding on #493). What the
+ * link POINTS at decides, via `statSync`, which follows it.
+ *
+ * The one thing a resolved symlink must not do is take the walk outside the
+ * template: a link to `../../shared` is exactly the escape this check exists
+ * to catch, and walking into it would report files that are not the
+ * template's content as if they were. Such a link is skipped here — its
+ * existence as an escape is the CONTENT check's business only in so far as a
+ * carrier declares it, and this adapter's contract is to enumerate the
+ * template's own files, not to judge them.
  */
 export function createFsListContentOwnedFilesFn(): ListContentOwnedFilesFn {
   return async function listContentOwnedFiles(templateDir: string, contentOwnedPath: string): Promise<string[]> {
     const absoluteEntry = path.join(templateDir, contentOwnedPath);
     if (!fs.existsSync(absoluteEntry)) return [];
+
+    // The declared entry itself may be a symlink; `templateDir` may sit under
+    // one too (a macOS `/tmp` -> `/private/tmp` prefix is the everyday case).
+    // Both sides are resolved so containment compares like with like.
+    const root = realPathOrNull(templateDir);
+    if (root === null) return [];
+    const resolvedEntry = realPathOrNull(absoluteEntry);
+    if (resolvedEntry === null || !isInside(root, resolvedEntry)) return [];
+
     const stat = fs.statSync(absoluteEntry);
     if (stat.isFile()) return [toPosixPath(contentOwnedPath)];
     if (!stat.isDirectory()) return [];
-    return walkFiles(templateDir, contentOwnedPath);
+    return walkFiles(templateDir, contentOwnedPath, root, new Set([resolvedEntry]));
   };
 }
 
@@ -79,7 +103,31 @@ function toPosixPath(relativePath: string): string {
   return relativePath.split(path.sep).join('/');
 }
 
-function walkFiles(templateDir: string, relativeDir: string): string[] {
+/** `null` for a broken symlink or a path that vanished mid-walk. */
+function realPathOrNull(absolutePath: string): string | null {
+  try {
+    return fs.realpathSync(absolutePath);
+  } catch {
+    return null;
+  }
+}
+
+function isInside(root: string, candidate: string): boolean {
+  if (candidate === root) return true;
+  return candidate.startsWith(root + path.sep);
+}
+
+/**
+ * @param visitedRealDirs real paths of directories already entered. Only a
+ *   symlink can make this walk cycle (a plain directory tree cannot contain
+ *   itself), and a link back to an ancestor would otherwise recurse forever.
+ */
+function walkFiles(
+  templateDir: string,
+  relativeDir: string,
+  root: string,
+  visitedRealDirs: Set<string>,
+): string[] {
   const absoluteDir = path.join(templateDir, relativeDir);
   const entries = fs.readdirSync(absoluteDir, { withFileTypes: true });
   const files: string[] = [];
@@ -89,9 +137,27 @@ function walkFiles(templateDir: string, relativeDir: string): string[] {
     // (see the doc comment above) and is walked/included like any other.
     if (entry.name === 'node_modules') continue;
     const relativePath = `${relativeDir}/${entry.name}`;
+
     if (entry.isDirectory()) {
-      files.push(...walkFiles(templateDir, relativePath));
-    } else if (entry.isFile()) {
+      files.push(...walkFiles(templateDir, relativePath, root, visitedRealDirs));
+      continue;
+    }
+    if (entry.isFile()) {
+      files.push(toPosixPath(relativePath));
+      continue;
+    }
+    if (!entry.isSymbolicLink()) continue; // fifo, socket, device: not content
+
+    const resolved = realPathOrNull(path.join(absoluteDir, entry.name));
+    if (resolved === null) continue; // broken link
+    if (!isInside(root, resolved)) continue; // points outside the template
+    if (visitedRealDirs.has(resolved)) continue; // already walked through another path
+
+    const targetStat = fs.statSync(resolved);
+    if (targetStat.isDirectory()) {
+      visitedRealDirs.add(resolved);
+      files.push(...walkFiles(templateDir, relativePath, root, visitedRealDirs));
+    } else if (targetStat.isFile()) {
       files.push(toPosixPath(relativePath));
     }
   }

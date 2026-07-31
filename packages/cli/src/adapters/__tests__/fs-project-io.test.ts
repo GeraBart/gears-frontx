@@ -1,6 +1,6 @@
 // @cpt-algo:cpt-frontx-algo-template-manifest-validate-content-self-containment:p2
 import path from 'node:path';
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createFsListContentOwnedFilesFn } from '../fs-project-io';
@@ -12,9 +12,13 @@ import { createFsListContentOwnedFilesFn } from '../fs-project-io';
 // exactly what the pure content self-containment algorithm depends on.
 describe('createFsListContentOwnedFilesFn', () => {
   let templateDir: string;
+  // A second root, outside the template, for the escaping-symlink cases.
+  let outsideDir: string;
 
   afterEach(async () => {
     if (templateDir) await rm(templateDir, { recursive: true, force: true });
+    if (outsideDir) await rm(outsideDir, { recursive: true, force: true });
+    outsideDir = '';
   });
 
   async function makeTemplate(): Promise<string> {
@@ -115,5 +119,111 @@ describe('createFsListContentOwnedFilesFn', () => {
     const files = await listContentOwnedFiles(dir, 'never-created');
 
     expect(files).toEqual([]);
+  });
+
+  // CodeRabbit review finding on #493: `readdirSync(..., { withFileTypes: true })`
+  // reports a symlink's OWN type, for which isDirectory() and isFile() are both
+  // false — so every symlinked carrier fell through the walk and was never
+  // inspected. What the link points at decides.
+  describe('symlinks', () => {
+    // A symlinked carrier is the whole point of the fix: this file WOULD have
+    // been dropped from the enumeration, so its `file:` specifiers were never
+    // checked for containment.
+    it('includes a symlinked carrier file, resolving the link rather than skipping it', async () => {
+      const dir = await makeTemplate();
+      await mkdir(path.join(dir, 'packages', 'real'), { recursive: true });
+      await writeFile(path.join(dir, 'packages', 'real', 'package.json'), '{}');
+      await symlink(
+        path.join(dir, 'packages', 'real', 'package.json'),
+        path.join(dir, 'packages', 'package.json'),
+      );
+      const listContentOwnedFiles = createFsListContentOwnedFilesFn();
+
+      const files = await listContentOwnedFiles(dir, 'packages');
+
+      expect(files.sort()).toEqual(['packages/package.json', 'packages/real/package.json']);
+    });
+
+    it('descends through a symlinked directory that stays inside the template', async () => {
+      const dir = await makeTemplate();
+      await mkdir(path.join(dir, 'real-workspace'), { recursive: true });
+      await writeFile(path.join(dir, 'real-workspace', 'package.json'), '{}');
+      await mkdir(path.join(dir, 'packages'), { recursive: true });
+      await symlink(path.join(dir, 'real-workspace'), path.join(dir, 'packages', 'linked'));
+      const listContentOwnedFiles = createFsListContentOwnedFilesFn();
+
+      const files = await listContentOwnedFiles(dir, 'packages');
+
+      expect(files).toEqual(['packages/linked/package.json']);
+    });
+
+    // A link out of the template is the escape the whole check exists to catch.
+    // Walking into it would report files that are not the template's content as
+    // if they were.
+    it('does NOT descend when a symlinked directory resolves outside the template', async () => {
+      const dir = await makeTemplate();
+      outsideDir = await mkdtemp(path.join(tmpdir(), 'frontx-outside-'));
+      await writeFile(path.join(outsideDir, 'package.json'), '{}');
+      await mkdir(path.join(dir, 'packages'), { recursive: true });
+      await writeFile(path.join(dir, 'packages', 'package.json'), '{}');
+      await symlink(outsideDir, path.join(dir, 'packages', 'escaping'));
+      const listContentOwnedFiles = createFsListContentOwnedFilesFn();
+
+      const files = await listContentOwnedFiles(dir, 'packages');
+
+      expect(files).toEqual(['packages/package.json']);
+    });
+
+    it('does NOT include a symlinked file that resolves outside the template', async () => {
+      const dir = await makeTemplate();
+      outsideDir = await mkdtemp(path.join(tmpdir(), 'frontx-outside-'));
+      await writeFile(path.join(outsideDir, 'package.json'), '{}');
+      await mkdir(path.join(dir, 'packages'), { recursive: true });
+      await symlink(path.join(outsideDir, 'package.json'), path.join(dir, 'packages', 'package.json'));
+      const listContentOwnedFiles = createFsListContentOwnedFilesFn();
+
+      const files = await listContentOwnedFiles(dir, 'packages');
+
+      expect(files).toEqual([]);
+    });
+
+    it('skips a broken symlink instead of throwing', async () => {
+      const dir = await makeTemplate();
+      await mkdir(path.join(dir, 'packages'), { recursive: true });
+      await writeFile(path.join(dir, 'packages', 'package.json'), '{}');
+      await symlink(path.join(dir, 'packages', 'gone'), path.join(dir, 'packages', 'dangling'));
+      const listContentOwnedFiles = createFsListContentOwnedFilesFn();
+
+      const files = await listContentOwnedFiles(dir, 'packages');
+
+      expect(files).toEqual(['packages/package.json']);
+    });
+
+    // Only a symlink can make this walk cycle; without the visited-set the
+    // link back to an ancestor recurses until the stack blows.
+    it('terminates on a symlink cycle back to an ancestor directory', async () => {
+      const dir = await makeTemplate();
+      await mkdir(path.join(dir, 'packages', 'auth'), { recursive: true });
+      await writeFile(path.join(dir, 'packages', 'auth', 'package.json'), '{}');
+      await symlink(path.join(dir, 'packages'), path.join(dir, 'packages', 'auth', 'loop'));
+      const listContentOwnedFiles = createFsListContentOwnedFilesFn();
+
+      const files = await listContentOwnedFiles(dir, 'packages');
+
+      expect(files).toEqual(['packages/auth/package.json']);
+    });
+
+    // The declared entry itself, not just something found while walking.
+    it('returns an empty list when the declared subtree entry is a symlink out of the template', async () => {
+      const dir = await makeTemplate();
+      outsideDir = await mkdtemp(path.join(tmpdir(), 'frontx-outside-'));
+      await writeFile(path.join(outsideDir, 'package.json'), '{}');
+      await symlink(outsideDir, path.join(dir, 'packages'));
+      const listContentOwnedFiles = createFsListContentOwnedFilesFn();
+
+      const files = await listContentOwnedFiles(dir, 'packages');
+
+      expect(files).toEqual([]);
+    });
   });
 });
