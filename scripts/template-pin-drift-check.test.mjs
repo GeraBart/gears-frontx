@@ -7,12 +7,10 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   DEPENDENCY_FIELDS,
-  MANIFEST_FILENAME,
   findDriftedSites,
   findEcosystemPinSites,
   findPackageJsonFiles,
   findPinSites,
-  findTemplateDirs,
   isExactRegistryVersionPin,
   readEcosystemTruthVersions,
   runCli,
@@ -142,7 +140,7 @@ describe('isExactRegistryVersionPin', () => {
   });
 });
 
-describe('findPackageJsonFiles / findTemplateDirs', () => {
+describe('findPackageJsonFiles', () => {
   it('finds every package.json under a directory, skipping node_modules', async () => {
     const root = await makeRoot();
     const templateDir = path.join(root, 'template-shell');
@@ -167,42 +165,6 @@ describe('findPackageJsonFiles / findTemplateDirs', () => {
     const files = findPackageJsonFiles(templateDir).map((f) => path.relative(templateDir, f)).sort();
 
     expect(files).toEqual(['.hidden-workspace/package.json']);
-  });
-
-  // A5 review finding: discovery is by manifest presence (ADR-0018), never
-  // by a `template-*` name prefix — location- and name-independent.
-  it('finds every top-level directory carrying frontx-template.json, regardless of its name', async () => {
-    const root = await makeRoot();
-    await writeManifest(path.join(root, 'template-shell'));
-    await writeManifest(path.join(root, 'a-renamed-template'));
-    await mkdir(path.join(root, 'packages'), { recursive: true }); // no manifest — not a template
-
-    const dirs = findTemplateDirs(root).map((d) => path.basename(d)).sort();
-
-    expect(dirs).toEqual(['a-renamed-template', 'template-shell']);
-  });
-
-  it('ignores a directory named template-* that carries no manifest', async () => {
-    const root = await makeRoot();
-    await mkdir(path.join(root, 'template-empty'), { recursive: true });
-
-    expect(findTemplateDirs(root)).toEqual([]);
-  });
-
-  it('ignores node_modules even if it somehow carries a manifest', async () => {
-    const root = await makeRoot();
-    await writeManifest(path.join(root, 'node_modules', 'something'));
-
-    expect(findTemplateDirs(root)).toEqual([]);
-  });
-
-  // CodeRabbit review finding on #493: matches validate-templates.mjs's
-  // same node_modules-only exclusion rule.
-  it('does NOT ignore a dot-prefixed top-level directory that carries a manifest', async () => {
-    const root = await makeRoot();
-    await writeManifest(path.join(root, '.hidden-template'));
-
-    expect(findTemplateDirs(root).map((d) => path.basename(d))).toEqual(['.hidden-template']);
   });
 });
 
@@ -400,35 +362,24 @@ describe('runCli', () => {
   });
 });
 
-// #492 review finding 2's "unguarded duplicated literal" class, reproduced
-// by this script itself: MANIFEST_FILENAME and DEPENDENCY_FIELDS are each
-// deliberately kept as a local literal (not an import from `@gears-frontx/cli`
-// or `validate-content-self-containment.ts`) so this script never depends on
-// the CLI package being built. That's a real property worth keeping — but a
-// duplicated literal that can silently drift needs a guard. These tests read
-// the CANONICAL TypeScript source as text (never `import`ed — a `.ts` file
-// isn't loadable by plain node, and importing the built `dist/` would
-// reintroduce exactly the build dependency this script exists to avoid) and
-// assert the local copy still matches.
-describe('duplicated-literal sync guards (#492 review finding 2)', () => {
-  function readCliSource(relativePath) {
-    const sourcePath = fileURLToPath(new URL(`../${relativePath}`, import.meta.url));
-    return readFileSync(sourcePath, 'utf8');
-  }
-
-  it('MANIFEST_FILENAME stays in sync with the canonical export in packages/cli/src/manifest/types.ts', () => {
-    const source = readCliSource('packages/cli/src/manifest/types.ts');
-    const match = /export const MANIFEST_FILENAME = '([^']+)';/.exec(source);
-
-    expect(match, 'canonical MANIFEST_FILENAME export not found — did types.ts change shape?').not.toBeNull();
-    expect(MANIFEST_FILENAME).toBe(match[1]);
-  });
-
+// #492 review finding 2's "unguarded duplicated literal" class, reproduced by
+// this script itself: DEPENDENCY_FIELDS is deliberately kept as a local literal
+// (not an import from `validate-content-self-containment.ts`) so this script
+// never depends on the CLI package being built. That's a real property worth
+// keeping - but a duplicated literal that can silently drift needs a guard.
+// This reads the CANONICAL TypeScript source as text (never `import`ed - a
+// `.ts` file isn't loadable by plain node, and importing the built `dist/`
+// would reintroduce exactly the build dependency this script exists to avoid).
+// MANIFEST_FILENAME's counterpart guard lives with the module that now owns it,
+// in `template-discovery.test.mjs`.
+describe('duplicated-literal sync guard (#492 review finding 2)', () => {
   it('DEPENDENCY_FIELDS stays in sync with validate-content-self-containment.ts', () => {
-    const source = readCliSource('packages/cli/src/manifest/validate-content-self-containment.ts');
-    const match = /const DEPENDENCY_FIELDS = (\[[^\]]*\])/.exec(source);
+    const sourcePath = fileURLToPath(
+      new URL('../packages/cli/src/manifest/validate-content-self-containment.ts', import.meta.url),
+    );
+    const match = /const DEPENDENCY_FIELDS = (\[[^\]]*\])/.exec(readFileSync(sourcePath, 'utf8'));
 
-    expect(match, 'canonical DEPENDENCY_FIELDS declaration not found — did the algorithm module change shape?').not.toBeNull();
+    expect(match, 'canonical DEPENDENCY_FIELDS declaration not found - did the algorithm module change shape?').not.toBeNull();
     const canonicalFields = JSON.parse(match[1].replace(/'/g, '"'));
     expect(DEPENDENCY_FIELDS).toEqual(canonicalFields);
   });

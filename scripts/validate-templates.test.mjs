@@ -3,7 +3,7 @@ import path from 'node:path';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it } from 'vitest';
-import { findTemplateDirs, loadCliModule, runCli } from './validate-templates.mjs';
+import { loadCliModule, runCli } from './validate-templates.mjs';
 
 let rootDir;
 
@@ -24,62 +24,6 @@ function validManifest(overrides = {}) {
     ...overrides,
   });
 }
-
-describe('findTemplateDirs', () => {
-  // A5 review finding: a template is discovered by its manifest
-  // (`frontx-template.json`, ADR-0018), never by a `template-*` name prefix —
-  // location- and name-independent, so a #470-renamed/relocated template is
-  // still found.
-  it('finds every top-level directory carrying frontx-template.json, regardless of its name', async () => {
-    const root = await makeRoot();
-    await mkdir(path.join(root, 'template-shell'), { recursive: true });
-    await writeFile(path.join(root, 'template-shell', 'frontx-template.json'), validManifest());
-    await mkdir(path.join(root, 'a-renamed-template'), { recursive: true });
-    await writeFile(path.join(root, 'a-renamed-template', 'frontx-template.json'), validManifest());
-    await mkdir(path.join(root, 'packages'), { recursive: true }); // no manifest — not a template
-
-    const dirs = findTemplateDirs(root, 'frontx-template.json').map((d) => path.basename(d)).sort();
-
-    expect(dirs).toEqual(['a-renamed-template', 'template-shell']);
-  });
-
-  it('ignores a directory named template-* that carries no manifest', async () => {
-    const root = await makeRoot();
-    await mkdir(path.join(root, 'template-empty'), { recursive: true });
-
-    expect(findTemplateDirs(root, 'frontx-template.json')).toEqual([]);
-  });
-
-  it('ignores node_modules even if it somehow carries a manifest', async () => {
-    const root = await makeRoot();
-    await mkdir(path.join(root, 'node_modules', 'something'), { recursive: true });
-    await writeFile(path.join(root, 'node_modules', 'something', 'frontx-template.json'), validManifest());
-
-    expect(findTemplateDirs(root, 'frontx-template.json')).toEqual([]);
-  });
-
-  // CodeRabbit review finding on #493: excluding every dot-prefixed
-  // directory from discovery reintroduces a location assumption the
-  // manifest-presence principle (A5 round) exists to drop. node_modules is
-  // the one true exclusion; a dot-prefixed directory carrying a real
-  // manifest IS a template.
-  it('does NOT ignore a dot-prefixed top-level directory that carries a manifest', async () => {
-    const root = await makeRoot();
-    await mkdir(path.join(root, '.hidden-template'), { recursive: true });
-    await writeFile(path.join(root, '.hidden-template', 'frontx-template.json'), validManifest());
-
-    expect(findTemplateDirs(root, 'frontx-template.json').map((d) => path.basename(d))).toEqual(['.hidden-template']);
-  });
-
-  it('respects the manifest filename passed in, independent of any real CLI constant', async () => {
-    const root = await makeRoot();
-    await mkdir(path.join(root, 'template-shell'), { recursive: true });
-    await writeFile(path.join(root, 'template-shell', 'a-different-manifest-name.json'), validManifest());
-
-    expect(findTemplateDirs(root, 'frontx-template.json')).toEqual([]);
-    expect(findTemplateDirs(root, 'a-different-manifest-name.json').map((d) => path.basename(d))).toEqual(['template-shell']);
-  });
-});
 
 describe('runCli', () => {
   it('passes when every template directory validates', async () => {

@@ -7,14 +7,12 @@
  * always had it (`cpt-frontx-dod-template-manifest-validate-command`), but
  * nothing wired it into a pipeline.
  *
- * Generic by construction: no template name is hardcoded. A directory counts
- * as a template by carrying `frontx-template.json` at its root — the manifest
- * IS what defines a template (ADR-0018) — not by a `template-*` naming
- * convention, so this is location- and name-independent: a future template
- * (the #470 shell/mfe split included) is covered whatever it ends up named or
- * located at the repo root, with no change to this script or the workflow
- * step that runs it (A5 review finding on #493 — a name-prefix glob would
- * vacuously pass if #470 renames or relocates a template).
+ * Generic by construction: no template name is hardcoded. Discovery is
+ * `template-discovery.mjs`'s manifest-presence rule, shared with the pin-drift
+ * guard — a future template is covered whatever it ends up named or located at
+ * the repo root, with no change to this script or the workflow step that runs
+ * it. The #470 split already exercised that: `template-standard/` became
+ * `template-shell/` plus `template-mfe/`, and both were picked up unchanged.
  *
  * Imports `@gears-frontx/cli`'s command directly rather than spawning the
  * built `frontx` binary as a child process — one less path assumption, and it
@@ -32,39 +30,10 @@
  * Core logic is exported for unit tests in
  * `scripts/validate-templates.test.mjs`.
  */
-import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { pathToFileURL } from 'node:url';
-
-/**
- * Every top-level directory at the repo root that carries `manifestFilename`
- * — a template is defined by its manifest (ADR-0018), not by where it lives
- * or what it's named. `manifestFilename` is passed in (rather than imported)
- * so this function stays independent of whether `@gears-frontx/cli` loaded.
- *
- * `node_modules` is the ONE exclusion (install-time output, never something
- * this repo's own tree defines); a dot-prefixed top-level directory (`.git`,
- * `.github`, `.cf-studio`, ...) is NOT excluded — filtering it out would
- * reintroduce exactly the kind of naming/location assumption the
- * manifest-presence principle exists to drop (A5 review round on #493), and
- * the one `fs.existsSync` check per top-level entry this costs is negligible
- * (CodeRabbit review finding on #493 — matches the same node_modules-only
- * rule `createFsListContentOwnedFilesFn` applies when walking a template's
- * own content).
- *
- * @param {string} rootDir
- * @param {string} manifestFilename
- * @returns {string[]} absolute paths, sorted
- */
-export function findTemplateDirs(rootDir, manifestFilename) {
-  return fs
-    .readdirSync(rootDir, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() && entry.name !== 'node_modules')
-    .map((entry) => path.join(rootDir, entry.name))
-    .filter((dir) => fs.existsSync(path.join(dir, manifestFilename)))
-    .sort();
-}
+import { findTemplateDirs } from './template-discovery.mjs';
 
 /**
  * @param {unknown} error

@@ -40,6 +40,7 @@ import path from 'node:path';
 import process from 'node:process';
 import { pathToFileURL } from 'node:url';
 import { templatePinnedEcosystemPackageDirs } from './template-ecosystem-packages.mjs';
+import { MANIFEST_FILENAME, findTemplateDirs } from './template-discovery.mjs';
 
 // Mirrors `DEPENDENCY_FIELDS` (`packages/cli/src/manifest/validate-content-
 // self-containment.ts`) — kept as a local literal, not an import, so this
@@ -52,13 +53,10 @@ import { templatePinnedEcosystemPackageDirs } from './template-ecosystem-package
 // without adding a build dependency to either script).
 export const DEPENDENCY_FIELDS = ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies'];
 
-// Mirrors `MANIFEST_FILENAME` (`packages/cli/src/manifest/types.ts`) — kept
-// as a local literal rather than an import so this script keeps working
-// straight after `npm ci`, with no `build:packages:cli` prerequisite; a
-// single stable filename literal is a far smaller duplication risk than the
-// package-list duplication `template-ecosystem-packages.mjs` exists to close.
-// Exported for the same sync-guard-test reason as `DEPENDENCY_FIELDS` above.
-export const MANIFEST_FILENAME = 'frontx-template.json';
+// Re-exported so the sync-guard test below (and the failure message this
+// script prints when discovery finds nothing) can name the filename without
+// reaching past `template-discovery.mjs`, which owns it.
+export { MANIFEST_FILENAME };
 
 /**
  * Reads and parses one governed package's `package.json`. FAILS CLOSED on
@@ -295,35 +293,6 @@ export function findDriftedSites(sites, truthVersions) {
       return actual !== undefined && actual !== site.pinnedVersion;
     })
     .map((site) => ({ ...site, actualVersion: truthVersions[site.packageName] }));
-}
-
-/**
- * Every top-level directory at the repo root that carries `frontx-template.json`
- * — a template is defined by its manifest (ADR-0018), not by a `template-*`
- * name prefix. Location- and name-independent: the #470 split is covered
- * whatever the resulting templates end up named (A5 review finding on #493 —
- * a name-prefix glob would vacuously stop finding a renamed/relocated
- * template instead of failing).
- *
- * `node_modules` is the ONE exclusion (install-time output, never something
- * this repo's own tree defines); a dot-prefixed top-level directory (`.git`,
- * `.github`, `.cf-studio`, ...) is NOT excluded — filtering it out would
- * reintroduce exactly the naming/location assumption the manifest-presence
- * principle exists to drop, and the one `fs.existsSync` check per top-level
- * entry this costs is negligible (CodeRabbit review finding on #493 —
- * matches the same node_modules-only rule `validate-templates.mjs` and
- * `createFsListContentOwnedFilesFn` apply).
- *
- * @param {string} rootDir
- * @returns {string[]} absolute paths, sorted
- */
-export function findTemplateDirs(rootDir) {
-  return fs
-    .readdirSync(rootDir, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() && entry.name !== 'node_modules')
-    .map((entry) => path.join(rootDir, entry.name))
-    .filter((dir) => fs.existsSync(path.join(dir, MANIFEST_FILENAME)))
-    .sort();
 }
 
 /**
