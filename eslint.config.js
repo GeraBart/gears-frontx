@@ -233,6 +233,69 @@ export default [
     },
   },
 
+  // @gears-frontx/telemetry: standalone browser SDK — no intra-ecosystem edge, no React.
+  // dep-cruiser cannot see this edge: options.exclude.path drops packages/*/dist and every
+  // workspace import resolves there, so this block is the gate that catches it.
+  // Scoped to src/ to match the two dep-cruiser rules; demo/ consumes the package by name.
+  {
+    files: ['packages/telemetry/src/**/*.ts', 'packages/telemetry/src/**/*.tsx'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@gears-frontx/*', '@gears-frontx/*/*'],
+              message:
+                'SDK VIOLATION: @gears-frontx/telemetry holds no intra-ecosystem package dependency.',
+            },
+            {
+              group: ['react', 'react-dom', 'react-dom/*', 'react/*'],
+              message:
+                'SDK VIOLATION: SDK packages cannot import React.',
+            },
+            {
+              group: ['@gears-frontx/*/src/**'],
+              message:
+                'MONOREPO VIOLATION: Import from package root, not internal paths.',
+            },
+            {
+              group: ['@/*'],
+              message:
+                'PACKAGE VIOLATION: Use relative imports within packages.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+
+  // The hook signature is variadic so a handler of any shape stays assignable, and the record
+  // carries consumer-supplied user data.
+  // TODO: type both against a generic payload and drop this block; follow-up PR.
+  {
+    files: [
+      'packages/telemetry/src/utils/hooks.ts',
+      'packages/telemetry/src/utils/eventTypes.ts',
+    ],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
+    },
+  },
+
+  // The envelope builders rewrite each record field in place to match the collector's wire format,
+  // and the hooks manager dispatches a variadic tuple through a key-indexed handler map.
+  // TODO: build the envelope into a fresh typed object and drop this block; follow-up PR.
+  {
+    files: [
+      'packages/telemetry/src/managers/events.ts',
+      'packages/telemetry/src/managers/hooks.ts',
+    ],
+    rules: {
+      '@typescript-eslint/ban-ts-comment': 'off',
+    },
+  },
+
   // ============ @gears-frontx/mfes BOUNDARY ENFORCEMENT (Phase 10) ============
   // MFES-1/2/3 enforced here via no-restricted-syntax denylist.
   // MFES-4 enforced via dep-cruiser rule frontx-mfes-4-type-format-dep (.dependency-cruiser.cjs).
