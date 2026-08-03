@@ -340,9 +340,9 @@ export default [
         // @cpt-begin:cpt-frontx-constraint-mfes-no-type-format-literals:p10:inst-eslint-rule
         {
           selector:
-            "Literal[value=/gts\\.(frontx\\.(screensets|framework|state|i18n|react)|[a-z]+\\.(screensets|framework|state|i18n))/]",
+            "Literal[value=/gts\\.(frontx\\.(screensets|framework|state|i18n|react|mfes)|[a-z]+\\.(screensets|framework|state|i18n))/]",
           message:
-            'MFES-1 VIOLATION (cpt-frontx-constraint-mfes-no-type-format-literals): @gears-frontx/mfes must not contain type-system-format string literals from solution namespaces. These belong in the type-system plugin or consumer packages.',
+            'MFES-1 VIOLATION (cpt-frontx-constraint-mfes-no-type-format-literals): @gears-frontx/mfes must not contain type-system-format string literals from solution namespaces or the mfes namespace (gts.frontx.mfes.*). These belong in the type-system plugin or consumer packages.',
         },
         // @cpt-end:cpt-frontx-constraint-mfes-no-type-format-literals:p10:inst-eslint-rule
         // @cpt-begin:cpt-frontx-constraint-mfes-no-solution-shared-properties:p10:inst-eslint-rule
