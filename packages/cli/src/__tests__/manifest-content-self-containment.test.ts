@@ -321,29 +321,94 @@ describe('validateContentSelfContainment - tsconfig `paths` mappings', () => {
     expect(result.violations.map((v) => v.field).join(' ')).toContain('compilerOptions.outDir');
   });
 
+  // The local review round completed the `compilerOptions` registry. `baseUrl`
+  // is the finding that motivated it: the check already READ `baseUrl` to
+  // resolve `paths` against, so a tsconfig with an escaping `baseUrl` and no
+  // `paths` map moved its whole module resolution outside the template while
+  // producing no specifier to report.
+  it('a relative `baseUrl` escaping the template root is a violation even with no `paths` map', async () => {
+    const { listContentOwnedFiles, readFile } = fakeTemplate({
+      'packages/framework/tsconfig.json': JSON.stringify({ compilerOptions: { baseUrl: '../../..' } }),
+    });
+    const result = await validateContentSelfContainment('template', manifest(['packages']), listContentOwnedFiles, readFile);
+    expect(result.status).toBe('REJECTED');
+    if (result.status !== 'REJECTED') return;
+    expect(result.violations.map((v) => v.field).join(' ')).toContain('compilerOptions.baseUrl');
+  });
+
+  it.each([
+    ['rootDir', '../../../shared-src'],
+    ['declarationDir', '../../../types'],
+    ['outFile', '../../../bundle.js'],
+    ['tsBuildInfoFile', '../../../.cache/tpl.tsbuildinfo'],
+  ])('an escaping `%s` is a violation', async (option, escapingPath) => {
+    const { listContentOwnedFiles, readFile } = fakeTemplate({
+      'packages/framework/tsconfig.json': JSON.stringify({ compilerOptions: { [option]: escapingPath } }),
+    });
+    const result = await validateContentSelfContainment('template', manifest(['packages']), listContentOwnedFiles, readFile);
+    expect(result.status).toBe('REJECTED');
+    if (result.status !== 'REJECTED') return;
+    expect(result.violations.map((v) => v.field).join(' ')).toContain(`compilerOptions.${option}`);
+  });
+
+  it('an escaping `rootDirs` entry is a violation, and the array index is reported', async () => {
+    const { listContentOwnedFiles, readFile } = fakeTemplate({
+      'packages/framework/tsconfig.json': JSON.stringify({
+        compilerOptions: { rootDirs: ['./src', '../../../generated'] },
+      }),
+    });
+    const result = await validateContentSelfContainment('template', manifest(['packages']), listContentOwnedFiles, readFile);
+    expect(result.status).toBe('REJECTED');
+    if (result.status !== 'REJECTED') return;
+    expect(result.violations.map((v) => v.field).join(' ')).toContain('compilerOptions.rootDirs[1]');
+  });
+
   // False-positive guard, and the reason globs are cut at their first wildcard
   // rather than counted as path segments: every tsconfig the real templates
   // ship looks like this, and none of it names anything outside the root.
-  it('the ordinary in-template file-list shapes are NOT violations', async () => {
+  it('the ordinary in-template file-list and compilerOptions shapes are NOT violations', async () => {
     const { listContentOwnedFiles, readFile } = fakeTemplate({
       'tsconfig.json': JSON.stringify({
         include: ['src/**/*'],
         exclude: ['node_modules', 'dist', '**/__tests__/**', '**/*.test.ts'],
-        compilerOptions: { outDir: './dist', typeRoots: ['./node_modules/@types'] },
+        compilerOptions: { outDir: './dist', rootDir: './src', typeRoots: ['./node_modules/@types'] },
       }),
-      // `rootDir: '../..'` climbs exactly to the template root, no further.
-      'packages/react/tsconfig.test.json': JSON.stringify({
-        include: ['src/**/*', '__tests__/**/*'],
-        compilerOptions: { rootDir: '../..' },
-      }),
+      'tsconfig.app.json': JSON.stringify({ compilerOptions: { baseUrl: '.' } }),
     });
     const result = await validateContentSelfContainment(
       'template',
-      manifest(['tsconfig.json', 'packages']),
+      manifest(['tsconfig.json', 'tsconfig.app.json']),
       listContentOwnedFiles,
       readFile,
     );
     expect(result.status).toBe('VALIDATED');
+  });
+
+  // The sharpest false-positive risk the completed registry brings, and a live
+  // one: `template-shell/packages/react/tsconfig.test.json` really does declare
+  // `rootDir: '../..'`, which climbs exactly two levels from `packages/react` and
+  // lands ON the template root - inside, legally. `..`-segment counting is what
+  // makes that a pass; any check that flagged an ascending path by its text would
+  // turn `npm run validate:templates` red on a template that is correct.
+  it("a `rootDir` climbing exactly to the template root is NOT a violation (template-shell's live shape)", async () => {
+    const { listContentOwnedFiles, readFile } = fakeTemplate({
+      'packages/react/tsconfig.test.json': JSON.stringify({
+        extends: '../../tsconfig.json',
+        compilerOptions: { noEmit: true, rootDir: '../..', types: ['vitest/globals', 'node'] },
+        include: ['src/**/*', '__tests__/**/*'],
+        exclude: ['node_modules', 'dist'],
+      }),
+    });
+    const result = await validateContentSelfContainment('template', manifest(['packages']), listContentOwnedFiles, readFile);
+    expect(result.status).toBe('VALIDATED');
+  });
+
+  it('a `rootDir` one level past the template root IS a violation', async () => {
+    const { listContentOwnedFiles, readFile } = fakeTemplate({
+      'packages/react/tsconfig.test.json': JSON.stringify({ compilerOptions: { rootDir: '../../..' } }),
+    });
+    const result = await validateContentSelfContainment('template', manifest(['packages']), listContentOwnedFiles, readFile);
+    expect(result.status).toBe('REJECTED');
   });
 });
 
@@ -458,7 +523,11 @@ describe('validateContentSelfContainment - carrier discovery and edge cases', ()
     expect(result.status).toBe('VALIDATED');
   });
 
-  it('a malformed (unparseable) carrier file is skipped rather than crashing the check', async () => {
+  // Review finding on #493: this used to expect VALIDATED. A carrier the check
+  // cannot parse is a carrier the check did not inspect, and "we could not look"
+  // must not be indistinguishable from "we looked and it was clean" - silence is
+  // also what a pass looks like.
+  it('a malformed (unparseable) carrier file is a violation naming the file, not a silent skip', async () => {
     const { listContentOwnedFiles, readFile } = fakeTemplate({ 'package.json': 'not-valid-json{{{' });
     const result = await validateContentSelfContainment(
       'template',
@@ -466,7 +535,28 @@ describe('validateContentSelfContainment - carrier discovery and edge cases', ()
       listContentOwnedFiles,
       readFile,
     );
-    expect(result.status).toBe('VALIDATED');
+    expect(result.status).toBe('REJECTED');
+    if (result.status !== 'REJECTED') return;
+    expect(result.violations).toHaveLength(1);
+    expect(result.violations[0]?.field).toBe('package.json');
+    expect(result.violations[0]?.message).toMatch(/not valid JSON/i);
+  });
+
+  it('a carrier that was enumerated but cannot be read is a violation naming the file and the carrier kind', async () => {
+    // Enumerated (the manifest declares it) but absent from the fixture's file
+    // map, so `readFile` rejects - the shape a file deleted between listing and
+    // reading, or one the OS refuses, actually takes.
+    const listContentOwnedFiles: ListContentOwnedFilesFn = async () => ['packages/auth/tsconfig.json'];
+    const readFile: ReadFileFn = async () => {
+      throw new Error('EACCES: permission denied');
+    };
+
+    const result = await validateContentSelfContainment('template', manifest(['packages']), listContentOwnedFiles, readFile);
+
+    expect(result.status).toBe('REJECTED');
+    if (result.status !== 'REJECTED') return;
+    expect(result.violations[0]?.field).toBe('packages/auth/tsconfig.json');
+    expect(result.violations[0]?.message).toMatch(/tsconfig carrier that could not be read/i);
   });
 
   it('multiple violations across multiple carriers are all reported', async () => {

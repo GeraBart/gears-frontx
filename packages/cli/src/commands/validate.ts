@@ -1,7 +1,12 @@
 // @cpt-flow:cpt-frontx-flow-template-manifest-validate-for-publication:p1
 // @cpt-dod:cpt-frontx-dod-template-manifest-validate-command:p1
 // @cpt-dod:cpt-frontx-dod-template-manifest-content-self-containment:p2
-import type { ListContentOwnedFilesFn, ManifestViolation, ReadFileFn } from '../manifest/types';
+import type {
+  ListContentOwnedFilesFn,
+  ManifestValidationResult,
+  ManifestViolation,
+  ReadFileFn,
+} from '../manifest/types';
 import { MANIFEST_FILENAME } from '../manifest/types';
 import { validateManifestContract } from '../manifest/validate-contract';
 import { validateContentSelfContainment } from '../manifest/validate-content-self-containment';
@@ -63,7 +68,28 @@ export async function validateCommand(
   // @cpt-end:cpt-frontx-flow-template-manifest-validate-for-publication:p1:inst-if-rejected
 
   // @cpt-begin:cpt-frontx-flow-template-manifest-validate-for-publication:p2:inst-delegate-to-content-algo
-  const contentResult = await validateContentSelfContainment(templateDir, raw, listContentOwnedFilesFn, readFileFn);
+  // The command is the seam where an IO failure becomes a result, exactly as it
+  // already is for the manifest read above. `ListContentOwnedFilesFn` has no
+  // error channel by design - the algorithm behind it never touches a
+  // filesystem - so a real `readdir`/`stat` refusal (a permission-denied
+  // directory, a path that vanished mid-walk) can only arrive here as a throw,
+  // and before this it escaped `validateCommand` as a raw node stack trace that
+  // bypassed the exit-code contract every other failure goes through (review
+  // finding on #493). Catching in the adapter instead would have to invent a
+  // return value for "I could not enumerate", and the only one the signature
+  // allows is an empty list - a fail-open that reads as a clean template.
+  let contentResult: ManifestValidationResult;
+  try {
+    contentResult = await validateContentSelfContainment(templateDir, raw, listContentOwnedFilesFn, readFileFn);
+  } catch (error) {
+    return {
+      ok: false,
+      exitCode: 1,
+      message:
+        `FAIL: template content could not be inspected for self-containment: ` +
+        `${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
   // @cpt-end:cpt-frontx-flow-template-manifest-validate-for-publication:p2:inst-delegate-to-content-algo
 
   // @cpt-begin:cpt-frontx-flow-template-manifest-validate-for-publication:p2:inst-if-content-violations

@@ -274,6 +274,27 @@ describe('validateCommand', () => {
     expect(result.exitCode).toBe(0);
   });
 
+  // Review finding on #493: `ListContentOwnedFilesFn` has no error channel, so
+  // a real `readdir`/`stat` refusal (permission denied, a path that vanished
+  // mid-walk) reaches this command as a throw. It used to escape as a raw node
+  // stack trace, bypassing the exit-code contract every other failure here
+  // goes through.
+  it('converts an enumeration failure into a named failure result rather than throwing', async () => {
+    const readFileFn: ReadFileFn = vi.fn().mockResolvedValue(validManifest());
+    const throwingEnumeration: ListContentOwnedFilesFn = async () => {
+      throw Object.assign(new Error("EACCES: permission denied, scandir '/some/template/src/generated'"), {
+        code: 'EACCES',
+      });
+    };
+
+    const result = await validateCommand('/some/template', readFileFn, throwingEnumeration);
+
+    expect(result.ok).toBe(false);
+    expect(result.exitCode).toBe(1);
+    expect(result.message).toMatch(/could not be inspected for self-containment/i);
+    expect(result.message).toContain('/some/template/src/generated');
+  });
+
   // inst-report-violations / inst-return-fail
   it('reports all violations on REJECTED manifest', async () => {
     // Missing identity, version, and ownership boundaries — multiple violations expected.

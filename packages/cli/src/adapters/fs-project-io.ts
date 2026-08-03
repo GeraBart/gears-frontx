@@ -78,6 +78,16 @@ export function createFsRemoveProjectFileFn(): RemoveProjectFileFn {
  * existence as an escape is the CONTENT check's business only in so far as a
  * carrier declares it, and this adapter's contract is to enumerate the
  * template's own files, not to judge them.
+ *
+ * A `readdir`/`stat` the operating system REFUSES (a permission-denied
+ * directory, most of all) is deliberately NOT swallowed here. The seam's return
+ * type is `Promise<string[]>`, so the only value this function could invent for
+ * "I could not enumerate" is an empty list - which the content check cannot
+ * tell apart from a subtree that is genuinely clean, and a validation gate that
+ * passes because it could not look is worse than one that crashes. The throw is
+ * converted into a named failure result exactly once, at the command boundary
+ * that owns the exit code (`commands/validate.ts`), which is where the manifest
+ * read's own failure is already turned into one.
  */
 export function createFsListContentOwnedFilesFn(): ListContentOwnedFilesFn {
   return async function listContentOwnedFiles(templateDir: string, contentOwnedPath: string): Promise<string[]> {

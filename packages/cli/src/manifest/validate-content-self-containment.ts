@@ -5,15 +5,17 @@
 // boundaries, but nothing there inspects the *content* those boundaries own.
 // A file inside a declared exclusive subtree OR shared-file path can carry a
 // filesystem-path reference that resolves outside the candidate template
-// directory - a `package.json` `file:` specifier; a tsconfig `paths`
-// mapping, `extends` target, or `references[].path` entry; or a lockfile
+// directory - a `package.json` `file:` specifier; a tsconfig `paths` mapping,
+// `extends` target, `references[].path` entry, `files`/`include`/`exclude`
+// entry, or one of the `compilerOptions` path fields (`TSCONFIG_SINGLE_PATH_
+// OPTIONS`/`TSCONFIG_PATH_LIST_OPTIONS` below); or a lockfile
 // workspace-member/`resolved` entry - and the contract check has no way to
 // see it. This is exactly how the #485 escaping-`file:` bug class lived
-// undetected through pre-publish validation. The carrier set above is a
-// registry, not a closed list: adding a carrier is a code change here, not a
-// spec rewrite (deliberately excluded: `package.json` `workspaces` globs and
-// any non-JSON carrier - this module parses structurally and never scans
-// raw text).
+// undetected through pre-publish validation. The carrier set is a registry,
+// not a closed list: adding a carrier is a code change here, not a spec
+// rewrite (deliberately excluded: `package.json` `workspaces` globs and any
+// non-JSON carrier - this module parses structurally and never scans raw
+// text).
 //
 // Generic by construction: every input here is the manifest's OWN declared
 // content-owning paths (exclusive subtrees plus shared-file paths) and the
@@ -22,6 +24,10 @@
 // `cpt-frontx-constraint-cli-template-independence` (CLI-1) - the check
 // inspects whatever candidate it is pointed at and knows nothing else.
 import type { ListContentOwnedFilesFn, ManifestViolation, ManifestValidationResult, ReadFileFn } from './types';
+
+function describeError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 
 // A path-like specifier a carrier file declares, plus the directory it is
 // relative to (POSIX, itself relative to the template root - never an
@@ -130,10 +136,48 @@ function globAnchorPrefix(pattern: string): string {
   return segments.join('/');
 }
 
+// Every `compilerOptions` field whose value IS a path, resolved against the
+// tsconfig file's own directory. Enumerated as data rather than as a chain of
+// `if (typeof co['x'] === 'string')` blocks because the registry's whole point
+// is to be complete: a field is either in this table and checked, or it is a
+// documented omission - never an oversight that reads as a pass.
+//
+// `baseUrl` appears here as a path in its own right, not only as the base
+// `paths` mappings resolve against. It was the one field the check knew about
+// and did not report: a tsconfig with an escaping `baseUrl` and no `paths` map
+// pulls its whole module resolution outside the template while producing no
+// specifier at all to inspect (the review's MEDIUM finding).
+//
+// The remainder are the fields TypeScript resolves as single paths and no
+// version of this registry had yet: `rootDir` bounds which sources the program
+// may contain, and `declarationDir`/`outFile`/`tsBuildInfoFile` (like the
+// already-covered `outDir`) name where the build WRITES - a template whose
+// build writes outside its own tree is not self-contained in the more literal
+// sense of the two.
+//
+// The documented omission is `types`: its entries are type-PACKAGE names
+// resolved through `typeRoots`/`node_modules`, not paths, so containment says
+// nothing about them (`types: ["vitest/globals", "node"]` is what every
+// template tsconfig actually holds). `paths` is handled separately above
+// because it alone resolves against `baseUrl` rather than the tsconfig's own
+// directory.
+const TSCONFIG_SINGLE_PATH_OPTIONS = [
+  'baseUrl',
+  'rootDir',
+  'outDir',
+  'declarationDir',
+  'outFile',
+  'tsBuildInfoFile',
+] as const;
+
+// The same, for the `compilerOptions` fields whose value is an ARRAY of paths.
+const TSCONFIG_PATH_LIST_OPTIONS = ['typeRoots', 'rootDirs'] as const;
+
 // Every path-like specifier a tsconfig file's own shape declares (A2 review
 // finding on #493 widened this from `paths` alone to `extends` and
 // `references[].path`; a CodeRabbit finding widened it again to the file-list
-// and output fields - same file, same parse, same escape semantics).
+// fields; the local review round completed the `compilerOptions` tables above -
+// same file, same parse, same escape semantics throughout).
 // `paths` mapping entries resolve against `baseUrl` (default `.`); everything
 // else here resolves against the tsconfig file's OWN directory instead, per
 // TypeScript's own resolution rule for each.
@@ -167,21 +211,22 @@ function extractTsconfigSpecifiers(fileRelPath: string, parsed: unknown): PathSp
       }
     }
 
-    // `typeRoots` and `outDir` resolve against the tsconfig's OWN directory,
-    // not `baseUrl` - an output directory or a type-root outside the template
-    // makes the template's build depend on, or write into, a tree it does not
-    // own.
-    const typeRoots = co['typeRoots'];
-    if (Array.isArray(typeRoots)) {
-      typeRoots.forEach((value, i) => {
-        if (typeof value !== 'string') return;
-        results.push({ description: `compilerOptions.typeRoots[${i}]`, rawPath: value, baseDir: tsconfigDir });
-      });
+    // Every registry field resolves against the tsconfig's OWN directory, not
+    // `baseUrl` - `baseUrl` is one of them, and resolving it against itself is
+    // the one thing it cannot mean.
+    for (const option of TSCONFIG_SINGLE_PATH_OPTIONS) {
+      const value = co[option];
+      if (typeof value !== 'string') continue;
+      results.push({ description: `compilerOptions.${option}`, rawPath: value, baseDir: tsconfigDir });
     }
 
-    const outDir = co['outDir'];
-    if (typeof outDir === 'string') {
-      results.push({ description: 'compilerOptions.outDir', rawPath: outDir, baseDir: tsconfigDir });
+    for (const option of TSCONFIG_PATH_LIST_OPTIONS) {
+      const values = co[option];
+      if (!Array.isArray(values)) continue;
+      values.forEach((value, i) => {
+        if (typeof value !== 'string') return;
+        results.push({ description: `compilerOptions.${option}[${i}]`, rawPath: value, baseDir: tsconfigDir });
+      });
     }
   }
 
@@ -364,19 +409,34 @@ export async function validateContentSelfContainment(
       const kind = carrierKind(fileRelPath);
       if (kind === null) continue;
 
+      // @cpt-begin:cpt-frontx-algo-template-manifest-validate-content-self-containment:p2:inst-csc-parse-carrier
+      // A carrier this check cannot inspect is a REJECTION, not a skip. Both
+      // failure paths below used to `continue`, which made "we could not look"
+      // indistinguishable from "we looked and it was clean" - the one shape a
+      // validation gate must never have, since silence is also what a pass
+      // looks like (review finding on #493). The file was enumerated as the
+      // template's own declared content, so a template shipping a carrier
+      // nobody can read cannot be certified self-contained.
       let raw: string;
       try {
         raw = await readFile(`${templateDir}/${fileRelPath}`);
-      } catch {
-        continue; // vanished between listing and reading - not this check's concern
+      } catch (error) {
+        violations.push({
+          field: fileRelPath,
+          message: `is a declared ${kind} carrier that could not be read (${describeError(error)}), so its path references cannot be checked`,
+        });
+        continue;
       }
 
-      // @cpt-begin:cpt-frontx-algo-template-manifest-validate-content-self-containment:p2:inst-csc-parse-carrier
       let parsed: unknown;
       try {
         parsed = JSON.parse(raw);
-      } catch {
-        continue; // malformed JSON is the contract/build's concern, not duplicated here
+      } catch (error) {
+        violations.push({
+          field: fileRelPath,
+          message: `is a declared ${kind} carrier that is not valid JSON (${describeError(error)}), so its path references cannot be checked`,
+        });
+        continue;
       }
       // @cpt-end:cpt-frontx-algo-template-manifest-validate-content-self-containment:p2:inst-csc-parse-carrier
 
