@@ -1,17 +1,29 @@
 // @cpt-dod:cpt-frontx-dod-unit-test-generation-and-agent-verification-standard-test-convention:p1
 import path from 'node:path';
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { describe, expect, it, vi } from 'vitest';
 import {
   backupSuffix,
   builtEntryPointOf,
   linkEcosystemPackages,
-  linkedPackageDirs,
   runCli,
   symlinkSpecFor,
   templateDirName,
 } from './link-template-ecosystem.mjs';
 
 const repoRoot = '/repo';
+
+/**
+ * The set a run is handed, as a FIXTURE rather than as production knowledge.
+ * The script no longer declares one: `runCli` derives it from what the template
+ * pins (`templatePinnedPackageDirs`, covered in
+ * `template-ecosystem-packages.test.mjs` against a real fixture tree), and
+ * everything below tests what `linkEcosystemPackages` does with a set it is
+ * given - which is why these cases can run against a fake filesystem at all.
+ * Three entries, because the interesting rollback states need a middle one.
+ */
+const linkedPackageDirs = ['api', 'mfes', 'gts-plugin'];
 const scopeDir = path.join(repoRoot, templateDirName, 'node_modules', '@gears-frontx');
 
 /** Tarball content npm wrote: the thing a failed run must not destroy. */
@@ -236,7 +248,7 @@ describe('linkEcosystemPackages', () => {
   it('replaces exactly the pinned ecosystem directories and nothing else', () => {
     const { fs, calls, tree } = builtTree();
 
-    const result = linkEcosystemPackages({ repoRoot, fs, platform: 'linux' });
+    const result = linkEcosystemPackages({ repoRoot, packageDirs: linkedPackageDirs, fs, platform: 'linux' });
 
     expect(result.ok).toBe(true);
     expect(result.linked).toEqual(linkedPackageDirs);
@@ -254,7 +266,7 @@ describe('linkEcosystemPackages', () => {
     const absent = linkedPackageDirs[0];
     tree.delete(path.join(scopeDir, absent));
 
-    const result = linkEcosystemPackages({ repoRoot, fs, platform: 'linux' });
+    const result = linkEcosystemPackages({ repoRoot, packageDirs: linkedPackageDirs, fs, platform: 'linux' });
 
     expect(result.ok).toBe(true);
     expect(scopeEntries(tree)).toEqual(linkedScope);
@@ -263,7 +275,7 @@ describe('linkEcosystemPackages', () => {
   it('refuses when the template has never been installed', () => {
     const { fs, calls } = fakeFs({});
 
-    const result = linkEcosystemPackages({ repoRoot, fs, platform: 'linux' });
+    const result = linkEcosystemPackages({ repoRoot, packageDirs: linkedPackageDirs, fs, platform: 'linux' });
 
     expect(result).toMatchObject({ ok: false, reason: 'template-not-installed' });
     expect(result.message).toContain('npm ci');
@@ -280,7 +292,7 @@ describe('linkEcosystemPackages', () => {
       fs.existsSync,
     );
 
-    const result = linkEcosystemPackages({ repoRoot, fs, platform: 'linux' });
+    const result = linkEcosystemPackages({ repoRoot, packageDirs: linkedPackageDirs, fs, platform: 'linux' });
 
     expect(result).toMatchObject({ ok: false, reason: 'build-missing' });
     expect(result.message).toContain(path.join('packages/mfes', './dist/index.js'));
@@ -296,7 +308,7 @@ describe('linkEcosystemPackages', () => {
         ? false
         : original(target))(fs.existsSync);
 
-    const result = linkEcosystemPackages({ repoRoot, fs, platform: 'linux' });
+    const result = linkEcosystemPackages({ repoRoot, packageDirs: linkedPackageDirs, fs, platform: 'linux' });
 
     expect(result.ok).toBe(false);
     expect(calls.links).toEqual([]);
@@ -310,7 +322,7 @@ describe('linkEcosystemPackages', () => {
       fs.existsSync,
     );
 
-    const result = linkEcosystemPackages({ repoRoot, fs, platform: 'linux' });
+    const result = linkEcosystemPackages({ repoRoot, packageDirs: linkedPackageDirs, fs, platform: 'linux' });
 
     expect(result).toMatchObject({ ok: false, reason: 'source-missing' });
   });
@@ -325,7 +337,7 @@ describe('linkEcosystemPackages', () => {
       text: '{ "name": "@gears-frontx/mfes"',
     });
 
-    const result = linkEcosystemPackages({ repoRoot, fs, platform: 'linux' });
+    const result = linkEcosystemPackages({ repoRoot, packageDirs: linkedPackageDirs, fs, platform: 'linux' });
 
     expect(result).toMatchObject({ ok: false, reason: 'source-missing' });
     expect(result.message).toContain('packages/mfes/package.json is unreadable');
@@ -341,7 +353,7 @@ describe('linkEcosystemPackages', () => {
     const [first, second] = linkedPackageDirs;
     fs.symlinkSync = failSymlinkAt(fs, path.join(scopeDir, second));
 
-    const result = linkEcosystemPackages({ repoRoot, fs, platform: 'linux' });
+    const result = linkEcosystemPackages({ repoRoot, packageDirs: linkedPackageDirs, fs, platform: 'linux' });
 
     expect(result).toMatchObject({
       ok: false,
@@ -364,7 +376,7 @@ describe('linkEcosystemPackages', () => {
     const secondLink = path.join(scopeDir, second);
     fs.renameSync = failRenameAt(fs, ({ from }) => from === secondLink);
 
-    const result = linkEcosystemPackages({ repoRoot, fs, platform: 'linux' });
+    const result = linkEcosystemPackages({ repoRoot, packageDirs: linkedPackageDirs, fs, platform: 'linux' });
 
     expect(result).toMatchObject({
       ok: false,
@@ -391,7 +403,7 @@ describe('linkEcosystemPackages', () => {
     fs.symlinkSync = failSymlinkAt(fs, secondLink);
     fs.renameSync = failRenameAt(fs, ({ to }) => to === secondLink);
 
-    const result = linkEcosystemPackages({ repoRoot, fs, platform: 'linux' });
+    const result = linkEcosystemPackages({ repoRoot, packageDirs: linkedPackageDirs, fs, platform: 'linux' });
 
     expect(result).toMatchObject({
       ok: false,
@@ -418,7 +430,7 @@ describe('linkEcosystemPackages', () => {
     tree.delete(path.join(scopeDir, first));
     fs.symlinkSync = failSymlinkAt(fs, path.join(scopeDir, third));
 
-    const result = linkEcosystemPackages({ repoRoot, fs, platform: 'linux' });
+    const result = linkEcosystemPackages({ repoRoot, packageDirs: linkedPackageDirs, fs, platform: 'linux' });
 
     expect(result).toMatchObject({
       ok: false,
@@ -438,6 +450,8 @@ describe('linkEcosystemPackages', () => {
 });
 
 describe('runCli', () => {
+  const cliOptions = { repoRoot, packageDirs: linkedPackageDirs, platform: 'linux' };
+
   // With the pins on 0.3.0-alpha.1 the template builds without these links, so
   // a stale link no longer announces itself - success is the case that needs the
   // warning now.
@@ -445,10 +459,26 @@ describe('runCli', () => {
     const { fs } = builtTree();
     const log = vi.fn();
 
-    const exitCode = runCli({ repoRoot, fs, platform: 'linux', log, error: vi.fn() });
+    const exitCode = runCli({ ...cliOptions, fs, log, error: vi.fn() });
 
     expect(exitCode).toBe(0);
     expect(log.mock.calls.flat().join('\n')).toContain('nothing will tell you when these');
+  });
+
+  // Review finding on round 2: the note used to say `npm install` and
+  // `clean:artifacts` "both undo them", which is wrong about the second and
+  // therefore sends a developer to the wrong fix. `npm install` replaces the
+  // links; `clean:artifacts` leaves them and deletes what they resolve through.
+  it('tells `npm install` (links replaced) apart from `clean:artifacts` (linked targets deleted)', () => {
+    const { fs } = builtTree();
+    const log = vi.fn();
+
+    runCli({ ...cliOptions, fs, log, error: vi.fn() });
+    const printed = log.mock.calls.flat().join('\n');
+
+    expect(printed).toMatch(/`npm install` inside template-shell[\s\S]*REPLACES/);
+    expect(printed).toMatch(/clean:artifacts[\s\S]*leaves the links in place and deletes the packages\/\*\/dist/);
+    expect(printed).toContain('npm run build:packages');
   });
 
   it('exits 1 and prints the refusal without listing any link as done', () => {
@@ -456,11 +486,48 @@ describe('runCli', () => {
     const log = vi.fn();
     const error = vi.fn();
 
-    const exitCode = runCli({ repoRoot, fs, platform: 'linux', log, error });
+    const exitCode = runCli({ ...cliOptions, fs, log, error });
 
     expect(exitCode).toBe(1);
     expect(error).toHaveBeenCalledOnce();
     expect(log).not.toHaveBeenCalled();
+  });
+
+  // The set is derived from the template's own pins, so an empty one means the
+  // dev loop this script exists for has no subject - either the template stopped
+  // pinning anything to the registry, or the derivation broke. Linking nothing
+  // and exiting 0 would be indistinguishable from a successful run.
+  it('refuses, rather than exiting 0, when nothing is pinned to link', () => {
+    const { fs } = builtTree();
+    const error = vi.fn();
+
+    const exitCode = runCli({ repoRoot, packageDirs: [], platform: 'linux', fs, log: vi.fn(), error });
+
+    expect(exitCode).toBe(1);
+    expect(error.mock.calls.flat().join('\n')).toContain('no packages/* directory is pinned');
+  });
+
+  // The derivation reads real manifests and fails closed on an unreadable one;
+  // that has to reach the developer as this script's own refusal, naming the
+  // file, not as a node stack trace. The one case here that needs a real
+  // checkout on disk, since the derivation is deliberately not routed through
+  // the injected `fs`.
+  it('reports a failure inside the set derivation as an exit code naming the file', async () => {
+    const realRoot = await mkdtemp(path.join(tmpdir(), 'frontx-link-derive-'));
+    try {
+      await mkdir(path.join(realRoot, 'packages', 'api'), { recursive: true });
+      await writeFile(path.join(realRoot, 'packages', 'api', 'package.json'), '{ "name": broken');
+      const error = vi.fn();
+
+      const exitCode = runCli({ repoRoot: realRoot, fs: builtTree().fs, platform: 'linux', log: vi.fn(), error });
+
+      expect(exitCode).toBe(1);
+      const printed = error.mock.calls.flat().join('\n');
+      expect(printed).toContain('Cannot link:');
+      expect(printed).toContain(path.join('packages', 'api', 'package.json'));
+    } finally {
+      await rm(realRoot, { recursive: true, force: true });
+    }
   });
 
   // A filesystem exception escaping the core would surface as a stack trace and
@@ -470,7 +537,7 @@ describe('runCli', () => {
     fs.symlinkSync = failSymlinkAt(fs, path.join(scopeDir, linkedPackageDirs[1]));
     const error = vi.fn();
 
-    const exitCode = runCli({ repoRoot, fs, platform: 'linux', log: vi.fn(), error });
+    const exitCode = runCli({ ...cliOptions, fs, log: vi.fn(), error });
 
     expect(exitCode).toBe(1);
     expect(error.mock.calls.flat().join('\n')).toContain('EPERM');

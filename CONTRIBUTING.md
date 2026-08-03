@@ -114,7 +114,7 @@ npm run dev:template:link    # point the template's node_modules at the packages
 cd template-shell && npm run dev
 ```
 
-`dev:template:link` ([`scripts/link-template-ecosystem.mjs`](scripts/link-template-ecosystem.mjs)) only repoints those three directories inside the template's `node_modules`; it never writes `package.json` or `package-lock.json`, so nothing from the dev loop can leak into a seeded project. What each linked directory then resolves through is its `dist/`, which is why the script refuses to link an unbuilt package instead of leaving the failure to surface later as a missing module.
+`dev:template:link` ([`scripts/link-template-ecosystem.mjs`](scripts/link-template-ecosystem.mjs)) only repoints the directories inside the template's `node_modules` that the template pins to the registry - it reads the template's own manifests to find out which those are, so a newly pinned package is linked without anyone editing the script. It never writes `package.json` or `package-lock.json`, so nothing from the dev loop can leak into a seeded project. What each linked directory then resolves through is its `dist/`, which is why the script refuses to link an unbuilt package instead of leaving the failure to surface later as a missing module.
 
 > **Forgetting to relink is silent.** The template builds, type-checks and tests green against the published pins on its own, so a missing relink produces no error anywhere - it just means the `packages/*` edits you are testing are not the code being run. Nothing warns you. Relink after every ecosystem change, and when a template-side result contradicts a change you just made in `packages/*`, suspect the link first.
 
@@ -127,7 +127,7 @@ Two ways to lose the links without meaning to:
 - **any `npm install` inside `template-shell`** — say, while adding a dependency — reifies the tree from the lockfile and silently puts the registry tarballs back. Relink afterwards.
 - **`npm run clean:artifacts`** at the repo root removes `packages/*/dist`, so the links survive but point at nothing. `npm run build:packages` restores them; the link script refuses to run at all if the build is missing.
 
-The dev loop uses symlinks on macOS and Linux and directory junctions on Windows, so no elevated shell or Developer Mode is required on any platform. If a link cannot be created anyway, the run moves each installed directory aside rather than deleting it, so it rolls the whole tree back to the pinned versions and names what it could not restore - a failed link costs a re-run, not an `npm ci`.
+The dev loop uses symlinks on macOS and Linux and directory junctions on Windows, so no elevated shell or Developer Mode is required on any platform. If a link cannot be created anyway, the run moves each installed directory aside rather than deleting it, so it rolls the tree back to the pinned versions and names what it could not restore. Read that last part: a failed link usually costs only a re-run, but if the rollback itself could not put a directory back, the message says so and names it - and that case does need `npm ci` inside `template-shell`, exactly as the message instructs.
 
 ## Validation
 

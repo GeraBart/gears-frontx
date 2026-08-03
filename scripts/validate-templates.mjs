@@ -125,5 +125,8 @@ export async function runCli(options = {}) {
 const isEntryPoint = process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href;
 
 if (isEntryPoint) {
-  process.exit(await runCli());
+  // `process.exitCode` rather than `process.exit()`: the latter can truncate a
+  // still-flushing stderr write, which for a guard means losing the very
+  // violation list that says what failed.
+  process.exitCode = await runCli();
 }
