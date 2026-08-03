@@ -167,6 +167,7 @@ export class DefaultMfeRegistry extends MfeRegistry {
       extensionManager: this.extensionManager,
       resolveHandler: (entryTypeId) => this.resolveHandler(entryTypeId),
       coordinator: this.coordinator,
+      typeSystem: this.typeSystem,
       triggerLifecycle: (extensionId, stageId) =>
         this.triggerLifecycleStageInternal(extensionId, stageId),
       executeActionsChain: (chain) => this.executeActionsChain(chain),
@@ -357,9 +358,12 @@ export class DefaultMfeRegistry extends MfeRegistry {
     );
 
     // Step 8: Fire-and-forget 'init' lifecycle stage (errors logged to console.error).
+    // The stage ID comes from the injected plugin: MFES-1 forbids this package
+    // from spelling a concrete type-format literal, and a consumer whose stages
+    // live in another notation would otherwise never be matched.
     this.triggerDomainOwnLifecycleStageInternal(
       declaration.id,
-      'gts.frontx.mfes.lifecycle.stage.v1~frontx.mfes.lifecycle.init.v1'
+      this.typeSystem.resolveLifecycleStageInitId()
     ).catch(error => {
       console.error('[DefaultMfeRegistry] Domain init error:', error, { domainId: declaration.id });
     });
