@@ -16,6 +16,6 @@
  * @packageDocumentation
  */
 
-import { DefaultMfeRegistryFactory, type MfeRegistryFactory } from '@gears-frontx/mfes';
+import { createMfeRegistryFactory, type MfeRegistryFactory } from '@gears-frontx/mfes';
 
-export const mfeRegistryFactory: MfeRegistryFactory = new DefaultMfeRegistryFactory();
+export const mfeRegistryFactory: MfeRegistryFactory = createMfeRegistryFactory();

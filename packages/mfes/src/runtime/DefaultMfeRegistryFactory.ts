@@ -2,8 +2,12 @@
  * DefaultMfeRegistryFactory - Concrete Factory Implementation
  *
  * Factory-with-cache implementation for creating MfeRegistry instances.
- * This class is NOT exported from the public barrel - it's an internal
- * implementation detail.
+ * The class is NOT exported from the public barrel: each instance owns the
+ * registry it cached and the plugin that registry closed over, so a consumer
+ * able to construct its own instance could hand out a second registry bound
+ * to a different plugin - exactly the divergence the cache exists to refuse.
+ * `createMfeRegistryFactory` is the one creation path out of this module; the
+ * composition root that calls it owns the single factory an application uses.
  *
  * @packageDocumentation
  * @internal
@@ -25,7 +29,7 @@ import { DefaultMfeRegistry } from './DefaultMfeRegistry';
  *
  * This is the ONLY code (besides test files) that imports DefaultMfeRegistry.
  *
- * @internal - Not exported from public barrel
+ * @internal - reachable only through createMfeRegistryFactory
  */
 export class DefaultMfeRegistryFactory extends MfeRegistryFactory {
   private instance: MfeRegistry | null = null;
@@ -76,4 +80,19 @@ export class DefaultMfeRegistryFactory extends MfeRegistryFactory {
     // @cpt-end:cpt-frontx-state-mfe-registry-factory-cache:p1:inst-state-fc-01
     // @cpt-end:cpt-frontx-flow-mfe-registry-factory-build:p1:inst-flow-fb-03
   }
+}
+
+/**
+ * Create a MfeRegistryFactory for a composition root to own.
+ *
+ * The declared return type is the abstract contract, which keeps the concrete
+ * class off the package's public surface and leaves the implementation behind
+ * it substitutable. Each call returns a factory with its own empty cache, so
+ * an application creates one and shares it; tests get isolation by creating
+ * their own rather than by resetting shared state.
+ *
+ * @returns A factory whose first build() fixes the registry and its plugin
+ */
+export function createMfeRegistryFactory(): MfeRegistryFactory {
+  return new DefaultMfeRegistryFactory();
 }

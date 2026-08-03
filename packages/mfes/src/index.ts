@@ -143,7 +143,9 @@ export {
 
 // Default registry — concrete facade implementation (Stage 1 extraction)
 export { DefaultMfeRegistry } from './runtime/DefaultMfeRegistry';
-export { DefaultMfeRegistryFactory } from './runtime/DefaultMfeRegistryFactory';
+// Only the creation function crosses the barrel: the concrete factory stays
+// internal so no consumer can build a rival registry past the composition root
+export { createMfeRegistryFactory } from './runtime/DefaultMfeRegistryFactory';
 
 // Lifecycle manager — abstract contract and default implementation
 // (aliased: distinct from mount-manager's ActionChainExecutor, which also carries ChainExecutionOptions)
