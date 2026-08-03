@@ -12,39 +12,31 @@
  *
  * Every case asserts the stage id the runtime actually dispatched, not merely
  * that the resolver ran, so a runtime that called the resolver and then fired
- * something else still fails:
- * - init/destroyed run through DefaultMfeRegistry's real domain-lifecycle
- *   pipeline. The domain declares a hook bound to each fake stage id, and
- *   DefaultLifecycleManager executes a hook only when `hook.stage` equals the
- *   dispatched id — so the hook's action chain firing IS the id assertion.
- * - activated/deactivated run through DefaultMountManager, whose
- *   `triggerLifecycle` collaborator is the dispatch boundary: the recorded
- *   stage ids are exactly what the registry's lifecycle manager would receive.
- *   Driving these from the registry instead needs a working MFE handler
- *   fixture, which is outside this change.
+ * something else still fails: every stage runs through DefaultMfeRegistry's
+ * real lifecycle pipeline, the entity declares a hook bound to each fake stage
+ * id, and DefaultLifecycleManager executes a hook only when `hook.stage`
+ * equals the dispatched id — so the hook's action chain firing IS the id
+ * assertion. init/destroyed are declared on the domain, activated/deactivated
+ * on an extension driven through the domain's mounter.
  */
 // @cpt-algo:cpt-frontx-algo-type-substrate-port-type-of-resolution:p2
 import { describe, it, expect, vi } from 'vitest';
 // @internal — colocated test, direct relative import is permitted.
 import { DefaultMfeRegistry } from '../DefaultMfeRegistry';
-import { DefaultMountManager } from '../default-mount-manager';
-import type { DefaultExtensionManager } from '../default-extension-manager';
-import type { RuntimeBridgeFactory } from '../runtime-bridge-factory';
-import { RuntimeCoordinator, type RuntimeConnection } from '../coordination/types';
-import type { MfeRegistry } from '../../registry/MfeRegistry';
 import type { TypeSystemPlugin } from '../../type-substrate';
-import type { ActionsChain, ExtensionDomain } from '../../types';
+import type { ActionsChain, Extension, ExtensionDomain, MfeEntry } from '../../types';
+import {
+  MfeHandler,
+  type ChildMfeBridge,
+  type MfeEntryLifecycle,
+} from '../../handler/types';
+import { MfeBridgeFactoryDefault } from '../../handler/mfe-bridge-factory-default';
 import { ExtensionDomainImplementation } from '../ExtensionDomainImplementation';
 import { ExtensionDomainImplementationFactory } from '../ExtensionDomainImplementationFactory';
 import type { DomainContext } from '../DomainContext';
 import { ConcurrentMountStrategy } from '../mount-strategies';
 import type { ContainerHooks } from '../mount-strategy';
 import { ActionHandler } from '../../mediator/types';
-
-// The manager's config shape is declared inline on its constructor; deriving it
-// keeps the stub builder below tied to the real type, so a newly required
-// config field fails to compile here instead of passing as a shapeless double.
-type MountManagerConfig = ConstructorParameters<typeof DefaultMountManager>[0];
 
 // Fake non-GTS notation for the four lifecycle stages. Deliberately NOT in
 // the GTS namespace - if the runtime resolved any stage through a literal
@@ -56,18 +48,27 @@ const FAKE_STAGE_DESTROYED = 'cti.example.lifecycle.stage~destroyed';
 const FAKE_ACTION_LOAD_EXT = 'cti.example.action~load_ext.v1~';
 const FAKE_ACTION_MOUNT_EXT = 'cti.example.action~mount_ext.v1~';
 const FAKE_ACTION_UNMOUNT_EXT = 'cti.example.action~unmount_ext.v1~';
-// Dispatched by the domain's init/destroyed hooks. Its handler records the
-// stage that triggered it, turning "which id did the runtime fire" into an
-// observable effect rather than a spy call count.
+// Dispatched by every lifecycle hook below. Its handler records the stage that
+// triggered it, turning "which id did the runtime fire" into an observable
+// effect rather than a spy call count.
 const FAKE_ACTION_STAGE_PROBE = 'cti.example.action~stage_probe.v1~';
 
+const ENTRY_BASE_ID = 'cti.example.entry~';
+const ENTRY_ID = `${ENTRY_BASE_ID}widget.v1`;
+const EXTENSION_ID = 'cti.example.extension~widget.v1';
+
 function createNonGtsPlugin(): TypeSystemPlugin {
+  // The entry lives in the plugin rather than in an earlier registration,
+  // which is how `DefaultExtensionManager.resolveEntry` finds it for a first
+  // extension.
+  const registered = new Map<string, unknown>([[ENTRY_ID, makeEntry()]]);
+
   return {
     name: 'NonGtsPlugin',
     version: '1.0.0',
     registerSchema(): void {},
-    getSchema(): undefined {
-      return undefined;
+    getSchema(typeId: string): unknown {
+      return registered.get(typeId);
     },
     register(): void {},
     isTypeOf(typeId: string, baseTypeId: string): boolean {
@@ -135,8 +136,46 @@ function makeDomain(): ExtensionDomain {
       { stage: FAKE_STAGE_INIT, actions_chain: stageProbeChain(FAKE_STAGE_INIT) },
       { stage: FAKE_STAGE_DESTROYED, actions_chain: stageProbeChain(FAKE_STAGE_DESTROYED) },
     ],
-    extensionsLifecycleStages: [],
+    extensionsLifecycleStages: [FAKE_STAGE_ACTIVATED, FAKE_STAGE_DEACTIVATED],
   };
+}
+
+function makeEntry(): MfeEntry {
+  return {
+    id: ENTRY_ID,
+    requiredProperties: [],
+    actions: [],
+    domainActions: [],
+  };
+}
+
+function makeExtension(): Extension {
+  return {
+    id: EXTENSION_ID,
+    domain: DOMAIN_ID,
+    entry: ENTRY_ID,
+    // Hooks target the domain rather than the extension: an extension target
+    // only resolves once the mounted MFE registers a handler of its own, and
+    // the stub lifecycle below registers none.
+    lifecycle: [
+      { stage: FAKE_STAGE_ACTIVATED, actions_chain: stageProbeChain(FAKE_STAGE_ACTIVATED) },
+      { stage: FAKE_STAGE_DEACTIVATED, actions_chain: stageProbeChain(FAKE_STAGE_DEACTIVATED) },
+    ],
+  } as Extension;
+}
+
+/**
+ * Handler whose load resolves immediately to an inert lifecycle. The mount
+ * path only needs a lifecycle object to call; what this test observes is the
+ * stage ids the registry fires around that call, so no module loading,
+ * manifest or blob chain is involved.
+ */
+class StubHandler extends MfeHandler {
+  readonly bridgeFactory = new MfeBridgeFactoryDefault();
+
+  async load(): Promise<MfeEntryLifecycle<ChildMfeBridge>> {
+    return { mount: () => {}, unmount: () => {} };
+  }
 }
 
 class TestHooks implements ContainerHooks {
@@ -231,126 +270,59 @@ describe('non-GTS consumer: domain lifecycle resolves init/destroyed stages thro
   });
 });
 
-// ─── MountManager: activated and deactivated stages ────────────────────────
-//
-// DefaultMountManager in isolation. The extensionManager and coordinator are
-// stubbed to let mountExtension/unmountExtension reach the triggerLifecycle
-// call without driving the full MFE load pipeline.
-//
-// Constraint: `triggerLifecycle` is the dispatch boundary — the registry wires
-// it straight to DefaultLifecycleManager.triggerLifecycleStage — so recording
-// its stageId argument asserts the id the runtime actually dispatched, not just
-// that a resolver ran. Reaching the same point from the registry would need a
-// working MFE handler fixture, which is outside this change.
-
-class StubExtensionManager {
-  // Persists across calls so DefaultMountManager's mount/unmount mutations
-  // (extensionState.mountState = 'mounted' / 'unmounted') survive between
-  // the mount and unmount invocations of getExtensionState().
-  private readonly state = {
-    extension: { domain: 'cti.example.domain.v1' },
-    entry: { id: 'cti.example.entry.v1', domainActions: [] },
-    loadState: 'loaded',
-    mountState: 'unmounted',
-    lifecycle: { mount: async () => {}, unmount: async () => {} },
-    bridge: null as null | { dispose(): void },
-    container: null as null | Element,
-    shadowRoot: undefined as undefined | ShadowRoot,
-    error: undefined as unknown,
-  };
-
-  getExtensionState() {
-    return this.state;
-  }
-  getDomainState() {
-    return {
-      domain: { id: 'cti.example.domain.v1' },
-      implementation: {},
-    };
-  }
-}
-
-class StubCoordinator extends RuntimeCoordinator {
-  get(): RuntimeConnection | undefined {
-    return undefined;
-  }
-  register(): void {}
-  unregister(): void {}
-}
-
-class StubBridgeFactory {
-  createBridge() {
-    const bridge = {
-      instanceId: 'stub',
-      dispose() {},
-      domainId: 'stub',
-      executeActionsChain: async () => {},
-      subscribeToProperty: () => () => {},
-      getProperty: () => undefined,
-      registerActionHandler: () => {},
-    };
-    return { parentBridge: bridge, childBridge: bridge };
-  }
-  disposeBridge() {}
-}
-
-// The three casts below are per-field and deliberate: DefaultExtensionManager,
-// MfeRegistry and RuntimeBridgeFactory each carry a surface far wider than the
-// mount/unmount paths touch, and implementing them in full would assert more
-// about this test's fixtures than it verifies. The declared return type still
-// holds every other field to the real config contract.
-function buildStubMountManagerConfig(
-  plugin: TypeSystemPlugin,
-  triggeredStages: string[]
-): MountManagerConfig {
-  return {
-    extensionManager: new StubExtensionManager() as unknown as DefaultExtensionManager,
-    resolveHandler: () => undefined,
-    coordinator: new StubCoordinator(),
-    typeSystem: plugin,
-    triggerLifecycle: async (_extId: string, stageId: string) => {
-      triggeredStages.push(stageId);
-    },
-    executeActionsChain: async () => {},
-    hostRuntime: {} as unknown as MfeRegistry,
-    registerCatchAllActionHandler: () => {},
-    unregisterCatchAllActionHandler: () => {},
-    registerExtensionActionHandler: () => {},
-    unregisterExtensionActionHandler: () => {},
-    bridgeFactory: new StubBridgeFactory() as unknown as RuntimeBridgeFactory,
-  };
-}
+// ─── Extension lifecycle: activated and deactivated stages ────────────────
 
 describe('non-GTS consumer: mount lifecycle resolves activated/deactivated stages through the plugin', () => {
+  /**
+   * Register the domain and one extension, then mount it through the domain's
+   * mounter — the same route the React slot takes. Returns the probe log with
+   * the domain's own init entry already dropped, so what remains is what the
+   * extension's hooks recorded.
+   */
+  async function mountExtensionThroughRegistry(
+    plugin: TypeSystemPlugin
+  ): Promise<{ registry: DefaultMfeRegistry; stageProbeLog: string[] }> {
+    const stageProbeLog: string[] = [];
+    const registry = new DefaultMfeRegistry({
+      typeSystem: plugin,
+      mfeHandlers: [new StubHandler(ENTRY_BASE_ID)],
+    });
+
+    registry.registerDomain(makeDomain(), new ConcurrentDomainFactory(stageProbeLog));
+    await vi.waitFor(() => expect(stageProbeLog).toEqual([FAKE_STAGE_INIT]));
+    stageProbeLog.length = 0;
+
+    await registry.registerExtension(makeExtension());
+
+    const mounter = registry.getMounter(DOMAIN_ID);
+    mounter.attach(document.createElement('div'));
+    await mounter.mount(EXTENSION_ID, document.createElement('div'));
+
+    return { registry, stageProbeLog };
+  }
+
   // inst-resolve-lifecycle-stage-activated
-  it('dispatches the activated stage id the plugin resolved when an extension mounts', async () => {
+  it('runs the extension hook bound to the activated stage id the plugin resolved once the extension has mounted', async () => {
     const plugin = createNonGtsPlugin();
     const activatedSpy = vi.spyOn(plugin, 'resolveLifecycleStageActivatedId');
-    const triggeredStages: string[] = [];
 
-    const manager = new DefaultMountManager(buildStubMountManagerConfig(plugin, triggeredStages));
+    const { stageProbeLog } = await mountExtensionThroughRegistry(plugin);
 
-    await manager.mountExtension('cti.example.extension.v1', document.createElement('div'));
-
+    expect(stageProbeLog).toEqual([FAKE_STAGE_ACTIVATED]);
     expect(activatedSpy).toHaveBeenCalledWith();
-    expect(triggeredStages).toContain(FAKE_STAGE_ACTIVATED);
   });
 
   // inst-resolve-lifecycle-stage-deactivated
-  it('dispatches the deactivated stage id the plugin resolved when an extension unmounts', async () => {
+  it('runs the extension hook bound to the deactivated stage id the plugin resolved when the extension unmounts', async () => {
     const plugin = createNonGtsPlugin();
     const deactivatedSpy = vi.spyOn(plugin, 'resolveLifecycleStageDeactivatedId');
-    const triggeredStages: string[] = [];
 
-    const manager = new DefaultMountManager(buildStubMountManagerConfig(plugin, triggeredStages));
+    const { registry, stageProbeLog } = await mountExtensionThroughRegistry(plugin);
+    stageProbeLog.length = 0;
 
-    // Mount first so the extension's state flips to 'mounted' for the
-    // unmount path's early-return guard.
-    await manager.mountExtension('cti.example.extension.v1', document.createElement('div'));
-    triggeredStages.length = 0;
-    await manager.unmountExtension('cti.example.extension.v1');
+    await registry.getMounter(DOMAIN_ID).unmount(EXTENSION_ID);
 
+    expect(stageProbeLog).toEqual([FAKE_STAGE_DEACTIVATED]);
     expect(deactivatedSpy).toHaveBeenCalledWith();
-    expect(triggeredStages).toContain(FAKE_STAGE_DEACTIVATED);
   });
 });
