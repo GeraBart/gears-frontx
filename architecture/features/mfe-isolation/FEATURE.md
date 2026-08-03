@@ -19,6 +19,7 @@
 - [5. Definitions of Done](#5-definitions-of-done)
   - [Audited Trust Kernel — Blob Core](#audited-trust-kernel--blob-core)
   - [Instance-Keyed Load Cache](#instance-keyed-load-cache)
+  - [Manifest Reference Resolution](#manifest-reference-resolution)
 - [6. Acceptance Criteria](#6-acceptance-criteria)
 
 <!-- /toc -->
@@ -74,6 +75,7 @@ User-facing interactions that start with an actor and describe the end-to-end fl
 **Error Scenarios**:
 - The expose chunk source cannot be fetched — load fails and the cache entry is evicted for retry
 - The import primitive receives a non-inline-content URL — guard rejects it with a type error before any dynamic import executes
+- The entry names its manifest by id, and neither the handler's own manifest cache nor the type system supplied at handler registration holds a manifest under that id — load fails with an error naming the unresolved reference; a handler that belongs to no registry has no type system to ask and fails the same way
 
 **Steps**:
 1. [x] - `p1` - Actor registers the microfrontend entry with the registry - `inst-register`
@@ -83,6 +85,9 @@ User-facing interactions that start with an actor and describe the end-to-end fl
    1. [x] - `p1` - **RETURN** the cached lifecycle (same blob URLs, same module instance, same lifecycle reference) - `inst-return-cached`
 5. [x] - `p1` - **ELSE** - `inst-else-new-load`
    1. [x] - `p1` - System resolves the MFE manifest from the entry's manifest reference - `inst-resolve-manifest`
+      1. [x] - `p1` - **IF** the reference carries the manifest document itself, System caches it under its own id and uses it for this load - `inst-manifest-inline`
+      2. [x] - `p1` - **ELSE** the reference names the manifest by id: System reads the handler's manifest cache and, on a miss, asks the type system supplied to the handler at registration for the manifest registered under that id, accepting only a value of manifest shape - `inst-manifest-by-id`
+      3. [x] - `p1` - **IF** no source yields a manifest for the id, System raises an MFE load error naming the unresolved reference and the ways to supply it - `inst-manifest-unresolved-raise`
    2. [x] - `p1` - System builds shared-dependency blob URLs in dependency order (leaves first) via the build-shared-dep-blobs algorithm - `inst-build-shared-blobs`
    3. [x] - `p1` - System builds the blob URL chain for the expose chunk and its full static-dependency graph via the blob-url-chain algorithm - `inst-build-expose-chain`
    4. [x] - `p1` - System imports the expose blob URL through the trust-kernel guarded import primitive - `inst-import-expose`
@@ -225,6 +230,20 @@ The system **MUST** key the load cache by the extension instance ID (not the ent
 **Touches**:
 - Entities: `MfeEntry`
 
+### Manifest Reference Resolution
+
+- [x] `p1` - **ID**: `cpt-frontx-dod-mfe-isolation-manifest-reference-resolution`
+
+The system **MUST** accept an entry's manifest either as the document itself or as an id naming a manifest the type system holds. For an id, the handler **MUST** read its own manifest cache first and, on a miss, the type system the registry supplied to it at registration, accepting the answer only when it is of manifest shape and caching it for subsequent loads. The handler **MUST NOT** carry a type system obtained any other way — a handler registered into no registry has none. When no source yields a manifest for the id, the system **MUST** fail the load with an error naming the unresolved reference rather than proceeding with an absent or foreign manifest.
+
+**Implements**:
+- `cpt-frontx-flow-mfe-isolation-load`
+
+**Constraints**: none owned (F8 owns no DESIGN constraint per DECOMPOSITION 2.7)
+
+**Touches**:
+- Entities: `MfeEntry`
+
 ## 6. Acceptance Criteria
 
 - [ ] Each loaded microfrontend evaluates as its own isolated module instance; two extensions sharing the same entry definition receive distinct instance-keyed cache entries and distinct module evaluations
@@ -233,3 +252,5 @@ The system **MUST** key the load cache by the extension instance ID (not the ent
 - [ ] All blob URLs in the instance-keyed load cache are retained for the page lifetime and are never revoked after the import resolves
 - [ ] Shared-dependency source text is deduplicated across MFE loads using a cross-MFE LRU cache keyed by `name@version`; cache entries for failed fetches are evicted to permit retry
 - [ ] On load failure, the cache entry for the failed extension instance is evicted so a subsequent call can attempt a fresh load
+- [ ] An entry whose manifest is named by id loads when the manifest is registered with the type system of the registry the handler was registered into, without the id ever being cached by an earlier load
+- [ ] An entry whose manifest id no source resolves fails the load with a diagnostic naming that reference, both when a type system was supplied and when the handler belongs to no registry

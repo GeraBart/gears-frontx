@@ -130,11 +130,12 @@ Internal system functions and procedures that do not interact with actors direct
 **Output**: The matched `MfeHandler`, or a resolution failure
 
 **Steps**:
-1. [x] - `p1` - Sort the registered handler list by descending `handler.priority` — handlers with equal priority retain insertion order - `inst-algo-hr-01`
-2. [ ] - `p1` - **FOR EACH** handler in sorted order - `inst-algo-hr-02`
+1. [x] - `p1` - Supply the registry's injected `TypeSystemPlugin` to each handler as it is registered, so a handler the developer constructed before any registry existed can resolve the references its own load path owns; matching itself stays with the registry - `inst-algo-hr-attach-type-system`
+2. [x] - `p1` - Sort the registered handler list by descending `handler.priority` — handlers with equal priority retain insertion order - `inst-algo-hr-01`
+3. [ ] - `p1` - **FOR EACH** handler in sorted order - `inst-algo-hr-02`
    1. [ ] - `p1` - Evaluate `typeSystem.isTypeOf(entryTypeId, handler.handledBaseTypeId)` through the injected `TypeSystemPlugin` - `inst-algo-hr-02a`
    2. [x] - `p1` - **IF** `isTypeOf` returns true, **RETURN** this handler as the match — stop iterating - `inst-algo-hr-02b`
-3. [x] - `p1` - **IF** no handler matched after iterating all handlers, **RETURN** resolution failure indicating no registered handler covers the given entry type - `inst-algo-hr-03`
+4. [x] - `p1` - **IF** no handler matched after iterating all handlers, **RETURN** resolution failure indicating no registered handler covers the given entry type - `inst-algo-hr-03`
 
 ### Extension Registration and Entry Storage
 
@@ -234,7 +235,7 @@ The system **MUST** own and orchestrate the complete register → type-validate 
 
 - [x] `p1` - **ID**: `cpt-frontx-dod-mfe-registry-type-contracts`
 
-The system **MUST** define the `MfeHandler` abstract class with `handledBaseTypeId`, `priority`, `bridgeFactory`, and `load(entry, extensionId)` — and MUST NOT include any `canHandle`-style self-selection method on the handler.
+The system **MUST** define the `MfeHandler` abstract class with `handledBaseTypeId`, `priority`, `bridgeFactory`, `load(entry, extensionId)`, and a registration-time `attachTypeSystem(typeSystem)` the base class implements for every handler — and MUST NOT include any `canHandle`-style self-selection method on the handler. Type matching **MUST** remain the registry's, evaluated against `handledBaseTypeId`; the plugin a handler receives **MUST** serve only the references its own load path owns, and registration **MUST** be the sole channel by which a handler obtains one.
 
 **Implements**:
 - `cpt-frontx-algo-mfe-registry-handler-resolution`
@@ -247,7 +248,8 @@ The system **MUST** define the `MfeHandler` abstract class with `handledBaseType
 
 - [ ] The abstract `MfeRegistry` is the only exported public runtime contract; consumers obtain instances via `mfeRegistryFactory.build({ typeSystem })`.
 - [ ] Handler resolution uses `typeSystem.isTypeOf(entryTypeId, handler.handledBaseTypeId)` exclusively — no type-format string literals appear in the registry's resolution logic.
-- [ ] `MfeHandler` declares `handledBaseTypeId`, `priority`, `bridgeFactory`, and `load` — no self-selection predicate.
+- [ ] `MfeHandler` declares `handledBaseTypeId`, `priority`, `bridgeFactory`, `load`, and `attachTypeSystem` — no self-selection predicate.
+- [ ] A handler constructed with no type system and passed to the registry through `mfeHandlers` resolves its own type-system-owned references after registration, with no change at the construction site.
 - [ ] The factory-with-cache pattern returns the same instance on repeated calls with matching configuration, and throws on configuration mismatch.
 - [ ] An extension whose type validation fails is rejected without being placed into its extension domain.
 - [ ] An extension with no matching handler is rejected with a handler-not-found error.

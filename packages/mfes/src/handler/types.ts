@@ -11,6 +11,7 @@
 // @cpt-algo:cpt-frontx-algo-mfe-registry-handler-resolution:p1
 
 import type { MfeEntry, ActionsChain, SharedProperty } from '../types';
+import type { TypeSystemPlugin } from '../type-substrate';
 import { ActionHandler } from '../mediator/types';
 
 /**
@@ -157,8 +158,12 @@ export abstract class MfeBridgeFactory<TBridge extends ChildMfeBridge = ChildMfe
  * - Loading MFE bundles
  * - Creating bridge instances
  *
- * Handler resolution (type hierarchy matching) is performed by the registry
- * using its own TypeSystemPlugin, not by the handler itself.
+ * Handler resolution (type hierarchy matching) stays with the registry, which
+ * matches entries against `handledBaseTypeId` through its own TypeSystemPlugin.
+ * The handler receives that same plugin at registration
+ * ({@link MfeHandler.attachTypeSystem}) for a different job: resolving the
+ * references its own load path owns — a manifest named by id rather than
+ * carried inline — against what the type system holds.
  */
 export abstract class MfeHandler<TEntry extends MfeEntry = MfeEntry, TBridge extends ChildMfeBridge = ChildMfeBridge> {
   /**
@@ -179,12 +184,39 @@ export abstract class MfeHandler<TEntry extends MfeEntry = MfeEntry, TBridge ext
    */
   readonly priority: number;
 
+  /**
+   * The registering registry's type system, or absent while the handler
+   * belongs to no registry.
+   *
+   * Registration is the only channel: a handler is constructed by the host
+   * application (`new MfeHandlerMF(entryBaseTypeId)`) long before any registry
+   * exists, so it cannot be a constructor argument. A handler that is never
+   * registered resolves references from its own state alone and refuses the
+   * ones it cannot.
+   */
+  protected typeSystem?: TypeSystemPlugin;
+
   constructor(
     handledBaseTypeId: string,
     priority: number = 0
   ) {
     this.handledBaseTypeId = handledBaseTypeId;
     this.priority = priority;
+  }
+
+  /**
+   * Receive the type system of the registry this handler is being registered
+   * into. Called by the registry once per handler at registration.
+   *
+   * Implemented on the base class so every handler gains the plugin without
+   * restating the wiring. Registering one handler instance into a second
+   * registry re-points it at that registry's plugin — a handler instance
+   * belongs to one registry at a time.
+   *
+   * @param typeSystem - The registering registry's injected plugin
+   */
+  attachTypeSystem(typeSystem: TypeSystemPlugin): void {
+    this.typeSystem = typeSystem;
   }
 
   /**

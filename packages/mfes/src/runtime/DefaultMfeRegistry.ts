@@ -185,6 +185,13 @@ export class DefaultMfeRegistry extends MfeRegistry {
 
     if (config.mfeHandlers) {
       for (const handler of config.mfeHandlers) {
+        // @cpt-begin:cpt-frontx-algo-mfe-registry-handler-resolution:p1:inst-algo-hr-attach-type-system
+        // Handlers are constructed by the host application, which has no
+        // registry yet and therefore no plugin to hand them. Registration is
+        // where the two meet: without this, a handler resolving a reference
+        // the type system owns (a manifest named by id) has nothing to ask.
+        handler.attachTypeSystem(this.typeSystem);
+        // @cpt-end:cpt-frontx-algo-mfe-registry-handler-resolution:p1:inst-algo-hr-attach-type-system
         this.handlers.push(handler);
       }
       // @cpt-begin:cpt-frontx-algo-mfe-registry-handler-resolution:p1:inst-algo-hr-01
