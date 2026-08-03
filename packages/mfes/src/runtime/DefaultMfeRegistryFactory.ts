@@ -41,28 +41,39 @@ export class DefaultMfeRegistryFactory extends MfeRegistryFactory {
    * @returns The MfeRegistry singleton instance
    * @throws Error if called with different config after first build
    */
-  // @cpt-begin:cpt-frontx-flow-mfe-registry-factory-build:p1:inst-1
-  // @cpt-begin:cpt-frontx-state-mfe-registry-factory-cache:p1:inst-1
+  // @cpt-begin:cpt-frontx-flow-mfe-registry-factory-build:p1:inst-flow-fb-01
   build(config: MfeRegistryConfig): MfeRegistry {
+  // @cpt-end:cpt-frontx-flow-mfe-registry-factory-build:p1:inst-flow-fb-01
+    // @cpt-begin:cpt-frontx-flow-mfe-registry-factory-build:p1:inst-flow-fb-02
     if (this.instance) {
-      // Instance exists - validate config matches
+      // The plugin identity, not its shape, is what the cached registry closed
+      // over: every handler, mediator and domain it built asks that instance
+      // for type resolution, so a second plugin cannot be adopted afterwards.
       if (this.cachedConfig && config.typeSystem !== this.cachedConfig.typeSystem) {
+        // @cpt-begin:cpt-frontx-flow-mfe-registry-factory-build:p1:inst-flow-fb-02a
         throw new Error(
           'MfeRegistry already built with a different TypeSystemPlugin. ' +
           'Cannot rebuild with a different configuration. ' +
           `Expected: ${this.cachedConfig.typeSystem.name}, ` +
           `Got: ${config.typeSystem.name}`
         );
+        // @cpt-end:cpt-frontx-flow-mfe-registry-factory-build:p1:inst-flow-fb-02a
       }
-      // Config matches - return cached instance
+      // @cpt-end:cpt-frontx-flow-mfe-registry-factory-build:p1:inst-flow-fb-02
+
+      // @cpt-begin:cpt-frontx-flow-mfe-registry-factory-build:p1:inst-flow-fb-02b
+      // @cpt-begin:cpt-frontx-state-mfe-registry-factory-cache:p1:inst-state-fc-02
       return this.instance;
+      // @cpt-end:cpt-frontx-state-mfe-registry-factory-cache:p1:inst-state-fc-02
+      // @cpt-end:cpt-frontx-flow-mfe-registry-factory-build:p1:inst-flow-fb-02b
     }
 
-    // No instance yet - create, cache, return
+    // @cpt-begin:cpt-frontx-flow-mfe-registry-factory-build:p1:inst-flow-fb-03
+    // @cpt-begin:cpt-frontx-state-mfe-registry-factory-cache:p1:inst-state-fc-01
     this.cachedConfig = config;
     this.instance = new DefaultMfeRegistry(config);
     return this.instance;
+    // @cpt-end:cpt-frontx-state-mfe-registry-factory-cache:p1:inst-state-fc-01
+    // @cpt-end:cpt-frontx-flow-mfe-registry-factory-build:p1:inst-flow-fb-03
   }
-  // @cpt-end:cpt-frontx-flow-mfe-registry-factory-build:p1:inst-1
-  // @cpt-end:cpt-frontx-state-mfe-registry-factory-cache:p1:inst-1
 }

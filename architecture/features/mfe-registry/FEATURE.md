@@ -99,7 +99,7 @@ User-facing interactions that start with an actor (human or external system) and
 
 ### Build Registry via Factory
 
-- [ ] `p2` - **ID**: `cpt-frontx-flow-mfe-registry-factory-build`
+- [x] `p2` - **ID**: `cpt-frontx-flow-mfe-registry-factory-build`
 
 **Actor**: `cpt-frontx-actor-project-developer`
 
@@ -111,11 +111,11 @@ User-facing interactions that start with an actor (human or external system) and
 - Subsequent call supplies a different `TypeSystemPlugin` — factory throws a configuration mismatch error.
 
 **Steps**:
-1. [ ] - `p1` - Developer calls `mfeRegistryFactory.build` with a configuration containing a `TypeSystemPlugin` - `inst-flow-fb-01`
-2. [ ] - `p1` - **IF** a cached instance already exists, validate that the supplied plugin matches the cached configuration - `inst-flow-fb-02`
-   1. [ ] - `p1` - **IF** the plugin differs, throw a configuration mismatch error and **RETURN** - `inst-flow-fb-02a`
-   2. [ ] - `p1` - **IF** the plugin matches, **RETURN** cached instance - `inst-flow-fb-02b`
-3. [ ] - `p1` - Create a new registry implementation bound to the supplied `TypeSystemPlugin`, cache it alongside the configuration, and **RETURN** the new instance - `inst-flow-fb-03`
+1. [x] - `p1` - Developer calls `mfeRegistryFactory.build` with a configuration containing a `TypeSystemPlugin` - `inst-flow-fb-01`
+2. [x] - `p1` - **IF** a cached instance already exists, validate that the supplied plugin matches the cached configuration - `inst-flow-fb-02`
+   1. [x] - `p1` - **IF** the plugin differs, throw a configuration mismatch error and **RETURN** - `inst-flow-fb-02a`
+   2. [x] - `p1` - **IF** the plugin matches, **RETURN** cached instance - `inst-flow-fb-02b`
+3. [x] - `p1` - Create a new registry implementation bound to the supplied `TypeSystemPlugin`, cache it alongside the configuration, and **RETURN** the new instance - `inst-flow-fb-03`
 
 ## 3. Processes / Business Logic (CDSL)
 
@@ -177,15 +177,15 @@ Internal system functions and procedures that do not interact with actors direct
 
 ### Factory Cache Lifecycle
 
-- [ ] `p2` - **ID**: `cpt-frontx-state-mfe-registry-factory-cache`
+- [x] `p2` - **ID**: `cpt-frontx-state-mfe-registry-factory-cache`
 
 **States**: EMPTY, CACHED
 
 **Initial State**: EMPTY
 
 **Transitions**:
-1. [ ] - `p1` - **FROM** EMPTY **TO** CACHED **WHEN** `build` is called for the first time and a new registry instance is created and stored - `inst-state-fc-01`
-2. [ ] - `p1` - **FROM** CACHED **TO** CACHED **WHEN** `build` is called again with a matching configuration — returns the existing instance - `inst-state-fc-02`
+1. [x] - `p1` - **FROM** EMPTY **TO** CACHED **WHEN** `build` is called for the first time and a new registry instance is created and stored - `inst-state-fc-01`
+2. [x] - `p1` - **FROM** CACHED **TO** CACHED **WHEN** `build` is called again with a matching configuration — returns the existing instance - `inst-state-fc-02`
 
 ## 5. Definitions of Done
 
