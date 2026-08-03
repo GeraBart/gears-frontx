@@ -337,24 +337,42 @@ export default [
     rules: {
       'no-restricted-syntax': [
         'error',
+        // Each selector below is a list covering both spellings of a string constant: a
+        // quoted one is a `Literal`, a backtick one is a `TemplateElement`, so matching
+        // `Literal` alone lets `` `gts.frontx…` `` through the denylist untouched. Both
+        // `value.raw` and `value.cooked` are checked so an escape sequence
+        // (`gts.frontx…`) cannot spell the forbidden text either. A node matching
+        // several branches of one list still reports once. Comments and JSDoc carry no
+        // matching node at all, so naming these ids in prose stays legal.
         // @cpt-begin:cpt-frontx-constraint-mfes-no-type-format-literals:p10:inst-eslint-rule
         {
-          selector:
+          selector: [
             "Literal[value=/gts\\.(frontx\\.(screensets|framework|state|i18n|react|mfes)|[a-z]+\\.(screensets|framework|state|i18n))/]",
+            "TemplateElement[value.raw=/gts\\.(frontx\\.(screensets|framework|state|i18n|react|mfes)|[a-z]+\\.(screensets|framework|state|i18n))/]",
+            "TemplateElement[value.cooked=/gts\\.(frontx\\.(screensets|framework|state|i18n|react|mfes)|[a-z]+\\.(screensets|framework|state|i18n))/]",
+          ].join(', '),
           message:
             'MFES-1 VIOLATION (cpt-frontx-constraint-mfes-no-type-format-literals): @gears-frontx/mfes must not contain type-system-format string literals from solution namespaces or the mfes namespace (gts.frontx.mfes.*). These belong in the type-system plugin or consumer packages.',
         },
         // @cpt-end:cpt-frontx-constraint-mfes-no-type-format-literals:p10:inst-eslint-rule
         // @cpt-begin:cpt-frontx-constraint-mfes-no-solution-shared-properties:p10:inst-eslint-rule
         {
-          selector: "Literal[value=/^(theme|language)$/]",
+          selector: [
+            "Literal[value=/^(theme|language)$/]",
+            "TemplateElement[value.raw=/^(theme|language)$/]",
+            "TemplateElement[value.cooked=/^(theme|language)$/]",
+          ].join(', '),
           message:
             'MFES-2 VIOLATION (cpt-frontx-constraint-mfes-no-solution-shared-properties): @gears-frontx/mfes must not define solution-specific shared-property identifiers (e.g. theme, language). Supply these via the application layer or templates.',
         },
         // @cpt-end:cpt-frontx-constraint-mfes-no-solution-shared-properties:p10:inst-eslint-rule
         // @cpt-begin:cpt-frontx-constraint-mfes-no-layout-domain-values:p10:inst-eslint-rule
         {
-          selector: "Literal[value=/^(header|footer|menu|sidebar|popup|overlay|screen)$/]",
+          selector: [
+            "Literal[value=/^(header|footer|menu|sidebar|popup|overlay|screen)$/]",
+            "TemplateElement[value.raw=/^(header|footer|menu|sidebar|popup|overlay|screen)$/]",
+            "TemplateElement[value.cooked=/^(header|footer|menu|sidebar|popup|overlay|screen)$/]",
+          ].join(', '),
           message:
             'MFES-3 VIOLATION (cpt-frontx-constraint-mfes-no-layout-domain-values): @gears-frontx/mfes must not define specific extension-domain (layout-domain) values. These are solution vocabulary owned by frontx-template-shell (LayoutDomain enum).',
         },
