@@ -412,6 +412,76 @@ describe('validateContentSelfContainment - tsconfig `paths` mappings', () => {
   });
 });
 
+describe('validateContentSelfContainment - JSONC-tolerant tsconfig parsing (review finding on #498)', () => {
+  // `tsc` itself reads `tsconfig*.json` with a JSONC parser, so a tsconfig
+  // with comments and trailing commas is legal and `tsc` accepts it
+  // unmodified. This check used to reject that same file as "not valid
+  // JSON" - a false positive that sent the developer to fix a file that
+  // was never broken. inst-csc-parse-carrier / inst-csc-extract-specifiers
+  it('a tsconfig with line comments, block comments, and trailing commas parses, and an escaping `paths` entry inside it is still flagged', async () => {
+    const { listContentOwnedFiles, readFile } = fakeTemplate({
+      'tsconfig.json': `{
+        // repo base config
+        "compilerOptions": {
+          "baseUrl": ".", /* resolve relative to this file */
+          "paths": {
+            "@gears-frontx/mfes": ["../packages/mfes/src"],
+          },
+        },
+      }`,
+    });
+    const result = await validateContentSelfContainment('template', manifest(['tsconfig.json']), listContentOwnedFiles, readFile);
+    expect(result.status).toBe('REJECTED');
+    if (result.status !== 'REJECTED') return;
+    expect(result.violations[0]?.field).toContain('compilerOptions.paths');
+  });
+
+  it('a tsconfig with comments and trailing commas whose paths all stay inside the template root is NOT a violation', async () => {
+    const { listContentOwnedFiles, readFile } = fakeTemplate({
+      'tsconfig.json': `{
+        // repo base config
+        "include": ["src/**/*",],
+        "compilerOptions": {
+          "strict": true, // strict mode
+        },
+      }`,
+    });
+    const result = await validateContentSelfContainment('template', manifest(['tsconfig.json']), listContentOwnedFiles, readFile);
+    expect(result.status).toBe('VALIDATED');
+  });
+
+  it('a `//` inside a tsconfig string value (an `extends` URL) survives JSONC parsing rather than being cut as a comment', async () => {
+    const { listContentOwnedFiles, readFile } = fakeTemplate({
+      // A bare package specifier is npm-resolved and thus never a violation
+      // (see the `extends` describe block above) - the point here is only
+      // that the URL's `//` must not corrupt the JSON, e.g. by producing an
+      // unterminated string once the parser thinks the comment (and
+      // therefore the rest of the line, including the closing quote) is gone.
+      'tsconfig.json': `{ "extends": "@tsconfig/node20/tsconfig.json", "compilerOptions": { "types": ["node"] } }`,
+    });
+    const result = await validateContentSelfContainment('template', manifest(['tsconfig.json']), listContentOwnedFiles, readFile);
+    expect(result.status).toBe('VALIDATED');
+  });
+
+  it('a genuinely malformed tsconfig - unparseable even allowing comments and trailing commas - still fails closed, with a message that does not claim plain JSON', async () => {
+    const { listContentOwnedFiles, readFile } = fakeTemplate({ 'tsconfig.json': '{ "compilerOptions": { "strict": true, ' });
+    const result = await validateContentSelfContainment('template', manifest(['tsconfig.json']), listContentOwnedFiles, readFile);
+    expect(result.status).toBe('REJECTED');
+    if (result.status !== 'REJECTED') return;
+    expect(result.violations).toHaveLength(1);
+    expect(result.violations[0]?.field).toBe('tsconfig.json');
+    expect(result.violations[0]?.message).toMatch(/even tolerating the comments and trailing commas/i);
+  });
+
+  it('a malformed package.json still reports the plain "not valid JSON" message, unaffected by tsconfig JSONC tolerance', async () => {
+    const { listContentOwnedFiles, readFile } = fakeTemplate({ 'package.json': 'not-valid-json{{{' });
+    const result = await validateContentSelfContainment('template', manifest(['package.json']), listContentOwnedFiles, readFile);
+    expect(result.status).toBe('REJECTED');
+    if (result.status !== 'REJECTED') return;
+    expect(result.violations[0]?.message).toMatch(/^is a declared package\.json carrier that is not valid JSON/);
+  });
+});
+
 describe('validateContentSelfContainment - lockfile entries', () => {
   // inst-csc-extract-specifiers (lockfile, lockfileVersion >= 2 "packages" map)
   it('a lockfileVersion-3 workspace-member key escaping the template root is a violation', async () => {

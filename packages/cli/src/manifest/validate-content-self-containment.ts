@@ -24,6 +24,7 @@
 // `cpt-frontx-constraint-cli-template-independence` (CLI-1) - the check
 // inspects whatever candidate it is pointed at and knows nothing else.
 import type { ListContentOwnedFilesFn, ManifestViolation, ManifestValidationResult, ReadFileFn } from './types';
+import { parseJsonc } from './parse-jsonc';
 
 function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -430,11 +431,21 @@ export async function validateContentSelfContainment(
 
       let parsed: unknown;
       try {
-        parsed = JSON.parse(raw);
+        // A tsconfig carrier is read JSONC-tolerantly (comments, trailing
+        // commas) - the same shape `tsc`'s own config reader accepts - so a
+        // tsconfig template authors and `tsc` both consider valid is never
+        // reported as broken JSON here; `package.json` and lockfile carriers
+        // stay strict JSON, since neither ecosystem tool that owns their
+        // format tolerates comments in them.
+        parsed = kind === 'tsconfig' ? parseJsonc(raw) : JSON.parse(raw);
       } catch (error) {
+        const shapeNote =
+          kind === 'tsconfig'
+            ? "is not valid JSON, even tolerating the comments and trailing commas tsc's own config reader accepts"
+            : 'is not valid JSON';
         violations.push({
           field: fileRelPath,
-          message: `is a declared ${kind} carrier that is not valid JSON (${describeError(error)}), so its path references cannot be checked`,
+          message: `is a declared ${kind} carrier that ${shapeNote} (${describeError(error)}), so its path references cannot be checked`,
         });
         continue;
       }
