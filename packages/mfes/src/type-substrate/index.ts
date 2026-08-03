@@ -210,8 +210,9 @@ export interface TypeSystemPlugin<TSchema = unknown> {
 
   /**
    * Resolve this plugin's concrete type ID for the framework's `activated`
-   * lifecycle stage (fired when an extension becomes the active occupant of
-   * an exclusive domain).
+   * lifecycle stage (fired on an extension once its mount has completed
+   * successfully — in every domain, whatever its mount cardinality, not only
+   * on the single occupant of an exclusive one).
    *
    * @returns This plugin's concrete type ID for the `activated` lifecycle stage
    */
@@ -221,8 +222,9 @@ export interface TypeSystemPlugin<TSchema = unknown> {
 
   /**
    * Resolve this plugin's concrete type ID for the framework's `deactivated`
-   * lifecycle stage (fired when an extension stops being the active occupant
-   * of an exclusive domain, before unmount).
+   * lifecycle stage (fired on every mounted extension before its unmount
+   * runs — in every domain, whatever its mount cardinality, not only on the
+   * single occupant of an exclusive one).
    *
    * @returns This plugin's concrete type ID for the `deactivated` lifecycle stage
    */
