@@ -253,20 +253,14 @@ describe('non-GTS consumer: domain lifecycle resolves init/destroyed stages thro
 
     registry.registerDomain(makeDomain(), new ConcurrentDomainFactory(stageProbeLog));
     await vi.waitFor(() => expect(stageProbeLog).toEqual([FAKE_STAGE_INIT]));
+    stageProbeLog.length = 0;
 
-    // Constraint: unregisterDomain drops the domain's mediator handlers before
-    // firing destroyed, so this hook's chain cannot reach the probe handler the
-    // way init's does — it is logged as unhandled. The registry's chain executor
-    // is the furthest observable point, and the chain it receives still carries
-    // the stage id, so the assertion remains about the dispatched id.
-    const chainSpy = vi.spyOn(registry, 'executeActionsChain');
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
-
+    // unregisterDomain awaits the destroyed stage, so the hook's chain has
+    // reached the probe handler by the time it returns.
     await registry.unregisterDomain(DOMAIN_ID);
 
-    expect(chainSpy).toHaveBeenCalledWith(stageProbeChain(FAKE_STAGE_DESTROYED));
+    expect(stageProbeLog).toEqual([FAKE_STAGE_DESTROYED]);
     expect(destroyedSpy).toHaveBeenCalledWith();
-    consoleError.mockRestore();
   });
 });
 

@@ -657,8 +657,12 @@ export class DefaultMfeRegistry extends MfeRegistry {
 
   async unregisterDomain(domainId: string): Promise<void> {
     return this.operationSerializer.serializeOperation(domainId, async () => {
+      // Invariant: teardown hooks must still be able to dispatch. The manager
+      // unmounts the extensions and fires the domain's `destroyed` stage, whose
+      // chains target this domain — so the handlers stay attached until it
+      // returns. Detaching after also drops anything a teardown hook registered.
+      await this.extensionManager.unregisterDomain(domainId);
       this.mediator.unregisterAllHandlers(domainId);
-      return this.extensionManager.unregisterDomain(domainId);
     });
   }
 
