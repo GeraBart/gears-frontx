@@ -112,13 +112,16 @@ describe('createFsListContentOwnedFilesFn', () => {
     expect(files).toEqual(['.frontx/ai/my-tpl/manifest.json']);
   });
 
-  it('returns an empty list when the declared subtree entry does not exist on disk', async () => {
+  // A declared boundary that is absent cannot be enumerated. Returning `[]`
+  // here (the former behaviour) was a fail-open: the content check reads it as
+  // "declared subtree is clean" and the template passes without ever being
+  // inspected. The refusal is thrown and named at the command boundary
+  // (gs-layer CHANGES_REQUESTED verdict item 1, review 4843755259, Variant B).
+  it('throws naming the declared subtree entry when it does not exist on disk', async () => {
     const dir = await makeTemplate();
     const listContentOwnedFiles = createFsListContentOwnedFilesFn();
 
-    const files = await listContentOwnedFiles(dir, 'never-created');
-
-    expect(files).toEqual([]);
+    await expect(listContentOwnedFiles(dir, 'never-created')).rejects.toThrow('never-created');
   });
 
   // CodeRabbit review finding on #493: `readdirSync(..., { withFileTypes: true })`
@@ -213,17 +216,31 @@ describe('createFsListContentOwnedFilesFn', () => {
       expect(files).toEqual(['packages/auth/package.json']);
     });
 
-    // The declared entry itself, not just something found while walking.
-    it('returns an empty list when the declared subtree entry is a symlink out of the template', async () => {
+    // The DECLARED entry itself resolving out of the template, not something
+    // found while walking (that stays a skip, above). A declared boundary that
+    // escapes the root cannot be enumerated as the template's own content, so
+    // it is refused rather than returned as `[]` (gs-layer verdict item 1,
+    // Variant B).
+    it('throws when the declared subtree entry is a symlink out of the template', async () => {
       const dir = await makeTemplate();
       outsideDir = await mkdtemp(path.join(tmpdir(), 'frontx-outside-'));
       await writeFile(path.join(outsideDir, 'package.json'), '{}');
       await symlink(outsideDir, path.join(dir, 'packages'));
       const listContentOwnedFiles = createFsListContentOwnedFilesFn();
 
-      const files = await listContentOwnedFiles(dir, 'packages');
+      await expect(listContentOwnedFiles(dir, 'packages')).rejects.toThrow('packages');
+    });
 
-      expect(files).toEqual([]);
+    // The declared entry is a broken symlink. `existsSync` follows the link, so
+    // this reads as absent - the same refusal as a missing path, but a distinct
+    // filesystem shape worth pinning. Contrast the mid-walk broken-link case
+    // above, which stays a skip: only the DECLARED boundary throws.
+    it('throws when the declared subtree entry is itself a broken symlink', async () => {
+      const dir = await makeTemplate();
+      await symlink(path.join(dir, 'gone-target'), path.join(dir, 'packages'));
+      const listContentOwnedFiles = createFsListContentOwnedFilesFn();
+
+      await expect(listContentOwnedFiles(dir, 'packages')).rejects.toThrow('packages');
     });
   });
 });

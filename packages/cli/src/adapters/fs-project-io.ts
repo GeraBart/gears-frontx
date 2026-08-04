@@ -71,36 +71,57 @@ export function createFsRemoveProjectFileFn(): RemoveProjectFileFn {
  * therefore never inspected (CodeRabbit review finding on #493). What the
  * link POINTS at decides, via `statSync`, which follows it.
  *
- * The one thing a resolved symlink must not do is take the walk outside the
+ * A resolved symlink found WHILE walking must not take the walk outside the
  * template: a link to `../../shared` is exactly the escape this check exists
  * to catch, and walking into it would report files that are not the
- * template's content as if they were. Such a link is skipped here - its
+ * template's content as if they were. Such a mid-walk link is skipped - its
  * existence as an escape is the CONTENT check's business only in so far as a
- * carrier declares it, and this adapter's contract is to enumerate the
- * template's own files, not to judge them.
+ * carrier declares it, and for content it FINDS this adapter enumerates rather
+ * than judges. A template shipping an internal dangling or escaping link
+ * alongside real content still enumerates that content.
  *
- * A `readdir`/`stat` the operating system REFUSES (a permission-denied
- * directory, most of all) is deliberately NOT swallowed here. The seam's return
- * type is `Promise<string[]>`, so the only value this function could invent for
- * "I could not enumerate" is an empty list - which the content check cannot
- * tell apart from a subtree that is genuinely clean, and a validation gate that
- * passes because it could not look is worse than one that crashes. The throw is
- * converted into a named failure result exactly once, at the command boundary
- * that owns the exit code (`commands/validate.ts`), which is where the manifest
- * read's own failure is already turned into one.
+ * Two failures are refused outright rather than reported as an empty list.
+ * First, a `readdir`/`stat` the operating system REFUSES (a permission-denied
+ * directory, most of all): the seam's return type is `Promise<string[]>`, so
+ * the only value this function could invent for "I could not enumerate" is an
+ * empty list - which the content check cannot tell apart from a subtree that is
+ * genuinely clean, and a validation gate that passes because it could not look
+ * is worse than one that crashes. Second, the DECLARED boundary itself failing
+ * to hold: the manifest names a content-owning path that is absent, is a broken
+ * symlink, cannot be resolved, or resolves outside the template root.
+ * Enumerating nothing there would certify content that was never inspected, so
+ * each is thrown with a message naming the refused path. This is the declared
+ * entry ONLY; the mid-walk skip above is unchanged. Every throw is converted
+ * into a named failure result exactly once, at the command boundary that owns
+ * the exit code (`commands/validate.ts`), which is where the manifest read's
+ * own failure is already turned into one.
  */
 export function createFsListContentOwnedFilesFn(): ListContentOwnedFilesFn {
   return async function listContentOwnedFiles(templateDir: string, contentOwnedPath: string): Promise<string[]> {
     const absoluteEntry = path.join(templateDir, contentOwnedPath);
-    if (!fs.existsSync(absoluteEntry)) return [];
+    // `existsSync` follows the link, so a broken symlink reads as absent too;
+    // either way the declared boundary cannot be enumerated and is refused.
+    if (!fs.existsSync(absoluteEntry)) {
+      throw new Error(`declared content-owning path does not exist: ${contentOwnedPath}`);
+    }
 
     // The declared entry itself may be a symlink; `templateDir` may sit under
     // one too (a macOS `/tmp` -> `/private/tmp` prefix is the everyday case).
     // Both sides are resolved so containment compares like with like.
     const root = realPathOrNull(templateDir);
-    if (root === null) return [];
+    if (root === null) {
+      throw new Error(`template directory could not be resolved: ${templateDir}`);
+    }
     const resolvedEntry = realPathOrNull(absoluteEntry);
-    if (resolvedEntry === null || !isInside(root, resolvedEntry)) return [];
+    if (resolvedEntry === null) {
+      throw new Error(`declared content-owning path could not be resolved: ${contentOwnedPath}`);
+    }
+    // A declared boundary resolving outside the template root would enumerate
+    // files that are not the template's content; the escape is refused here.
+    // (A mid-walk escape is skipped instead - see walkFiles.)
+    if (!isInside(root, resolvedEntry)) {
+      throw new Error(`declared content-owning path resolves outside the template root: ${contentOwnedPath} -> ${resolvedEntry}`);
+    }
 
     const stat = fs.statSync(absoluteEntry);
     if (stat.isFile()) return [toPosixPath(contentOwnedPath)];
