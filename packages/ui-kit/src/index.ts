@@ -7,6 +7,22 @@
  * once in the consumer entry module.
  */
 export { Button, type ButtonProps } from './components/button/button';
+export {
+  Card,
+  type CardProps,
+  CardAction,
+  type CardActionProps,
+  CardContent,
+  type CardContentProps,
+  CardDescription,
+  type CardDescriptionProps,
+  CardFooter,
+  type CardFooterProps,
+  CardHeader,
+  type CardHeaderProps,
+  CardTitle,
+  type CardTitleProps,
+} from './components/card/card';
 export { Checkbox, type CheckboxProps } from './components/checkbox/checkbox';
 export {
   Dialog,

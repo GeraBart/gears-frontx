@@ -53,16 +53,43 @@ describe('theme tokens', () => {
 
   // Policy: every `var(--x)` a component's CSS reads must be themeable
   // (theme.css), written by Base UI at runtime (BASE_UI_RUNTIME_VARS), or
-  // computed and declared by that SAME component part for its own private
-  // use (e.g. Toast's stacked-card transform math — local arithmetic, not
-  // a themeable/brandable value). "Same part" is scoped by leading CSS
-  // class, not by file: a token declared under `.toast` may be read from
-  // any selector for that class's states (`.toast[data-expanded]`,
-  // `.toast::after`, ...), but not from an unrelated class in the same
-  // file — a token must never cross from one component part into another
-  // by accident just because a test only checked "declared somewhere in
-  // this file". Widening this further should widen the policy statement
-  // above, not just the mechanism below.
+  // locally declared and exempted below by one of two shapes:
+  //   - SAME part, own private use — e.g. Toast's stacked-card transform
+  //     math (local arithmetic, not a themeable/brandable value), read
+  //     from another selector for that same class's states
+  //     (`.toast[data-expanded]`, `.toast::after`, ...).
+  //   - ANCESTOR part, read by a descendant via `.declarer .reader` — e.g.
+  //     Card declares `--card-spacing`/`--card-title-*` on `.card` and
+  //     reads them from `.card .cardHeader`, `.card .cardContent`,
+  //     `.card .cardTitle`, etc. This is a genuine cross-part read (the
+  //     value crosses from Card's root into its Header/Content/Footer/
+  //     Title parts) — sanctioned because it's CSS custom-property
+  //     inheritance itself doing the work, not a coincidence: prefixing
+  //     the reader's selector with the declarer's class is what makes the
+  //     value resolve to the *nearest* such ancestor at runtime, which is
+  //     also what makes a nested Card size itself independently of an
+  //     outer one (see card.module.css).
+  // Both shapes are scoped by leading CSS class, not by file: a token
+  // declared under `.card` may be read from any selector whose first class
+  // is `.card` (`.card .cardHeader`, `.card.sizeSm`, `.card:has(...)`,
+  // ...), but not from an unrelated class in the same file — a token must
+  // never cross from one component part into another by accident just
+  // because a test only checked "declared somewhere in this file".
+  //
+  // Known blind spot: `leadingClass` reads only the selector's first class
+  // token, so it cannot distinguish a descendant combinator (`.card .x`,
+  // where inheritance genuinely carries the declared value down) from a
+  // sibling one (`.card ~ .x`, `.card + .x`, where it does not — `var()`
+  // would resolve to nothing there). Both bucket identically today, so
+  // the guard would wave a sibling-combinator reader through too. Nothing
+  // in the kit currently reads a local token that way, so it's left
+  // unfixed rather than guarded against speculatively — but it means this
+  // exemption checks "is the reader prefixed by the declarer's class",
+  // not "would inheritance actually deliver the value here", and the two
+  // are not the same guarantee.
+  //
+  // Widening this further should widen the policy statement above, not
+  // just the mechanism below.
   function leadingClass(selector: string) {
     return selector.match(/\.[a-z][a-z0-9-]*/i)?.[0];
   }

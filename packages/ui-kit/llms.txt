@@ -31,6 +31,10 @@ Rules for generated code:
   default|destructive|outline|secondary|ghost|link, sizes
   default|sm|lg|icon; render prop for button-semantic actions over a
   real anchor (not a link substitute).
+- [Card](dist/docs/card.md): bounded content surface (Card/CardHeader/
+  CardTitle/CardDescription/CardAction/CardContent/CardFooter); header
+  becomes a two-column/two-row grid automatically when it contains a
+  CardAction/CardDescription; sizes default|sm.
 - [Checkbox](dist/docs/checkbox.md): on/off tick box for independent
   options; `checked`/`onCheckedChange`; nest inside Label for one click
   target.
