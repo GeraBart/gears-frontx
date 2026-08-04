@@ -12,10 +12,11 @@ Rules for generated code:
   `import '@gears-frontx/ui-kit/styles.css';`
 - Import components from the package root: `import { Button } from '@gears-frontx/ui-kit';`
 - Set the app font AND `data-theme` on `<html>`/`<body>`, not on an inner
-  container: overlay components (Select, Dialog, DropdownMenu) portal their
-  popup to `<body>` and inherit theme tokens and font from there. If a
-  subtree must carry its own theme, pass that element as `container` to
-  `SelectContent` / `DialogContent` / `DropdownMenuContent`.
+  container: overlay components (Select, Dialog, DropdownMenu, Tooltip)
+  portal their popup to `<body>` and inherit theme tokens and font from
+  there. If a subtree must carry its own theme, pass that element as
+  `container` to `SelectContent` / `DialogContent` / `DropdownMenuContent` /
+  `TooltipContent`.
 - Brand/appearance changes go through theme tokens (CSS variables in
   `theme.css`, light/dark via `data-theme`), never through inline styles or
   overriding kit class names.
@@ -66,6 +67,11 @@ Rules for generated code:
 - [Textarea](dist/docs/textarea.md): multi-line text field; native
   `<textarea>` props; grows with content; `aria-invalid` for the error
   state.
+- [Tooltip](dist/docs/tooltip.md): visual-only hint on hover/focus of a
+  trigger (Tooltip/TooltipTrigger/TooltipContent); optional
+  `TooltipProvider` shares delay/grouping across many tooltips;
+  `TooltipContent` takes `container`; disabled on touch devices — never
+  the only carrier of essential information.
 
 ## Optional
 

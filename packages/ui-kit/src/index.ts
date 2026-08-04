@@ -92,3 +92,12 @@ export {
 } from './components/select/select';
 export { Switch, type SwitchProps } from './components/switch/switch';
 export { Textarea, type TextareaProps } from './components/textarea/textarea';
+export {
+  Tooltip,
+  TooltipContent,
+  type TooltipContentProps,
+  TooltipProvider,
+  type TooltipProviderProps,
+  TooltipTrigger,
+  type TooltipTriggerProps,
+} from './components/tooltip/tooltip';
