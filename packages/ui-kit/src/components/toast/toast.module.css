@@ -173,6 +173,21 @@
   transform: translateX(calc(var(--toast-swipe-movement-x) + 150%)) translateY(var(--offset-y));
 }
 
+/*
+ * Unlike .iconSpin above, every motion declared on .toast (stack transform
+ * math, expand/collapse height, entry/exit/swipe slides) and .content's
+ * cross-fade below is purely decorative — the position, scale and opacity
+ * of a toast card encode no information a user would lose by seeing the
+ * end state directly instead of the transition to it. Suppressed outright
+ * under reduced motion, same treatment as skeleton.module.css's pulse.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .toast,
+  .content {
+    transition: none;
+  }
+}
+
 .content {
   /*
    * Substitutes for the preflight the kit lacks: without it, content-box
@@ -226,6 +241,21 @@
 
 .iconSpin {
   animation: spin 1s linear infinite;
+}
+
+/*
+ * Not the same case as skeleton.module.css's pulse (dropped outright under
+ * reduced motion): the spinner is the only thing on a `loading` toast that
+ * indicates work is still in progress — freezing it reads as broken, not
+ * calm, since there's no other cue on the card. So this keeps spinning
+ * rather than stopping, just markedly slower (4x), to cut the perceived
+ * motion for a user who asked their OS for less of it without losing the
+ * "still working" signal entirely.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .iconSpin {
+    animation-duration: 4s;
+  }
 }
 
 @keyframes spin {

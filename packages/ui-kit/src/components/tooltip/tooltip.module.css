@@ -56,6 +56,23 @@
 }
 
 /*
+ * Base UI sets `data-instant` on the popup when an open/close change must
+ * not animate — an adjacent tooltip opening/closing within a shared
+ * `Tooltip.Provider` delay group (`delay`, TooltipRoot.js:92) or the
+ * positioner tracking the cursor instead of the anchor (`tracking-cursor`,
+ * TooltipPositioner.js:76) — both in node_modules/@base-ui/react/tooltip/.
+ * The attribute carries the reason as its value, not a boolean, but both
+ * reasons mean the same thing here: skip the transition. Same specificity
+ * as the starting/ending-style rule above (one class + one attribute), so
+ * this doesn't depend on being declared after it — it wins regardless of
+ * source order because `transition` isn't set by that rule at all, only by
+ * `.popup` itself, which this outranks either way.
+ */
+.popup[data-instant] {
+  transition: none;
+}
+
+/*
  * A small diamond seamed against the popup edge. Base UI's floating-ui
  * arrow middleware writes an inline `top` or `left` (whichever is the
  * cross axis for the rendered side) via style attribute, already offset

@@ -59,10 +59,17 @@ required:
 | `toast.promise(promise, { loading, success, error })` | One toast that morphs through loading → success/error. |
 
 `type` drives the built-in icon: `success` \| `info` \| `warning` \|
-`error` \| `loading` (spins); omit it for no icon. `actionProps` (native
+`error` \| `loading` (spins, 4x slower under `prefers-reduced-motion:
+reduce` rather than stopping — it's the only cue a `loading` toast is
+still pending); omit it for no icon. `actionProps` (native
 `<button>` props, e.g. `{ children: 'Undo', onClick }`) renders an
 outline action button beside the close button; omit it and none
 renders.
+
+The card's own motion — the stacking/scale math, expand-on-hover, and
+entry/exit/swipe slides — is purely decorative and is suppressed
+outright under `prefers-reduced-motion: reduce`; toasts appear and
+disappear immediately rather than sliding.
 
 `createToastManager()` / `useToastManager()` are re-exported for
 advanced cases: `createToastManager()` makes an isolated manager

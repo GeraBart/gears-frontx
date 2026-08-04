@@ -55,6 +55,24 @@
   transform: scale(0.95);
 }
 
+/*
+ * Base UI sets `data-instant` on the popup when an open/close change must
+ * not animate — a keyboard-activated item click or Escape/outside-press
+ * dismissal (`click`/`dismiss`, MenuRoot.js:232), a menubar/toolbar losing
+ * hover to a sibling menu (`group`, MenuRoot.js:230), or a submenu popup
+ * re-anchoring to a different trigger (`trigger-change`,
+ * MenuPositioner.js:213) — all in node_modules/@base-ui/react/menu/.
+ * The attribute carries the reason as its value, not a boolean, but every
+ * reason means the same thing here: skip the transition. Same specificity
+ * as the starting/ending-style rule above (one class + one attribute), so
+ * this doesn't depend on being declared after it — it wins regardless of
+ * source order because `transition` isn't set by that rule at all, only by
+ * `.popup` itself, which this outranks either way.
+ */
+.popup[data-instant] {
+  transition: none;
+}
+
 /* A submenu's anchor is its own (usually narrow) SubTrigger item, not the
  * top-level trigger — sizing to --anchor-width there would cramp the
  * submenu to the width of a single menu row. base-vega overrides width for
