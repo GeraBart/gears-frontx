@@ -4,8 +4,10 @@
 // upgrade (F14 `ReadProjectFileFn`/`WriteProjectFileFn`/`RemoveProjectFileFn`)
 // FEATUREs already define — no template-resolution/inventory/provenance
 // logic lives here (that is Phase 9/10's `adapters/fs-*` and
-// `adapters/provenance-io.ts` scope). Pure IO plumbing, no business rule, no
-// CDSL instruction of its own.
+// `adapters/provenance-io.ts` scope). Not pure IO plumbing throughout,
+// though: `createFsListContentOwnedFilesFn` below enumerates the content it
+// finds but refuses a declared boundary it cannot honestly enumerate,
+// rather than reporting one as an empty list — see its doc comment.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { WriteFileFn } from '../scaffold/types';

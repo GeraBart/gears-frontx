@@ -228,7 +228,7 @@ describe('createFsListContentOwnedFilesFn', () => {
       await symlink(outsideDir, path.join(dir, 'packages'));
       const listContentOwnedFiles = createFsListContentOwnedFilesFn();
 
-      await expect(listContentOwnedFiles(dir, 'packages')).rejects.toThrow('packages');
+      await expect(listContentOwnedFiles(dir, 'packages')).rejects.toThrow('resolves outside the template root');
     });
 
     // The declared entry is a broken symlink. `existsSync` follows the link, so
@@ -240,7 +240,7 @@ describe('createFsListContentOwnedFilesFn', () => {
       await symlink(path.join(dir, 'gone-target'), path.join(dir, 'packages'));
       const listContentOwnedFiles = createFsListContentOwnedFilesFn();
 
-      await expect(listContentOwnedFiles(dir, 'packages')).rejects.toThrow('packages');
+      await expect(listContentOwnedFiles(dir, 'packages')).rejects.toThrow('does not exist');
     });
   });
 });
