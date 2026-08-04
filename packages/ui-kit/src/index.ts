@@ -107,6 +107,7 @@ export {
   SelectValue,
   type SelectValueProps,
 } from './components/select/select';
+export { Separator, type SeparatorProps } from './components/separator/separator';
 export { Switch, type SwitchProps } from './components/switch/switch';
 export {
   Tabs,

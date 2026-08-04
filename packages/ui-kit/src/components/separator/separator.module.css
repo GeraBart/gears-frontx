@@ -1,0 +1,40 @@
+/*
+ * Separator styles, translated from shadcn/ui base-vega (MIT) to CSS
+ * Modules. Consumes only theme.css variables — no raw colors.
+ *
+ * Source (base-vega separator.tsx): "shrink-0 bg-border data-horizontal:h-px
+ * data-horizontal:w-full data-vertical:w-px data-vertical:self-stretch".
+ *
+ * No `box-sizing` declared, unlike badge.module.css/tabs.module.css: those
+ * combine a fixed dimension with padding and/or a border, where content-box
+ * (this kit's ambient default — no reset exists) inflates the rendered box
+ * past that dimension. This component has neither padding nor border on
+ * `.separator` — only the 1px thickness set below — so content-box and
+ * border-box compute an identical box here; declaring one would be a no-op.
+ */
+.separator {
+  flex-shrink: 0;
+  background-color: var(--border);
+}
+
+.separator[data-orientation='horizontal'] {
+  width: 100%;
+  height: 1px;
+}
+
+/*
+ * `align-self: stretch` (the source's `self-stretch`) only has an effect
+ * inside a flex or grid container — it overrides that container's own
+ * `align-items` for this one item (Flexbox §8.3), stretching Separator to
+ * the flex line's used cross size (driven by its tallest sibling, per
+ * §9.4 step 8), regardless of whether the container itself set
+ * `align-items: stretch` or `center` or anything else. It has no effect
+ * at all in a plain block parent (no flex/grid context to stretch
+ * within), and no height to stretch to in a flex line whose siblings are
+ * themselves all zero-height — those are the two real failure cases, not
+ * the container's own `align-items` value; see separator.md.
+ */
+.separator[data-orientation='vertical'] {
+  align-self: stretch;
+  width: 1px;
+}

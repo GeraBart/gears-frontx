@@ -70,6 +70,11 @@ Rules for generated code:
   list (Select/SelectTrigger/SelectValue/SelectContent/SelectGroup/
   SelectItem); trigger sizes default|sm; keyboard and typeahead built
   in.
+- [Separator](dist/docs/separator.md): thin visual divider between content
+  sections; orientation horizontal|vertical (default horizontal); no
+  `decorative` prop — pass `aria-hidden="true"` for a purely visual
+  divider; not for use inside DropdownMenu/Select popups, which have their
+  own separator styling; no portal.
 - [Switch](dist/docs/switch.md): immediate on/off toggle;
   `checked`/`onCheckedChange`, sizes default|sm; use checkbox for
   submit-time options.
