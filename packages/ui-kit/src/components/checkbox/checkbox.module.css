@@ -4,6 +4,14 @@
  */
 
 .checkbox {
+  /*
+   * Substitutes for the preflight the kit lacks: without it, content-box
+   * (this kit's ambient default) piles the border on top of the declared
+   * width/height, rendering an 18x18 box instead of 16x16 — same acute
+   * case as tabs.module.css/badge.module.css, scoped the same way (this
+   * class only).
+   */
+  box-sizing: border-box;
   position: relative;
   display: flex;
   align-items: center;

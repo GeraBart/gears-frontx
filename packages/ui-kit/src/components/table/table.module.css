@@ -149,10 +149,11 @@
 
 .tableHead {
   /*
-   * Local `box-sizing: border-box` — the kit declares box-sizing nowhere (a
-   * kit-wide gap tracked separately; see tabs.module.css/badge.module.css
-   * for the same note). Not the same acute case as those two: no fixed
-   * dimension of the kit's *own* collides with its own padding here —
+   * Local `box-sizing: border-box` — the same declaration that now
+   * appears across most of the kit (see tabs.module.css for the running
+   * count). Not the same acute case as tabs.module.css/badge.module.css:
+   * no fixed dimension of the kit's *own* collides with its own padding
+   * here —
    * `height` and `padding-inline` sit on orthogonal axes, so content-box
    * doesn't inflate either past the other on its own. The real collision
    * is consumer-supplied: sizing a column via a *width* set through

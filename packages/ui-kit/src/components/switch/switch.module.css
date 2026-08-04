@@ -4,6 +4,16 @@
  */
 
 .switch {
+  /*
+   * Substitutes for the preflight the kit lacks: without it, content-box
+   * (this kit's ambient default) piles the border on top of the width/
+   * height declared by whichever size class (.sizeDefault/.sizeSm below)
+   * is combined onto this same root, rendering 20.4x34 instead of
+   * 18.4x32 (default) — same acute case as tabs.module.css/
+   * badge.module.css, scoped the same way (this class only, since the
+   * size classes never appear without it — see switch.tsx).
+   */
+  box-sizing: border-box;
   position: relative;
   display: inline-flex;
   align-items: center;

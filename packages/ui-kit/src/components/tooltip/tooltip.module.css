@@ -16,6 +16,18 @@
  * other overlays share.
  */
 .popup {
+  /*
+   * Substitutes for the preflight the kit lacks: `width: fit-content`
+   * alone is unaffected by box-sizing (content-based sizing already
+   * accounts for padding/border in the used width, same as `auto`), but
+   * once a long enough tooltip hits the `max-width: 20rem` cap below,
+   * content-box (this kit's ambient default) interprets that cap as the
+   * content width and piles the horizontal padding on top of it,
+   * rendering 344px instead of the declared 320px. Same acute case as
+   * dialog.module.css's `.popup` (measured 498-instead-of-448, now
+   * exactly 448), scoped the same way (this class only).
+   */
+  box-sizing: border-box;
   position: relative;
   isolation: isolate;
   z-index: 50;

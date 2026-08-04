@@ -4,6 +4,14 @@
  */
 
 .textarea {
+  /*
+   * Substitutes for the preflight the kit lacks: without it, content-box
+   * (this kit's ambient default) piles the padding and border on top of
+   * the declared min-height, rendering 82px instead of 64px — same acute
+   * case as tabs.module.css/badge.module.css, scoped the same way (this
+   * class only).
+   */
+  box-sizing: border-box;
   display: flex;
   /* Grows with content where supported (Chromium 123+); a fixed min-height
    * plus the native resize handle everywhere else. */

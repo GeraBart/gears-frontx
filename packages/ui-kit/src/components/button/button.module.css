@@ -4,6 +4,21 @@
  */
 
 .button {
+  /*
+   * Substitutes for the preflight the kit lacks — but unlike
+   * tabs.module.css/badge.module.css, this one is a no-op for the common
+   * case: <button> is already border-box in every browser's UA
+   * stylesheet, so a real Button (nativeButton, the default) measures
+   * correctly at every size with or without this declaration. It only
+   * matters for the documented `render` escape hatch (button.md's
+   * `<Button render={<a/>} nativeButton={false}>` example): an <a> has no
+   * such UA default, so content-box there piles this class's own border
+   * on top of each `.sizeIcon`-style height/width, rendering 38px instead
+   * of 36px. Declared on `.button` rather than each size class since
+   * every Button always combines one of those with this class on the
+   * same root (see button.tsx) — one declaration covers all four.
+   */
+  box-sizing: border-box;
   display: inline-flex;
   align-items: center;
   justify-content: center;

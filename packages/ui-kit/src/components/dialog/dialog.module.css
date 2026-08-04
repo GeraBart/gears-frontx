@@ -18,6 +18,14 @@
 }
 
 .popup {
+  /*
+   * Substitutes for the preflight the kit lacks: without it, content-box
+   * (this kit's ambient default) piles the padding and border on top of
+   * the declared width, rendering 498px instead of 448px at the sm+
+   * breakpoint below — same acute case as tabs.module.css/
+   * badge.module.css, scoped the same way (this class only).
+   */
+  box-sizing: border-box;
   position: fixed;
   top: 50%;
   left: 50%;

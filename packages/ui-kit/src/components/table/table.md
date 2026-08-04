@@ -92,10 +92,10 @@ There's no `width` prop — size a column the same way the upstream source's
 own docs do, with a `className`/`style` width on `TableHead`/`TableCell`
 (see Examples).
 
-`TableHead`/`TableCell` declare `box-sizing: border-box` (unlike most of the
-kit, which declares box-sizing nowhere) specifically so this works: without
-it, the cell's own padding would add on top of the width you set instead of
-being absorbed into it, and a `width: 100` cell would render wider than 100.
+`TableHead`/`TableCell` declare `box-sizing: border-box` specifically so this
+works: without it, the cell's own padding would add on top of the width you
+set instead of being absorbed into it, and a `width: 100` cell would render
+wider than 100.
 
 ## Row states
 

@@ -4,6 +4,14 @@
  */
 
 .input {
+  /*
+   * Substitutes for the preflight the kit lacks: without it, content-box
+   * (this kit's ambient default) piles the horizontal padding and border
+   * on top of the declared height, rendering 46px instead of 36px — same
+   * acute case as tabs.module.css/badge.module.css, scoped the same way
+   * (this class only).
+   */
+  box-sizing: border-box;
   display: block;
   width: 100%;
   min-width: 0;

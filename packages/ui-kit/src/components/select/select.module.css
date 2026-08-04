@@ -4,6 +4,21 @@
  */
 
 .trigger {
+  /*
+   * Substitutes for the preflight the kit lacks. This class combines with
+   * .sizeDefault/.sizeSm (height + this class's own padding/border) on a
+   * Base UI Select.Trigger, which renders a real <button> by default
+   * (verified against the Base UI source) — already border-box via the
+   * UA stylesheet, so it measures correctly (36px) as shipped even
+   * without this declaration. It's declared anyway for the same reason
+   * as button.module.css's `.button`: SelectTriggerProps types both
+   * `render` and `nativeButton` (via BaseUIComponentProps<'button', …>),
+   * so `<SelectTrigger render={<a/>} nativeButton={false}>` type-checks
+   * today and would hit the identical collision on an element with no UA
+   * border-box default. Same acute case as tabs.module.css/
+   * badge.module.css, scoped the same way (this class only).
+   */
+  box-sizing: border-box;
   display: flex;
   width: fit-content;
   align-items: center;
@@ -83,6 +98,18 @@
 }
 
 .popup {
+  /*
+   * Substitutes for the preflight the kit lacks: without it, content-box
+   * (this kit's ambient default) piles this class's own border on top of
+   * `width: var(--anchor-width)`, rendering the popup 2px wider than the
+   * trigger it's anchored to — found by auditing every module for this
+   * collision, not by the demo page. Popup is a plain <div> (verified
+   * against the Base UI source), so there's no UA default to fall back
+   * on the way Button/Select.Trigger has. Same acute case as
+   * tabs.module.css/badge.module.css, scoped the same way (this class
+   * only).
+   */
+  box-sizing: border-box;
   position: relative;
   isolation: isolate;
   z-index: 50;
@@ -129,6 +156,18 @@
 }
 
 .item {
+  /*
+   * Substitutes for the preflight the kit lacks: without it, content-box
+   * (this kit's ambient default) piles the 2.5rem of horizontal padding
+   * on top of `width: 100%`, rendering each item 40px wider than the
+   * popup's content box — clipped by .popup's own overflow-x: hidden
+   * above, which cuts off .itemIndicator (the checkmark, positioned
+   * `right: 0.5rem` from this box's now-invisible true right edge)
+   * entirely. Found by auditing every module for this collision, not by
+   * the demo page. Same acute case as tabs.module.css/badge.module.css,
+   * scoped the same way (this class only).
+   */
+  box-sizing: border-box;
   position: relative;
   display: flex;
   width: 100%;

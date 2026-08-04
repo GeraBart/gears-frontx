@@ -4,14 +4,17 @@
  */
 
 /*
- * Local `box-sizing: border-box` — the kit declares box-sizing nowhere (a
- * kit-wide gap tracked separately; fixing it there needs one deliberate
- * commit plus a visual check across every component, not a side effect of
- * this one). Tabs needs it now because `.trigger` is the kit's only part
- * sized by a *percentage* height (`calc(100% - 1px)` below): under
- * content-box, that percentage resolves against `.list`'s content height
- * and then padding/border pile on top of it, so the active tab renders
- * taller than its track instead of inset within it.
+ * Local `box-sizing: border-box` — this was the first of the kit's
+ * per-module fixes for the preflight reset the kit lacks; the same
+ * declaration now appears across most of the kit (14 of its 19 component
+ * modules, 20 classes total, each substituting for that same missing
+ * reset on its own class list — see input.module.css/dialog.module.css/
+ * select.module.css and others for the acute case each one fixes). Tabs
+ * needed it first because `.trigger` is the kit's only part sized by a
+ * *percentage* height (`calc(100% - 1px)` below): under content-box,
+ * that percentage resolves against `.list`'s content height and then
+ * padding/border pile on top of it, so the active tab renders taller
+ * than its track instead of inset within it.
  *
  * Declared on the kit's own classes only (`.list`/`.trigger` — the two
  * with padding/border driving the bug — plus `.tabs`/`.content` for the
