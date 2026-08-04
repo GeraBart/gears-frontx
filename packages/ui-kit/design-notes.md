@@ -40,6 +40,14 @@ generate screens consistently.
 - `data-table`, date-picker, charts, page layout templates, form validation
   integration (RHF/zod), i18n helpers, Storybook.
 
+`insight-front` uses shadcn's `calendar`, `chart` and `sidebar`, and the kit
+will not cover them — a known gap, not an oversight. `calendar` (date-picker)
+needs `react-day-picker` + `date-fns` and `chart` (charts) needs `recharts`, so
+both fall to the architecture's "behavior from Base UI, no extra runtime deps"
+rule. `sidebar` (page layout templates) adds no dependencies but is a large
+composite over `sheet`, `button`, `input`, `separator`, `skeleton` and
+`tooltip` plus a mobile-detection hook: app layout, not a base component.
+
 ## Architecture
 
 - Component stack: **React 19 + Base UI (`@base-ui/react`) + CSS Modules + CVA**.
@@ -63,13 +71,13 @@ generate screens consistently.
   ignore. Only after all of those gates pass is flipping `private` the release
   act.
 
-## Component set (MVP, 19 components)
+## Component set (MVP, 29 components)
 
 | Group    | Components |
 |----------|------------|
-| Forms    | `button`, `input`, `textarea`, `select`, `checkbox`, `radio-group`, `switch`, `label`, `field` |
-| Overlays | `dialog`, `dropdown-menu`, `tooltip`, `toast` |
-| Structure| `card`, `tabs`, `badge`, `separator`, `skeleton` |
+| Forms    | `button`, `input`, `textarea`, `select`, `checkbox`, `radio-group`, `switch`, `label`, `field`, `toggle`, `toggle-group` |
+| Overlays | `dialog`, `dropdown-menu`, `tooltip`, `toast`, `popover`, `sheet`, `preview-card` |
+| Structure| `card`, `tabs`, `badge`, `separator`, `skeleton`, `alert`, `avatar`, `collapsible`, `empty`, `spinner` |
 | Data     | `table` (primitive markup) |
 
 Behavior and accessibility come from Base UI primitives; variant logic is CVA;
@@ -78,6 +86,19 @@ attribution in this package's NOTICE). Wrapping conventions follow Constructor's
 internal react-kit (gitlab.constr.dev/frontend/react-kit): per-component
 directories, colocated tests and docs, `render`-prop polymorphism. A composite
 `data-table` is deliberately deferred.
+
+Ten entries — `toggle`, `toggle-group` (Forms), `popover`, `sheet`,
+`preview-card` (Overlays), `alert`, `avatar`, `collapsible`, `empty`, `spinner`
+(Structure) — come from the kit's first consumer, `insight-front`
+(`constructorfabric/insight-front`): of the shadcn/Base UI components that team
+uses today, these are the ones the kit lacked. `toggle` and `toggle-group` wrap
+`@base-ui/react/toggle` and `/toggle-group`; `avatar` and `collapsible` have
+Base UI primitives too. `alert`, `empty` and `spinner` are pure styling with no
+primitive, like `card`, `badge` and `skeleton`. All three new overlays portal
+their popup, so each needs the same `container` escape hatch the existing
+overlays document. Two names diverge from their sources and will confuse the
+next reader: shadcn's registry calls `preview-card` `hover-card`, and `sheet`
+maps onto Base UI's `drawer` primitive.
 
 `toast` is built on Base UI's own Toast primitive (`@base-ui/react/toast`),
 not sonner: base-vega ships a `sonner.json` variant too, but that pulls in
@@ -96,7 +117,8 @@ anti-patterns) colocated as `src/components/<name>/<name>.md` and copied to
 `dist/docs/` at build. A unit test enforces that every component has a doc,
 is indexed in `llms.txt`, and documents every variant/size its CSS module
 defines. Still planned: three composition recipes (CRUD page, settings form,
-confirmation dialog) once the components they compose exist.
+confirmation dialog). The components they compose now all exist, so what is
+left is writing them.
 
 ## Testing and acceptance
 
@@ -121,8 +143,12 @@ confirmation dialog) once the components they compose exist.
 
 ## Delivery plan
 
-1. Package skeleton + proven tsup/CSS Modules pipeline + Button (this step).
+1. Package skeleton + proven tsup/CSS Modules pipeline + Button.
 2. Tokens polish + first component batch (forms) on `@base-ui/react`.
-3. Remaining components.
-4. AI docs + kitchen-sink example app; satisfy the #495 publication gates,
+3. Remaining components — done, the 19-component MVP set exists.
+4. The ten `insight-front` gap components. Before the release step, not after:
+   they are part of the MVP set the `private` gate names, and the kitchen-sink
+   app and composition recipes should cover the whole set once rather than be
+   extended right after publication.
+5. AI docs + kitchen-sink example app; satisfy the #495 publication gates,
    remove the temporary artifact ignore, then flip `private` and publish.
