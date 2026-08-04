@@ -1,0 +1,45 @@
+/*
+ * Skeleton styles, translated from shadcn/ui base-vega (MIT) to CSS Modules.
+ * Consumes only theme.css variables — no raw colors.
+ *
+ * Source (base-vega skeleton.tsx): "animate-pulse rounded-md bg-muted".
+ *
+ * No `box-sizing` declared, same reasoning as separator.module.css: this
+ * class has only `background-color` and `border-radius` — no padding, no
+ * border. Neither of those two properties adds to the box's rendered size,
+ * so content-box (this kit's ambient default — no reset exists) and
+ * border-box compute identically here; declaring one would be a no-op. A
+ * consumer sizes an instance with their own `width`/`height` via
+ * `className` (there is no fixed dimension baked in here to inflate).
+ */
+.skeleton {
+  border-radius: var(--radius-md);
+  background-color: var(--muted);
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/*
+ * Deviation from source: Tailwind's `animate-pulse` utility — which
+ * base-vega's Skeleton uses directly — has no built-in
+ * prefers-reduced-motion handling, and the kit has no existing convention
+ * to defer to either (grepping `src/` for the media feature turns up
+ * nothing prior to this component). A skeleton's pulse is a continuous,
+ * purely decorative animation: it signals "content is loading" but carries
+ * no information encoded in the motion itself, which is exactly the case
+ * prefers-reduced-motion exists for. A user who has asked their OS to
+ * minimize non-essential motion (e.g. for vestibular sensitivity) should
+ * still see the placeholder shape — just without the pulsing. Freezing at
+ * full opacity (rather than the mid-pulse 0.5 below) keeps the placeholder
+ * clearly visible instead of leaving it dimmed.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.5;
+  }
+}

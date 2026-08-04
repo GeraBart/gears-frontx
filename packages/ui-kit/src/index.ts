@@ -108,6 +108,7 @@ export {
   type SelectValueProps,
 } from './components/select/select';
 export { Separator, type SeparatorProps } from './components/separator/separator';
+export { Skeleton, type SkeletonProps } from './components/skeleton/skeleton';
 export { Switch, type SwitchProps } from './components/switch/switch';
 export {
   Tabs,

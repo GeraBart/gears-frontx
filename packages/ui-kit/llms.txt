@@ -75,6 +75,11 @@ Rules for generated code:
   `decorative` prop — pass `aria-hidden="true"` for a purely visual
   divider; not for use inside DropdownMenu/Select popups, which have their
   own separator styling; no portal.
+- [Skeleton](dist/docs/skeleton.md): pulsing placeholder shape shown while
+  content loads; no Base UI primitive, no variants — size it yourself via
+  `className`/`style`; no ARIA of its own, put `role="status"`/`aria-busy`
+  on the surrounding container; pulse animation is removed under
+  `prefers-reduced-motion: reduce`; no portal.
 - [Switch](dist/docs/switch.md): immediate on/off toggle;
   `checked`/`onCheckedChange`, sizes default|sm; use checkbox for
   submit-time options.
