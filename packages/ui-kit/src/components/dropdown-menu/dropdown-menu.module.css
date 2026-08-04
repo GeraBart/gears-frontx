@@ -1,0 +1,195 @@
+/*
+ * DropdownMenu styles, translated from shadcn/ui (MIT) to CSS Modules.
+ * Consumes only theme.css variables — no raw colors.
+ */
+
+.positioner {
+  isolation: isolate;
+  z-index: 50;
+  outline: none;
+}
+
+/* Elevation shadow, not a scrim: a popup menu sits over content rather
+ * than blocking it, so it borrows Select's popup idiom (border + two-layer
+ * shadow) instead of Dialog's full-page --overlay backdrop token. */
+.popup {
+  position: relative;
+  isolation: isolate;
+  z-index: 50;
+  max-height: var(--available-height);
+  width: var(--anchor-width);
+  min-width: 8rem;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 0.25rem;
+  border-radius: var(--radius-md);
+  border: 1px solid color-mix(in oklab, var(--foreground) 10%, transparent);
+  background-color: var(--popover);
+  color: var(--popover-foreground);
+  box-shadow:
+    0 4px 6px -1px color-mix(in oklab, var(--foreground) 10%, transparent),
+    0 2px 4px -2px color-mix(in oklab, var(--foreground) 10%, transparent);
+  transform-origin: var(--transform-origin);
+  outline: none;
+  transition:
+    opacity 100ms ease,
+    transform 100ms ease;
+}
+
+.popup[data-starting-style],
+.popup[data-ending-style] {
+  opacity: 0;
+  transform: scale(0.95);
+}
+
+/* A submenu's anchor is its own (usually narrow) SubTrigger item, not the
+ * top-level trigger — sizing to --anchor-width there would cramp the
+ * submenu to the width of a single menu row. base-vega overrides width for
+ * the same reason; content-sizing with a smaller min-width is correct here. */
+.subPopup {
+  width: auto;
+  min-width: 6rem;
+}
+
+.label {
+  padding: 0.375rem 0.5rem;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1rem;
+}
+
+.item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.5rem;
+  border-radius: var(--radius-sm);
+  cursor: default;
+  user-select: none;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  outline: none;
+}
+
+.item:focus,
+.item[data-highlighted] {
+  background-color: var(--accent);
+  color: var(--accent-foreground);
+}
+
+.item[data-disabled] {
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+.variantDefault {
+  color: inherit;
+}
+
+.variantDestructive {
+  color: var(--destructive);
+}
+
+.variantDestructive:focus,
+.variantDestructive[data-highlighted] {
+  background-color: color-mix(in oklab, var(--destructive) 10%, transparent);
+  color: var(--destructive);
+}
+
+.checkboxItem,
+.radioItem {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 2rem 0.375rem 0.5rem;
+  border-radius: var(--radius-sm);
+  cursor: default;
+  user-select: none;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  outline: none;
+}
+
+.checkboxItem:focus,
+.checkboxItem[data-highlighted],
+.radioItem:focus,
+.radioItem[data-highlighted] {
+  background-color: var(--accent);
+  color: var(--accent-foreground);
+}
+
+.checkboxItem[data-disabled],
+.radioItem[data-disabled] {
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+.itemIndicator {
+  pointer-events: none;
+  position: absolute;
+  right: 0.5rem;
+  display: flex;
+  width: 1rem;
+  height: 1rem;
+  align-items: center;
+  justify-content: center;
+}
+
+.separator {
+  pointer-events: none;
+  margin: 0.25rem -0.25rem;
+  height: 1px;
+  background-color: var(--border);
+}
+
+.shortcut {
+  margin-left: auto;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+}
+
+.item:focus .shortcut,
+.item[data-highlighted] .shortcut {
+  color: var(--accent-foreground);
+}
+
+.subTrigger {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.5rem;
+  border-radius: var(--radius-sm);
+  cursor: default;
+  user-select: none;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  outline: none;
+}
+
+.subTrigger:focus,
+.subTrigger[data-highlighted],
+.subTrigger[data-popup-open] {
+  background-color: var(--accent);
+  color: var(--accent-foreground);
+}
+
+.subTrigger[data-disabled] {
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+.subTriggerIcon {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.svgIcon {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  pointer-events: none;
+}
