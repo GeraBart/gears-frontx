@@ -9,6 +9,23 @@
 export { Button, type ButtonProps } from './components/button/button';
 export { Checkbox, type CheckboxProps } from './components/checkbox/checkbox';
 export {
+  Dialog,
+  DialogClose,
+  type DialogCloseProps,
+  DialogContent,
+  type DialogContentProps,
+  DialogDescription,
+  type DialogDescriptionProps,
+  DialogFooter,
+  type DialogFooterProps,
+  DialogHeader,
+  type DialogHeaderProps,
+  DialogTitle,
+  type DialogTitleProps,
+  DialogTrigger,
+  type DialogTriggerProps,
+} from './components/dialog/dialog';
+export {
   Field,
   type FieldProps,
   FieldDescription,

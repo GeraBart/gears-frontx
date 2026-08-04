@@ -12,9 +12,10 @@ Rules for generated code:
   `import '@gears-frontx/ui-kit/styles.css';`
 - Import components from the package root: `import { Button } from '@gears-frontx/ui-kit';`
 - Set the app font AND `data-theme` on `<html>`/`<body>`, not on an inner
-  container: overlay components (Select) portal their popup to `<body>`
-  and inherit theme tokens and font from there. If a subtree must carry
-  its own theme, pass that element as `container` to `SelectContent`.
+  container: overlay components (Select, Dialog) portal their popup to
+  `<body>` and inherit theme tokens and font from there. If a subtree
+  must carry its own theme, pass that element as `container` to
+  `SelectContent` / `DialogContent`.
 - Brand/appearance changes go through theme tokens (CSS variables in
   `theme.css`, light/dark via `data-theme`), never through inline styles or
   overriding kit class names.
@@ -32,6 +33,11 @@ Rules for generated code:
 - [Checkbox](dist/docs/checkbox.md): on/off tick box for independent
   options; `checked`/`onCheckedChange`; nest inside Label for one click
   target.
+- [Dialog](dist/docs/dialog.md): modal overlay for a focused task or
+  confirmation (Dialog/DialogTrigger/DialogContent/DialogHeader/
+  DialogFooter/DialogTitle/DialogDescription/DialogClose); traps focus,
+  closes on Escape/outside click; `DialogContent` takes `container` and
+  `showCloseButton`.
 - [Field](dist/docs/field.md): labelled form field composition
   (Field/FieldLabel/FieldDescription/FieldError); wires ids, htmlFor,
   aria-describedby, and validation display automatically — the default

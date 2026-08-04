@@ -32,6 +32,15 @@
   --ring: oklch(0.708 0 0);
 
   /*
+   * Scrim behind modal-style popups (Dialog's backdrop). Deliberately
+   * theme-invariant — unlike every other token here, it is not redefined
+   * in [data-theme='dark'] or the prefers-color-scheme block: a dark tint
+   * dims the page in both light and dark UI, whereas --foreground would
+   * flip to near-white in dark mode and brighten instead of dim.
+   */
+  --overlay: oklch(0 0 0 / 50%);
+
+  /*
    * Radius scale (shadcn v4 convention). Components consume only the
    * derived steps; consumers rebrand by overriding --radius alone and
    * the whole scale follows.
