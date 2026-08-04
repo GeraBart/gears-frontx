@@ -2,19 +2,28 @@
  * In-monorepo dev loop for the shell template.
  *
  * `template-shell/` is not a root workspace: it is a standalone npm project
- * that pins `@gears-frontx/api`, `@gears-frontx/mfes` and
- * `@gears-frontx/gts-plugin` to exact registry versions so a seeded project can
- * install outside the monorepo. The cost of that pin is that a plain
- * `npm install` inside the template resolves the *published* alpha, so edits to
- * `packages/*` never reach the template and the failure is silent — the
- * template builds, type-checks and tests green against code nobody changed.
+ * that pins the FrontX ecosystem packages it consumes to exact registry
+ * versions so a seeded project can install outside the monorepo. The cost of
+ * that pin is that a plain `npm install` inside the template resolves the
+ * *published* alpha, so edits to `packages/*` never reach the template and the
+ * failure is silent - the template builds, type-checks and tests green against
+ * code nobody changed.
  *
- * This script repoints the three installed ecosystem directories at the local
+ * WHICH packages those are is asked of the template, not declared here: the set
+ * is every `packages/*` directory the template pins at an exact registry
+ * version (`templatePinnedPackageDirs`). That is the honest question, because a
+ * published tarball is the only thing a link can shadow - a dependency the
+ * template already reaches through `file:` or a workspace resolves locally and
+ * needs no link. A hand-written array was the predecessor of that derivation and
+ * it went stale exactly as expected: `packages/telemetry` (#496) would have been
+ * left unlinked with nothing reporting it.
+ *
+ * This script repoints those installed ecosystem directories at the local
  * `packages/*` builds. What it links is the whole package directory, but what a
  * consumer then resolves through it is `dist/` - which is why an unbuilt package
- * is refused instead of linked. It replaces exactly those three entries and
- * touches nothing else: not `package.json`, not `package-lock.json`, not the
- * rest of the tree.
+ * is refused instead of linked. It replaces exactly those entries and touches
+ * nothing else: not `package.json`, not `package-lock.json`, not the rest of the
+ * tree.
  *
  * A `npm install --no-save --no-package-lock <paths>` would do the linking too,
  * but npm rebuilds the whole ideal tree for it — pruning unrelated packages and
@@ -24,12 +33,14 @@
  * Run `npm ci` inside `template-shell` to go back to the pinned versions. There
  * is no `--unlink`: the links replace published tarball *content*, which only
  * npm can put back, so any inverse this script could offer would still end in
- * `npm ci` — after leaving three holes in the tree in the meantime.
+ * `npm ci` - after leaving a hole per linked package in the meantime.
  *
  * That same asymmetry is why a run that cannot create every link puts the tree
  * back rather than reporting how far it got: the installed content is moved
- * aside, never deleted, until the last symlink is in place. A failed link costs
- * a re-run, not an `npm ci`.
+ * aside, never deleted, until the last symlink is in place. A failed link then
+ * usually costs a re-run rather than an `npm ci` - and when the rollback itself
+ * cannot put a directory back, the result says so and names it (`unrestored`),
+ * because that is the one case `npm ci` is genuinely needed for.
  *
  * Core logic is exported for unit tests; only `runCli` touches the process.
  *
@@ -39,16 +50,10 @@ import fsDefault from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { templatePinnedPackageDirs } from './template-ecosystem-packages.mjs';
 
 /** Template whose `node_modules` the links are written into. */
 export const templateDirName = 'template-shell';
-
-/**
- * Only the packages the template pins to the registry. The rest of
- * `@gears-frontx/*` inside the template either lives in its own subtree or is
- * already linked by npm, and must keep whatever npm gave it.
- */
-export const linkedPackageDirs = ['api', 'mfes', 'gts-plugin'];
 
 /**
  * Suffix of the directory an installed package is moved to while its symlink
@@ -62,31 +67,32 @@ export const linkedPackageDirs = ['api', 'mfes', 'gts-plugin'];
 export const backupSuffix = '.frontx-link-backup';
 
 /**
- * The template's own code imports `FRONTX_ACTION_*` from
- * `@gears-frontx/gts-plugin` and reads `DomainContext.typeSystem`, neither of
- * which exists in the published `0.3.0-alpha.0` tarballs — the constants still
- * sit in `@gears-frontx/mfes` there. Linking is what makes the template compile
- * at all until the pins move onto `0.3.0-alpha.1`, so the warning is printed on
- * success: it explains why the pinned tree is red, not why linking failed.
+ * Printed on SUCCESS, because success is now the dangerous case.
  *
- * The warning names the failing exports and not a count of errors. The count
- * moves with every ecosystem change, and `type-check` chains its sub-steps with
- * `&&`, so the number a developer sees also depends on which sub-step
- * short-circuits first — a figure quoted here would be wrong more often than
- * right.
+ * While the pins sat on `0.3.0-alpha.0` this warning said the opposite: those
+ * tarballs predated the `FRONTX_ACTION_*`/`DomainContext.typeSystem` move into
+ * `@gears-frontx/gts-plugin`, so the template did not compile without these
+ * links and forgetting to relink announced itself as a wall of type errors.
+ * With the pins on `0.3.0-alpha.1` (#485) the template builds from the registry
+ * on its own - which removes the error AND the signal. A stale link now costs
+ * nothing visible and silently tests the published code instead of the working
+ * copy, so the note names that trade rather than a build failure.
  */
-const pinnedSurfaceDriftWarning =
-  'Note: the pinned registry versions cannot build template-shell right now — the published\n' +
-  '0.3.0-alpha.0 tarballs predate the FRONTX_ACTION_*/DomainContext.typeSystem move into\n' +
-  '@gears-frontx/gts-plugin, so type-check and build:packages fail on those exports without\n' +
-  'these links. Linking is the only working path until the template pins move onto the\n' +
-  '0.3.0-alpha.1 packages this branch publishes (#485).';
+const silentStalenessNote =
+  'Note: the template also builds from its pins alone, so nothing will tell you when these\n' +
+  'links go stale. Two different things break them, and they need different fixes:\n' +
+  '  - `npm install` inside template-shell reifies the tree from the lockfile and REPLACES\n' +
+  '    the links with the pinned registry tarballs. Re-run this command.\n' +
+  '  - `npm run clean:artifacts` leaves the links in place and deletes the packages/*/dist\n' +
+  '    they resolve through, so they point at nothing. Re-run `npm run build:packages`.\n' +
+  'A template result that contradicts an edit you just made in packages/* is the symptom;\n' +
+  'check both before believing it.';
 
 /**
  * @typedef {{ ok: true; linked: string[]; warning: string }} LinkSuccess
  * @typedef {{
  *   ok: false;
- *   reason: 'template-not-installed' | 'source-missing' | 'build-missing';
+ *   reason: 'template-not-installed' | 'nothing-pinned' | 'source-missing' | 'build-missing';
  *   message: string;
  * }} LinkRefusal
  * @typedef {LinkSuccess | LinkRefusal | LinkRollback} LinkResult
@@ -96,13 +102,21 @@ const pinnedSurfaceDriftWarning =
  * The only failure that can be raised after the first write, and the reason the
  * caller has to read fields rather than just the message.
  *
- * `restored` names the packages the rollback returned to the state `npm ci` left
- * them in: every package whose installed directory had already been moved aside.
- * That includes the package that failed when its symlink was refused, and
- * excludes it when the move aside itself was refused - nothing of it had moved,
- * so it appears in neither list. `unrestored` names the packages the rollback
- * could not put back, and a non-empty `unrestored` is the only outcome of this
- * script that needs `npm ci` to repair.
+ * `restored` names the packages whose installed directory the rollback moved
+ * back: those, and only those, are at the version `npm ci` had put there. That
+ * includes the package that failed when its symlink was refused, and excludes
+ * it when the move aside itself was refused - nothing of it had moved, so it
+ * appears in no list at all.
+ *
+ * `cleared` names the packages that had NOTHING installed when the run started
+ * (a hand-pruned scope, a partial install). Their rollback is the removal of
+ * the symlink alone, which already returns the scope to the state `npm ci` left
+ * it in - there is no version to come back to, so reporting them as `restored`
+ * would name one that never existed.
+ *
+ * `unrestored` names the packages the rollback could not put back, and a
+ * non-empty `unrestored` is the only outcome of this script that needs
+ * `npm ci` to repair.
  *
  * @typedef {{
  *   ok: false;
@@ -110,6 +124,7 @@ const pinnedSurfaceDriftWarning =
  *   message: string;
  *   failedPackage: string;
  *   restored: string[];
+ *   cleared: string[];
  *   unrestored: string[];
  * }} LinkRollback
  */
@@ -117,7 +132,7 @@ const pinnedSurfaceDriftWarning =
 /**
  * Repo-relative path of the ESM entry point a consumer actually loads.
  *
- * All three packages resolve exclusively through `dist/`, so a checkout without
+ * Every linked package resolves exclusively through `dist/`, so a checkout without
  * a build has a complete `package.json` and no loadable code. Reading the entry
  * from `exports['.'].import` rather than hardcoding `dist/index.js` keeps the
  * guard honest if a package changes its output layout.
@@ -257,6 +272,8 @@ function restoreInstalledTree({ fs, staged, failedPackage, failedStep, cause }) 
   /** @type {string[]} */
   const restored = [];
   /** @type {string[]} */
+  const cleared = [];
+  /** @type {string[]} */
   const unrestored = [];
 
   for (const { name, linkPath, backupPath } of [...staged].reverse()) {
@@ -266,11 +283,16 @@ function restoreInstalledTree({ fs, staged, failedPackage, failedStep, cause }) 
       // also not exist, which is the case this run failed on.
       fs.rmSync(linkPath, { recursive: true, force: true });
 
-      if (backupPath !== null) {
+      if (backupPath === null) {
+        // Nothing was installed here, so nothing was moved aside and there is
+        // nothing to put back - taking the symlink away already returned the
+        // scope to the state `npm ci` left it in. Calling that "restored to the
+        // installed version" would name a version that never existed.
+        cleared.push(name);
+      } else {
         fs.renameSync(backupPath, linkPath);
+        restored.push(name);
       }
-
-      restored.push(name);
     } catch {
       unrestored.push(name);
     }
@@ -278,6 +300,7 @@ function restoreInstalledTree({ fs, staged, failedPackage, failedStep, cause }) 
 
   // Reported in the order the packages are linked, not the order they were undone.
   restored.reverse();
+  cleared.reverse();
   unrestored.reverse();
 
   /** @type {string} */
@@ -290,11 +313,19 @@ function restoreInstalledTree({ fs, staged, failedPackage, failedStep, cause }) 
       `Rollback could not restore ${describePackages(unrestored)} - the installed ` +
       `content is still there under \`${backupSuffix}\`.`;
     recoveryLine = `Run \`npm ci\` inside ${templateDirName} to repair the tree.`;
+  } else if (restored.length > 0 || cleared.length > 0) {
+    // Two different true statements, and saying only the first of them about a
+    // package that was never installed is the wording this fixes.
+    const parts = [];
+    if (restored.length > 0) {
+      parts.push(`rolled ${describePackages(restored)} back to the installed versions`);
+    }
+    if (cleared.length > 0) {
+      parts.push(`removed the ${describePackages(cleared)} symlink, where nothing had been installed to put back`);
+    }
+    stateLine = `Rollback ${parts.join(' and ')}; nothing was left half-removed.`;
   } else {
-    stateLine =
-      restored.length > 0
-        ? `Rolled ${describePackages(restored)} back to the installed versions; nothing was left half-removed.`
-        : 'Nothing had been written yet, so the installed tree is untouched.';
+    stateLine = 'Nothing had been written yet, so the installed tree is untouched.';
     recoveryLine =
       `Fix the cause and re-run, or run \`npm ci\` inside ${templateDirName} to rebuild ` +
       'the tree from the lockfile.';
@@ -320,6 +351,7 @@ function restoreInstalledTree({ fs, staged, failedPackage, failedStep, cause }) 
     ].join('\n'),
     failedPackage,
     restored,
+    cleared,
     unrestored,
   };
 }
@@ -334,19 +366,24 @@ function restoreInstalledTree({ fs, staged, failedPackage, failedStep, cause }) 
  * linked and part on registry tarballs, or worse, one package deleted and not
  * replaced - is harder to diagnose than both end points.
  *
+ * `packageDirs` is passed in rather than derived here: the derivation reads the
+ * real repository (`templatePinnedPackageDirs`), and keeping it in `runCli`
+ * leaves this function a pure function of the tree it is handed - which is what
+ * lets the rollback cases be tested against a fake filesystem at all.
+ *
  * @param {{
  *   repoRoot: string;
+ *   packageDirs: string[];
  *   fs?: typeof fsDefault;
  *   platform?: NodeJS.Platform;
- *   packageDirs?: string[];
  * }} options
  * @returns {LinkResult}
  */
 export function linkEcosystemPackages({
   repoRoot,
+  packageDirs,
   fs = fsDefault,
   platform = process.platform,
-  packageDirs = linkedPackageDirs,
 }) {
   const scopeDir = path.join(repoRoot, templateDirName, 'node_modules', '@gears-frontx');
 
@@ -357,6 +394,22 @@ export function linkEcosystemPackages({
       message:
         `Cannot link: ${path.relative(repoRoot, scopeDir)} does not exist.\n` +
         `Run \`npm ci\` inside ${templateDirName} first.`,
+    };
+  }
+
+  // An empty set is not "nothing to do": the set comes from the template's own
+  // pins, so an empty one means either the template stopped pinning anything to
+  // the registry (in which case the dev loop it exists for is obsolete) or the
+  // derivation broke. Linking nothing and exiting 0 would look exactly like a
+  // successful run to everyone downstream.
+  if (packageDirs.length === 0) {
+    return {
+      ok: false,
+      reason: 'nothing-pinned',
+      message:
+        `Cannot link: no packages/* directory is pinned at an exact registry version by ${templateDirName}.\n` +
+        'Nothing published can shadow a local edit, so there is nothing to link - which is either a real\n' +
+        'change in how the template declares its dependencies, or a broken derivation.',
     };
   }
 
@@ -474,13 +527,19 @@ export function linkEcosystemPackages({
   return {
     ok: true,
     linked: plan.map(({ name }) => name),
-    warning: pinnedSurfaceDriftWarning,
+    warning: silentStalenessNote,
   };
 }
 
 /**
+ * The set derivation lives here, and so does the only place a failure inside it
+ * is turned into an exit code: reading the template's manifests fails closed
+ * (`readPackageManifest`), and a thrown message naming an unreadable file is
+ * more useful to a developer than the same message wrapped in a stack trace.
+ *
  * @param {{
  *   repoRoot?: string;
+ *   packageDirs?: string[];
  *   fs?: typeof fsDefault;
  *   platform?: NodeJS.Platform;
  *   log?: (message: string) => void;
@@ -490,12 +549,22 @@ export function linkEcosystemPackages({
  */
 export function runCli({
   repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'),
+  packageDirs,
   fs = fsDefault,
   platform = process.platform,
   log = console.log,
   error = console.error,
 } = {}) {
-  const result = linkEcosystemPackages({ repoRoot, fs, platform });
+  /** @type {string[]} */
+  let dirs;
+  try {
+    dirs = packageDirs ?? templatePinnedPackageDirs(repoRoot, templateDirName);
+  } catch (cause) {
+    error(`Cannot link: ${cause instanceof Error ? cause.message : String(cause)}`);
+    return 1;
+  }
+
+  const result = linkEcosystemPackages({ repoRoot, packageDirs: dirs, fs, platform });
 
   if (!result.ok) {
     error(result.message);
@@ -514,5 +583,8 @@ const isEntryPoint =
   process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href;
 
 if (isEntryPoint) {
-  process.exit(runCli());
+  // `process.exitCode` rather than `process.exit()`: the latter can truncate a
+  // still-flushing stdout write, and the warning this script prints on success
+  // is the whole reason it says anything at all.
+  process.exitCode = runCli();
 }

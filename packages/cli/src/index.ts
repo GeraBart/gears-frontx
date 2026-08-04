@@ -30,6 +30,7 @@ export { updateLocalCommand } from './commands/update-local';
 export type { UpdateLocalResult } from './commands/update-local';
 
 export { validateManifestContract, readManifestFromContent } from './manifest/validate-contract';
+export { validateContentSelfContainment } from './manifest/validate-content-self-containment';
 export { validateCommand } from './commands/validate';
 export type {
   TemplateManifest,
@@ -40,8 +41,10 @@ export type {
   ManifestValidationResult,
   ManifestValidationState,
   ReadFileFn,
+  ListContentOwnedFilesFn,
 } from './manifest/types';
 export type { ReadManifestResult } from './manifest/validate-contract';
+export { createFsReadFileFn, createFsListContentOwnedFilesFn } from './adapters/fs-project-io';
 export type { ValidateCommandResult } from './commands/validate';
 export { MANIFEST_FILENAME, MANIFEST_SCHEMA_VERSION } from './manifest/types';
 

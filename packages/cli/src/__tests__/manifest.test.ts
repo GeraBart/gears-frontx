@@ -3,10 +3,23 @@
 // @cpt-state:cpt-frontx-state-template-manifest-validation-lifecycle:p1
 // @cpt-dod:cpt-frontx-dod-template-manifest-validate-command:p1
 // @cpt-dod:cpt-frontx-dod-template-manifest-single-description:p1
-import { describe, it, expect, vi } from 'vitest';
+import path from 'node:path';
+import { mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { validateManifestContract, readManifestFromContent } from '../manifest/validate-contract';
 import { validateCommand } from '../commands/validate';
-import type { TemplateManifest, ReadFileFn } from '../manifest/types';
+import { createFsListContentOwnedFilesFn, createFsReadFileFn } from '../adapters/fs-project-io';
+import { MANIFEST_FILENAME } from '../manifest/types';
+import type { TemplateManifest, ReadFileFn, ListContentOwnedFilesFn } from '../manifest/types';
+
+// These tests exercise the manifest-CONTRACT path only (cpt-frontx-algo-
+// template-manifest-validate-contract, p1); the content self-containment
+// check (p2, packages/cli/src/__tests__/manifest-content-self-containment.test.ts)
+// has its own dedicated coverage, so a stub that finds no files is the
+// correct fixture here - it keeps these cases from depending on behavior
+// that isn't what they're testing.
+const noContentOwnedFiles: ListContentOwnedFilesFn = async () => [];
 
 // Helper: build a valid four-category manifest JSON string.
 // Categories: (1) identity, (2) version, (3) ownership boundaries, (4) referenced templates.
@@ -252,7 +265,7 @@ describe('validateCommand', () => {
   // inst-if-manifest-absent / inst-return-manifest-absent
   it('returns FAIL + non-zero exit code when manifest absent', async () => {
     const readFileFn: ReadFileFn = vi.fn().mockRejectedValue(new Error('ENOENT: no such file'));
-    const result = await validateCommand('/some/template', readFileFn);
+    const result = await validateCommand('/some/template', readFileFn, noContentOwnedFiles);
     expect(result.ok).toBe(false);
     expect(result.exitCode).toBe(1);
     expect(result.message).toMatch(/manifest not found/i);
@@ -261,9 +274,30 @@ describe('validateCommand', () => {
   // inst-else-pass / inst-return-pass
   it('returns PASS + zero exit code for conforming manifest', async () => {
     const readFileFn: ReadFileFn = vi.fn().mockResolvedValue(validManifest());
-    const result = await validateCommand('/some/template', readFileFn);
+    const result = await validateCommand('/some/template', readFileFn, noContentOwnedFiles);
     expect(result.ok).toBe(true);
     expect(result.exitCode).toBe(0);
+  });
+
+  // Review finding on #493: `ListContentOwnedFilesFn` has no error channel, so
+  // a real `readdir`/`stat` refusal (permission denied, a path that vanished
+  // mid-walk) reaches this command as a throw. It used to escape as a raw node
+  // stack trace, bypassing the exit-code contract every other failure here
+  // goes through.
+  it('converts an enumeration failure into a named failure result rather than throwing', async () => {
+    const readFileFn: ReadFileFn = vi.fn().mockResolvedValue(validManifest());
+    const throwingEnumeration: ListContentOwnedFilesFn = async () => {
+      throw Object.assign(new Error("EACCES: permission denied, scandir '/some/template/src/generated'"), {
+        code: 'EACCES',
+      });
+    };
+
+    const result = await validateCommand('/some/template', readFileFn, throwingEnumeration);
+
+    expect(result.ok).toBe(false);
+    expect(result.exitCode).toBe(1);
+    expect(result.message).toMatch(/could not be inspected for self-containment/i);
+    expect(result.message).toContain('/some/template/src/generated');
   });
 
   // inst-report-violations / inst-return-fail
@@ -271,11 +305,75 @@ describe('validateCommand', () => {
     // Missing identity, version, and ownership boundaries — multiple violations expected.
     const raw = JSON.stringify({});
     const readFileFn: ReadFileFn = vi.fn().mockResolvedValue(raw);
-    const result = await validateCommand('/some/template', readFileFn);
+    const result = await validateCommand('/some/template', readFileFn, noContentOwnedFiles);
     expect(result.ok).toBe(false);
     expect(result.exitCode).toBe(1);
     expect(result.violations).toBeDefined();
     expect((result.violations ?? []).length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+// Real-fs coverage of validateCommand's content-self-containment seam (gs-layer
+// CHANGES_REQUESTED, review round on #493): the adapter-level throws
+// (fs-project-io.test.ts) and validateCommand's throw-to-FAIL conversion
+// (the fake-throw case above) are each proven separately; these three drive
+// the REAL createFsListContentOwnedFilesFn and createFsReadFileFn against a
+// real tmpdir template, the same wiring cli.ts uses in production, so the
+// conversion is proven end to end rather than only at either seam alone.
+describe('validateCommand — real fs content self-containment (review round on #493)', () => {
+  let templateDir: string;
+  let outsideDir: string;
+
+  afterEach(async () => {
+    if (templateDir) await rm(templateDir, { recursive: true, force: true });
+    if (outsideDir) await rm(outsideDir, { recursive: true, force: true });
+    templateDir = '';
+    outsideDir = '';
+  });
+
+  async function makeTemplate(exclusiveSubtrees: string[]): Promise<string> {
+    const dir = await mkdtemp(path.join(tmpdir(), 'frontx-validate-command-'));
+    templateDir = dir;
+    const manifest = validManifest({ ownershipBoundaries: { exclusiveSubtrees, sharedFiles: [] } });
+    await writeFile(path.join(dir, MANIFEST_FILENAME), manifest);
+    return dir;
+  }
+
+  it('refuses with exit 1 when a declared content-owning path does not exist on disk', async () => {
+    const dir = await makeTemplate(['packages']);
+    // No `packages` directory is ever created under `dir`.
+
+    const result = await validateCommand(dir, createFsReadFileFn(), createFsListContentOwnedFilesFn());
+
+    expect(result.ok).toBe(false);
+    expect(result.exitCode).toBe(1);
+    expect(result.message).toMatch(/could not be inspected/i);
+    expect(result.message).toContain('packages');
+  });
+
+  it('refuses with exit 1 when a declared content-owning path is a symlink resolving outside the template root', async () => {
+    const dir = await makeTemplate(['packages']);
+    outsideDir = await mkdtemp(path.join(tmpdir(), 'frontx-validate-command-outside-'));
+    await symlink(outsideDir, path.join(dir, 'packages'));
+
+    const result = await validateCommand(dir, createFsReadFileFn(), createFsListContentOwnedFilesFn());
+
+    expect(result.ok).toBe(false);
+    expect(result.exitCode).toBe(1);
+    expect(result.message).toContain('packages');
+    expect(result.message).toContain('resolves outside the template root');
+  });
+
+  it('accepts a BOM-prefixed tsconfig.json carrier that is otherwise valid JSONC', async () => {
+    const dir = await makeTemplate(['tsconfig.json']);
+    // A leading UTF-8 byte-order mark, written via fs like a real editor
+    // would leave it, not simulated through a fixture-file trick.
+    await writeFile(path.join(dir, 'tsconfig.json'), '﻿{ "compilerOptions": { "strict": true } }');
+
+    const result = await validateCommand(dir, createFsReadFileFn(), createFsListContentOwnedFilesFn());
+
+    expect(result.ok).toBe(true);
+    expect(result.exitCode).toBe(0);
   });
 });
 

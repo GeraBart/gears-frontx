@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1.0",
   "name": "@gears-frontx/frontx-template-shell",
-  "version": "0.1.0-alpha.0",
+  "version": "0.1.0-alpha.1",
   "ownershipBoundaries": {
     "exclusiveSubtrees": [
       "packages/",
@@ -13,7 +13,6 @@
       "src-app/vitest.mfe.base.ts",
       "public/",
       "scripts/",
-      "internal/",
       "__tests__/",
       "package.json",
       "package-lock.json",

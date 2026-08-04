@@ -12,11 +12,13 @@
   - [Validate Template for Publication](#validate-template-for-publication)
 - [3. Processes / Business Logic (CDSL)](#3-processes--business-logic-cdsl)
   - [Validate Template Structure Against the Manifest Contract](#validate-template-structure-against-the-manifest-contract)
+  - [Validate Content Self-Containment](#validate-content-self-containment)
 - [4. States (CDSL)](#4-states-cdsl)
   - [TemplateManifest Validation State Machine](#templatemanifest-validation-state-machine)
 - [5. Definitions of Done](#5-definitions-of-done)
   - [Manifest Contract Validation Command](#manifest-contract-validation-command)
   - [Manifest as Single Authoritative Description](#manifest-as-single-authoritative-description)
+  - [Content Self-Containment Is Checked at Pre-Publish Validation](#content-self-containment-is-checked-at-pre-publish-validation)
 - [6. Acceptance Criteria](#6-acceptance-criteria)
 
 <!-- /toc -->
@@ -78,6 +80,8 @@ User-facing interactions that start with an actor (human or external system) and
 
 **Error Scenarios**:
 - Template manifest is missing, structurally malformed, or fails contract checks; the developer receives a FAIL with a list of violations and must correct the manifest before retrying.
+- A file inside a declared exclusive subtree or shared-file path references a filesystem path - per the known-carrier registry (currently: a `package.json` `file:` specifier; a tsconfig file's `compilerOptions.paths` mapping, `extends` target, `references[].path` entry, `files`/`include`/`exclude` entry, or one of its path-valued `compilerOptions` (`baseUrl`, `rootDir`, `rootDirs`, `outDir`, `declarationDir`, `outFile`, `tsBuildInfoFile`, `typeRoots`); or a lockfile workspace-member key/`resolved` entry) - that resolves outside the candidate template directory; the developer receives a FAIL naming the offending file and path and must correct the reference before retrying.
+- The candidate's content cannot be inspected at all - the filesystem refuses to enumerate a declared content-owning path (a permission-denied directory, a path that vanished mid-walk), or a declared content-owning path cannot be honestly enumerated because it is absent, is a broken symlink, or resolves outside the candidate template directory; the developer receives a FAIL naming the path that could not be read, never a PASS and never a raw runtime error. A check that cannot look must not report the outcome of having looked, and a declared boundary that does not hold is refused rather than treated as empty content.
 
 **Steps**:
 1. [x] - `p1` - Template developer invokes the CLI pre-publish validate command on the candidate template directory - `inst-invoke-validate`
@@ -88,7 +92,11 @@ User-facing interactions that start with an actor (human or external system) and
 5. [x] - `p1` - **IF** the validation result is REJECTED - `inst-if-rejected`
    1. [x] - `p1` - CLI reports all violations to the developer with their locations - `inst-report-violations`
    2. [x] - `p1` - **RETURN** FAIL exit code - `inst-return-fail`
-6. [x] - `p1` - **ELSE** (validation result is VALIDATED) - `inst-else-pass`
+6. [x] - `p2` - **ELSE** (manifest contract is VALIDATED), CLI additionally delegates to the content self-containment algorithm (`cpt-frontx-algo-template-manifest-validate-content-self-containment`), which inspects every file inside the manifest's declared content-owning paths - every exclusive subtree, plus every shared-file path; a refusal raised while enumerating those paths - a filesystem refusal, or a declared boundary that is absent, a broken symlink, or resolves outside the candidate template directory - is converted here into a FAIL naming what could not be read, since the command is the one boundary that owns the exit code - `inst-delegate-to-content-algo`
+7. [x] - `p2` - **IF** the content self-containment result carries violations - `inst-if-content-violations`
+   1. [x] - `p2` - CLI reports all content violations to the developer, naming the offending file and the escaping path - `inst-report-content-violations`
+   2. [x] - `p2` - **RETURN** FAIL exit code - `inst-return-content-fail`
+8. [x] - `p1` - **ELSE** (manifest contract VALIDATED and content self-containment carries no violations) - `inst-else-pass`
    1. [x] - `p1` - CLI reports PASS to the developer - `inst-report-pass`
    2. [x] - `p1` - **RETURN** success exit code - `inst-return-pass`
 
@@ -139,6 +147,32 @@ Internal system functions and procedures that do not interact with actors direct
 13. [x] - `p1` - **IF** any violations were accumulated - `inst-if-violations`
     1. [x] - `p1` - **RETURN** REJECTED with the accumulated violations list - `inst-return-rejected`
 14. [x] - `p1` - **RETURN** VALIDATED with no violations - `inst-return-validated`
+
+### Validate Content Self-Containment
+
+- [x] `p2` - **ID**: `cpt-frontx-algo-template-manifest-validate-content-self-containment`
+
+Closes the gap the manifest-contract check alone leaves open: the contract validates the manifest's *declared* ownership boundaries, but nothing about that check inspects the *content* those boundaries own. A file inside a declared exclusive subtree or shared-file path can carry a filesystem-path reference - per the known-carrier registry (currently: a `package.json` `file:` dependency specifier; a tsconfig file's `compilerOptions.paths` mapping, `extends` target, `references[].path` entry, `files`/`include`/`exclude` entry, or one of its path-valued `compilerOptions` (`baseUrl`, `rootDir`, `rootDirs`, `outDir`, `declarationDir`, `outFile`, `tsBuildInfoFile`, `typeRoots`); or a lockfile workspace-member key / `resolved` entry) - that resolves outside the candidate template directory, and the contract check has no way to observe it. The registry is extensible: a carrier is anything this algorithm can parse structurally, and adding one is a code change here, not a spec rewrite. Deliberately out of scope: a `package.json` `workspaces` glob (a discovery pattern, not a literal path reference) and any file that is not a JSON carrier by name (e.g. a Vite config alias) - this algorithm parses every carrier structurally and never scans raw text, so a form it cannot parse is not in the carrier set at all. That is not the same as tolerating an unparseable carrier: a file the registry DOES claim, whose content cannot be read or parsed, is a violation rather than a skip.
+
+This algorithm inspects the actual on-disk content of every declared content-owning path - every exclusive subtree, plus every shared-file path, since either boundary kind can own a carrier file (`cpt-frontx-adr-template-ownership-boundary-declaration`) - generically: it reads the manifest's own declarations and knows no template name, so it applies unchanged to every template.
+
+**Input**: candidate template directory path, the content-owning paths declared in the manifest's ownership boundaries (every exclusive subtree, plus every shared-file path)
+
+**Output**: validation result (VALIDATED with no violations, or REJECTED with a list of violations naming the offending file and the escaping path)
+
+**Steps**:
+1. [x] - `p2` - **FOR EACH** declared content-owning path (every exclusive subtree, plus every shared-file path) - `inst-csc-for-each-subtree`
+   1. [x] - `p2` - Enumerate every regular file reachable under the path (the path itself, when it addresses a single file), including a dot-prefixed directory or dot-file (legitimate template content, e.g. `.gitignore` or a `.frontx/ai/<identity>` bundle), never descending into a `node_modules` directory (install-time output, never committed template content) - `inst-csc-enumerate-files`
+2. [x] - `p2` - **FOR EACH** enumerated file whose name identifies it as a carrier of filesystem-path specifiers (`package.json`, a `tsconfig*.json` file, or an npm lockfile) - `inst-csc-for-each-carrier`
+   1. [x] - `p2` - Read and parse the carrier file's content structurally - never by pattern-matching the raw text; a `tsconfig*.json` carrier is parsed JSONC-tolerantly (comments, trailing commas, and a leading byte-order mark allowed, matching what `tsc`'s own config reader accepts), while a `package.json` or lockfile carrier is parsed as strict JSON; a carrier that cannot be read, or whose content cannot be parsed under its own tolerance, is itself a violation naming the file and the carrier kind, since a carrier the algorithm did not inspect must not be indistinguishable from one it inspected and found clean - `inst-csc-parse-carrier`
+   2. [x] - `p2` - Extract every path-like specifier the carrier's shape declares, per the known-carrier registry (currently: a `file:` dependency specifier in `package.json`; a `compilerOptions.paths` mapping entry (resolved against `baseUrl`), an `extends` target, a `references[].path` entry, a `files`/`include`/`exclude` entry, or a path-valued `compilerOptions` entry (`baseUrl`, `rootDir`, `rootDirs`, `outDir`, `declarationDir`, `outFile`, `tsBuildInfoFile`, `typeRoots`) in a tsconfig file; or a workspace-member key or a non-registry `resolved` entry in a lockfile) - `inst-csc-extract-specifiers`
+   3. [x] - `p2` - **FOR EACH** extracted specifier - `inst-csc-for-each-specifier`
+      1. [x] - `p2` - Resolve the specifier to a path relative to the candidate template directory, taken relative to the carrier file's own directory (and, for a tsconfig `paths` entry, relative to its `baseUrl`) rather than by pattern-matching `..` segments; a glob pattern resolves by the directory prefix it is anchored at, since that prefix is the whole of what containment can be decided from; an absolute, drive-prefixed, or home-relative (`~`) specifier is outside the root by definition, since every specifier in this resolution is contractually root-relative - `inst-csc-resolve-specifier`
+      2. [x] - `p2` - **IF** the resolved path lies outside the candidate template directory - `inst-csc-if-outside-root`
+         1. [x] - `p2` - Add violation naming the carrier file, the specifier, and the resolved path - `inst-csc-add-violation`
+3. [x] - `p2` - **IF** any violations were accumulated - `inst-csc-if-violations`
+   1. [x] - `p2` - **RETURN** REJECTED with the accumulated violations list - `inst-csc-return-rejected`
+4. [x] - `p2` - **RETURN** VALIDATED with no violations - `inst-csc-return-validated`
 
 ## 4. States (CDSL)
 
@@ -195,6 +229,23 @@ The system **MUST** ensure the same manifest shape (`cpt-frontx-contract-templat
 - Entities: `TemplateManifest`, `OwnershipBoundary`
 - Component: `cpt-frontx-component-cli`
 
+### Content Self-Containment Is Checked at Pre-Publish Validation
+
+- [x] `p2` - **ID**: `cpt-frontx-dod-template-manifest-content-self-containment`
+
+The system **MUST** ensure the CLI pre-publish validate command additionally rejects a candidate template whose declared content-owning paths (every exclusive subtree, plus every shared-file path) contain a file referencing a filesystem path - per the known-carrier registry (currently: a `package.json` `file:` specifier; a tsconfig file's `compilerOptions.paths` mapping, `extends` target, `references[].path` entry, `files`/`include`/`exclude` entry, or one of its path-valued `compilerOptions` (`baseUrl`, `rootDir`, `rootDirs`, `outDir`, `declarationDir`, `outFile`, `tsBuildInfoFile`, `typeRoots`); or a lockfile workspace-member key/`resolved` entry) - that resolves outside the candidate template directory, reporting the offending file and path. A reference that resolves to a location still inside the template directory (a legitimate relative reference to the template's own subpackages) is not a violation; an absolute, drive-prefixed, or home-relative (`~`) reference is always a violation, since every reference this check resolves is contractually root-relative. The check resolves paths structurally and never flags a reference by pattern-matching `..` segments. Deliberately out of scope: a `package.json` `workspaces` glob and any carrier that is not JSON (e.g. a Vite config alias) - the registry only covers carriers this algorithm can parse structurally.
+
+**Implements**:
+- `cpt-frontx-flow-template-manifest-validate-for-publication`
+- `cpt-frontx-algo-template-manifest-validate-content-self-containment`
+
+**Constraints**: `cpt-frontx-constraint-cli-template-independence` - the check inspects the candidate's declared subtrees generically; it declares no template name and bundles no template content.
+
+**Touches**:
+- CLI: pre-publish validate command (`target`)
+- Entities: `TemplateManifest`, `OwnershipBoundary`
+- Component: `cpt-frontx-component-cli`
+
 ## 6. Acceptance Criteria
 
 - [x] The CLI pre-publish validate command locates the manifest in a candidate template directory and reports PASS or FAIL with violations.
@@ -204,6 +255,8 @@ The system **MUST** ensure the same manifest shape (`cpt-frontx-contract-templat
 - [x] A manifest whose ownership-boundaries category declares an ill-formed exclusive subtree, a shared-file entry missing its path or declared merge strategy, a merge strategy outside the closed set (`exclusive`, `region-union`), or a `region-union` entry declaring no owned region keys, causes a FAIL naming each offending entry.
 - [x] A manifest whose referenced-templates category lists an entry with a malformed template reference causes a FAIL naming each offending entry.
 - [x] A manifest declaring an exclusive subtree or shared-file path in the reserved CLI-owned `.frontx/` metadata namespace (`.frontx/provenance.json`, or any `.frontx/` path other than the manifest's own `.frontx/ai/<template-identity>/` bundle subtree) causes a FAIL; a template may declare only its own `.frontx/ai/<template-identity>/` bundle subtree under `.frontx/`.
+- [x] A file inside a declared exclusive subtree or shared-file path that references a filesystem path resolving outside the candidate template directory - per the known-carrier registry (currently: a `package.json` `file:` specifier; a tsconfig file's `compilerOptions.paths` mapping, `extends` target, `references[].path` entry, `files`/`include`/`exclude` entry, or one of its path-valued `compilerOptions` (`baseUrl`, `rootDir`, `rootDirs`, `outDir`, `declarationDir`, `outFile`, `tsBuildInfoFile`, `typeRoots`); or a lockfile workspace-member key/`resolved` entry) - causes a FAIL naming the offending file and path; a reference that resolves to a location still inside the template directory is not flagged, and an absolute, drive-prefixed, or home-relative (`~`) reference always is.
+- [x] A declared content-owning path that is absent, is a broken symlink, or resolves outside the candidate template directory causes a FAIL naming the path, never a silent PASS from enumerating no content.
 - [x] A conforming manifest declaring exactly the four categories causes a PASS result and a zero exit code.
 - [x] The same manifest shape checked at pre-publish validation is consumed at install, apply, and assembly — no command reads a different or partial descriptor.
 - [x] The manifest shape is versioned so that previously published manifests remain readable when the contract evolves.

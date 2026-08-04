@@ -35,7 +35,7 @@ import type { InventoryEntry } from './inventory/types';
 import type { FetchFn } from './resolver/types';
 import type { ReadContentItemsFn, WriteFileFn } from './scaffold/types';
 import type { BoundaryConflictEntry } from './scaffold/state';
-import type { ReadFileFn } from './manifest/types';
+import type { ListContentOwnedFilesFn, ReadFileFn } from './manifest/types';
 import type { ProvenanceWriteFn } from './provenance/types';
 import type { ReadProvenanceRecordsFn } from './scaffold/materialize';
 import type {
@@ -60,6 +60,7 @@ import {
 import {
   createFsWriteFileFn,
   createFsReadFileFn,
+  createFsListContentOwnedFilesFn,
   createFsReadProjectFileFn,
   createFsWriteProjectFileFn,
   createFsRemoveProjectFileFn,
@@ -149,6 +150,7 @@ export interface CliDeps {
   readContentFn: ReadContentItemsFn;
   writeFileFn: WriteFileFn;
   readFileFn: ReadFileFn;
+  listContentOwnedFilesFn: ListContentOwnedFilesFn;
   provenanceWriteFn: ProvenanceWriteFn;
   readProvenanceRecordsFn: ReadProvenanceRecordsFn;
   readSingleProvenanceFn: ReadProvenanceFn;
@@ -174,6 +176,7 @@ export function createRealDeps(): CliDeps {
     readContentFn: createFsReadContentItemsFn(inventoryRoot),
     writeFileFn: createFsWriteFileFn(),
     readFileFn: createFsReadFileFn(),
+    listContentOwnedFilesFn: createFsListContentOwnedFilesFn(),
     provenanceWriteFn: createFsProvenanceWriteFn(),
     readProvenanceRecordsFn: readProvenanceRecords,
     readSingleProvenanceFn: createFsReadSingleProvenanceFn(),
@@ -297,7 +300,7 @@ export async function runCommand(command: KnownCommand, args: string[], deps: Cl
     case 'validate': {
       const [templateDir] = args;
       if (!templateDir) return { exitCode: EXIT_USER_ERROR, stderr: 'validate requires a <templateDir> argument.' };
-      const result = await validateCommand(templateDir, deps.readFileFn);
+      const result = await validateCommand(templateDir, deps.readFileFn, deps.listContentOwnedFilesFn);
       return {
         exitCode: result.exitCode === 0 ? EXIT_SUCCESS : EXIT_USER_ERROR,
         stdout: result.ok ? result.message : undefined,
