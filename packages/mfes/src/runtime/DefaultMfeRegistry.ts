@@ -5,7 +5,7 @@
  * It wires all collaborators together and implements the facade API.
  *
  * INTERNAL: This class is NOT exported from the public barrel.
- * External consumers obtain instances via mfeRegistryFactory.build(config).
+ * External consumers obtain instances via createMfeRegistryFactory().build(config).
  *
  * @packageDocumentation
  * @internal
@@ -125,7 +125,7 @@ export class DefaultMfeRegistry extends MfeRegistry {
       throw new Error(
         'MfeRegistry requires a TypeSystemPlugin. ' +
         'Provide it via config.typeSystem parameter. ' +
-        'Use mfeRegistryFactory.build({ typeSystem: gtsPlugin }) to create an instance.'
+        'Use createMfeRegistryFactory().build({ typeSystem: gtsPlugin }) to create an instance.'
       );
     }
 

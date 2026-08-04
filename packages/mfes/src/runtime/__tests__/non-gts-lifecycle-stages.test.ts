@@ -16,8 +16,10 @@
  * real lifecycle pipeline, the entity declares a hook bound to each fake stage
  * id, and DefaultLifecycleManager executes a hook only when `hook.stage`
  * equals the dispatched id — so the hook's action chain firing IS the id
- * assertion. init/destroyed are declared on the domain, activated/deactivated
- * on an extension driven through the domain's mounter.
+ * assertion. Each stage is covered on every route the runtime fires it from:
+ * init/destroyed on the domain, activated/deactivated on an extension driven
+ * through the domain's mounter, and init/destroyed again on the extension,
+ * which registration and unregistration drive independently of the domain.
  */
 // @cpt-algo:cpt-frontx-algo-type-substrate-port-type-of-resolution:p2
 import { describe, it, expect, vi } from 'vitest';
@@ -52,6 +54,20 @@ const FAKE_ACTION_UNMOUNT_EXT = 'cti.example.action~unmount_ext.v1~';
 // triggered it, turning "which id did the runtime fire" into an observable
 // effect rather than a spy call count.
 const FAKE_ACTION_STAGE_PROBE = 'cti.example.action~stage_probe.v1~';
+
+// The stages the mount path drives. Default for the domain's
+// `extensionsLifecycleStages` and for the hooks an extension declares, so the
+// mount cases observe exactly one stage each.
+const MOUNT_STAGES = [FAKE_STAGE_ACTIVATED, FAKE_STAGE_DEACTIVATED];
+// Registration and unregistration drive init and destroyed on the extension
+// too, so the cases that cover those widen the domain's allowance and the
+// extension's hooks to all four.
+const ALL_EXTENSION_STAGES = [
+  FAKE_STAGE_INIT,
+  FAKE_STAGE_ACTIVATED,
+  FAKE_STAGE_DEACTIVATED,
+  FAKE_STAGE_DESTROYED,
+];
 
 const ENTRY_BASE_ID = 'cti.example.entry~';
 const ENTRY_ID = `${ENTRY_BASE_ID}widget.v1`;
@@ -115,7 +131,7 @@ function stageProbeChain(stageId: string): ActionsChain {
   };
 }
 
-function makeDomain(): ExtensionDomain {
+function makeDomain(extensionsLifecycleStages: string[] = MOUNT_STAGES): ExtensionDomain {
   return {
     id: DOMAIN_ID,
     actions: [
@@ -136,7 +152,7 @@ function makeDomain(): ExtensionDomain {
       { stage: FAKE_STAGE_INIT, actions_chain: stageProbeChain(FAKE_STAGE_INIT) },
       { stage: FAKE_STAGE_DESTROYED, actions_chain: stageProbeChain(FAKE_STAGE_DESTROYED) },
     ],
-    extensionsLifecycleStages: [FAKE_STAGE_ACTIVATED, FAKE_STAGE_DEACTIVATED],
+    extensionsLifecycleStages,
   };
 }
 
@@ -149,7 +165,7 @@ function makeEntry(): MfeEntry {
   };
 }
 
-function makeExtension(): Extension {
+function makeExtension(stages: string[] = MOUNT_STAGES): Extension {
   return {
     id: EXTENSION_ID,
     domain: DOMAIN_ID,
@@ -157,10 +173,10 @@ function makeExtension(): Extension {
     // Hooks target the domain rather than the extension: an extension target
     // only resolves once the mounted MFE registers a handler of its own, and
     // the stub lifecycle below registers none.
-    lifecycle: [
-      { stage: FAKE_STAGE_ACTIVATED, actions_chain: stageProbeChain(FAKE_STAGE_ACTIVATED) },
-      { stage: FAKE_STAGE_DEACTIVATED, actions_chain: stageProbeChain(FAKE_STAGE_DEACTIVATED) },
-    ],
+    lifecycle: stages.map((stage) => ({
+      stage,
+      actions_chain: stageProbeChain(stage),
+    })),
   } as Extension;
 }
 
@@ -266,35 +282,39 @@ describe('non-GTS consumer: domain lifecycle resolves init/destroyed stages thro
 
 // ─── Extension lifecycle: activated and deactivated stages ────────────────
 
+/**
+ * Register the domain and one extension, then mount it through the domain's
+ * mounter — the same route the React slot takes. Returns the probe log with
+ * the domain's own init entry already dropped, so what remains is what the
+ * extension's hooks recorded.
+ */
+async function mountExtensionThroughRegistry(
+  plugin: TypeSystemPlugin,
+  extensionStages: string[] = MOUNT_STAGES
+): Promise<{ registry: DefaultMfeRegistry; stageProbeLog: string[] }> {
+  const stageProbeLog: string[] = [];
+  const registry = new DefaultMfeRegistry({
+    typeSystem: plugin,
+    mfeHandlers: [new StubHandler(ENTRY_BASE_ID)],
+  });
+
+  registry.registerDomain(
+    makeDomain(extensionStages),
+    new ConcurrentDomainFactory(stageProbeLog)
+  );
+  await vi.waitFor(() => expect(stageProbeLog).toEqual([FAKE_STAGE_INIT]));
+  stageProbeLog.length = 0;
+
+  await registry.registerExtension(makeExtension(extensionStages));
+
+  const mounter = registry.getMounter(DOMAIN_ID);
+  mounter.attach(document.createElement('div'));
+  await mounter.mount(EXTENSION_ID, document.createElement('div'));
+
+  return { registry, stageProbeLog };
+}
+
 describe('non-GTS consumer: mount lifecycle resolves activated/deactivated stages through the plugin', () => {
-  /**
-   * Register the domain and one extension, then mount it through the domain's
-   * mounter — the same route the React slot takes. Returns the probe log with
-   * the domain's own init entry already dropped, so what remains is what the
-   * extension's hooks recorded.
-   */
-  async function mountExtensionThroughRegistry(
-    plugin: TypeSystemPlugin
-  ): Promise<{ registry: DefaultMfeRegistry; stageProbeLog: string[] }> {
-    const stageProbeLog: string[] = [];
-    const registry = new DefaultMfeRegistry({
-      typeSystem: plugin,
-      mfeHandlers: [new StubHandler(ENTRY_BASE_ID)],
-    });
-
-    registry.registerDomain(makeDomain(), new ConcurrentDomainFactory(stageProbeLog));
-    await vi.waitFor(() => expect(stageProbeLog).toEqual([FAKE_STAGE_INIT]));
-    stageProbeLog.length = 0;
-
-    await registry.registerExtension(makeExtension());
-
-    const mounter = registry.getMounter(DOMAIN_ID);
-    mounter.attach(document.createElement('div'));
-    await mounter.mount(EXTENSION_ID, document.createElement('div'));
-
-    return { registry, stageProbeLog };
-  }
-
   // inst-resolve-lifecycle-stage-activated
   it('runs the extension hook bound to the activated stage id the plugin resolved once the extension has mounted', async () => {
     const plugin = createNonGtsPlugin();
@@ -318,5 +338,64 @@ describe('non-GTS consumer: mount lifecycle resolves activated/deactivated stage
 
     expect(stageProbeLog).toEqual([FAKE_STAGE_DEACTIVATED]);
     expect(deactivatedSpy).toHaveBeenCalledWith();
+  });
+});
+
+// ─── Extension registration: init and destroyed stages ─────────────────────
+//
+// The same two stages the domain fires are fired on the extension as well, on
+// a different route: `registerExtension` inits the admitted extension, and
+// `unregisterExtension` unmounts it and then destroys it. Covering only the
+// domain would leave that route free to hold a GTS literal.
+
+describe('non-GTS consumer: extension registration resolves init/destroyed stages through the plugin', () => {
+  // inst-resolve-lifecycle-stage-init
+  it('runs the extension hook bound to the init stage id the plugin resolved when an extension is registered', async () => {
+    const plugin = createNonGtsPlugin();
+    const initSpy = vi.spyOn(plugin, 'resolveLifecycleStageInitId');
+    const stageProbeLog: string[] = [];
+    const registry = new DefaultMfeRegistry({
+      typeSystem: plugin,
+      mfeHandlers: [new StubHandler(ENTRY_BASE_ID)],
+    });
+
+    registry.registerDomain(
+      makeDomain(ALL_EXTENSION_STAGES),
+      new ConcurrentDomainFactory(stageProbeLog)
+    );
+    // Drop the domain's own init so what remains is the extension's.
+    await vi.waitFor(() => expect(stageProbeLog).toEqual([FAKE_STAGE_INIT]));
+    stageProbeLog.length = 0;
+    initSpy.mockClear();
+
+    // registerExtension awaits the init stage, so the hook's chain has reached
+    // the probe handler by the time it returns.
+    await registry.registerExtension(makeExtension(ALL_EXTENSION_STAGES));
+
+    expect(stageProbeLog).toEqual([FAKE_STAGE_INIT]);
+    expect(initSpy).toHaveBeenCalledWith();
+  });
+
+  // inst-resolve-lifecycle-stage-destroyed
+  it('runs the extension hooks for deactivated then destroyed when a mounted extension is unregistered', async () => {
+    const plugin = createNonGtsPlugin();
+    const deactivatedSpy = vi.spyOn(plugin, 'resolveLifecycleStageDeactivatedId');
+    const destroyedSpy = vi.spyOn(plugin, 'resolveLifecycleStageDestroyedId');
+
+    const { registry, stageProbeLog } = await mountExtensionThroughRegistry(
+      plugin,
+      ALL_EXTENSION_STAGES
+    );
+    stageProbeLog.length = 0;
+
+    await registry.unregisterExtension(EXTENSION_ID);
+
+    // Order is the contract, not an artifact of the log: unregistration
+    // deactivates the mounted extension before destroying it, so a runtime
+    // firing destroyed first would tear down state the deactivated hook still
+    // expects to be there.
+    expect(stageProbeLog).toEqual([FAKE_STAGE_DEACTIVATED, FAKE_STAGE_DESTROYED]);
+    expect(deactivatedSpy).toHaveBeenCalledWith();
+    expect(destroyedSpy).toHaveBeenCalledWith();
   });
 });
