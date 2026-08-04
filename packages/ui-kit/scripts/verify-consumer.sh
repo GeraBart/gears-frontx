@@ -1,8 +1,72 @@
 #!/usr/bin/env bash
 # Acceptance check #1: the packed @gears-frontx/ui-kit installs into a clean
-# Vite project and the project builds a page that uses the kit's components and
-# CSS. Run from anywhere; requires npm and node. `npm pack` works on a private
-# package — only `publish` is blocked.
+# Vite project and the project builds a page that uses the kit's components
+# and CSS. Run from anywhere; requires npm and node. `npm pack` works on a
+# private package — only `publish` is blocked.
+#
+# Since the per-entry repackaging (see design-notes.md's Architecture
+# section), this is also the tree-shaking proof: every consumer page below
+# imports only `Button`. A bundle that pulled in every component regardless
+# of what's imported (the old single dist/index.js + dist/index.css defect)
+# would still pass a presence-only check, so this script asserts BOTH
+# directions — Button's hashed class/CSS present, and a hashed class/CSS
+# from a component the page never imported (Table, Dialog — both have large,
+# distinctive CSS) absent.
+#
+# THREE bundler-facing legs, not one, plus a types leg. This is not
+# belt-and-braces — each guards something the others provably do not:
+#
+#   - [vite]: the ecosystem's own tooling; primary consumer check.
+#   - [esbuild-barrel]: importing the barrel (`@gears-frontx/ui-kit`)
+#     through raw esbuild. Measured directly: Vite's production build goes
+#     through Rollup, whose tree-shaking already cascades "this ui-kit
+#     wrapper export is unused" through to "therefore the Base UI submodule
+#     it exclusively imported is unused too" — true even against the
+#     *pre-repackaging* single dist/index.js (grepped the old build's Vite
+#     consumer output for Select/Menu/Toast/FloatingFocusManager identifiers:
+#     absent). Raw esbuild's bundler does not cascade that elimination: a
+#     Button-only page bundled with esbuild against the pre-repackaging
+#     tarball retained ~614KB unminified / 233KB minified of unreached Base
+#     UI internals (SelectRoot, MenuRoot, ToastRoot, FloatingFocusManager,
+#     @floating-ui/dom — none reachable from Button), solely because they
+#     were all unconditionally imported somewhere in the one bundled
+#     dist/index.js. So a Vite-only gate would prove the CSS fix but
+#     silently miss this JS regression. `/* @__PURE__ */` on the kit's
+#     cva() calls does not fix it either (verified: byte-identical esbuild
+#     output with and without the annotation on button/card/tabs/select/
+#     switch/dropdown-menu/badge) — the retention is Base UI's own
+#     submodules, unrelated to the kit's variant-styling calls. This leg
+#     guards a real, previously-invisible consumer-facing regression; it is
+#     not redundant with [vite] and should not be deleted as such. (The
+#     numbers above are from that investigation, built with --minify; this
+#     leg itself deliberately builds unminified — see the comment at its
+#     esbuild invocation for why minifying would break its own probes.)
+#   - [esbuild-subpath]: importing a component's own subpath
+#     (`@gears-frontx/ui-kit/button`) through raw esbuild. Exists because of
+#     a second, independent esbuild finding: esbuild does not tree-shake CSS
+#     the way it tree-shakes JS. A BARREL import bundled with esbuild
+#     correctly drops unreached components' JS (proven by [esbuild-barrel]
+#     above) but still ships every component's CSS regardless — swept
+#     `sideEffects` as `["**/*.css"]`, `["*.css"]`, and `false` and got the
+#     same full-CSS result every time, so this is not a `sideEffects` bug to
+#     fix; esbuild collects CSS from the whole reachable module graph
+#     independently of which JS bindings survive tree-shaking. Importing a
+#     component's SUBPATH instead resolves straight to that component's own
+#     chunk, whose module graph never reaches the other 18 components' CSS
+#     in the first place — which is why this leg, uniquely, asserts CSS
+#     presence/absence rather than JS. Do not fold this into
+#     [esbuild-barrel]'s assertions: a barrel entry cannot pass a CSS-absence
+#     check under esbuild today, and asserting it there would either be a
+#     permanently-red check or a silently-weakened one.
+#   - [types]: `tsc` under both `moduleResolution: "nodenext"` and
+#     `"bundler"`, for the barrel and three subpaths. Exists because the
+#     per-entry repackaging's relative `.d.ts` specifiers are a types-only
+#     surface no test above exercises — a nodenext consumer rejecting every
+#     symbol in the package is invisible to unit tests, `tsc --noEmit` on
+#     the kit's own source (which uses `bundler` resolution), and every
+#     bundler leg above (runtime resolution was never broken, only the
+#     types). This regressed once already; this leg exists so it cannot
+#     regress silently a second time.
 set -euo pipefail
 
 UIKIT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -15,6 +79,10 @@ trap 'rm -rf "$WORKDIR"' EXIT
 REACT_VERSION="19.2.8"
 VITE_VERSION="6.4.3"
 PLUGIN_REACT_VERSION="4.3.4"
+TYPESCRIPT_VERSION="5.4.2"
+# Matches the root package.json `overrides.esbuild` pin (a CVE fix), so this
+# script never resolves a different esbuild than the rest of the monorepo.
+ESBUILD_VERSION="0.25.12"
 
 echo "==> Building and packing @gears-frontx/ui-kit"
 cd "$UIKIT_DIR"
@@ -22,14 +90,101 @@ npm run build >/dev/null
 npm pack --pack-destination "$WORKDIR" >/dev/null
 TARBALL="$(ls "$WORKDIR"/gears-frontx-ui-kit-*.tgz)"
 
-echo "==> Scaffolding a clean Vite consumer in $WORKDIR/consumer"
-CONSUMER="$WORKDIR/consumer"
+# Hashed CSS-module class names are the only reliable tree-shaking probe: a
+# minifier renames or inlines source-level identifiers, but a hashed class
+# literal (used identically as a JS string and a CSS selector) survives
+# minification verbatim. Pulled from the just-built dist/, not hardcoded,
+# so this script never drifts out of sync with a real CSS content change.
+#
+# The `|| true` matters: under `set -e`, a bare `grep | head` whose grep
+# finds nothing makes the *assignment itself* exit non-zero (pipefail
+# propagates grep's failure through head's success), which kills the script
+# at the assignment — before the explicit empty-value check below ever
+# runs, so its diagnostic message never prints. `|| true` neutralizes that,
+# so an empty extraction is caught (and named) by the check that follows,
+# not by an unexplained script death.
+extract_hashed_class() {
+  # $1: dist chunk file, $2: local class name to find a hashed literal for
+  grep -oE "_$2_[A-Za-z0-9]+_[0-9]+" "$1" 2>/dev/null | head -1 || true
+}
+
+BUTTON_CLASS="$(extract_hashed_class "$UIKIT_DIR/dist/button.js" 'variantOutline')"
+TABLE_CLASS="$(extract_hashed_class "$UIKIT_DIR/dist/table.js" 'tableCaption')"
+DIALOG_CLASS="$(extract_hashed_class "$UIKIT_DIR/dist/dialog.js" 'backdrop')"
+for probe_name in BUTTON_CLASS TABLE_CLASS DIALOG_CLASS; do
+  if [ -z "${!probe_name}" ]; then
+    echo "FAIL: could not extract a hashed class probe ($probe_name) from dist/ — did a component's local class names change?"
+    exit 1
+  fi
+done
+echo "==> Probes: Button=$BUTTON_CLASS Table=$TABLE_CLASS Dialog=$DIALOG_CLASS"
+
+# Present/absent assertions against a glob, with the glob's own emptiness
+# checked explicitly rather than left to grep's exit code. Without this, an
+# absence check written as `grep … && { fail; }` passes *silently* when the
+# glob matches no file at all (the shell passes the literal unexpanded glob
+# string to grep, which exits 2 for "no such file", and 2 is still "not 0"
+# so the `&&` block never runs) — indistinguishable from "checked, and
+# genuinely absent, good". That's live risk here, not theoretical: it's
+# exactly what happens the moment a leg's output shape changes (e.g. a
+# different bundler's output directory/extension). Building the file list
+# with `local -a files=( $glob )` (deliberately unquoted, for the glob
+# expansion) and checking whether the first element exists on disk gives an
+# explicit, named failure instead — "no output to check" is a different,
+# louder problem than "checked and clean".
+assert_present_in_glob() {
+  # $1: label, $2: pattern, $3: glob expression (as a single string)
+  local label="$1" pattern="$2" glob="$3"
+  # shellcheck disable=SC2206
+  local -a files=( $glob )
+  if [ ! -e "${files[0]}" ]; then
+    echo "FAIL: $label — no output files matched '$glob'"
+    exit 1
+  fi
+  grep -qF "$pattern" "${files[@]}" 2>/dev/null || { echo "FAIL: $label missing from the bundle"; exit 1; }
+}
+
+assert_absent_from_glob() {
+  # $1: label, $2: pattern (fixed string), $3: glob expression
+  local label="$1" pattern="$2" glob="$3"
+  # shellcheck disable=SC2206
+  local -a files=( $glob )
+  if [ ! -e "${files[0]}" ]; then
+    echo "FAIL: $label — no output files matched '$glob'"
+    exit 1
+  fi
+  if grep -qF "$pattern" "${files[@]}" 2>/dev/null; then
+    echo "FAIL: $label leaked into the bundle despite never being imported"
+    exit 1
+  fi
+}
+
+assert_identifier_absent_from_glob() {
+  # Like assert_absent_from_glob, but for a plain (non -F) grep pattern —
+  # used for the Base UI submodule name probes, which are real identifiers
+  # (SelectRoot, ToastRoot, …), not hashed CSS-module class literals.
+  local label="$1" pattern="$2" glob="$3"
+  # shellcheck disable=SC2206
+  local -a files=( $glob )
+  if [ ! -e "${files[0]}" ]; then
+    echo "FAIL: $label — no output files matched '$glob'"
+    exit 1
+  fi
+  if grep -q "$pattern" "${files[@]}" 2>/dev/null; then
+    echo "FAIL: $label leaked into the bundle despite Button never reaching it"
+    exit 1
+  fi
+}
+
+echo
+echo "==> [vite] Scaffolding a clean Vite consumer in $WORKDIR/vite-consumer"
+CONSUMER="$WORKDIR/vite-consumer"
 mkdir -p "$CONSUMER/src"
 cd "$CONSUMER"
 
 cat > package.json <<'EOF'
 {
-  "name": "ui-kit-consumer-check",
+  "name": "ui-kit-vite-consumer-check",
   "private": true,
   "type": "module",
   "scripts": { "build": "vite build" }
@@ -48,7 +203,6 @@ EOF
 
 cat > src/main.jsx <<'EOF'
 import '@gears-frontx/ui-kit/theme.css';
-import '@gears-frontx/ui-kit/styles.css';
 
 import { Button } from '@gears-frontx/ui-kit';
 import { createRoot } from 'react-dom/client';
@@ -67,23 +221,216 @@ import { defineConfig } from 'vite';
 export default defineConfig({ plugins: [react()] });
 EOF
 
-echo "==> Installing tarball and deps"
+echo "==> [vite] Installing tarball and deps"
 npm install --no-audit --no-fund --silent \
   "$TARBALL" "react@$REACT_VERSION" "react-dom@$REACT_VERSION"
 npm install --no-audit --no-fund --silent -D \
   "vite@$VITE_VERSION" "@vitejs/plugin-react@$PLUGIN_REACT_VERSION"
 
-echo "==> Building the consumer"
+echo "==> [vite] Building the consumer (imports only Button from the barrel)"
 npm run build
 
-echo "==> Asserting kit CSS and component made it into the bundle"
-grep -rq -- '--primary' dist/assets/*.css || { echo 'FAIL: theme variables missing from bundle'; exit 1; }
-grep -rqE 'button_button' dist/assets/*.css || { echo 'FAIL: component styles missing from bundle'; exit 1; }
-grep -rqE 'button_variantOutline' dist/assets/*.js || { echo 'FAIL: CSS-module class map missing from JS bundle'; exit 1; }
+echo "==> [vite] Asserting kit CSS and Button made it into the bundle"
+grep -rq -- '--primary' dist/assets/*.css || { echo 'FAIL: [vite] theme variables missing from bundle'; exit 1; }
+assert_present_in_glob "[vite] Button styles"    "$BUTTON_CLASS" 'dist/assets/*.css'
+assert_present_in_glob "[vite] Button class map" "$BUTTON_CLASS" 'dist/assets/*.js'
 
-echo "==> Asserting the AI docs layer ships with the package"
-KIT="node_modules/@gears-frontx/ui-kit"
+echo "==> [vite] Asserting components never imported (Table, Dialog) were tree-shaken out"
+assert_absent_from_glob "[vite] Table styles"    "$TABLE_CLASS"  'dist/assets/*.css'
+assert_absent_from_glob "[vite] Table JS"        "$TABLE_CLASS"  'dist/assets/*.js'
+assert_absent_from_glob "[vite] Dialog styles"   "$DIALOG_CLASS" 'dist/assets/*.css'
+assert_absent_from_glob "[vite] Dialog JS"       "$DIALOG_CLASS" 'dist/assets/*.js'
+
+echo "==> [vite] Bundle report (Button-only consumer page)"
+du -h dist/assets/*.js dist/assets/*.css
+
+echo "==> Asserting the AI docs layer ships with the installed package"
+KIT="$CONSUMER/node_modules/@gears-frontx/ui-kit"
 [ -f "$KIT/llms.txt" ] || { echo 'FAIL: llms.txt missing from the package'; exit 1; }
 [ -f "$KIT/dist/docs/button.md" ] || { echo 'FAIL: per-component docs missing from dist/docs'; exit 1; }
 
-echo "OK: consumer check passed"
+echo
+echo "==> [esbuild-barrel] Scaffolding a raw-esbuild consumer (barrel import) in $WORKDIR/esbuild-barrel"
+EB_BARREL="$WORKDIR/esbuild-barrel"
+mkdir -p "$EB_BARREL/src"
+cd "$EB_BARREL"
+
+cat > package.json <<'EOF'
+{ "name": "ui-kit-esbuild-barrel-check", "private": true, "type": "module" }
+EOF
+
+# No JSX rendering needed — this leg measures bundle *contents*, not runtime
+# behavior (the [vite] leg already proves the component renders). The
+# reference to Button keeps esbuild from eliminating the import itself as
+# dead; react/react-dom are external so the measurement isolates the kit's
+# own code (and its Base UI dependency) from React's fixed footprint, which
+# would otherwise dwarf the comparison this leg exists to make.
+cat > src/main.jsx <<'EOF'
+import '@gears-frontx/ui-kit/theme.css';
+
+import { Button } from '@gears-frontx/ui-kit';
+
+console.log(Button);
+EOF
+
+echo "==> [esbuild-barrel] Installing tarball and deps"
+npm install --no-audit --no-fund --silent \
+  "$TARBALL" "react@$REACT_VERSION" "react-dom@$REACT_VERSION" "esbuild@$ESBUILD_VERSION"
+
+echo "==> [esbuild-barrel] Bundling (imports only Button from the barrel)"
+# Deliberately NOT --minify: the Base UI submodule probes below search for
+# source-level identifiers (SelectRoot, MenuRoot, ...), and a minifier
+# renames unexported local bindings — verified directly (built this same
+# bundle with --minify and grepped for "SelectRoot": present 24 times
+# unminified, 0 times minified, in the *same* underlying code). Minifying
+# here would make those probes silently pass on a real regression, which is
+# worse than not having them. The hashed CSS-module class probes elsewhere
+# in this script are unaffected either way — those are string *literals*
+# baked in at the kit's own build time, not consumer-side bindings a
+# consumer's minifier could rename — so nothing is lost by leaving this leg
+# unminified; [esbuild-subpath] below still exercises the minified case.
+npx esbuild src/main.jsx --bundle --format=esm --platform=browser \
+  --external:react --external:react-dom --external:react/jsx-runtime \
+  --loader:.css=css --outfile=dist/out.js
+
+echo "==> [esbuild-barrel] Asserting Button's JS made it into the bundle"
+grep -q -- '--primary' dist/out.css || { echo 'FAIL: [esbuild-barrel] theme variables missing from bundle'; exit 1; }
+assert_present_in_glob "[esbuild-barrel] Button class map" "$BUTTON_CLASS" 'dist/out.js'
+
+echo "==> [esbuild-barrel] Asserting Table/Dialog JS were tree-shaken out"
+# CSS is deliberately NOT asserted absent here — measured, esbuild bundles
+# every component's CSS from a barrel import regardless of JS tree-shaking
+# (see the file header's [esbuild-subpath] paragraph); asserting CSS
+# absence on this leg would be permanently red, not a real check.
+assert_absent_from_glob "[esbuild-barrel] Table JS"  "$TABLE_CLASS"  'dist/out.js'
+assert_absent_from_glob "[esbuild-barrel] Dialog JS" "$DIALOG_CLASS" 'dist/out.js'
+
+# The class-name probes above only catch leakage of the *kit's own* unused
+# component code. They would miss the specific regression this leg exists
+# for: an unreached Base UI primitive's internals surviving because
+# esbuild's bundler doesn't cascade "kit wrapper unused" into "its exclusive
+# Base UI import unused" the way Rollup does (see the file header). Probe
+# for that directly, by name, against Base UI's own exported identifiers —
+# none of these are reachable from Button.
+echo "==> [esbuild-barrel] Asserting unreached Base UI submodules were not pulled in"
+for probe in SelectRoot MenuRoot ToastRoot FloatingFocusManager; do
+  assert_identifier_absent_from_glob "[esbuild-barrel] Base UI's $probe" "$probe" 'dist/out.js'
+done
+# 'floating-ui/dom' (not the bare substring 'floating-ui'): Button itself
+# legitimately pulls in the small, shared @floating-ui/utils package (its
+# unminified file-path comment reads ".../floating-ui/utils/dist/floating-ui.
+# utils.dom.mjs"), which a broader pattern would false-positive on. The
+# actual positioning *engine* used by popup/overlay components — the real
+# leak indicator — ships as @floating-ui/dom, hence the narrower pattern.
+assert_identifier_absent_from_glob "[esbuild-barrel] @floating-ui/dom" 'floating-ui/dom' 'dist/out.js'
+
+echo "==> [esbuild-barrel] Bundle report (Button-only, react/react-dom external)"
+wc -c dist/out.js dist/out.css
+
+echo
+echo "==> [esbuild-subpath] Scaffolding a raw-esbuild consumer (subpath import) in $WORKDIR/esbuild-subpath"
+EB_SUBPATH="$WORKDIR/esbuild-subpath"
+mkdir -p "$EB_SUBPATH/src"
+cd "$EB_SUBPATH"
+
+cat > package.json <<'EOF'
+{ "name": "ui-kit-esbuild-subpath-check", "private": true, "type": "module" }
+EOF
+
+cat > src/main.jsx <<'EOF'
+import '@gears-frontx/ui-kit/theme.css';
+
+import { Button } from '@gears-frontx/ui-kit/button';
+
+console.log(Button);
+EOF
+
+echo "==> [esbuild-subpath] Installing tarball and deps"
+npm install --no-audit --no-fund --silent \
+  "$TARBALL" "react@$REACT_VERSION" "react-dom@$REACT_VERSION" "esbuild@$ESBUILD_VERSION"
+
+echo "==> [esbuild-subpath] Bundling (imports @gears-frontx/ui-kit/button directly)"
+npx esbuild src/main.jsx --bundle --minify --format=esm --platform=browser \
+  --external:react --external:react-dom --external:react/jsx-runtime \
+  --loader:.css=css --outfile=dist/out.js
+
+echo "==> [esbuild-subpath] Asserting Button's CSS made it into the bundle (subpath import gets per-component CSS even under esbuild)"
+assert_present_in_glob "[esbuild-subpath] Button styles" "$BUTTON_CLASS" 'dist/out.css'
+
+echo "==> [esbuild-subpath] Asserting Table/Dialog CSS were excluded"
+assert_absent_from_glob "[esbuild-subpath] Table styles"  "$TABLE_CLASS"  'dist/out.css'
+assert_absent_from_glob "[esbuild-subpath] Dialog styles" "$DIALOG_CLASS" 'dist/out.css'
+
+echo "==> [esbuild-subpath] Bundle report (Button-only via subpath, react/react-dom external)"
+wc -c dist/out.js dist/out.css
+
+echo
+echo "==> [types] Type-checking the barrel and three subpaths under both moduleResolution settings"
+TYPES_CHECK="$WORKDIR/types-check"
+mkdir -p "$TYPES_CHECK/src"
+cd "$TYPES_CHECK"
+
+# type: module matters here specifically for the nodenext leg below: nodenext
+# resolution treats the *consuming* file as CJS or ESM based on the nearest
+# package.json's "type" field, and a CJS file cannot statically import a
+# pure-ESM package (TS1479) regardless of whether the package's own exports
+# are otherwise correct — that would be a false failure of THIS check, not a
+# real one, so the throwaway consumer has to be ESM for the test to mean
+# anything.
+cat > package.json <<'EOF'
+{ "name": "ui-kit-types-check", "private": true, "type": "module" }
+EOF
+
+cat > src/main.ts <<'EOF'
+import { Button, type ButtonProps } from '@gears-frontx/ui-kit';
+import { Button as ButtonSubpath } from '@gears-frontx/ui-kit/button';
+import { Table } from '@gears-frontx/ui-kit/table';
+import { Dialog } from '@gears-frontx/ui-kit/dialog';
+
+export { Button, ButtonSubpath, Table, Dialog };
+export type { ButtonProps };
+EOF
+
+cat > tsconfig.nodenext.json <<'EOF'
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "jsx": "react-jsx",
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": ["src"]
+}
+EOF
+
+cat > tsconfig.bundler.json <<'EOF'
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": ["src"]
+}
+EOF
+
+echo "==> [types] Installing tarball and deps"
+npm install --no-audit --no-fund --silent \
+  "$TARBALL" "react@$REACT_VERSION" "react-dom@$REACT_VERSION" \
+  "@types/react@19.2.17" "@types/react-dom@19.2.3" "typescript@$TYPESCRIPT_VERSION"
+
+echo "==> [types] tsc --noEmit under moduleResolution: nodenext"
+npx tsc -p tsconfig.nodenext.json || { echo 'FAIL: [types] nodenext type-check failed — see tsc output above (relative .d.ts specifiers likely lost their .js extension again)'; exit 1; }
+
+echo "==> [types] tsc --noEmit under moduleResolution: bundler"
+npx tsc -p tsconfig.bundler.json || { echo 'FAIL: [types] bundler type-check failed — see tsc output above'; exit 1; }
+
+echo
+echo "OK: consumer check passed (vite + esbuild-barrel + esbuild-subpath + types)"

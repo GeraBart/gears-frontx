@@ -51,15 +51,33 @@ composite over `sheet`, `button`, `input`, `separator`, `skeleton` and
 ## Architecture
 
 - Component stack: **React 19 + Base UI (`@base-ui/react`) + CSS Modules + CVA**.
-- Build: **tsup** (`cjs`+`esm`+dts), matching the sibling ecosystem packages.
-  Key constraint: tsup has no CSS Modules support of its own — the esbuild
-  `local-css` loader override in `tsup.config.ts` provides it, relying on the
-  convention that JS imports only `*.module.css` (see the comment there).
-- CSS pipeline: per-component `*.module.css`; the bundler inlines hashed
-  class-name maps into JS and extracts all CSS into `dist/index.css`
-  (`./styles.css` export). Design tokens are a plain-CSS file
-  (`./theme.css` export). A consumer imports both once. No PostCSS/Tailwind
-  requirements on either side.
+- Build: **Vite library mode**, ESM only (no CJS build). One entry per
+  component — `src/components/<name>/public.ts`, globbed — plus the
+  `src/index.ts` barrel, mirroring Constructor's internal react-kit
+  (`scripts/buildPlugin.ts` there) rather than tsup's single-entry bundle.
+  Per-entry splitting is what makes the kit tree-shakeable at both the JS and
+  CSS level, *including through the barrel*: each entry compiles to its own
+  `dist/<name>.js` + `dist/<name>.d.ts` (`vite-plugin-dts`, with a small
+  `afterBuild` hook writing the flat `dist/<name>.d.ts` a consumer's `./*`
+  subpath import resolves to — see `scripts/buildPlugin.ts`) and its own CSS
+  chunk (`vite-plugin-lib-inject-css`); `dist/index.js` only re-exports those
+  already-separate files, so a consumer's bundler can drop the ones it never
+  imports rather than receiving one bundle with everything inlined.
+  `rollup-plugin-node-externals` externalizes `dependencies`/
+  `peerDependencies` (`@base-ui/react`, CVA, react, react-dom and subpaths
+  like `react/jsx-runtime`) in place of tsup's hand-maintained `external`
+  array. CSS Modules support is native to Vite — the esbuild `local-css`
+  loader override tsup needed (and the fragile convention its comment
+  documented, that JS may only import `*.module.css`) is gone.
+- CSS pipeline: per-component `*.module.css`, each compiled to its own CSS
+  chunk and auto-imported by that component's JS chunk
+  (`vite-plugin-lib-inject-css`) — no combined stylesheet, no `./styles.css`
+  export; importing a component's JS is what pulls in its CSS. Design tokens
+  remain a plain-CSS file (`./theme.css` export), hand-copied into `dist/` at
+  build, unchanged: Vite's lib build only emits CSS reachable from a JS
+  import, and theme.css is deliberately never imported by JS. A consumer
+  imports `theme.css` once; component CSS then arrives for free with each
+  component import. No PostCSS/Tailwind requirements on either side.
 - Theme: semantic CSS variables (colors, radii), light/dark via `data-theme` /
   `prefers-color-scheme`; neutral shadcn-style visual base. Component CSS
   consumes only these variables — the theme file is the single seam between
@@ -132,9 +150,13 @@ left is writing them.
   telemetry example pattern): every component in every state; live smoke and
   the agent playground.
 - Acceptance: (1) `scripts/verify-consumer.sh` packs the package, installs the
-  tarball into a clean Vite project, builds a page and asserts tokens, styles,
-  and class maps in the bundle; (2) an agent assembles a CRUD screen from kit
-  components from a single prompt using the bundled docs.
+  tarball into a clean Vite project, builds a page that imports a single
+  component (`Button`) and asserts tokens, that component's styles and class
+  map are present in the bundle — *and*, the proof the repackaging exists
+  for, that a component never imported (`Table`, `Dialog` — both have large,
+  distinctive CSS) is absent from both the JS and CSS output; (2) an agent
+  assembles a CRUD screen from kit components from a single prompt using the
+  bundled docs.
 
 ## Risks
 
@@ -146,7 +168,12 @@ left is writing them.
 
 ## Delivery plan
 
-1. Package skeleton + proven tsup/CSS Modules pipeline + Button.
+A log of completed phases, oldest first — not a description of the current
+build (see Architecture for that; the tsup pipeline step 1 names was later
+replaced by Vite, per Architecture's build bullet).
+
+1. Package skeleton + proven tsup/CSS Modules pipeline (later replaced by
+   Vite; see Architecture) + Button.
 2. Tokens polish + first component batch (forms) on `@base-ui/react`.
 3. Remaining components — done, the 19-component MVP set exists.
 4. The ten `insight-front` gap components. Before the release step, not after:

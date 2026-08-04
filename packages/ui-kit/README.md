@@ -15,7 +15,6 @@ kits into their own templates.
 ```ts
 // once, in the consumer entry module
 import '@gears-frontx/ui-kit/theme.css'; // design tokens (CSS variables)
-import '@gears-frontx/ui-kit/styles.css'; // compiled component styles
 ```
 
 ```tsx
@@ -25,6 +24,20 @@ import { Button } from '@gears-frontx/ui-kit';
   Save
 </Button>;
 ```
+
+Each component ships its own CSS chunk, pulled in automatically by importing
+the component — there's no combined stylesheet to import separately. Import
+from the package root (`@gears-frontx/ui-kit`) or from a component's own
+subpath (`@gears-frontx/ui-kit/button`) — both tree-shake the *JS* of
+components you don't import, on every bundler tested (Vite, webpack,
+esbuild). For CSS, which one actually shakes is bundler-dependent: Vite and
+webpack drop the CSS of unimported components either way; esbuild only does
+that from a subpath import — bundling the root import through esbuild ships
+every component's CSS regardless of what's used, because esbuild collects
+CSS from the whole reachable module graph rather than pruning it alongside
+unused JS bindings the way it prunes JS. If your build uses esbuild directly
+(not through a framework that wraps it, like Vite does), prefer the subpath
+import for CSS you actually want dropped.
 
 The theme file paints the page (background, text, and UA-owned surfaces like
 the scrollbar) as well as defining the tokens, so dark mode works out of the
@@ -38,9 +51,9 @@ To re-brand, override the CSS variables from `theme.css` in your own styles.
 ## Development
 
 ```bash
-npm run build --workspace=@gears-frontx/ui-kit   # tsup: dist/index.{js,cjs,d.ts,css} + theme.css
+npm run build --workspace=@gears-frontx/ui-kit   # vite: dist/index.js + dist/<component>.{js,d.ts} + theme.css, ESM only
 npm run test:unit --workspace=@gears-frontx/ui-kit
-./packages/ui-kit/scripts/verify-consumer.sh     # pack-install acceptance check
+./packages/ui-kit/scripts/verify-consumer.sh     # pack-install + tree-shaking acceptance check
 ```
 
 See [design-notes.md](design-notes.md) for the design and its history. The package is

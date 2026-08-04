@@ -1,0 +1,25 @@
+// Type-checks the build tooling itself — vite.config.ts and scripts/ — which
+// the main tsconfig deliberately leaves out: its `include` is scoped to
+// `src/**/*` with `rootDir: ./src`, because vite-plugin-dts reads that project
+// to decide which declarations to emit, and pulling the tooling in would emit
+// declarations for it into dist/.
+//
+// Without this project those files were checked by nothing: `npm run
+// type-check` skipped them, and an editor fell back to compiler defaults
+// (target ES5), which reported spurious downlevel-iteration errors on code
+// that is fine under the ES2022 target this package actually builds with.
+// The build is now considerably more code than tsup's single config object,
+// and it is the code that decides what ships, so it gets checked.
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false,
+    "rootDir": ".",
+    "types": ["node"]
+  },
+  "include": ["vite.config.ts", "scripts/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}

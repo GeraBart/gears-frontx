@@ -7,10 +7,16 @@
 
 Rules for generated code:
 
-- Import styles exactly once at the app entry, theme first:
+- Import the design tokens exactly once at the app entry:
   `import '@gears-frontx/ui-kit/theme.css';`
-  `import '@gears-frontx/ui-kit/styles.css';`
 - Import components from the package root: `import { Button } from '@gears-frontx/ui-kit';`
+  Each component ships its own CSS, pulled in automatically by importing the
+  component — there is no separate stylesheet import for component styles.
+  A component subpath also works (`import { Button } from '@gears-frontx/ui-kit/button';`)
+  and is the one to reach for on an esbuild-based build specifically: esbuild
+  tree-shakes unused components' JS from a root import already, but only
+  drops their CSS from a subpath import — Vite and webpack drop both either
+  way, so this only matters when esbuild is the actual bundler running.
 - The kit paints the page itself from its tokens and sets `color-scheme`: with
   no `data-theme` attribute anywhere, `prefers-color-scheme: dark` alone
   yields a correct, legible dark page (background, text, and UA-owned
