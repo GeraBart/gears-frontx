@@ -101,14 +101,24 @@
   color: inherit;
 }
 
+/*
+ * Text mixes a little --foreground in rather than reading --destructive raw,
+ * same deviation from the registry (and same reasoning) as
+ * badge.module.css's destructive variant. Measured on the highlighted state,
+ * where this item is at its worst: --destructive text over its own 10% tint
+ * on --popover is 3.97:1 in light mode, under the 4.5:1 floor — the tint
+ * pulls the surface toward the text it has to contrast with. The mix moves
+ * the text away from it in both themes, since --foreground flips with the
+ * theme: 4.82:1 light / 6.09:1 dark highlighted, 5.78:1 / 6.92:1 at rest.
+ */
 .variantDestructive {
-  color: var(--destructive);
+  color: color-mix(in oklab, var(--destructive) 90%, var(--foreground) 10%);
 }
 
 .variantDestructive:focus,
 .variantDestructive[data-highlighted] {
   background-color: color-mix(in oklab, var(--destructive) 10%, transparent);
-  color: var(--destructive);
+  color: color-mix(in oklab, var(--destructive) 90%, var(--foreground) 10%);
 }
 
 .checkboxItem,

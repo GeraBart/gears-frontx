@@ -76,8 +76,18 @@
   color: var(--destructive-foreground);
 }
 
+/*
+ * Mixes toward --foreground rather than the registry's `destructive/90`
+ * fade to transparent. Fading an already-marginal fill toward the page
+ * pulls it *toward* the label it has to contrast with — measured 4.57:1 at
+ * rest but 4.34:1 on hover in light mode, i.e. the hover state alone fails
+ * AA. Mixing with --foreground moves it away from the label in both themes
+ * (the token flips with the theme, so light darkens and dark lightens):
+ * 5.54:1 light / 7.64:1 dark. Same idiom and reasoning as
+ * badge.module.css's destructive variant.
+ */
 .variantDestructive:hover {
-  background-color: color-mix(in oklab, var(--destructive) 90%, transparent);
+  background-color: color-mix(in oklab, var(--destructive) 90%, var(--foreground) 10%);
 }
 
 .variantOutline {

@@ -96,7 +96,20 @@
   --accent: oklch(0.269 0 0);
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.704 0.191 22.216);
-  --destructive-foreground: oklch(0.985 0 0);
+  /*
+   * Dark, not the near-white the light theme uses, and a deliberate deviation
+   * from the registry: dark mode lightens --destructive to 0.704 so it stays
+   * legible as *text* on a dark page (6.21:1 on --popover), but that same red
+   * is then far too light to carry white text — measured 2.77:1 for Button's
+   * solid destructive fill, a clear WCAG AA failure. Flipping this token is
+   * what fixes it (6.85:1) and it only affects that one solid fill: this is
+   * the single token in the palette read by exactly one rule
+   * (button.module.css's .variantDestructive). Darkening --destructive itself
+   * instead would fix the button and break every destructive *text* use —
+   * FieldError, DropdownMenu's destructive item, Toast's error icon — which
+   * all read it against a dark surface.
+   */
+  --destructive-foreground: oklch(0.145 0 0);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
@@ -122,7 +135,8 @@
     --accent: oklch(0.269 0 0);
     --accent-foreground: oklch(0.985 0 0);
     --destructive: oklch(0.704 0.191 22.216);
-    --destructive-foreground: oklch(0.985 0 0);
+    /* See the [data-theme='dark'] block above for why this one is dark. */
+    --destructive-foreground: oklch(0.145 0 0);
     --border: oklch(1 0 0 / 10%);
     --input: oklch(1 0 0 / 15%);
     --ring: oklch(0.556 0 0);
