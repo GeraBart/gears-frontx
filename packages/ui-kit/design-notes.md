@@ -63,7 +63,10 @@ composite over `sheet`, `button`, `input`, `separator`, `skeleton` and
 - Theme: semantic CSS variables (colors, radii), light/dark via `data-theme` /
   `prefers-color-scheme`; neutral shadcn-style visual base. Component CSS
   consumes only these variables — the theme file is the single seam between
-  kit styles and consumer brand.
+  kit styles and consumer brand. The theme file also paints the page surface
+  itself (`body`/`[data-theme]` background and color, plus `color-scheme`),
+  not just the tokens: a bare consumer page goes correctly dark under
+  `prefers-color-scheme` with no attribute and no CSS of its own.
 - Publishing: version-gated like every ecosystem package. `private: true`
   remains in place until both the MVP component set lands and #495 approves
   the package's architecture ownership, traceability, and version policy. The

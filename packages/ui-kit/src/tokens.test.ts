@@ -161,4 +161,115 @@ describe('theme tokens', () => {
       expect(raw, `raw color "${raw?.[0]}" in ${file}`).toBeNull();
     }
   });
+
+  // Guards the token blocks in theme.css against drift: the dark palette is
+  // hand-duplicated between [data-theme='dark'] and the prefers-color-scheme
+  // media block (custom properties can't be shared across two selectors any
+  // other way), and nothing but this test notices if the two copies diverge,
+  // a new light token is added without a dark counterpart, or a
+  // theme-invariant token (shape/scrim, not color) drifts into a theme block.
+  describe('theme.css token blocks stay in sync', () => {
+    const themeRules = extractRules(themeCss);
+
+    function tokenMap(body: string) {
+      return new Map(
+        Array.from(body.matchAll(/(--[a-z0-9-]+)\s*:\s*([^;]+);/g), (match) => [
+          match[1] ?? '',
+          (match[2] ?? '').trim(),
+        ]),
+      );
+    }
+
+    // Identify each block by selector shape rather than array position, so
+    // reordering theme.css doesn't silently break this test. `invariantsBlock`
+    // must match `:root` exactly — `lightBlock`'s selector also contains the
+    // substring `:root` (it's `:root, [data-theme='light']`), so an exact
+    // match is what keeps the two finders pointing at different blocks.
+    const invariantsBlock = themeRules.find((rule) => rule.selector === ':root');
+    const lightBlock = themeRules.find(
+      (rule) =>
+        rule.selector.includes(':root') &&
+        rule.selector.includes("[data-theme='light']") &&
+        !rule.selector.includes(':not('),
+    );
+    const darkAttrBlock = themeRules.find((rule) => rule.selector === "[data-theme='dark']");
+    const darkMediaBlock = themeRules.find((rule) => rule.selector.includes(':root:not('));
+
+    if (!invariantsBlock || !lightBlock || !darkAttrBlock || !darkMediaBlock) {
+      throw new Error(
+        "theme.css's token block selectors changed shape — update this test's block finders",
+      );
+    }
+
+    const invariantTokensDeclared = tokenMap(invariantsBlock.body);
+    const lightTokens = tokenMap(lightBlock.body);
+    const darkAttrTokens = tokenMap(darkAttrBlock.body);
+    const darkMediaTokens = tokenMap(darkMediaBlock.body);
+
+    // Shape/scrim, not color: declared once on the invariants block and
+    // deliberately never redefined in any theme block, because a theme scope
+    // overrides colors, never shape or scrim (see the comment on theme.css's
+    // `:root` invariants block).
+    const THEME_INVARIANT_TOKENS = new Set([
+      // Scrim behind modal-style popups. A dark tint dims the page in both
+      // light and dark UI; --foreground would flip to near-white in dark
+      // mode and brighten instead of dim (see the --overlay comment in
+      // theme.css).
+      '--overlay',
+      // Radius scale derived from --radius. Corner shape isn't a light/dark
+      // concern — consumers rebrand it by overriding --radius alone, in
+      // either theme.
+      '--radius',
+      '--radius-xs',
+      '--radius-sm',
+      '--radius-md',
+      '--radius-lg',
+      '--radius-xl',
+    ]);
+
+    it('defines the two dark blocks identically', () => {
+      expect(Object.fromEntries(darkAttrTokens)).toEqual(Object.fromEntries(darkMediaTokens));
+    });
+
+    it('declares every theme-invariant token on the invariants block', () => {
+      for (const token of Array.from(THEME_INVARIANT_TOKENS)) {
+        expect(
+          invariantTokensDeclared.has(token),
+          `${token} is missing from theme.css's :root invariants block`,
+        ).toBe(true);
+      }
+    });
+
+    // A consequence of splitting shape/scrim onto their own :root-only block:
+    // the light block now holds color tokens exclusively, so parity with the
+    // dark blocks needs no exemption list — every light token must appear in
+    // both. Don't reintroduce an exemption here; add a new entry to
+    // THEME_INVARIANT_TOKENS (and to theme.css's invariants block) instead.
+    it('redefines every light token in both dark blocks', () => {
+      for (const token of Array.from(lightTokens.keys())) {
+        expect(darkAttrTokens.has(token), `${token} missing from [data-theme='dark']`).toBe(true);
+        expect(
+          darkMediaTokens.has(token),
+          `${token} missing from the prefers-color-scheme block`,
+        ).toBe(true);
+      }
+    });
+
+    it('never redefines the theme-invariant tokens in any theme block', () => {
+      for (const token of Array.from(THEME_INVARIANT_TOKENS)) {
+        expect(
+          lightTokens.has(token),
+          `${token} is theme-invariant but redefined in the light block`,
+        ).toBe(false);
+        expect(
+          darkAttrTokens.has(token),
+          `${token} is theme-invariant but redefined in [data-theme='dark']`,
+        ).toBe(false);
+        expect(
+          darkMediaTokens.has(token),
+          `${token} is theme-invariant but redefined in the prefers-color-scheme block`,
+        ).toBe(false);
+      }
+    });
+  });
 });

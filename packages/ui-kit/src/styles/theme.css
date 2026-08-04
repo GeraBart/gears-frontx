@@ -1,16 +1,56 @@
 /*
  * Gears UI Kit theme tokens.
  *
- * Semantic-level CSS variables consumed by all kit components.
- * The neutral base derives from shadcn/ui (MIT, https://ui.shadcn.com);
+ * Semantic-level CSS variables consumed by all kit components, plus the
+ * page-painting rules at the end of this file: importing this file alone is
+ * enough for a consumer's page to render correctly light or dark out of the
+ * box, with no data-theme attribute required — every component painting its
+ * own surface from these same tokens is what makes the rest of the page
+ * match. The neutral base derives from shadcn/ui (MIT, https://ui.shadcn.com);
  * see the repository NOTICE file for attribution.
  *
  * Basic branding happens on the consumer side by overriding these variables.
- * Dark mode: set data-theme="dark" on <html>, or rely on the
- * prefers-color-scheme fallback.
+ * Dark mode: set data-theme="dark" on <html>/<body> for explicit control, or
+ * rely on the prefers-color-scheme fallback below.
  */
 
+/*
+ * Theme-invariant tokens: shape and scrim, not color. Deliberately declared
+ * on `:root` alone, outside every theme block below — a theme scope
+ * overrides colors, never shape or scrim, so a `data-theme` subtree inherits
+ * whatever the consumer set globally instead of snapping back to these kit
+ * defaults. Filing them under a theme selector (e.g. `[data-theme='light']`)
+ * would break that: a `<section data-theme="light">` nested under a
+ * consumer's rebranded `--radius` would reset to the kit default here
+ * instead of inheriting the brand value, just because it happens to sit in
+ * a light-forced scope.
+ */
 :root {
+  /*
+   * Scrim behind modal-style popups (Dialog's backdrop). Unlike every color
+   * token below, it is not redefined in [data-theme='dark'] or the
+   * prefers-color-scheme block: a dark tint dims the page in both light and
+   * dark UI, whereas --foreground would flip to near-white in dark mode and
+   * brighten instead of dim.
+   */
+  --overlay: oklch(0 0 0 / 50%);
+
+  /*
+   * Radius scale (shadcn v4 convention). Components consume only the
+   * derived steps; consumers rebrand by overriding --radius alone and the
+   * whole scale follows. Corner shape isn't a light/dark concern, so it is
+   * never redefined per-theme.
+   */
+  --radius: 0.625rem;
+  --radius-xs: calc(var(--radius) - 6px);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root,
+[data-theme='light'] {
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -32,25 +72,12 @@
   --ring: oklch(0.708 0 0);
 
   /*
-   * Scrim behind modal-style popups (Dialog's backdrop). Deliberately
-   * theme-invariant — unlike every other token here, it is not redefined
-   * in [data-theme='dark'] or the prefers-color-scheme block: a dark tint
-   * dims the page in both light and dark UI, whereas --foreground would
-   * flip to near-white in dark mode and brighten instead of dim.
+   * Hands UA-owned surfaces (scrollbar, spellcheck underline, <input>
+   * autofill, form-control chrome) the light palette. The dark blocks below
+   * set this to `dark`; without it those surfaces keep following the OS
+   * default regardless of our tokens.
    */
-  --overlay: oklch(0 0 0 / 50%);
-
-  /*
-   * Radius scale (shadcn v4 convention). Components consume only the
-   * derived steps; consumers rebrand by overriding --radius alone and
-   * the whole scale follows.
-   */
-  --radius: 0.625rem;
-  --radius-xs: calc(var(--radius) - 6px);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  color-scheme: light;
 }
 
 [data-theme='dark'] {
@@ -73,6 +100,9 @@
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
+
+  /* See the light block's color-scheme comment above for why this exists. */
+  color-scheme: dark;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -96,5 +126,57 @@
     --border: oklch(1 0 0 / 10%);
     --input: oklch(1 0 0 / 15%);
     --ring: oklch(0.556 0 0);
+
+    /* See the light block's color-scheme comment above for why this exists. */
+    color-scheme: dark;
   }
+}
+
+/*
+ * Paint the page itself. Tokens alone only flip descendants' custom-property
+ * values — nothing is visible until something actually consumes them via
+ * background-color/color. Two selectors, two jobs:
+ *   - `body`: fixes the default, no-attribute case. `html` carries no
+ *     background of its own, so body's background is what the canvas
+ *     actually shows. A single-element selector (specificity 0,0,1) is used
+ *     deliberately so a consumer's own `body { background: ... }` rule can
+ *     override it without `!important` — but that only holds when
+ *     `data-theme` lives on `<html>`, as llms.txt recommends. A consumer who
+ *     instead puts `data-theme` on `<body>` and then repaints that same
+ *     element needs a rule of matching specificity (an attribute selector,
+ *     or `!important`): once the attribute sits on `<body>`, the
+ *     `[data-theme]` half below targets that same element and, at
+ *     specificity 0,1,0, outranks a plain `body { ... }` override.
+ *   - `[data-theme]`: makes a *scoped* theme paint its own surface, not just
+ *     flip its descendants' tokens. Without this, a `data-theme="dark"`
+ *     subtree nested in a light page would flip its descendants' colors but
+ *     sit on the still-light background behind it (case (d) below).
+ *
+ * Cascade check against all four ways a theme can resolve (an explicit
+ * attribute always wins over the media query; no attribute falls through to
+ * it):
+ *   (a) no attribute, prefers light  -> only the plain `:root` half of the
+ *       light block applies -> light tokens, color-scheme: light.
+ *   (b) no attribute, prefers dark   -> the light block sets light tokens on
+ *       `:root` first, then `:root:not([data-theme='light'])` inside the
+ *       media query overrides them (no attribute present, so :not matches)
+ *       -> dark tokens win, color-scheme: dark.
+ *   (c) data-theme="light", prefers dark -> `[data-theme='light']` sets
+ *       light tokens; the media query's `:not([data-theme='light'])` guard
+ *       now fails to match, so the dark override never applies -> light
+ *       tokens win, color-scheme: light.
+ *   (d) data-theme="dark" nested inside a light page -> `[data-theme='dark']`
+ *       matches that element directly, setting dark tokens that cascade to
+ *       its descendants; this rule's `[data-theme]` half paints that same
+ *       element's own background/color from the now-dark tokens, instead of
+ *       leaving its light-themed ancestor's background showing through ->
+ *       dark tokens win, scoped to that subtree.
+ *
+ * No literal colors here — the page paints from the same tokens components
+ * consume, so it always tracks whichever case above resolved.
+ */
+body,
+[data-theme] {
+  background-color: var(--background);
+  color: var(--foreground);
 }

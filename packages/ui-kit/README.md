@@ -26,8 +26,12 @@ import { Button } from '@gears-frontx/ui-kit';
 </Button>;
 ```
 
-Dark mode: set `data-theme="dark"` on `<html>`; without it the theme follows
-`prefers-color-scheme` (opt out with `data-theme="light"`).
+The theme file paints the page (background, text, and UA-owned surfaces like
+the scrollbar) as well as defining the tokens, so dark mode works out of the
+box with no attribute at all: it follows `prefers-color-scheme` by default.
+For explicit control instead, set `data-theme="dark"` or `data-theme="light"`
+on `<html>` — or on any inner subtree, which then paints its own surface
+independently of the page around it.
 
 To re-brand, override the CSS variables from `theme.css` in your own styles.
 
