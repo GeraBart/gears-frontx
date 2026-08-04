@@ -1,0 +1,237 @@
+/*
+ * Tabs styles, translated from shadcn/ui (MIT) to CSS Modules.
+ * Consumes only theme.css variables — no raw colors.
+ */
+
+/*
+ * Local `box-sizing: border-box` — the kit declares box-sizing nowhere (a
+ * kit-wide gap tracked separately; fixing it there needs one deliberate
+ * commit plus a visual check across every component, not a side effect of
+ * this one). Tabs needs it now because `.trigger` is the kit's only part
+ * sized by a *percentage* height (`calc(100% - 1px)` below): under
+ * content-box, that percentage resolves against `.list`'s content height
+ * and then padding/border pile on top of it, so the active tab renders
+ * taller than its track instead of inset within it.
+ *
+ * Declared on the kit's own classes only (`.list`/`.trigger` — the two
+ * with padding/border driving the bug — plus `.tabs`/`.content` for the
+ * same box model consistently within this component), never on a
+ * universal descendant selector: a `.tabs *` reset would also silently
+ * flip the box model of whatever a consumer renders inside a
+ * `TabsContent` panel, which isn't this component's content to change.
+ */
+.tabs,
+.list,
+.trigger,
+.content {
+  box-sizing: border-box;
+}
+
+.tabs {
+  display: flex;
+  gap: 0.5rem;
+}
+
+/*
+ * Counterintuitive but correct: horizontal tabs stack the list above its
+ * panel (a flex *column*), while vertical tabs (the default flex-row) put
+ * a column-shaped list beside its panel. Base UI stamps `data-orientation`
+ * on every part (root, list, tab, and panel alike), so every rule below
+ * targets that attribute directly on the part it styles, rather than
+ * reading a shared ancestor's data attribute the way the Tailwind
+ * `group-data-*` source does.
+ */
+.tabs[data-orientation='horizontal'] {
+  flex-direction: column;
+}
+
+.list {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-lg);
+  padding: 3px;
+  color: var(--muted-foreground);
+}
+
+.list[data-orientation='horizontal'] {
+  height: 2.25rem;
+}
+
+.list[data-orientation='vertical'] {
+  height: fit-content;
+  flex-direction: column;
+}
+
+.variantDefault {
+  background-color: var(--muted);
+}
+
+.variantLine {
+  gap: 0.25rem;
+  background-color: transparent;
+  border-radius: 0;
+}
+
+.trigger {
+  position: relative;
+  display: inline-flex;
+  flex: 1 1 0%;
+  height: calc(100% - 1px);
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  padding: 0.25rem 0.5rem;
+  background-color: transparent;
+  /*
+   * Not `var(--muted-foreground)`: against this component's own `--muted`
+   * track (the "default" variant's background, immediately above), that
+   * token falls just short of the 4.5:1 AA floor for 14px/500 text in
+   * light mode (~4.34:1). The source's own value (`text-foreground/60`)
+   * only clears it because Tailwind's opacity blends against this exact
+   * backdrop — mixing against a known, fixed background (rather than
+   * `transparent`, the kit's usual idiom for a color meant to sit on an
+   * arbitrary backdrop) reproduces that same guarantee here, and does it
+   * with one rule for both themes: ~5.1:1 in light, ~4.9:1 in dark.
+   *
+   * The "line" variant has no `--muted` fill (its `.list` is transparent),
+   * so this same text sits on whatever is behind Tabs there — typically
+   * `--background`. Checked against that backdrop too, with the same
+   * luminance calculation: it only gets easier to read (~5.6:1 light,
+   * ~6.4:1 dark), since `--background` is lighter than `--muted` in light
+   * mode and darker than it in dark mode — both moves widen the gap from
+   * this mid-gray text rather than closing it.
+   *
+   * All of the above holds only while `--muted` stays a light surface in
+   * light mode / a dark one in dark mode, as it does at this kit's default
+   * palette. A consumer who rebrands `--muted` alone to something dark in
+   * light mode (llms.txt's own documented rebranding path) drags this mix
+   * dark right along with it — around 1.06:1 measured at a `--muted`
+   * override with an OKLCH lightness of 0.2, unreadable. This isn't a new
+   * failure mode: the source's
+   * `text-foreground/60` fails identically, since it blends toward that
+   * same track. `var(--muted-foreground)` would have degraded more
+   * gracefully in that scenario (~3.8:1, still poor but survivable) — the
+   * mix here trades that graceful-degradation margin for meeting AA at
+   * the default palette, which the token alone does not.
+   */
+  color: color-mix(in oklab, var(--foreground) 55%, var(--muted) 45%);
+  font-family: inherit;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    color 150ms ease,
+    background-color 150ms ease,
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.trigger[data-orientation='vertical'] {
+  width: 100%;
+  justify-content: flex-start;
+}
+
+.trigger:hover {
+  color: var(--foreground);
+}
+
+.trigger:focus-visible {
+  outline: none;
+  border-color: var(--ring);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent);
+}
+
+/* See button.module.css: forced-colors drops box-shadow, restore UA outline. */
+@media (forced-colors: active) {
+  .trigger:focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+}
+
+/*
+ * Base UI keeps a disabled Tab focusable (arrow-key navigation must still
+ * reach and skip it) rather than setting the native `disabled` attribute,
+ * so only `data-disabled` — never `:disabled` — ever matches here.
+ */
+.trigger[data-disabled] {
+  cursor: not-allowed;
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+/*
+ * Source raises the active tab *above* the track in dark mode too
+ * (`dark:bg-input/30`, a lift of roughly +0.03 L over `--muted`) — but
+ * `--background` in dark (oklch 0.145) sits markedly *darker* than
+ * `--muted` (oklch 0.269), so this flips the raised direction rather than
+ * reproducing it. Left as `--background` anyway, matching this kit's own
+ * precedent (Button's `variantOutline` drops the same `dark:bg-input/30`
+ * idiom in favor of one token-driven rule — see button.module.css): the
+ * active tab still reads unambiguously against the track in both themes,
+ * just not with the same up/down direction as the untranslated source.
+ */
+.trigger[data-active] {
+  background-color: var(--background);
+  color: var(--foreground);
+}
+
+/*
+ * shadow-sm — a distinct, smaller two-layer shadow from Card's shadow-xs
+ * (see card.module.css): tighter blur, an extra -1px layer, no ring. Only
+ * the "default" (segmented-control) variant raises the active tab like
+ * this; "line" marks the active tab with the underline below instead.
+ */
+.variantDefault .trigger[data-active] {
+  box-shadow:
+    0 1px 3px 0 color-mix(in oklab, var(--foreground) 10%, transparent),
+    0 1px 2px -1px color-mix(in oklab, var(--foreground) 10%, transparent);
+}
+
+/*
+ * The "line" variant's underline: a static bar per tab, crossfaded by
+ * opacity rather than one element sliding between tabs — see the
+ * Tabs.Indicator note in tabs.tsx for why this kit doesn't animate a
+ * shared element's position instead.
+ */
+.trigger::after {
+  position: absolute;
+  background-color: var(--foreground);
+  opacity: 0;
+  transition: opacity 150ms ease;
+  content: '';
+}
+
+.trigger[data-orientation='horizontal']::after {
+  inset-inline: 0;
+  bottom: -5px;
+  height: 0.125rem;
+}
+
+.trigger[data-orientation='vertical']::after {
+  inset-block: 0;
+  right: -0.25rem;
+  width: 0.125rem;
+}
+
+.variantLine .trigger[data-active] {
+  background-color: transparent;
+  box-shadow: none;
+}
+
+.variantLine .trigger[data-active]::after {
+  opacity: 1;
+}
+
+.content {
+  flex: 1 1 0%;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  outline: none;
+}

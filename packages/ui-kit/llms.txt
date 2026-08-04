@@ -68,6 +68,10 @@ Rules for generated code:
 - [Switch](dist/docs/switch.md): immediate on/off toggle;
   `checked`/`onCheckedChange`, sizes default|sm; use checkbox for
   submit-time options.
+- [Tabs](dist/docs/tabs.md): switch between panels sharing the same
+  space (Tabs/TabsList/TabsTrigger/TabsContent); list variants
+  default|line; orientation horizontal|vertical (default horizontal);
+  inactive panels unmount unless `keepMounted`; no portal.
 - [Textarea](dist/docs/textarea.md): multi-line text field; native
   `<textarea>` props; grows with content; `aria-invalid` for the error
   state.

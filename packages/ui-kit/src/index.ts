@@ -107,6 +107,16 @@ export {
   type SelectValueProps,
 } from './components/select/select';
 export { Switch, type SwitchProps } from './components/switch/switch';
+export {
+  Tabs,
+  type TabsProps,
+  TabsContent,
+  type TabsContentProps,
+  TabsList,
+  type TabsListProps,
+  TabsTrigger,
+  type TabsTriggerProps,
+} from './components/tabs/tabs';
 export { Textarea, type TextareaProps } from './components/textarea/textarea';
 export {
   createToastManager,
