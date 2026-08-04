@@ -42,11 +42,19 @@ function createFakePlugin(name: string): TypeSystemPlugin {
 }
 
 describe('DefaultMfeRegistryFactory cache', () => {
-  it('returns the cached registry when the same config object is passed again', () => {
-    const config: MfeRegistryConfig = { typeSystem: createFakePlugin('FirstPlugin') };
+  it('returns the cached registry for the same plugin regardless of config identity', () => {
+    const plugin = createFakePlugin('FirstPlugin');
+    // Two distinct config objects carrying one plugin: passing the same object
+    // twice would pass even against a cache keyed by config identity, so the
+    // second call has to arrive in a config the factory has never seen.
+    const first: MfeRegistryConfig = { typeSystem: plugin };
+    const second: MfeRegistryConfig = { typeSystem: plugin };
     const factory = createMfeRegistryFactory();
 
-    expect(factory.build(config)).toBe(factory.build(config));
+    const registry = factory.build(first);
+
+    expect(factory.build(second)).toBe(registry);
+    expect(factory.build(first)).toBe(registry);
   });
 
   it('refuses the rebuild when the caller mutates typeSystem on the config it already built with', () => {
