@@ -59,6 +59,29 @@
   --scale: calc(max(0, 1 - (var(--toast-index) * 0.1)));
   --shrink: calc(1 - var(--scale));
 
+  /*
+   * Closes a 2px gap between the declared and rendered height. Base UI
+   * measures `--toast-height` (node_modules/@base-ui/react/toast/root/
+   * ToastRoot.js:124-127) as this same element's own `offsetHeight` —
+   * always border-box-shaped per the DOM spec, border/padding included
+   * regardless of `box-sizing` — taken while `height` is momentarily
+   * `auto` (natural size). Content-box (the prior default here)
+   * interpreted that measured number as *content*-only height, so the
+   * border re-added its own 2px on render: 78px measured → 80px
+   * rendered, 70px measured → 72px rendered — the delta always equals
+   * the border, confirming the box model as the cause, not the
+   * measurement point.
+   *
+   * No clipping risk from now treating that number as the whole box:
+   * `.content` (the only child) is height: 100% of this element, and a
+   * percentage height resolves as `auto` against an indeterminate parent
+   * during that same momentary measurement (CSS Sizing §5.2) — so the
+   * measured value already *is* `.content` at its natural size plus this
+   * border. Border-box hands `.content` that identical content-box size
+   * back (measured value minus the border), i.e. exactly natural, not
+   * less than it.
+   */
+  box-sizing: border-box;
   position: absolute;
   right: 0;
   bottom: 0;
@@ -196,18 +219,13 @@
    * center. Same acute case as tabs.module.css/badge.module.css, scoped
    * the same way (this class only).
    *
-   * `.toast` itself is deliberately left without this declaration, even
-   * though it has the same shape of collision (its own 1px border
-   * alongside its own declared height via `--height`): `.toast` renders
-   * at --toast-height (78px as measured in the demo) plus that border,
-   * i.e. 80px true height, under today's content-box. That same 78px is
-   * what `.toast[data-expanded]` (line 131) sets `height` to for the
-   * expanded stack, so every expanded card is actually 2px taller than
-   * the stack's own gap math assumes. Declaring border-box here would
-   * make `.toast` render at exactly 78px and incidentally close that
-   * 2px gap — but that's a real, separate discrepancy between this
-   * class's box model and Base UI's own measured height, left open
-   * deliberately for its own fix rather than folded into this one.
+   * `.toast` itself now carries the same declaration (see its own
+   * comment above) for a related but distinct reason: this one is about
+   * `.content`'s own padding piling onto its declared height; that one
+   * is about `.toast`'s declared height disagreeing with Base UI's
+   * measured `--toast-height` by exactly the border width. Fixing one
+   * doesn't fix the other — each class has its own border/padding to
+   * reconcile with its own declared size.
    */
   box-sizing: border-box;
   display: flex;
