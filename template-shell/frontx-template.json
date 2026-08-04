@@ -13,7 +13,6 @@
       "src-app/vitest.mfe.base.ts",
       "public/",
       "scripts/",
-      "internal/",
       "__tests__/",
       "package.json",
       "package-lock.json",
