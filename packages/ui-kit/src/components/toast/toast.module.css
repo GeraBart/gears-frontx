@@ -1,0 +1,272 @@
+/*
+ * Toast styles, translated from shadcn/ui (MIT) to CSS Modules.
+ * Consumes only theme.css variables — no raw colors.
+ */
+
+/*
+ * Fixed to the viewport, bottom-anchored; a max-w-sm column on wider
+ * screens (right-anchored: sm:right-4/left-auto), full-bleed minus 1rem
+ * gutters below the sm breakpoint. pointer-events: none lets clicks pass
+ * through the empty space around the stack; each .toast re-enables them.
+ */
+.viewport {
+  position: fixed;
+  z-index: 50;
+  inset-inline: 1rem;
+  bottom: 1rem;
+  width: auto;
+  max-width: 24rem;
+  margin-inline: auto;
+  pointer-events: none;
+  outline: none;
+}
+
+@media (min-width: 640px) {
+  .viewport {
+    right: 1rem;
+    left: auto;
+    width: 100%;
+    margin-inline: 0;
+  }
+}
+
+/*
+ * Each toast is an absolutely-positioned card stacked bottom-right inside
+ * the viewport. The custom properties below are local computed values —
+ * not theme tokens, not Base UI's own `--toast-*` runtime vars (see
+ * tokens.test.ts) — translating the source's arbitrary-property math 1:1:
+ *   --height    this toast's rendered height: the frontmost toast's height
+ *               while collapsed (so the stack's visual footprint tracks
+ *               the card on top), its own height once expanded (below).
+ *   --offset-y  the expanded vertical position: stack upward by --gap per
+ *               toast behind the front one, plus any live swipe delta.
+ *   --peek/--scale/--shrink  the collapsed "peeking cards" look: each
+ *               toast behind the front one is scaled down 10% per step
+ *               and nudged up by --peek so a sliver of it shows past the
+ *               one in front.
+ * z-index sits in the 900s–1000 range, well above the kit's other overlays
+ * (Dialog/DropdownMenu/Tooltip all use 50) — a toast should surface over an
+ * open modal, matching the source and typical toast UX.
+ */
+.toast {
+  --gap: 0.75rem;
+  --height: var(--toast-frontmost-height, var(--toast-height));
+  --offset-y: calc(
+    (var(--toast-offset-y) * -1) + (var(--toast-index) * var(--gap) * -1) +
+      var(--toast-swipe-movement-y)
+  );
+  --peek: 0.75rem;
+  --scale: calc(max(0, 1 - (var(--toast-index) * 0.1)));
+  --shrink: calc(1 - var(--scale));
+
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  z-index: calc(1000 - var(--toast-index));
+  width: 100%;
+  height: var(--height);
+  /*
+   * The kit's radius scale (theme.css) tops out at --radius-xl; the
+   * source's rounded-2xl is one step larger. Capped here rather than
+   * growing the shared scale for this one component.
+   */
+  border: 1px solid color-mix(in oklab, var(--foreground) 10%, transparent);
+  border-radius: var(--radius-xl);
+  background-color: var(--popover);
+  color: var(--popover-foreground);
+  box-shadow:
+    0 4px 6px -1px color-mix(in oklab, var(--foreground) 10%, transparent),
+    0 2px 4px -2px color-mix(in oklab, var(--foreground) 10%, transparent);
+  outline: none;
+  user-select: none;
+  pointer-events: auto;
+  transform-origin: bottom;
+  transform: translateX(var(--toast-swipe-movement-x))
+    translateY(
+      calc(
+        var(--toast-swipe-movement-y) - (var(--toast-index) * var(--peek)) -
+          (var(--shrink) * var(--height))
+      )
+    )
+    scale(var(--scale));
+  will-change: transform;
+  transition:
+    transform 500ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 500ms,
+    height 150ms;
+}
+
+.toast:focus-visible {
+  border-color: var(--ring);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent);
+}
+
+/* See button.module.css: forced-colors drops box-shadow, restore UA outline. */
+@media (forced-colors: active) {
+  .toast:focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+}
+
+/*
+ * An invisible strip spanning the gap below each toast, so moving the
+ * pointer from one stacked card down into the gap toward the next one
+ * doesn't register as leaving the stack (which would collapse it early).
+ */
+.toast::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 100%;
+  height: calc(var(--gap) + 1px);
+}
+
+/*
+ * Expanded (hovered/focused) stack: every toast takes its own full height
+ * and stacks upward by --gap, instead of the collapsed peek/scale look.
+ */
+.toast[data-expanded] {
+  height: var(--toast-height);
+  transform: translateX(var(--toast-swipe-movement-x)) translateY(var(--offset-y));
+}
+
+/*
+ * Beyond the toast limit: kept mounted (so it can animate back in once
+ * space frees up) but invisible rather than removed.
+ */
+.toast[data-limited] {
+  opacity: 0;
+}
+
+.toast[data-starting-style] {
+  transform: translateY(150%);
+}
+
+/* Auto/programmatic dismissal (not a swipe, not just over the limit):
+   slide the whole card straight down and out. */
+.toast[data-ending-style]:not([data-limited]):not([data-swipe-direction]) {
+  transform: translateY(150%);
+}
+
+/*
+ * Swipe-dismissed toasts continue off in the swipe direction. The source
+ * duplicates each of these under an extra `data-expanded:` variant with
+ * the exact same computed value — redundant once translated to real
+ * attribute selectors, which already match with or without data-expanded
+ * present, so each direction needs only one rule here.
+ */
+.toast[data-ending-style][data-swipe-direction='down'] {
+  transform: translateY(calc(var(--toast-swipe-movement-y) + 150%));
+}
+
+.toast[data-ending-style][data-swipe-direction='up'] {
+  transform: translateY(calc(var(--toast-swipe-movement-y) - 150%));
+}
+
+.toast[data-ending-style][data-swipe-direction='left'] {
+  transform: translateX(calc(var(--toast-swipe-movement-x) - 150%)) translateY(var(--offset-y));
+}
+
+.toast[data-ending-style][data-swipe-direction='right'] {
+  transform: translateX(calc(var(--toast-swipe-movement-x) + 150%)) translateY(var(--offset-y));
+}
+
+.content {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  gap: 0.75rem;
+  padding: 1rem;
+  overflow: hidden;
+  transition: opacity 250ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.content[data-behind] {
+  opacity: 0;
+}
+
+.content[data-expanded] {
+  opacity: 1;
+}
+
+.icon {
+  flex-shrink: 0;
+  width: 1rem;
+  height: 1rem;
+  pointer-events: none;
+}
+
+.iconDestructive {
+  color: var(--destructive);
+}
+
+.iconSpin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.body {
+  display: flex;
+  flex: 1 1 0%;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.title {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 500;
+}
+
+.description {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.action {
+  flex-shrink: 0;
+}
+
+/*
+ * A dimmer close affordance than Button's own ghost-variant color,
+ * brightening on hover — the source's deliberate divergence from the
+ * action button beside it. `button.close` (not just `.close`) so the
+ * extra type-selector specificity reliably beats Button's ghost color
+ * rule regardless of which of the two modules' CSS the bundler happens
+ * to emit last.
+ */
+button.close {
+  position: relative;
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+}
+
+button.close:hover {
+  color: var(--foreground);
+}
+
+/* Enlarges the click/tap target past the visible icon without affecting
+   layout — the source's after:-inset-2 hit-area trick. */
+button.close::after {
+  content: '';
+  position: absolute;
+  inset: -0.5rem;
+}
+
+.svgIcon {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  pointer-events: none;
+}

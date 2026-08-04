@@ -68,7 +68,7 @@ generate screens consistently.
 | Group    | Components |
 |----------|------------|
 | Forms    | `button`, `input`, `textarea`, `select`, `checkbox`, `radio-group`, `switch`, `label`, `field` |
-| Overlays | `dialog`, `dropdown-menu`, `tooltip`, `toast` (sonner) |
+| Overlays | `dialog`, `dropdown-menu`, `tooltip`, `toast` |
 | Structure| `card`, `tabs`, `badge`, `separator`, `skeleton` |
 | Data     | `table` (primitive markup) |
 
@@ -78,6 +78,14 @@ attribution in this package's NOTICE). Wrapping conventions follow Constructor's
 internal react-kit (gitlab.constr.dev/frontend/react-kit): per-component
 directories, colocated tests and docs, `render`-prop polymorphism. A composite
 `data-table` is deliberately deferred.
+
+`toast` is built on Base UI's own Toast primitive (`@base-ui/react/toast`),
+not sonner: base-vega ships a `sonner.json` variant too, but that pulls in
+`sonner` + `next-themes` as extra runtime dependencies, breaking the kit's
+"behavior from Base UI, no extra runtime deps" architecture for the sake of
+one component. Base UI's Toast keeps sonner's call-anywhere ergonomics
+(`toast.add({...})` from any file, no JSX composed at the call site) via its
+own manager object, without the extra dependencies.
 
 ## AI layer
 

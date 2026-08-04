@@ -93,6 +93,13 @@ export {
 export { Switch, type SwitchProps } from './components/switch/switch';
 export { Textarea, type TextareaProps } from './components/textarea/textarea';
 export {
+  createToastManager,
+  toast,
+  Toaster,
+  type ToasterProps,
+  useToastManager,
+} from './components/toast/toast';
+export {
   Tooltip,
   TooltipContent,
   type TooltipContentProps,
