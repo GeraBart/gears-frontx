@@ -1,0 +1,60 @@
+# @gears-frontx/ui-kit
+
+> Standard React component base for FrontX templates. Behavior comes from
+> Base UI primitives, styling is compiled CSS on semantic design tokens,
+> variants via a `variant`/`size` prop pair. Consumers need no CSS framework
+> or build plugins.
+
+Rules for generated code:
+
+- Import styles exactly once at the app entry, theme first:
+  `import '@gears-frontx/ui-kit/theme.css';`
+  `import '@gears-frontx/ui-kit/styles.css';`
+- Import components from the package root: `import { Button } from '@gears-frontx/ui-kit';`
+- Set the app font AND `data-theme` on `<html>`/`<body>`, not on an inner
+  container: overlay components (Select) portal their popup to `<body>`
+  and inherit theme tokens and font from there. If a subtree must carry
+  its own theme, pass that element as `container` to `SelectContent`.
+- Brand/appearance changes go through theme tokens (CSS variables in
+  `theme.css`, light/dark via `data-theme`), never through inline styles or
+  overriding kit class names.
+- Rounding is a scale derived from `--radius` (`--radius-xs|sm|md|lg|xl`);
+  override `--radius` alone and every component follows.
+- Per-component docs below list the kit-level props; everything else is the
+  underlying native element's props.
+
+## Components
+
+- [Button](dist/docs/button.md): action button; variants
+  default|destructive|outline|secondary|ghost|link, sizes
+  default|sm|lg|icon; render prop for button-semantic actions over a
+  real anchor (not a link substitute).
+- [Checkbox](dist/docs/checkbox.md): on/off tick box for independent
+  options; `checked`/`onCheckedChange`; nest inside Label for one click
+  target.
+- [Field](dist/docs/field.md): labelled form field composition
+  (Field/FieldLabel/FieldDescription/FieldError); wires ids, htmlFor,
+  aria-describedby, and validation display automatically — the default
+  way to build forms.
+- [Input](dist/docs/input.md): single-line text field; `onValueChange`
+  for the string value, `aria-invalid` for the error state; wires into
+  Field automatically.
+- [Label](dist/docs/label.md): caption for a form control; native
+  `<label>` props; associate via `htmlFor` or by nesting the control.
+- [RadioGroup](dist/docs/radio-group.md): mutually exclusive options
+  (RadioGroup + RadioGroupItem); `value`/`onValueChange` on the group;
+  arrow-key navigation built in.
+- [Select](dist/docs/select.md): dropdown picking one value from a
+  list (Select/SelectTrigger/SelectValue/SelectContent/SelectGroup/
+  SelectItem); trigger sizes default|sm; keyboard and typeahead built
+  in.
+- [Switch](dist/docs/switch.md): immediate on/off toggle;
+  `checked`/`onCheckedChange`, sizes default|sm; use checkbox for
+  submit-time options.
+- [Textarea](dist/docs/textarea.md): multi-line text field; native
+  `<textarea>` props; grows with content; `aria-invalid` for the error
+  state.
+
+## Optional
+
+- [README](README.md): installation, setup, package layout.
