@@ -111,6 +111,24 @@ export { Separator, type SeparatorProps } from './components/separator/separator
 export { Skeleton, type SkeletonProps } from './components/skeleton/skeleton';
 export { Switch, type SwitchProps } from './components/switch/switch';
 export {
+  Table,
+  type TableProps,
+  TableBody,
+  type TableBodyProps,
+  TableCaption,
+  type TableCaptionProps,
+  TableCell,
+  type TableCellProps,
+  TableFooter,
+  type TableFooterProps,
+  TableHead,
+  type TableHeadProps,
+  TableHeader,
+  type TableHeaderProps,
+  TableRow,
+  type TableRowProps,
+} from './components/table/table';
+export {
   Tabs,
   type TabsProps,
   TabsContent,

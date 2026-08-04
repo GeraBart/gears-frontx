@@ -83,6 +83,12 @@ Rules for generated code:
 - [Switch](dist/docs/switch.md): immediate on/off toggle;
   `checked`/`onCheckedChange`, sizes default|sm; use checkbox for
   submit-time options.
+- [Table](dist/docs/table.md): styled native table markup
+  (Table/TableHeader/TableBody/TableFooter/TableRow/TableHead/TableCell/
+  TableCaption); no Base UI primitive, no sorting/filtering/pagination —
+  primitive markup only; Table's own wrapper scrolls horizontally and is
+  keyboard-reachable (`tabIndex`); size a column via `className`/`style`
+  width on TableHead/TableCell; no portal.
 - [Tabs](dist/docs/tabs.md): switch between panels sharing the same
   space (Tabs/TabsList/TabsTrigger/TabsContent); list variants
   default|line; orientation horizontal|vertical (default horizontal);

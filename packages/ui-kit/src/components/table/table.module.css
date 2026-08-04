@@ -1,0 +1,207 @@
+/*
+ * Table styles, translated from shadcn/ui base-vega (MIT) to CSS Modules.
+ * Consumes only theme.css variables — no raw colors.
+ *
+ * Source (base-vega table.tsx) wraps <table> in its own scrolling div
+ * ("relative w-full overflow-x-auto") rather than asking every consumer to
+ * remember one; Table (table.tsx) renders both elements, kept here as two
+ * classes (.tableContainer, .table) matching the two real elements.
+ */
+
+.tableContainer {
+  position: relative;
+  width: 100%;
+  overflow-x: auto;
+}
+
+/*
+ * `tabIndex={0}` is set in table.tsx, not here (see the comment there for
+ * why) — this just gives that new tab stop the same visible focus ring
+ * every other focusable kit part gets.
+ */
+.tableContainer:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent);
+}
+
+/* See button.module.css: forced-colors drops box-shadow, restore UA outline. */
+@media (forced-colors: active) {
+  .tableContainer:focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+}
+
+.table {
+  width: 100%;
+  /*
+   * Substitutes for the preflight the kit lacks: without it, the table
+   * stays in the UA-default *separated* borders model, where every border
+   * declared below on a row/row-group (.tableHeader tr, .tableRow,
+   * .tableFooter) is silently ignored by the separated model's own
+   * rendering rules, and the UA default `border-spacing: 2px` gaps every
+   * cell, breaking the hover/selected/footer background tints into
+   * segmented strips instead of full-width rows. The source gets this for
+   * free from Tailwind's global preflight; this kit has none, so it's
+   * declared here explicitly.
+   */
+  border-collapse: collapse;
+  caption-side: bottom;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+/*
+ * Source: "[&_tr]:border-b" — every descendant row gets a bottom border
+ * from the header itself, on top of (and redundant with, when the row is
+ * this kit's own TableRow) .tableRow's own border-bottom below. Kept
+ * faithful to the source rather than dropped as "redundant": it also
+ * covers a plain <tr> rendered inside TableHeader without TableRow, which
+ * this kit's types don't forbid.
+ */
+.tableHeader tr {
+  border-bottom: 1px solid var(--border);
+}
+
+/*
+ * Source: "[&_tr:last-child]:border-0" — a descendant selector, so it
+ * reaches any last-child row nested inside .tableBody, not only a direct
+ * child. Removes the border every row otherwise gets from .tableRow, so
+ * the body doesn't end in a double line against its own bottom edge (or a
+ * following footer's own border-top).
+ */
+.tableBody tr:last-child {
+  border-bottom: 0;
+}
+
+.tableFooter {
+  border-top: 1px solid var(--border);
+  /*
+   * Source: bg-muted/50. Contrast checked with the kit's default text
+   * color (--foreground — neither <td> nor <tfoot> set an explicit color
+   * of their own, so this is the realistic ambient case) against this tint
+   * composited over --background (a footer has no background of its own
+   * beneath it to composite against), the way a browser actually renders
+   * it — alpha-over on gamma-encoded sRGB channels, not a blend in OKLab:
+   * 18.96:1 in light, 17.00:1 in dark — clears AA by a wide margin in
+   * both, same conclusion as .tableRow:hover below (identical tint).
+   */
+  background-color: color-mix(in oklab, var(--muted) 50%, transparent);
+  font-weight: 500;
+}
+
+/*
+ * Source: "[&>tr]:last:border-b-0" — a direct-child selector here, unlike
+ * .tableBody's descendant one above: only the footer's own last row, not
+ * any last-child row nested deeper inside it.
+ */
+.tableFooter > tr:last-child {
+  border-bottom: 0;
+}
+
+.tableRow {
+  border-bottom: 1px solid var(--border);
+  /* Same four-property list as button/badge/tabs' "transition-colors"
+     translation, kept for form consistency even though only
+     background-color actually changes on this part. */
+  transition:
+    color 150ms ease,
+    background-color 150ms ease,
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+/*
+ * Source: bg-muted/50, same tint as .tableFooter above — see its comment
+ * for the computed contrast (18.96:1 light / 17.00:1 dark against
+ * --foreground text), which applies identically here.
+ */
+.tableRow:hover {
+  background-color: color-mix(in oklab, var(--muted) 50%, transparent);
+}
+
+/*
+ * Source: "has-aria-expanded:bg-muted/50" — compiled against the actual
+ * Tailwind v4 output, this variant emits `:has([aria-expanded="true"])`,
+ * not mere presence of the attribute: Tailwind's `aria-expanded` variant
+ * tests the *value*, matching the ARIA boolean's true state specifically.
+ * A row highlights only while it contains a descendant control that is
+ * *currently* expanded (e.g. a row-level disclosure toggle in a
+ * master-detail layout) — a collapsed toggle (`aria-expanded="false"`)
+ * must not match, or every row with a toggle would stay permanently
+ * tinted regardless of its state, inverting the rule's purpose. Same
+ * tint, same contrast numbers as .tableRow:hover above.
+ */
+.tableRow:has([aria-expanded='true']) {
+  background-color: color-mix(in oklab, var(--muted) 50%, transparent);
+}
+
+/*
+ * Source: data-[state=selected]:bg-muted — full-strength, not the /50 tint
+ * above, so no color-mix approximation needed: --foreground against solid
+ * --muted is 18.15:1 light / 14.48:1 dark, both themes' text and muted
+ * tokens sit far enough apart in lightness that this is nowhere close to
+ * the AA floor.
+ */
+.tableRow[data-state='selected'] {
+  background-color: var(--muted);
+}
+
+.tableHead {
+  /*
+   * Local `box-sizing: border-box` — the kit declares box-sizing nowhere (a
+   * kit-wide gap tracked separately; see tabs.module.css/badge.module.css
+   * for the same note). Not the same acute case as those two: no fixed
+   * dimension of the kit's *own* collides with its own padding here —
+   * `height` and `padding-inline` sit on orthogonal axes, so content-box
+   * doesn't inflate either past the other on its own. The real collision
+   * is consumer-supplied: sizing a column via a *width* set through
+   * `className`/`style` on TableHead/TableCell is the documented way to do
+   * it — shadcn's own table example
+   * (ui.shadcn.com/docs/components/base/table) ships exactly that,
+   * `className="w-[100px]"` on a cell — and under content-box, this kit's
+   * own `padding-inline` (0.5rem here) would add on top of that width
+   * instead of being absorbed into it, so a `width: 100px` cell would not
+   * actually render 100px wide. border-box makes the documented pattern
+   * behave as given.
+   */
+  box-sizing: border-box;
+  height: 2.5rem;
+  padding: 0 0.5rem;
+  text-align: left;
+  vertical-align: middle;
+  font-weight: 500;
+  white-space: nowrap;
+  color: var(--foreground);
+}
+
+.tableHead:has([role='checkbox']) {
+  padding-right: 0;
+}
+
+.tableCell {
+  /* Same reasoning as .tableHead above — the other half of the same
+     column-width collision, since a <td> can carry the identical
+     consumer-supplied width as its <th>. */
+  box-sizing: border-box;
+  padding: 0.5rem;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.tableCell:has([role='checkbox']) {
+  padding-right: 0;
+}
+
+.tableCaption {
+  margin-top: 1rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  /*
+   * Source: text-muted-foreground, against --background (a caption sits
+   * outside any row/footer tint, so no mixed-tint approximation is
+   * needed): 4.73:1 light, 7.63:1 dark — clears the 4.5:1 AA floor for
+   * normal text in both themes.
+   */
+  color: var(--muted-foreground);
+}
