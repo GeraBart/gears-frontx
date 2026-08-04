@@ -91,6 +91,21 @@ import {
 </Dialog>
 ```
 
+## Wide content
+
+`DialogContent` lays its children out as a single-column grid capped at
+`28rem` (`calc(100% - 2rem)` below 640px), and the column's minimum width
+is floored at zero — so content wider than the popup overflows *inside*
+it rather than stretching the dialog past its cap.
+
+That means a wide child needs its own horizontal scroll container:
+`Table` already ships one (its wrapper scrolls and is keyboard-reachable),
+so a table drops in as-is. Anything else wide — a `<pre>` code block, a
+long unbroken string, an image — either wrap in an element with
+`overflow-x: auto`, or let it wrap (`overflow-wrap: anywhere` for
+unbreakable strings). Widening the dialog itself is a `className` width on
+`DialogContent`, not something to fix from the child.
+
 ## Anti-patterns
 
 - Do not nest interactive page content's focus expectations across the

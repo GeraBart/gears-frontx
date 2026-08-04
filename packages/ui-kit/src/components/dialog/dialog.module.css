@@ -32,6 +32,33 @@
   isolation: isolate;
   z-index: 50;
   display: grid;
+  /*
+   * Without this, the single implicit column is `auto` — i.e.
+   * `minmax(auto, auto)`, sized to its item's *max-content*
+   * contribution — so a grid item wider than the popup grows the track
+   * and drags `.popup` past the `max-width` below with it: content
+   * spills over the backdrop and outside the rounded surface. Measured
+   * with a Table inside a Dialog: the table's own scroll wrapper
+   * rendered 957px and never scrolled (`scrollWidth === clientWidth`),
+   * because an auto track gave it no width to scroll against; the popup
+   * overflowed with it (clientWidth 496, scrollWidth 981). Not
+   * Table-specific — a wide <pre>, an unbreakable string or an oversized
+   * image does the same.
+   *
+   * `minmax(0, 1fr)`, not plain `1fr`: `1fr` alone is `minmax(auto, 1fr)`
+   * whose automatic minimum is still min-content, which is exactly the
+   * floor that has to go. With the minimum at zero the track resolves to
+   * the popup's own content-box width, an over-wide item overflows
+   * *inside* it, and a scroll container placed there finally has a
+   * definite width to scroll against (wrapper drops 957px → 448px and
+   * scrolls).
+   *
+   * Independent of the box-sizing fix above, which is why both are
+   * declared: `min-width: 0` on the child, `max-width: 100%` on the
+   * wrapper, and `box-sizing: border-box` on the popup were each measured
+   * and none of them addresses the track sizing.
+   */
+  grid-template-columns: minmax(0, 1fr);
   width: 100%;
   max-width: calc(100% - 2rem);
   gap: 1.5rem;
