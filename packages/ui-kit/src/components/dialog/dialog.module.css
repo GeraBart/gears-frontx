@@ -9,6 +9,8 @@
   isolation: isolate;
   z-index: 50;
   background-color: var(--overlay);
+  /* Opacity-only, no transform/geometry — a fade isn't motion under
+     WCAG 2.3.3, so deliberately left unguarded under prefers-reduced-motion. */
   transition: opacity 100ms ease;
 }
 
@@ -77,6 +79,18 @@
   transition:
     opacity 100ms ease,
     transform 100ms ease;
+}
+
+/*
+ * Mixed transition: opacity (a fade, not motion under WCAG 2.3.3 — kept)
+ * and transform (the centered popup scaling in/out, which is — suppressed).
+ * Split rather than a blanket `transition: none` so the fade still plays;
+ * the popup just snaps to its final scale instead of animating there.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .popup {
+    transition: opacity 100ms ease;
+  }
 }
 
 @media (min-width: 640px) {

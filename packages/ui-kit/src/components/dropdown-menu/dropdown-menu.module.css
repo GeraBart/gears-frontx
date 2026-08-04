@@ -49,6 +49,22 @@
     transform 100ms ease;
 }
 
+/*
+ * Mixed transition: opacity (a fade, not motion under WCAG 2.3.3 — kept)
+ * and transform (the popup scaling in/out, which is — suppressed). Split
+ * rather than a blanket `transition: none` so the fade still plays; the
+ * popup just snaps to its final scale instead of animating there. Distinct
+ * from the `[data-instant]` rule below: that's Base UI declaring a specific
+ * state change must not animate at all (so it fully suppresses, including
+ * opacity); this is the user's own reduced-motion preference, which only
+ * objects to the scale.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .popup {
+    transition: opacity 100ms ease;
+  }
+}
+
 .popup[data-starting-style],
 .popup[data-ending-style] {
   opacity: 0;

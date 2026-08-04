@@ -24,6 +24,8 @@
   border-radius: var(--radius-xs);
   background-color: transparent;
   outline: none;
+  /* Colour-only transition, no transform/geometry — not motion under
+     WCAG 2.3.3, so deliberately left unguarded under prefers-reduced-motion. */
   transition:
     border-color 150ms ease,
     background-color 150ms ease,

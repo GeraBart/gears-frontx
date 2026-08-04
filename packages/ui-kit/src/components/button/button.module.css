@@ -33,6 +33,8 @@
   cursor: pointer;
   user-select: none;
   text-decoration: none;
+  /* Colour-only transition, no transform/geometry — not motion under
+     WCAG 2.3.3, so deliberately left unguarded under prefers-reduced-motion. */
   transition:
     color 150ms ease,
     background-color 150ms ease,

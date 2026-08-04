@@ -128,6 +128,8 @@
   font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
+  /* Colour-only transition, no transform/geometry — not motion under
+     WCAG 2.3.3, so deliberately left unguarded under prefers-reduced-motion. */
   transition:
     color 150ms ease,
     background-color 150ms ease,
@@ -207,6 +209,8 @@
   position: absolute;
   background-color: var(--foreground);
   opacity: 0;
+  /* Opacity-only, no transform/geometry — a crossfade isn't motion under
+     WCAG 2.3.3, so deliberately left unguarded under prefers-reduced-motion. */
   transition: opacity 150ms ease;
   content: '';
 }

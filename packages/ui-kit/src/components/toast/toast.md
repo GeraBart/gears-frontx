@@ -67,9 +67,10 @@ outline action button beside the close button; omit it and none
 renders.
 
 The card's own motion — the stacking/scale math, expand-on-hover, and
-entry/exit/swipe slides — is purely decorative and is suppressed
-outright under `prefers-reduced-motion: reduce`; toasts appear and
-disappear immediately rather than sliding.
+entry/exit/swipe slides — is suppressed under `prefers-reduced-motion:
+reduce`; toasts snap straight to position instead of sliding or
+resizing. Their opacity fades keep playing regardless — a fade isn't
+motion in the sense the OS preference is asking to reduce.
 
 `createToastManager()` / `useToastManager()` are re-exported for
 advanced cases: `createToastManager()` makes an isolated manager

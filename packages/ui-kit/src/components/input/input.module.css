@@ -26,6 +26,8 @@
   font-size: 1rem;
   line-height: 1.5rem;
   outline: none;
+  /* Colour-only transition, no transform/geometry — not motion under
+     WCAG 2.3.3, so deliberately left unguarded under prefers-reduced-motion. */
   transition:
     color 150ms ease,
     border-color 150ms ease,

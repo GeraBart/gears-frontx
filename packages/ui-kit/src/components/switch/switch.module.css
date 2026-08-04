@@ -22,6 +22,8 @@
   border: 1px solid transparent;
   border-radius: 9999px;
   outline: none;
+  /* Colour-only transition, no transform/geometry — not motion under
+     WCAG 2.3.3, so deliberately left unguarded under prefers-reduced-motion. */
   transition:
     background-color 150ms ease,
     border-color 150ms ease,
@@ -83,6 +85,19 @@
   border-radius: 9999px;
   background-color: var(--background);
   transition: transform 150ms ease;
+}
+
+/*
+ * Pure transform — the thumb sliding along the track on toggle — with
+ * nothing else transitioning to preserve, unlike the colour-only cases
+ * elsewhere in the kit. Suppressed outright under reduced motion: the
+ * thumb still ends up on the correct side, it just gets there without
+ * an animated slide.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .thumb {
+    transition: none;
+  }
 }
 
 .sizeDefault .thumb {
