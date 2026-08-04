@@ -63,7 +63,7 @@
     "test:unit:watch": "vitest --watch"
   },
   "dependencies": {
-    "@gears-frontx/api": "0.3.0-alpha.0",
+    "@gears-frontx/api": "0.3.0-alpha.1",
     "@gears-frontx/gts-plugin": "0.3.0-alpha.1",
     "@gears-frontx/mfes": "0.3.0-alpha.1",
     "@hookform/resolvers": "5.2.2",
