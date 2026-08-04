@@ -33,7 +33,7 @@
 
 ### 1.1 Overview
 
-This feature provides the abstract `MfeRegistry` façade — built via `mfeRegistryFactory` with the type-system provider injected — that owns microfrontend registration and on-demand load orchestration, resolving each unit's handler by its declared base type via the injected type system.
+This feature provides the abstract `MfeRegistry` façade — built via `createMfeRegistryFactory()` with the type-system provider injected — that owns microfrontend registration and on-demand load orchestration, resolving each unit's handler by its declared base type via the injected type system.
 
 ### 1.2 Purpose
 
@@ -82,7 +82,7 @@ User-facing interactions that start with an actor (human or external system) and
 - Domain contract matching fails — the extension is rejected before load.
 
 **Steps**:
-1. [ ] - `p1` - Developer obtains a registry instance by calling `mfeRegistryFactory.build` with an injected `TypeSystemPlugin` - `inst-flow-rvm-01`
+1. [ ] - `p1` - Developer obtains a registry instance by calling `createMfeRegistryFactory().build` with an injected `TypeSystemPlugin` - `inst-flow-rvm-01`
 2. [ ] - `p1` - Developer calls `registry.registerDomain` with an `ExtensionDomain` declaration and an `ExtensionDomainImplementationFactory` - `inst-flow-rvm-02`
 3. [ ] - `p1` - Registry validates the domain declaration through `typeSystem.register` and synchronously constructs the domain implementation via the factory - `inst-flow-rvm-03`
 4. [ ] - `p1` - **IF** validation fails **THEN** registry throws, domain is not registered, flow ends - `inst-flow-rvm-04`
@@ -194,7 +194,7 @@ Internal system functions and procedures that do not interact with actors direct
 
 - [x] `p1` - **ID**: `cpt-frontx-dod-mfe-registry-registry-contract`
 
-The system **MUST** expose the abstract `MfeRegistry` as the sole public runtime contract, obtainable only through `mfeRegistryFactory.build({ typeSystem })`, with the concrete implementation and internal coordination machinery remaining inaccessible to consumers.
+The system **MUST** expose the abstract `MfeRegistry` as the sole public runtime contract, obtainable only through `createMfeRegistryFactory().build({ typeSystem })`, with the concrete implementation and internal coordination machinery remaining inaccessible to consumers.
 
 **Implements**:
 - `cpt-frontx-flow-mfe-registry-factory-build`
@@ -247,7 +247,7 @@ The system **MUST** define the `MfeHandler` abstract class with `handledBaseType
 
 ## 6. Acceptance Criteria
 
-- [ ] The abstract `MfeRegistry` is the only exported public runtime contract; consumers obtain instances via `mfeRegistryFactory.build({ typeSystem })`.
+- [ ] The abstract `MfeRegistry` is the only exported public runtime contract; consumers obtain instances via `createMfeRegistryFactory().build({ typeSystem })`.
 - [ ] Handler resolution uses `typeSystem.isTypeOf(entryTypeId, handler.handledBaseTypeId)` exclusively — no type-format string literals appear in the registry's resolution logic.
 - [ ] `MfeHandler` declares `handledBaseTypeId`, `priority`, `bridgeFactory`, `load`, and `attachTypeSystem` — no self-selection predicate.
 - [ ] A handler constructed with no type system and passed to the registry through `mfeHandlers` resolves its own type-system-owned references after registration, with no change at the construction site.

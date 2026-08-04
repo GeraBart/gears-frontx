@@ -409,9 +409,10 @@ export class GtsPlugin implements TypeSystemPlugin<JSONSchema> {
  * @example
  * ```typescript
  * import { gtsPlugin } from '@gears-frontx/gts-plugin';
+ * import { createMfeRegistryFactory } from '@gears-frontx/mfes';
  *
  * // Build the registry with GTS plugin at application wiring time
- * const registry = mfeRegistryFactory.build({ typeSystem: gtsPlugin });
+ * const registry = createMfeRegistryFactory().build({ typeSystem: gtsPlugin });
  * ```
  */
 // @cpt-dod:cpt-frontx-dod-gts-type-provider-infra-schema-ownership:p1
