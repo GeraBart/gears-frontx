@@ -450,6 +450,17 @@ describe('validateContentSelfContainment - JSONC-tolerant tsconfig parsing (revi
     expect(result.status).toBe('VALIDATED');
   });
 
+  it('a BOM-prefixed tsconfig tsc accepts is inspected, not reported as broken JSON', async () => {
+    // A leading byte-order mark makes plain JSON.parse throw; tsc strips it, so
+    // a BOM-prefixed tsconfig that tsc builds unmodified must not surface here
+    // as an unparseable carrier - the same false-positive class as comments.
+    const { listContentOwnedFiles, readFile } = fakeTemplate({
+      'tsconfig.json': `\uFEFF{ "compilerOptions": { "strict": true } }`,
+    });
+    const result = await validateContentSelfContainment('template', manifest(['tsconfig.json']), listContentOwnedFiles, readFile);
+    expect(result.status).toBe('VALIDATED');
+  });
+
   it('a `//` inside a tsconfig string value (an `extends` URL) survives JSONC parsing rather than being cut as a comment', async () => {
     const { listContentOwnedFiles, readFile } = fakeTemplate({
       // A bare package specifier is npm-resolved and thus never a violation

@@ -58,6 +58,24 @@ describe('parseJsonc', () => {
     expect(result).toEqual({ include: ['src/**/*'] });
   });
 
+  it('parses a tsconfig prefixed with a UTF-8 byte-order mark the same as without it', () => {
+    // A leading BOM survives both string-aware passes and would otherwise make
+    // JSON.parse throw; tsc strips it before reading, so this reader must too.
+    const withBom = `\uFEFF{ "compilerOptions": { "strict": true } }`;
+
+    const result = parseJsonc(withBom);
+
+    expect(result).toEqual({ compilerOptions: { strict: true } });
+  });
+
+  it('strips only the leading BOM, leaving a byte-order mark inside a string value intact', () => {
+    const value = `\uFEFF{ "note": "keeps \uFEFF inside" }`;
+
+    const result = parseJsonc(value);
+
+    expect(result).toEqual({ note: 'keeps \uFEFF inside' });
+  });
+
   it('leaves a `//` inside a string value untouched rather than treating it as a comment', () => {
     const value = `{ "extends": "https://example.com/tsconfig.json" }`;
 

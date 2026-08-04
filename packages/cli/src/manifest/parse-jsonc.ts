@@ -5,6 +5,8 @@
  * TypeScript's own config reader (`ts.parseConfigFileTextToJson`) accepts
  * JSONC, not strict JSON: line comments, block comments, and trailing
  * commas are all legal in a tsconfig and `tsc` builds it without complaint.
+ * `tsc` also strips a leading UTF-8 byte-order mark before reading, so a
+ * BOM-prefixed tsconfig it accepts unmodified is well-formed too.
  * `validate-content-self-containment.ts` used to read every carrier -
  * including tsconfig - with plain `JSON.parse`, so a tsconfig that `tsc`
  * accepts unmodified could still be reported as "not valid JSON": a false
@@ -33,6 +35,7 @@
 
 const BACKSLASH = '\\';
 const DOUBLE_QUOTE = '"';
+const BYTE_ORDER_MARK = '\uFEFF';
 
 /**
  * Strips line comments and block comments from `text`, leaving every other
@@ -128,9 +131,9 @@ function stripTrailingCommas(text: string): string {
 }
 
 /**
- * Parses `text` as JSONC: plain JSON plus the comments and trailing commas
- * `tsc`'s own config reader tolerates. Genuinely malformed input - anything
- * still unparseable once comments and trailing commas are accounted for -
+ * Parses `text` as JSONC: plain JSON plus the comments, trailing commas, and
+ * leading byte-order mark `tsc`'s own config reader tolerates. Genuinely
+ * malformed input - anything still unparseable once those are accounted for -
  * still throws, so a caller that fails closed on a caught error keeps doing
  * so; this function only widens what counts as WELL-formed, never what
  * counts as malformed.
@@ -139,5 +142,12 @@ function stripTrailingCommas(text: string): string {
  * @throws {SyntaxError} When `text` is not valid JSON even with comments and trailing commas stripped.
  */
 export function parseJsonc(text: string): unknown {
-  return JSON.parse(stripTrailingCommas(stripJsonComments(text)));
+  // A leading UTF-8 byte-order mark sits at index 0, inside no string and
+  // consumed by no comment, so it survives both passes and then makes
+  // `JSON.parse` throw on an otherwise valid file. `tsc`'s own config reader
+  // strips it, so a BOM-prefixed tsconfig `tsc` accepts unmodified must not be
+  // reported as broken JSON here. Only a single leading mark is dropped; a BOM
+  // elsewhere is genuine malformed input and stays for `JSON.parse` to reject.
+  const withoutBom = text.startsWith(BYTE_ORDER_MARK) ? text.slice(1) : text;
+  return JSON.parse(stripTrailingCommas(stripJsonComments(withoutBom)));
 }
