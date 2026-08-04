@@ -27,6 +27,11 @@ Rules for generated code:
 
 ## Components
 
+- [Badge](dist/docs/badge.md): small pill-shaped status/count/category
+  label; variants default|secondary|destructive|outline|ghost|link; no
+  Base UI primitive; `render` (e.g. `<a>`) makes it a clickable tag —
+  hover feedback for default|secondary|destructive|outline only appears
+  once it is; ghost|link hover unconditionally either way.
 - [Button](dist/docs/button.md): action button; variants
   default|destructive|outline|secondary|ghost|link, sizes
   default|sm|lg|icon; render prop for button-semantic actions over a

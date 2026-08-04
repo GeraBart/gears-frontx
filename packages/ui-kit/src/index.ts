@@ -6,6 +6,7 @@
  * tokens) and '@gears-frontx/ui-kit/styles.css' (compiled component styles)
  * once in the consumer entry module.
  */
+export { Badge, type BadgeProps } from './components/badge/badge';
 export { Button, type ButtonProps } from './components/button/button';
 export {
   Card,
