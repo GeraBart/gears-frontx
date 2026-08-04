@@ -236,7 +236,7 @@ The system **MUST** own and orchestrate the complete register → type-validate 
 
 - [x] `p1` - **ID**: `cpt-frontx-dod-mfe-registry-type-contracts`
 
-The system **MUST** define the `MfeHandler` abstract class with `handledBaseTypeId`, `priority`, `bridgeFactory`, `load(entry, extensionId)`, and a registration-time `attachTypeSystem(typeSystem)` the base class implements for every handler — and MUST NOT include any `canHandle`-style self-selection method on the handler. Type matching **MUST** remain the registry's, evaluated against `handledBaseTypeId`; the plugin a handler receives **MUST** serve only the references its own load path owns, and registration **MUST** be the sole channel by which a handler obtains one.
+The system **MUST** define the `MfeHandler` abstract class with `handledBaseTypeId`, `priority`, `bridgeFactory`, `load(entry, extensionId)`, and a registration-time `attachTypeSystem(typeSystem)` the base class implements for every handler — and MUST NOT include any `canHandle`-style self-selection method on the handler. Type matching **MUST** remain the registry's, evaluated against `handledBaseTypeId`; the plugin a handler receives **MUST** serve only the references its own load path owns, and registration **MUST** be the sole channel by which a handler obtains one. A handler **MUST** bind to a single plugin for its lifetime: re-attaching the plugin it already holds is a no-op, and attaching a different one **MUST** be refused rather than swapped in, since the handler's own caches are keyed by extension and manifest id alone and cannot tell the two plugins' answers apart.
 
 **Implements**:
 - `cpt-frontx-algo-mfe-registry-handler-resolution`

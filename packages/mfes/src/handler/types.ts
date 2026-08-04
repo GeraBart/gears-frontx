@@ -209,13 +209,23 @@ export abstract class MfeHandler<TEntry extends MfeEntry = MfeEntry, TBridge ext
    * into. Called by the registry once per handler at registration.
    *
    * Implemented on the base class so every handler gains the plugin without
-   * restating the wiring. Registering one handler instance into a second
-   * registry re-points it at that registry's plugin — a handler instance
-   * belongs to one registry at a time.
+   * restating the wiring. A handler binds to one plugin for its lifetime:
+   * re-attaching the same instance is a no-op, and a different one is refused
+   * rather than swapped in. Subclass caches are keyed by extension or manifest
+   * id alone, so a silent swap would let a load started under the first
+   * registry be answered from a document the second plugin resolved.
    *
    * @param typeSystem - The registering registry's injected plugin
+   * @throws Error if a different plugin is already attached
    */
   attachTypeSystem(typeSystem: TypeSystemPlugin): void {
+    if (this.typeSystem && this.typeSystem !== typeSystem) {
+      throw new Error(
+        `MFE handler for base type '${this.handledBaseTypeId}' is already bound ` +
+        'to a type system. One handler instance cannot be shared across ' +
+        'registries - construct a separate handler for each registry.'
+      );
+    }
     this.typeSystem = typeSystem;
   }
 

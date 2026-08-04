@@ -27,8 +27,12 @@ const MANIFEST_ID = 'mock.mfe.mf_manifest.v1~test.manifest.v1';
 const ENTRY_BASE_ID = 'mock.mfe.entry.v1~';
 const ENTRY_ID = `${ENTRY_BASE_ID}test.entry.v1`;
 const PUBLIC_PATH = 'http://localhost:3099/';
+// A second origin for the same manifest id. The chunk URL a load fetches is
+// derived from the resolved manifest's publicPath, which makes the origin the
+// observable answer to "which plugin resolved this".
+const RIVAL_PUBLIC_PATH = 'http://localhost:4099/';
 
-function buildManifest(): MfManifest {
+function buildManifest(publicPath: string = PUBLIC_PATH): MfManifest {
   return {
     id: MANIFEST_ID,
     name: 'testMfe',
@@ -38,7 +42,7 @@ function buildManifest(): MfManifest {
       buildInfo: { buildVersion: '1.0.0', buildName: 'testMfe' },
       remoteEntry: { name: 'remoteEntry.js', path: '', type: 'module' },
       globalName: 'testMfe',
-      publicPath: PUBLIC_PATH,
+      publicPath,
     },
     shared: [],
   };
@@ -149,6 +153,35 @@ describe('MfeHandlerMF — manifest named by id', () => {
       MfeLoadError
     );
     expect(fetchSpy).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
+  });
+
+  it('refuses a second, different type system and keeps resolving through the first', async () => {
+    // Both plugins answer the same id, so nothing in the handler's own caches
+    // - keyed by manifest and extension id alone - could tell them apart.
+    const firstPlugin = createFakePlugin(new Map([[MANIFEST_ID, buildManifest()]]));
+    const secondPlugin = createFakePlugin(
+      new Map([[MANIFEST_ID, buildManifest(RIVAL_PUBLIC_PATH)]])
+    );
+    const handler = new MfeHandlerMF(ENTRY_BASE_ID, { retries: 0 });
+    handler.attachTypeSystem(firstPlugin);
+
+    expect(() => handler.attachTypeSystem(secondPlugin)).toThrow(
+      /already bound to a type system/
+    );
+    // Re-registering into the same registry must stay a no-op: only a rebind
+    // to a different plugin is the error.
+    expect(() => handler.attachTypeSystem(firstPlugin)).not.toThrow();
+
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockRejectedValue(new TypeError('network error for test'));
+
+    await expect(handler.load(buildEntry(MANIFEST_ID), 'ext-rebind')).rejects.toThrow(
+      MfeLoadError
+    );
+
+    expect(fetchSpy).toHaveBeenCalledWith(`${PUBLIC_PATH}assets/lifecycle.js`);
     fetchSpy.mockRestore();
   });
 });
