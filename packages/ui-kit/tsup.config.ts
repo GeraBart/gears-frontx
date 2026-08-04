@@ -6,8 +6,15 @@ export default defineConfig({
   dts: true,
   sourcemap: true,
   clean: true,
-  // Peer-provided at runtime; everything else (CVA, Base UI) is bundled so the
-  // CSS-module class maps and behavior ship as one artifact.
+  // Listed for the jsx-runtime subpath, which is not a package.json entry
+  // tsup would pick up on its own. Everything else stays external without
+  // being named here: tsup externalizes package.json `dependencies` and
+  // `peerDependencies` by default, so `@base-ui/react` and CVA are import
+  // statements in dist/index.js, not inlined code — the only thing this
+  // build inlines is the CSS-module class maps (see the loader override
+  // below). Don't describe the output as bundling its dependencies; it
+  // never has, and toast.md's context-sharing note depends on that being
+  // stated correctly.
   external: ['react', 'react-dom', 'react/jsx-runtime'],
   // tsup has no CSS Modules support of its own: its postcss plugin re-emits
   // every .css with `loader['.css'] ?? 'css'`, which yields an empty class map.

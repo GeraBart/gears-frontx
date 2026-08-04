@@ -81,10 +81,14 @@ component nested under `Toaster`, this is how you react to the toast
 list itself (an unread-count badge, "N toasts pending") or call that
 same manager without importing it directly. It is **not** a way to
 render your own toast cards in place of `Toaster`: the kit doesn't
-export the underlying Root/Content/Title/etc. parts, and a
-separately-installed `@base-ui/react` in your app can't share this
-context either — this package bundles Base UI into its own build rather
-than depending on the consumer's copy.
+export the underlying Root/Content/Title/etc. parts.
+
+Whether your own `@base-ui/react` shares this context depends on how it
+resolves. `@base-ui/react` is a regular dependency of this package and
+stays external in the build, so if your range is satisfied by the same
+version your installer dedupes to one copy and the context is shared; if
+you pin an incompatible version you get a second copy, and Base UI's
+Toast context — like any React context — does not cross between the two.
 
 `toast` is a module-scope singleton, which has two failure modes worth
 knowing rather than debugging blind: it's safe under SSR (it holds no

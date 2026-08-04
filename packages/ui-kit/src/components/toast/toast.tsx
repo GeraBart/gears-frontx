@@ -201,9 +201,16 @@ export const toast = ToastPrimitive.createToastManager();
  * (e.g. an unread-count badge) or call that same manager without
  * importing it directly. Not a way to render toast cards in place of
  * `Toaster`: the kit exports no Root/Content/Title/etc. parts to build
- * one with, and a separately-installed `@base-ui/react` in a consumer
- * app can't share this context either — Base UI is bundled into this
- * package's own build, not left as the consumer's dependency to resolve.
+ * one with.
+ *
+ * Whether a consumer's own `@base-ui/react` shares this context depends
+ * on whether the installer resolved one copy or two. `@base-ui/react` is
+ * a regular dependency of this package and stays external in the build
+ * (nothing is bundled but the CSS class maps), so a consumer whose own
+ * range is satisfied by the same version dedupes to a single copy and
+ * shares context; a consumer pinned to an incompatible version gets a
+ * nested second copy, and then Base UI's Toast context — like every
+ * React context — does not cross between them.
  */
 export const useToastManager = ToastPrimitive.useToastManager;
 
