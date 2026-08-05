@@ -306,6 +306,16 @@ export default [
     },
   },
 
+  // ui-kit's demo consumes the package by name (the workspace-linked dist), same as the
+  // telemetry demo — that one is exempt because the telemetry block is scoped to src/;
+  // ui-kit's block above spans the whole package, so the demo needs the explicit carve-out.
+  {
+    files: ['packages/ui-kit/demo/**/*.ts', 'packages/ui-kit/demo/**/*.tsx'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': 'off',
+    },
+  },
+
   // The hook signature is variadic so a handler of any shape stays assignable, and the record
   // carries consumer-supplied user data.
   // TODO: type both against a generic payload and drop this block; follow-up PR.

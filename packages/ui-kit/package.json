@@ -34,7 +34,10 @@
     "test": "npm run test:unit",
     "test:unit": "vitest --run --passWithNoTests=false",
     "test:unit:watch": "vitest --watch",
-    "test:consumer": "bash scripts/verify-consumer.sh"
+    "test:consumer": "bash scripts/verify-consumer.sh",
+    "type-check:demo": "tsc -p demo/tsconfig.json",
+    "predemo": "npm run build",
+    "demo": "vite demo"
   },
   "dependencies": {
     "@base-ui/react": "1.6.0",
