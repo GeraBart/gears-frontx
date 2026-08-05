@@ -73,9 +73,10 @@
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--destructive) 20%, transparent);
 }
 
-/* The mockups' Field spec: a default select is 40px — control/height/md. */
+/* The mockups' Field spec: a default select is 40px — the lg step of the
+ * control scale (see theme.css). */
 .sizeDefault {
-  height: var(--control-height-md);
+  height: var(--control-height-lg);
 }
 
 /* 32px — the one height the drawn controls and the token spec agree on
@@ -89,15 +90,12 @@
 }
 
 /*
- * The Field/filter chip (see select.tsx). 36px comes from the drawn
- * specimen — it sits between the control/height tokens (32/40/44), the
- * same drawn-vs-spec height discrepancy theme.css flags for buttons, so
- * it stays a literal until design answers. Declared after the size
- * classes: equal specificity, later source order, so the compact height
- * wins over whichever size is active.
+ * The Field/filter chip (see select.tsx): 36px, the md step. Declared
+ * after the size classes: equal specificity, later source order, so the
+ * compact height wins over whichever size is active.
  */
 .variantFilter {
-  height: 2.25rem;
+  height: var(--control-height-md);
   color: var(--muted-foreground);
 }
 

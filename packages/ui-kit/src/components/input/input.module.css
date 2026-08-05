@@ -15,8 +15,9 @@
   display: block;
   width: 100%;
   min-width: 0;
-  /* The mockups' Field spec: 40px tall — the control/height/md token. */
-  height: var(--control-height-md);
+  /* The mockups' Field spec: 40px tall — the lg step of the control scale
+   * (see theme.css; fields are drawn one step up from the md button). */
+  height: var(--control-height-lg);
   padding: 0.25rem 0.625rem;
   border: var(--border-width) solid var(--input);
   border-radius: var(--radius-md);

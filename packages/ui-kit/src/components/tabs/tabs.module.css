@@ -66,7 +66,8 @@
 }
 
 .list[data-orientation='horizontal'] {
-  height: 2.25rem;
+  /* Tabs are md-height controls in the mockups (36px). */
+  height: var(--control-height-md);
 }
 
 .list[data-orientation='vertical'] {

@@ -140,18 +140,13 @@
   text-decoration: underline;
 }
 
+/* Buttons sit on the control/height scale directly: sm/default/lg =
+ * sm/md/lg (32/36/40, the drawn specimens — see theme.css). */
 .sizeDefault {
-  height: 2.25rem;
+  height: var(--control-height-md);
   padding: 0 1rem;
 }
 
-/*
- * Only sm sits on the control/height scale today: the drawn buttons
- * measure 32/36/40 while the token spec says 32/40/44 — sm is the one
- * height both agree on. default/lg stay literals until design resolves
- * the discrepancy (flagged in theme.css); retokening them now would
- * silently grow every button by 4px.
- */
 .sizeSm {
   height: var(--control-height-sm);
   padding: 0 0.75rem;
@@ -159,7 +154,7 @@
 }
 
 .sizeLg {
-  height: 2.5rem;
+  height: var(--control-height-lg);
   padding: 0 1.5rem;
 }
 

@@ -217,12 +217,12 @@ Architecture's build bullet).
    per the design file's own component description), the unified Field set
    for Input/Textarea/Select with the `search` and `filter` types, Table
    density + selected/stale/restricted row hooks, and component CSS on the
-   metric tokens where the spec and the drawings agree. Still blocked on
-   design answers, with literals flagged in place until then: control
-   heights (token spec 32/40/44 vs drawn buttons 32/36/40 — Button
-   default/lg and the filter chip keep drawn values), the eight token
-   values marked `derived:` in theme.css, and a broad spacing-token pass
-   over per-component paddings (deferred; the scale exists in theme.css).
+   metric tokens. The drawn-vs-spec control-height discrepancy was ruled
+   in favor of the drawn specimens (32/36/40; buttons map sm/default/lg
+   directly, fields sit on the lg step, the filter chip on md). Still
+   open: the token values marked `derived:` in theme.css, and a broad
+   spacing-token pass over per-component paddings (deferred; the scale
+   exists in theme.css).
 5. The twelve gap components, mockups-first: `popover`, `alert`, `avatar`,
    `empty` are in both the mockups and the `insight-front` set and go first;
    `pagination` and `breadcrumb` are the mockups-only additions;
