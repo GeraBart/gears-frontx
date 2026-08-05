@@ -91,15 +91,21 @@ describe('Dialog', () => {
     container.remove();
   });
 
-  it('omits the close button when showCloseButton is false', () => {
+  // dialog.md's contract for the opt-out: only disable the built-in X when
+  // composing your own DialogClose inside the popup, so the dialog never
+  // ships without an in-popup close control. This is that sanctioned shape.
+  it('supports a consumer-composed DialogClose when showCloseButton is false', async () => {
     render(
       <Dialog defaultOpen>
         <DialogTrigger>Open</DialogTrigger>
         <DialogContent showCloseButton={false}>
           <DialogTitle>No close button</DialogTitle>
+          <DialogClose>Cancel</DialogClose>
         </DialogContent>
       </Dialog>,
     );
     expect(screen.queryByRole('button', { name: 'Close' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 });

@@ -63,6 +63,17 @@
   grid-template-columns: minmax(0, 1fr);
   width: 100%;
   max-width: calc(100% - 2rem);
+  /*
+   * The vertical counterpart of the max-width cap below: the popup is
+   * `position: fixed`, so both percentages resolve against the viewport.
+   * Without the cap, content taller than the viewport grows the popup past
+   * it — and because the modal locks page scrolling while open, the
+   * overflow is unreachable. overflow-y makes the popup itself the scroll
+   * container for that case. Known trade-off: the absolutely-positioned
+   * close button scrolls with the content.
+   */
+  max-height: calc(100% - 2rem);
+  overflow-y: auto;
   gap: 1.5rem;
   padding: 1.5rem;
   border: 1px solid color-mix(in oklab, var(--foreground) 10%, transparent);
@@ -149,7 +160,7 @@
   height: 1px;
   padding: 0;
   overflow: hidden;
-  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
   white-space: nowrap;
   border: 0;
   margin: -1px;
