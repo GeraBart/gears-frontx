@@ -216,7 +216,10 @@ Architecture's build bullet).
      retires the shadcn-inherited variant list;
    - Button: `loading` state; the icon-button size×variant matrix (the
      single `size="icon"` today vs sm/md/lg × primary/secondary drawn);
-   - Tabs: the `segment` kind next to the underline tabs;
+   - Tabs: restyle to the mockups' trackless Kind=tab look (the spec's
+     Kind=segment turned out to be the planned `toggle-group`'s styling —
+     the design file's own component description says "shadcn Tabs and
+     Toggle Group segment states" — so no segment variant on Tabs);
    - Field/Input/Select: `search` and `filter` field types;
    - Table: density (compact/default) and the primitive-styling share of
      row/table states (selected/stale/restricted, loading/empty/error) —

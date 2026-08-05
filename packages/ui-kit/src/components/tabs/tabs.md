@@ -43,7 +43,7 @@ by `value`.
 
 | Prop | Type | Default |
 |------|------|---------|
-| `variant` | `default` \| `line` — `default` is a segmented control where the active tab gets its own raised background; `line` is a flat row where the active tab is marked by an underline instead | `default` |
+| `variant` | `default` \| `line` — `default` is a trackless list where the active tab gets its own raised background (`--surface-elevated`); `line` is a flat row where the active tab is marked by an underline instead. A bordered segmented-control look is NOT a Tabs variant — that styling belongs to the planned `toggle-group` component | `default` |
 | `className` | `string` — merged after the kit class | — |
 
 `TabsTrigger`: `value` (required, matches a `TabsContent`), `disabled`;

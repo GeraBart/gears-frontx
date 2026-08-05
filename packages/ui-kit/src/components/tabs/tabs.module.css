@@ -1,5 +1,12 @@
 /*
- * Tabs styles, translated from shadcn/ui (MIT) to CSS Modules.
+ * Tabs styles — structure translated from shadcn/ui (MIT), visuals per the
+ * F-mockups' Tabs/Segment spec (Figma frame 196:382, Kind=tab): trackless
+ * list, the active tab raised on --surface-elevated, 13/18 medium labels,
+ * disabled at 0.42. The spec's Kind=segment (bordered items on
+ * --border-strong) is NOT a Tabs variant — the design file's own component
+ * description says "shadcn Tabs and Toggle Group segment states", i.e. the
+ * segment look belongs to the planned toggle-group component. The "line"
+ * underline variant has no mockup counterpart; kept as a kit extra.
  * Consumes only theme.css variables — no raw colors.
  */
 
@@ -54,7 +61,7 @@
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-lg);
-  padding: 3px;
+  gap: 0.25rem;
   color: var(--muted-foreground);
 }
 
@@ -67,12 +74,16 @@
   flex-direction: column;
 }
 
+/*
+ * Trackless per the mockups — the old shadcn translation filled this with
+ * --muted and inset the triggers 3px; the Studio spec marks the active tab
+ * with its own raised fill instead of a shared track.
+ */
 .variantDefault {
-  background-color: var(--muted);
+  background-color: transparent;
 }
 
 .variantLine {
-  gap: 0.25rem;
   background-color: transparent;
   border-radius: 0;
 }
@@ -81,50 +92,27 @@
   position: relative;
   display: inline-flex;
   flex: 1 1 0%;
-  height: calc(100% - 1px);
+  height: 100%;
   align-items: center;
   justify-content: center;
   gap: 0.375rem;
   border: 1px solid transparent;
   border-radius: var(--radius-md);
-  padding: 0.25rem 0.5rem;
+  padding: 0.25rem 0.75rem;
   background-color: transparent;
   /*
-   * Not `var(--muted-foreground)`: against this component's own `--muted`
-   * track (the "default" variant's background, immediately above), that
-   * token falls just short of the 4.5:1 AA floor for 14px/500 text in
-   * light mode (~4.34:1). The source's own value (`text-foreground/60`)
-   * only clears it because Tailwind's opacity blends against this exact
-   * backdrop — mixing against a known, fixed background (rather than
-   * `transparent`, the kit's usual idiom for a color meant to sit on an
-   * arbitrary backdrop) reproduces that same guarantee here, and does it
-   * with one rule for both themes: ~5.1:1 in light, ~4.9:1 in dark.
-   *
-   * The "line" variant has no `--muted` fill (its `.list` is transparent),
-   * so this same text sits on whatever is behind Tabs there — typically
-   * `--background`. Checked against that backdrop too, with the same
-   * luminance calculation: it only gets easier to read (~5.6:1 light,
-   * ~6.4:1 dark), since `--background` is lighter than `--muted` in light
-   * mode and darker than it in dark mode — both moves widen the gap from
-   * this mid-gray text rather than closing it.
-   *
-   * All of the above holds only while `--muted` stays a light surface in
-   * light mode / a dark one in dark mode, as it does at this kit's default
-   * palette. A consumer who rebrands `--muted` alone to something dark in
-   * light mode (llms.txt's own documented rebranding path) drags this mix
-   * dark right along with it — around 1.06:1 measured at a `--muted`
-   * override with an OKLCH lightness of 0.2, unreadable. This isn't a new
-   * failure mode: the source's
-   * `text-foreground/60` fails identically, since it blends toward that
-   * same track. `var(--muted-foreground)` would have degraded more
-   * gracefully in that scenario (~3.8:1, still poor but survivable) — the
-   * mix here trades that graceful-degradation margin for meeting AA at
-   * the default palette, which the token alone does not.
+   * The plain token is enough now: with the --muted track gone (see
+   * .variantDefault), inactive labels sit on the page surfaces, where
+   * --muted-foreground clears AA in both themes — measured 4.55:1 on
+   * --background / 4.76:1 on --card in light, 6.62:1 / 6.04:1 in dark.
+   * The old translation needed a foreground/muted mix here only because
+   * its own track was the backdrop; that reasoning left with the track.
    */
-  color: color-mix(in oklab, var(--foreground) 55%, var(--muted) 45%);
+  color: var(--muted-foreground);
+  /* Studio/tabs label: 13/18 medium per the mockup spec. */
   font-family: inherit;
-  font-size: 0.875rem;
-  line-height: 1.25rem;
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
   font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
@@ -165,38 +153,24 @@
  * reach and skip it) rather than setting the native `disabled` attribute,
  * so only `data-disabled` — never `:disabled` — ever matches here.
  */
+/* 0.42, not the shadcn 0.5 — the mockup specimens set disabled tabs at
+ * opacity 42. */
 .trigger[data-disabled] {
   cursor: not-allowed;
   pointer-events: none;
-  opacity: 0.5;
+  opacity: 0.42;
 }
 
 /*
- * Source raises the active tab *above* the track in dark mode too
- * (`dark:bg-input/30`, a lift of roughly +0.03 L over `--muted`) — but
- * `--background` in dark (oklch 0.145) sits markedly *darker* than
- * `--muted` (oklch 0.269), so this flips the raised direction rather than
- * reproducing it. Left as `--background` anyway, matching this kit's own
- * precedent (Button's `variantOutline` drops the same `dark:bg-input/30`
- * idiom in favor of one token-driven rule — see button.module.css): the
- * active tab still reads unambiguously against the track in both themes,
- * just not with the same up/down direction as the untranslated source.
+ * The active tab is a raised fill, not a track inset: --surface-elevated
+ * is the palette's "lifted panel" step in both themes (brighter than the
+ * page in light mode AND in dark mode), which resolves the
+ * raised-direction flip the old --background fill had to apologize for.
+ * No shadow — the mockup marks the active tab with the fill alone.
  */
 .trigger[data-active] {
-  background-color: var(--background);
+  background-color: var(--surface-elevated);
   color: var(--foreground);
-}
-
-/*
- * shadow-sm — a distinct, smaller two-layer shadow from Card's shadow-xs
- * (see card.module.css): tighter blur, an extra -1px layer, no ring. Only
- * the "default" (segmented-control) variant raises the active tab like
- * this; "line" marks the active tab with the underline below instead.
- */
-.variantDefault .trigger[data-active] {
-  box-shadow:
-    0 1px 3px 0 color-mix(in oklab, var(--foreground) 10%, transparent),
-    0 1px 2px -1px color-mix(in oklab, var(--foreground) 10%, transparent);
 }
 
 /*
