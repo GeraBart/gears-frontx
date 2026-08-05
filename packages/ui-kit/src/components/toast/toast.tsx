@@ -118,7 +118,7 @@ function CloseIcon({ className }: { className?: string }) {
   );
 }
 
-function ToastTypeIcon({ type }: { type: string | undefined }) {
+function ToastTypeIcon({ type }: { type?: string }) {
   switch (type) {
     case 'success':
       return <CheckCircleIcon />;
