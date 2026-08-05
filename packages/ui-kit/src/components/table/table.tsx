@@ -47,9 +47,15 @@ export interface TableProps extends ComponentProps<'table'> {
    * on the wrapper; without it the stop announces nothing.
    */
   label?: string;
+  /**
+   * Cell metrics only — `compact` tightens row padding for operational
+   * views (the mockups' Data Table density axis). Not a data-table
+   * feature: no virtualization, no row model, purely the cells' padding.
+   */
+  density?: 'default' | 'compact';
 }
 
-export function Table({ className, label, ...props }: TableProps) {
+export function Table({ className, label, density, ...props }: TableProps) {
   return (
     <div
       className={styles.tableContainer}
@@ -57,7 +63,10 @@ export function Table({ className, label, ...props }: TableProps) {
       role={label === undefined ? undefined : 'region'}
       aria-label={label}
     >
-      <table className={cx(styles.table, className)} {...props} />
+      <table
+        className={cx(styles.table, density === 'compact' && styles.densityCompact, className)}
+        {...props}
+      />
     </div>
   );
 }

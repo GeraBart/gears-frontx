@@ -103,33 +103,38 @@ wider than 100.
 
 ## Row states
 
-`TableRow` reads two attributes for its background tint, forwarded like any
-other prop rather than driven by a kit-specific prop:
+`TableRow` reads attributes for its background tint, forwarded like any
+other prop rather than driven by a kit-specific prop. Your own logic sets
+the attribute; the kit only paints it (the Studio Data Table's carded,
+state-ringed rows are a composition on top of these hooks, not part of the
+primitive):
 
-- `data-state="selected"` — a solid `--muted` fill, for a row the user has
-  selected (e.g. via a leading checkbox column).
+- `data-state="selected"` — a solid `--accent` (violet) fill, for a row
+  the user has selected (e.g. via a leading checkbox column).
+- `data-state="stale"` — a `--warning-soft` fill, for a row whose data
+  needs attention (out-of-date sync, pending action).
+- `data-state="restricted"` — a `--danger-soft` fill, for a row the
+  viewer lacks access to.
 - Hover, and any row containing a descendant that is *currently*
   `aria-expanded="true"` (e.g. a row-level disclosure toggle, only while
   open — a collapsed toggle does not match) — a lighter, translucent
-  `--muted` tint.
+  `--muted` tint. A `data-state` tint holds under hover.
 
-If you put secondary text styled with `--muted-foreground` (e.g. via
-`Field`'s description styling, copied inline) inside a *selected* row,
-check contrast yourself before shipping it: `--muted-foreground` on solid
-`--muted` computes to 4.34:1 in light mode, just under the 4.5:1 AA floor
-for normal-size text (it clears AA for large text, and clears both AA
-tiers in dark mode at 5.83:1). This combination isn't produced by Table
-itself — no part pairs `--muted-foreground` text with a `--muted` row
-background — it's only a risk if you add that pairing yourself.
+All three state fills clear AA against `--foreground` text by a wide
+margin (14:1+ both themes). If you put secondary `--muted-foreground` text
+inside a tinted row, check contrast yourself before shipping it — that
+pairing is yours, not the kit's.
 
 ## Props (kit level)
 
-One kit-specific prop: `Table`'s `label` (`string`) names the focusable
-scroll wrapper with `role="region"` + `aria-label` (see above). Every
-other prop is the matching native element's own
-(`ComponentProps<'table'>`, `<'thead'>`, `<'tbody'>`, `<'tfoot'>`,
-`<'tr'>`, `<'th'>`, `<'td'>`, `<'caption'>`), plus `className`, merged
-after the kit class on every part.
+Two kit-specific props on `Table`: `label` (`string`) names the focusable
+scroll wrapper with `role="region"` + `aria-label` (see above), and
+`density` (`default` | `compact`) tightens cell padding for operational
+views — purely cell metrics, not a data-table feature. Every other prop
+is the matching native element's own (`ComponentProps<'table'>`,
+`<'thead'>`, `<'tbody'>`, `<'tfoot'>`, `<'tr'>`, `<'th'>`, `<'td'>`,
+`<'caption'>`), plus `className`, merged after the kit class on every
+part.
 
 ## Examples
 

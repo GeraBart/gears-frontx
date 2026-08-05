@@ -139,14 +139,33 @@
 }
 
 /*
- * Source: data-[state=selected]:bg-muted — full-strength, not the /50 tint
- * above, so no color-mix approximation needed: --foreground against solid
- * --muted is 18.15:1 light / 14.48:1 dark, both themes' text and muted
- * tokens sit far enough apart in lightness that this is nowhere close to
- * the AA floor.
+ * Row state hooks, per the F-mockups' Data Table row states (frame
+ * 200:493). The kit styles the attribute, the consumer's own logic sets it
+ * (`<TableRow data-state="selected|stale|restricted">`) — no selection or
+ * data logic lives here, in keeping with "primitive markup only". The
+ * mockups draw these rows as cards ringed in the state color; that carded
+ * treatment belongs to the data-table *composition* — the primitive share
+ * is the tinted row surface, in the same state palette.
+ *
+ * selected moved from the shadcn bg-muted to the Studio --accent (the
+ * palette's violet selection surface); stale/restricted take the matching
+ * -soft status fills. All three checked against --foreground text, the
+ * ambient cell color: selected 15.13:1 light / 14.21:1 dark, stale
+ * 16.23:1 / 14.27:1, restricted 16.25:1 / 16.37:1 — nowhere near the AA
+ * floor. Declared after :hover/:has() above: equal specificity, later
+ * source order, so a state tint holds under hover instead of flickering
+ * to the hover tint.
  */
 .tableRow[data-state='selected'] {
-  background-color: var(--muted);
+  background-color: var(--accent);
+}
+
+.tableRow[data-state='stale'] {
+  background-color: var(--warning-soft);
+}
+
+.tableRow[data-state='restricted'] {
+  background-color: var(--danger-soft);
 }
 
 .tableHead {
@@ -194,6 +213,20 @@
 
 .tableCell:has([role='checkbox']) {
   padding-right: 0;
+}
+
+/*
+ * Density — the mockups' Data Table density axis ("compact density for
+ * operational views", per the design file's component mapping). One class
+ * on the <table>, cell metrics follow; the default density is the base
+ * styling above, untouched.
+ */
+.densityCompact .tableHead {
+  height: 2rem;
+}
+
+.densityCompact .tableCell {
+  padding-block: 0.25rem;
 }
 
 .tableCaption {

@@ -441,6 +441,39 @@ function App() {
               </TableCell>
               <TableCell>us-east</TableCell>
             </TableRow>
+            <TableRow data-state="selected">
+              <TableCell>gears-scheduler (selected)</TableCell>
+              <TableCell>
+                <Badge intent="success">running</Badge>
+              </TableCell>
+              <TableCell>eu-west</TableCell>
+            </TableRow>
+            <TableRow data-state="stale">
+              <TableCell>gears-connector (stale)</TableCell>
+              <TableCell>
+                <Badge intent="warning">needs action</Badge>
+              </TableCell>
+              <TableCell>eu-central</TableCell>
+            </TableRow>
+            <TableRow data-state="restricted">
+              <TableCell>gears-vault (restricted)</TableCell>
+              <TableCell>
+                <Badge form="dot">no access</Badge>
+              </TableCell>
+              <TableCell>—</TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+        <Table density="compact">
+          <TableBody>
+            <TableRow>
+              <TableCell>compact density</TableCell>
+              <TableCell>row one</TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell>compact density</TableCell>
+              <TableCell>row two</TableCell>
+            </TableRow>
           </TableBody>
         </Table>
       </Section>

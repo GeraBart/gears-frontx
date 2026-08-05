@@ -161,15 +161,44 @@ describe('Table', () => {
     expect(screen.getByTestId('cell')).toHaveProperty('colSpan', 2);
   });
 
-  it('forwards data-state to TableRow for the selected-row style hook', () => {
+  it.each(['selected', 'stale', 'restricted'])(
+    'forwards data-state="%s" to TableRow for the row-state style hooks',
+    (state) => {
+      render(
+        <table>
+          <tbody>
+            <TableRow data-testid="row" data-state={state} />
+          </tbody>
+        </table>,
+      );
+      expect(screen.getByTestId('row').getAttribute('data-state')).toBe(state);
+    },
+  );
+
+  it('applies the compact density class from the density prop', () => {
     render(
-      <table>
-        <tbody>
-          <TableRow data-testid="row" data-state="selected" />
-        </tbody>
-      </table>,
+      <Table density="compact">
+        <TableBody>
+          <TableRow>
+            <TableCell>a</TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>,
     );
-    expect(screen.getByTestId('row').getAttribute('data-state')).toBe('selected');
+    expect(screen.getByRole('table').className).toContain(styles.densityCompact);
+  });
+
+  it('stays density-default without the prop', () => {
+    render(
+      <Table>
+        <TableBody>
+          <TableRow>
+            <TableCell>a</TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>,
+    );
+    expect(screen.getByRole('table').className).not.toContain(styles.densityCompact);
   });
 
   it('keeps the table an accessible grid: role=table with the expected row/cell counts', () => {
