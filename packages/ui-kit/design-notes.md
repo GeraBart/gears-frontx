@@ -94,11 +94,14 @@ composite over `sheet`, `button`, `input`, `separator`, `skeleton` and
 
 ## Component set (MVP, 29 components)
 
+19 built, 10 planned — the ⏳-marked entries are the `insight-front` gap
+set, delivery-plan step 4 (see below), not yet in the package.
+
 | Group    | Components |
 |----------|------------|
-| Forms    | `button`, `input`, `textarea`, `select`, `checkbox`, `radio-group`, `switch`, `label`, `field`, `toggle`, `toggle-group` |
-| Overlays | `dialog`, `dropdown-menu`, `tooltip`, `toast`, `popover`, `sheet`, `preview-card` |
-| Structure| `card`, `tabs`, `badge`, `separator`, `skeleton`, `alert`, `avatar`, `collapsible`, `empty`, `spinner` |
+| Forms    | `button`, `input`, `textarea`, `select`, `checkbox`, `radio-group`, `switch`, `label`, `field`, ⏳ `toggle`, ⏳ `toggle-group` |
+| Overlays | `dialog`, `dropdown-menu`, `tooltip`, `toast`, ⏳ `popover`, ⏳ `sheet`, ⏳ `preview-card` |
+| Structure| `card`, `tabs`, `badge`, `separator`, `skeleton`, ⏳ `alert`, ⏳ `avatar`, ⏳ `collapsible`, ⏳ `empty`, ⏳ `spinner` |
 | Data     | `table` (primitive markup) |
 
 Behavior and accessibility come from Base UI primitives; variant logic is CVA;
