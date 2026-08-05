@@ -24,6 +24,13 @@ function CloseIcon({ className }: { className?: string }) {
 }
 
 export const Dialog = DialogPrimitive.Root;
+/**
+ * The root is a Base UI pass-through, but its props type is still exported:
+ * a consumer writing a typed wrapper imports it from this kit — Base UI is
+ * this package's dependency, not necessarily theirs. Same idiom as
+ * TooltipProviderProps.
+ */
+export type DialogProps = DialogPrimitive.Root.Props;
 
 export interface DialogTriggerProps extends Omit<DialogPrimitive.Trigger.Props, 'className'> {
   className?: string;
@@ -51,6 +58,12 @@ export interface DialogContentProps extends Omit<DialogPrimitive.Popup.Props, 'c
   container?: DialogPrimitive.Portal.Props['container'];
   /** Renders a top-right close (X) button inside the popup. @default true */
   showCloseButton?: boolean;
+  /**
+   * Accessible name for the built-in close (X) button — the popup's only
+   * kit-authored text, so the one string a non-English app needs to
+   * replace. Same contract as Toaster's closeLabel. @default 'Close'
+   */
+  closeLabel?: string;
 }
 
 export function DialogContent({
@@ -58,6 +71,7 @@ export function DialogContent({
   children,
   container,
   showCloseButton = true,
+  closeLabel = 'Close',
   ...props
 }: DialogContentProps) {
   return (
@@ -71,7 +85,7 @@ export function DialogContent({
             render={<Button variant="ghost" size="icon" />}
           >
             <CloseIcon />
-            <span className={styles.srOnly}>Close</span>
+            <span className={styles.srOnly}>{closeLabel}</span>
           </DialogPrimitive.Close>
         )}
       </DialogPrimitive.Popup>

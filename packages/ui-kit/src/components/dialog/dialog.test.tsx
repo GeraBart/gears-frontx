@@ -67,6 +67,19 @@ describe('Dialog', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 
+  it('renames the built-in close button via closeLabel for non-English apps', () => {
+    render(
+      <Dialog defaultOpen>
+        <DialogTrigger>Open</DialogTrigger>
+        <DialogContent closeLabel="Закрыть">
+          <DialogTitle>Локализовано</DialogTitle>
+        </DialogContent>
+      </Dialog>,
+    );
+    expect(screen.getByRole('button', { name: 'Закрыть' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Close' })).toBeNull();
+  });
+
   it('closes via a consumer-composed DialogClose', async () => {
     renderDialog();
     fireEvent.click(screen.getByRole('button', { name: 'Open' }));

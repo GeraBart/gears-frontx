@@ -39,6 +39,7 @@ default; `false`; `'trap-focus'`) — see Base UI Dialog.Root.
 | Prop | Type | Default |
 |------|------|---------|
 | `showCloseButton` | `boolean` — renders a top-right close (X) button | `true` |
+| `closeLabel` | `string` — accessible name for that button, the popup's only kit-authored text; same contract as `Toaster`'s `closeLabel` | `'Close'` |
 | `container` | DOM node to portal the popup into | `<body>` |
 | `initialFocus` / `finalFocus` | `boolean \| RefObject \| function` — see Base UI Dialog.Popup | default focus behavior |
 | `className` | `string` — merged after the kit class | — |
