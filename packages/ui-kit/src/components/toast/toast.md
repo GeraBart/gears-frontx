@@ -43,7 +43,10 @@ default `5000`), `limit` (max toasts shown at once, default `3`;
 overflow toasts stay mounted with `data-limited` rather than being
 removed, so they can reappear as space frees up), `toastManager`
 (defaults to the shared `toast` manager below), `container` (DOM node to
-portal the toast viewport into, default `<body>`), `children` — wrap the
+portal the toast viewport into, default `<body>`), `closeLabel`
+(accessible name for each toast's close (X) button, default
+`'Close toast'` — the card's only kit-authored text, so the one string a
+non-English app needs to replace), `children` — wrap the
 app (or at least any subtree calling `useToastManager`) so it can reach
 the manager via context; the toast viewport itself always portals
 regardless of where `Toaster` sits in the tree.

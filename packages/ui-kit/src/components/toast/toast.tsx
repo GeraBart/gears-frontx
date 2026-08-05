@@ -144,7 +144,13 @@ function ToastTypeIcon({ type }: { type: string | undefined }) {
  * their content from the `toast` object via context and render nothing if
  * it's unset — no children needed here.
  */
-function ToastCard({ toast: item }: { toast: ToastPrimitive.Root.ToastObject }) {
+function ToastCard({
+  toast: item,
+  closeLabel,
+}: {
+  toast: ToastPrimitive.Root.ToastObject;
+  closeLabel: string;
+}) {
   return (
     <ToastPrimitive.Root toast={item} className={styles.toast}>
       <ToastPrimitive.Content className={styles.content}>
@@ -155,7 +161,7 @@ function ToastCard({ toast: item }: { toast: ToastPrimitive.Root.ToastObject }) 
         </div>
         <ToastPrimitive.Action className={styles.action} render={<Button variant="outline" size="sm" />} />
         <ToastPrimitive.Close
-          aria-label="Close toast"
+          aria-label={closeLabel}
           className={styles.close}
           render={<Button variant="ghost" size="icon" />}
         >
@@ -167,9 +173,9 @@ function ToastCard({ toast: item }: { toast: ToastPrimitive.Root.ToastObject }) 
 }
 
 /* Reads the live toast list from context and renders one ToastCard each. */
-function ToastList() {
+function ToastList({ closeLabel }: { closeLabel: string }) {
   const { toasts } = ToastPrimitive.useToastManager();
-  return toasts.map((item) => <ToastCard key={item.id} toast={item} />);
+  return toasts.map((item) => <ToastCard key={item.id} toast={item} closeLabel={closeLabel} />);
 }
 
 /**
@@ -230,6 +236,12 @@ export interface ToasterProps extends ToastPrimitive.Provider.Props {
    * and font.
    */
   container?: ToastPrimitive.Portal.Props['container'];
+  /**
+   * Accessible name for each toast's close (X) button — the card's only
+   * kit-authored text, so the one string a non-English app needs to
+   * replace. @default 'Close toast'
+   */
+  closeLabel?: string;
 }
 
 /**
@@ -241,13 +253,19 @@ export interface ToasterProps extends ToastPrimitive.Provider.Props {
  *
  * Defaults `toastManager` to this module's shared singleton — see `toast`.
  */
-export function Toaster({ container, children, toastManager = toast, ...props }: ToasterProps) {
+export function Toaster({
+  container,
+  children,
+  closeLabel = 'Close toast',
+  toastManager = toast,
+  ...props
+}: ToasterProps) {
   return (
     <ToastPrimitive.Provider toastManager={toastManager} {...props}>
       {children}
       <ToastPrimitive.Portal container={container}>
         <ToastPrimitive.Viewport className={styles.viewport}>
-          <ToastList />
+          <ToastList closeLabel={closeLabel} />
         </ToastPrimitive.Viewport>
       </ToastPrimitive.Portal>
     </ToastPrimitive.Provider>

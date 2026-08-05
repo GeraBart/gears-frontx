@@ -75,6 +75,18 @@ describe('Toast', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 
+  it('renames the close button via closeLabel for non-English apps', async () => {
+    const manager = createToastManager();
+    render(<Toaster toastManager={manager} closeLabel="Закрыть уведомление" />);
+    act(() => {
+      manager.add({ title: 'Сохранено' });
+    });
+    await waitFor(() => screen.getByRole('dialog'));
+    fireEvent.mouseEnter(screen.getByRole('region', { name: 'Notifications' }));
+    await waitFor(() => screen.getByRole('button', { name: 'Закрыть уведомление' }));
+    expect(screen.queryByRole('button', { name: 'Close toast' })).toBeNull();
+  });
+
   it('renders the action button and invokes its handler on click', async () => {
     const manager = createToastManager();
     const onClick = vi.fn();
