@@ -54,12 +54,16 @@ wrap your own `div` with `overflow-y` and a `max-height` around `<Table>` —
 it composes cleanly, since your wrapper scrolls the vertical axis and
 Table's own wrapper scrolls the horizontal one (see Examples).
 
-The wrapper itself takes no props of its own — it isn't a separate export,
-so there's no `role`, `aria-label`, or `max-height` you can pass it
-directly the way you can to `Table`'s own `className`. That matches the
-source, which has the same limitation; if you need any of those on the
-wrapper, put your own `div` around `<Table>` (as above) and apply them
-there instead.
+A focus stop should announce something: pass `label` to name the wrapper
+(`role="region"` + `aria-label` — a bare `div`'s `aria-label` is ignored
+by the accessible-name algorithm without a role, which is also why
+labelling your own outer `div` doesn't work: the name lands on a
+non-focusable element while the focusable wrapper stays nameless).
+Without `label` the wrapper is roleless and nameless as before. Prefer
+passing it whenever the surrounding page doesn't make the table's purpose
+obvious the moment focus lands. Beyond `label`, the wrapper takes no
+props of its own — it isn't a separate export, so there's no `max-height`
+you can pass it; for that, put your own `div` around `<Table>` (as above).
 
 ## Semantics and accessibility
 
@@ -120,10 +124,12 @@ background — it's only a risk if you add that pairing yourself.
 
 ## Props (kit level)
 
-None of the parts add kit-specific props — every prop is the matching
-native element's own (`ComponentProps<'table'>`, `<'thead'>`, `<'tbody'>`,
-`<'tfoot'>`, `<'tr'>`, `<'th'>`, `<'td'>`, `<'caption'>`), plus
-`className`, merged after the kit class on every part.
+One kit-specific prop: `Table`'s `label` (`string`) names the focusable
+scroll wrapper with `role="region"` + `aria-label` (see above). Every
+other prop is the matching native element's own
+(`ComponentProps<'table'>`, `<'thead'>`, `<'tbody'>`, `<'tfoot'>`,
+`<'tr'>`, `<'th'>`, `<'td'>`, `<'caption'>`), plus `className`, merged
+after the kit class on every part.
 
 ## Examples
 

@@ -29,15 +29,34 @@ import styles from './table.module.css';
  * markup" component intentionally does not have. The trade-off is a table
  * that never overflows still gets one extra, functionless tab stop — minor
  * next to the alternative of a table that does overflow being silently
- * unreachable. It does not add a `role` or `aria-label`: the table inside
- * still speaks for itself via its own semantics, this only restores
- * keyboard operability of the scroll itself.
+ * unreachable.
+ *
+ * A focus stop should announce something: `label` names the wrapper
+ * (`role="region"` + `aria-label` — a bare div's aria-label is ignored
+ * without a role, which is also why wrapping the Table yourself and
+ * labelling that wrapper doesn't work: the name lands on a non-focusable
+ * element while the focusable one stays nameless). Without `label` the
+ * wrapper stays roleless and nameless as before — prefer passing it
+ * whenever the surrounding page doesn't already make the table's purpose
+ * obvious the moment focus lands.
  */
-export type TableProps = ComponentProps<'table'>;
+export interface TableProps extends ComponentProps<'table'> {
+  /**
+   * Accessible name for the focusable scroll wrapper around the table
+   * (`role="region"` + `aria-label`). Announced when keyboard focus lands
+   * on the wrapper; without it the stop announces nothing.
+   */
+  label?: string;
+}
 
-export function Table({ className, ...props }: TableProps) {
+export function Table({ className, label, ...props }: TableProps) {
   return (
-    <div className={styles.tableContainer} tabIndex={0}>
+    <div
+      className={styles.tableContainer}
+      tabIndex={0}
+      role={label === undefined ? undefined : 'region'}
+      aria-label={label}
+    >
       <table className={cx(styles.table, className)} {...props} />
     </div>
   );

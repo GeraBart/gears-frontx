@@ -82,6 +82,20 @@ describe('Table', () => {
     expect(wrapper).toHaveProperty('tagName', 'DIV');
     expect(wrapper?.className).toContain(styles.tableContainer);
     expect(wrapper?.getAttribute('tabindex')).toBe('0');
+    // Without label the wrapper stays roleless and nameless — the table
+    // inside speaks for itself.
+    expect(wrapper?.getAttribute('role')).toBeNull();
+    expect(wrapper?.getAttribute('aria-label')).toBeNull();
+  });
+
+  it('names the focusable scroll wrapper via label', () => {
+    render(<Table data-testid="table" label="Quarterly results" />);
+    const wrapper = screen.getByTestId('table').parentElement;
+    // aria-label on a bare div is ignored by the accname algorithm — the
+    // label prop must bring role="region" with it for the name to land.
+    expect(wrapper?.getAttribute('role')).toBe('region');
+    expect(wrapper?.getAttribute('aria-label')).toBe('Quarterly results');
+    expect(screen.getByRole('region', { name: 'Quarterly results' })).toBe(wrapper);
   });
 
   it.each([
