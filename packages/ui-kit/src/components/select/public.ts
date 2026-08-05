@@ -1,5 +1,6 @@
 export {
   Select,
+  type SelectProps,
   SelectContent,
   type SelectContentProps,
   SelectGroup,

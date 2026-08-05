@@ -40,6 +40,13 @@ function ChevronRightIcon({ className }: { className?: string }) {
 }
 
 export const DropdownMenu = MenuPrimitive.Root;
+/**
+ * The root is a Base UI pass-through, but its props type is still exported:
+ * a consumer writing a typed wrapper imports it from this kit — Base UI is
+ * this package's dependency, not necessarily theirs. Same idiom as
+ * TooltipProviderProps.
+ */
+export type DropdownMenuProps = MenuPrimitive.Root.Props;
 
 export interface DropdownMenuTriggerProps extends Omit<MenuPrimitive.Trigger.Props, 'className'> {
   className?: string;
@@ -190,6 +197,8 @@ export function DropdownMenuShortcut({ className, ...props }: DropdownMenuShortc
 }
 
 export const DropdownMenuSub = MenuPrimitive.SubmenuRoot;
+/** Pass-through props type — see DropdownMenuProps. */
+export type DropdownMenuSubProps = MenuPrimitive.SubmenuRoot.Props;
 
 export interface DropdownMenuSubTriggerProps
   extends Omit<MenuPrimitive.SubmenuTrigger.Props, 'className'> {

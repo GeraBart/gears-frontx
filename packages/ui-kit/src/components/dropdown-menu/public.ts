@@ -1,5 +1,6 @@
 export {
   DropdownMenu,
+  type DropdownMenuProps,
   DropdownMenuCheckboxItem,
   type DropdownMenuCheckboxItemProps,
   DropdownMenuContent,
@@ -19,6 +20,7 @@ export {
   DropdownMenuShortcut,
   type DropdownMenuShortcutProps,
   DropdownMenuSub,
+  type DropdownMenuSubProps,
   DropdownMenuSubContent,
   type DropdownMenuSubContentProps,
   DropdownMenuSubTrigger,

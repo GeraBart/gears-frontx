@@ -4,6 +4,13 @@ import { cx } from 'class-variance-authority';
 import styles from './tooltip.module.css';
 
 export const Tooltip = TooltipPrimitive.Root;
+/**
+ * The root is a Base UI pass-through, but its props type is still exported:
+ * a consumer writing a typed wrapper imports it from this kit — Base UI is
+ * this package's dependency, not necessarily theirs. Same idiom as
+ * TooltipProviderProps below.
+ */
+export type TooltipProps = TooltipPrimitive.Root.Props;
 
 /**
  * Optional. Mount once near the app root to share open/close delay and

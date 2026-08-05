@@ -1,5 +1,6 @@
 export {
   Dialog,
+  type DialogProps,
   DialogClose,
   type DialogCloseProps,
   DialogContent,
