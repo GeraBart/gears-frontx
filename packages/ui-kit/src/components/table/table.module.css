@@ -60,7 +60,7 @@
  * this kit's types don't forbid.
  */
 .tableHeader tr {
-  border-bottom: 1px solid var(--border);
+  border-bottom: var(--border-width) solid var(--border);
 }
 
 /*
@@ -75,7 +75,7 @@
 }
 
 .tableFooter {
-  border-top: 1px solid var(--border);
+  border-top: var(--border-width) solid var(--border);
   /*
    * Source: bg-muted/50. Contrast checked with the kit's default text
    * color (--foreground — neither <td> nor <tfoot> set an explicit color
@@ -100,7 +100,7 @@
 }
 
 .tableRow {
-  border-bottom: 1px solid var(--border);
+  border-bottom: var(--border-width) solid var(--border);
   /* Same four-property list as button/badge/tabs' "transition-colors"
      translation, kept for form consistency even though only
      background-color actually changes on this part. Colour and box-shadow

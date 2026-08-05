@@ -205,30 +205,24 @@ Architecture's build bullet).
    Vite; see Architecture) + Button.
 2. Tokens polish + first component batch (forms) on `@base-ui/react`.
 3. Remaining components — done, the 19-component MVP set exists.
-4. **Studio reskin (in progress).** The design source moved from shadcn's
-   neutral defaults to the Studio design: the F-mockups Figma file, page
-   `00 · Foundations`, tokens from its "Studio / shadcn" variable
-   collection. Done: theme.css carries the palette and the new token groups
-   (see Architecture's theme bullet). Remaining — adapt the existing 19
-   components to the mockups' component specs:
-   - Badge: status intents (`success`/`warning`/`info`/`danger`/`muted`)
-     in pill and dot forms — the mockups say "semantic intent only", which
-     retires the shadcn-inherited variant list;
-   - Button: `loading` state; the icon-button size×variant matrix (the
-     single `size="icon"` today vs sm/md/lg × primary/secondary drawn);
-   - Tabs: restyle to the mockups' trackless Kind=tab look (the spec's
-     Kind=segment turned out to be the planned `toggle-group`'s styling —
-     the design file's own component description says "shadcn Tabs and
-     Toggle Group segment states" — so no segment variant on Tabs);
-   - Field/Input/Select: `search` and `filter` field types;
-   - Table: density (compact/default) and the primitive-styling share of
-     row/table states (selected/stale/restricted, loading/empty/error) —
-     data-table *logic* stays out, per Non-goals;
-   - component CSS moves onto the new metric tokens (control heights, icon
-     sizes, spacing) where hardcoded px stands today.
-   Blocked on design answers: control heights (the mockups' token spec says
-   32/40/44 while the drawn buttons measure 32/36/40), and the eight token
-   values marked `derived:` in theme.css.
+4. **Studio reskin (done, two design answers pending).** The design source
+   moved from shadcn's neutral defaults to the Studio design: the
+   F-mockups Figma file, page `00 · Foundations`, tokens from its
+   "Studio / shadcn" variable collection. Landed: theme.css carries the
+   palette and the new token groups (see Architecture's theme bullet), and
+   the existing components follow the mockups' component specs — Badge on
+   semantic intents (pill/dot; the shadcn variant list retired), Button's
+   `icon` slot + auto icon-only + `loading`, Tabs on the trackless Kind=tab
+   look (the spec's Kind=segment is the planned `toggle-group`'s styling,
+   per the design file's own component description), the unified Field set
+   for Input/Textarea/Select with the `search` and `filter` types, Table
+   density + selected/stale/restricted row hooks, and component CSS on the
+   metric tokens where the spec and the drawings agree. Still blocked on
+   design answers, with literals flagged in place until then: control
+   heights (token spec 32/40/44 vs drawn buttons 32/36/40 — Button
+   default/lg and the filter chip keep drawn values), the eight token
+   values marked `derived:` in theme.css, and a broad spacing-token pass
+   over per-component paddings (deferred; the scale exists in theme.css).
 5. The twelve gap components, mockups-first: `popover`, `alert`, `avatar`,
    `empty` are in both the mockups and the `insight-front` set and go first;
    `pagination` and `breadcrumb` are the mockups-only additions;

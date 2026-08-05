@@ -25,7 +25,7 @@
   justify-content: center;
   gap: 0.375rem;
   overflow: hidden;
-  border: 1px solid transparent;
+  border: var(--border-width) solid transparent;
   border-radius: 9999px;
   /* Studio/Meta: 12/16 regular, +0.1px tracking (not the 500 weight the
    * shadcn translation used — the mockups set status labels in regular). */

@@ -25,7 +25,7 @@
   justify-content: space-between;
   gap: 0.375rem;
   padding: 0.5rem 0.5rem 0.5rem 0.625rem;
-  border: 1px solid var(--input);
+  border: var(--border-width) solid var(--input);
   border-radius: var(--radius-md);
   /* Fields sit raised, not transparent, per the Field spec (frame 193:433). */
   background-color: var(--surface-elevated);
@@ -78,8 +78,10 @@
   height: var(--control-height-md);
 }
 
+/* 32px — the one height the drawn controls and the token spec agree on
+ * (see button.module.css's .sizeSm note). */
 .sizeSm {
-  height: 2rem;
+  height: var(--control-height-sm);
 }
 
 .variantDefault {
@@ -142,7 +144,7 @@
   overflow-x: hidden;
   overflow-y: auto;
   border-radius: var(--radius-md);
-  border: 1px solid color-mix(in oklab, var(--foreground) 10%, transparent);
+  border: var(--border-width) solid color-mix(in oklab, var(--foreground) 10%, transparent);
   background-color: var(--popover);
   color: var(--popover-foreground);
   box-shadow:
@@ -241,8 +243,8 @@
   position: absolute;
   right: 0.5rem;
   display: flex;
-  width: 1rem;
-  height: 1rem;
+  width: var(--icon-size-sm);
+  height: var(--icon-size-sm);
   align-items: center;
   justify-content: center;
 }
@@ -274,8 +276,8 @@
 }
 
 .svgIcon {
-  width: 1rem;
-  height: 1rem;
+  width: var(--icon-size-sm);
+  height: var(--icon-size-sm);
   flex-shrink: 0;
   pointer-events: none;
 }

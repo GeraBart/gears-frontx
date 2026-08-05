@@ -18,10 +18,10 @@
  * reset on its own class list — see input.module.css/dialog.module.css/
  * select.module.css and others for the acute case each one fixes). Tabs
  * needed it first because `.trigger` is the kit's only part sized by a
- * *percentage* height (`calc(100% - 1px)` below): under content-box,
- * that percentage resolves against `.list`'s content height and then
- * padding/border pile on top of it, so the active tab renders taller
- * than its track instead of inset within it.
+ * *percentage* height (`height: 100%` below): under content-box, that
+ * percentage resolves against `.list`'s content height and then
+ * padding/border pile on top of it, so the trigger renders taller than
+ * its list instead of matching it.
  *
  * Declared on the kit's own classes only (`.list`/`.trigger` — the two
  * with padding/border driving the bug — plus `.tabs`/`.content` for the
@@ -96,7 +96,7 @@
   align-items: center;
   justify-content: center;
   gap: 0.375rem;
-  border: 1px solid transparent;
+  border: var(--border-width) solid transparent;
   border-radius: var(--radius-md);
   padding: 0.25rem 0.75rem;
   background-color: transparent;

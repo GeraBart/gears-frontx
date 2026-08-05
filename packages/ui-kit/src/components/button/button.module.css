@@ -26,7 +26,7 @@
   justify-content: center;
   gap: 0.5rem;
   white-space: nowrap;
-  border: 1px solid transparent;
+  border: var(--border-width) solid transparent;
   border-radius: var(--radius-md);
   font-family: inherit;
   font-size: 0.875rem;
@@ -71,8 +71,14 @@
   color: var(--primary-foreground);
 }
 
+/*
+ * The palette's own hover step, not the shadcn transparency fade: the
+ * Studio collection defines primary-hover as a real color (the two modes'
+ * primaries swap — dark hovers to the light primary and vice versa), so
+ * the fill stays fully opaque instead of letting the page tint through.
+ */
 .variantDefault:hover {
-  background-color: color-mix(in oklab, var(--primary) 90%, transparent);
+  background-color: var(--primary-hover);
 }
 
 .variantDestructive {
@@ -139,8 +145,15 @@
   padding: 0 1rem;
 }
 
+/*
+ * Only sm sits on the control/height scale today: the drawn buttons
+ * measure 32/36/40 while the token spec says 32/40/44 — sm is the one
+ * height both agree on. default/lg stay literals until design resolves
+ * the discrepancy (flagged in theme.css); retokening them now would
+ * silently grow every button by 4px.
+ */
 .sizeSm {
-  height: 2rem;
+  height: var(--control-height-sm);
   padding: 0 0.75rem;
   border-radius: var(--radius-sm);
 }

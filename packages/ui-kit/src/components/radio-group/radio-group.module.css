@@ -24,7 +24,7 @@
   width: 1rem;
   height: 1rem;
   padding: 0;
-  border: 1px solid var(--input);
+  border: var(--border-width) solid var(--input);
   border-radius: 9999px;
   background-color: transparent;
   outline: none;

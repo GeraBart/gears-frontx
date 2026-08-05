@@ -18,7 +18,7 @@
   /* The mockups' Field spec: 40px tall — the control/height/md token. */
   height: var(--control-height-md);
   padding: 0.25rem 0.625rem;
-  border: 1px solid var(--input);
+  border: var(--border-width) solid var(--input);
   border-radius: var(--radius-md);
   /* Fields sit raised, not transparent, per the Field spec (frame 193:433). */
   background-color: var(--surface-elevated);

@@ -19,7 +19,7 @@
   align-items: center;
   flex-shrink: 0;
   padding: 0;
-  border: 1px solid transparent;
+  border: var(--border-width) solid transparent;
   border-radius: 9999px;
   outline: none;
   /* Colour and box-shadow crossfades only, no transform/geometry — not motion under
