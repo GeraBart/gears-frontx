@@ -28,8 +28,14 @@ const BASE_UI_RUNTIME_VARS = new Set([
   '--toast-frontmost-height',
 ]);
 
+// Strip comments before scanning for declarations: theme.css's prose quotes
+// tokens with their values (`--radius: 0.625rem` etc.), and a token that
+// only survives inside a comment must read as *removed*, not defined.
 const definedTokens = new Set(
-  Array.from(themeCss.matchAll(/(--[a-z0-9-]+)\s*:/g), (match) => match[1]),
+  Array.from(
+    themeCss.replace(/\/\*[\s\S]*?\*\//g, ' ').matchAll(/(--[a-z0-9-]+)\s*:/g),
+    (match) => match[1],
+  ),
 );
 
 const componentsDir = join(srcDir, 'components');
@@ -171,9 +177,14 @@ describe('theme tokens', () => {
   describe('theme.css token blocks stay in sync', () => {
     const themeRules = extractRules(themeCss);
 
+    // Every declaration, not just custom properties: the theme blocks also
+    // carry `color-scheme`, and it needs the same drift guarantees — the two
+    // dark blocks must both say `dark` (identity test), and a light-block
+    // declaration must have dark counterparts (parity test). Custom-property
+    // names start with `--`, ordinary properties with a letter; both match.
     function tokenMap(body: string) {
       return new Map(
-        Array.from(body.matchAll(/(--[a-z0-9-]+)\s*:\s*([^;]+);/g), (match) => [
+        Array.from(body.matchAll(/([a-z-][a-z0-9-]*)\s*:\s*([^;]+);/g), (match) => [
           match[1] ?? '',
           (match[2] ?? '').trim(),
         ]),
