@@ -164,6 +164,22 @@ describe('Tabs', () => {
     expect(screen.getByRole('tabpanel').getAttribute('data-orientation')).toBe('horizontal');
   });
 
+  // Base UI puts the open panel in the tab order itself (`tabIndex: open ?
+  // 0 : -1`, TabsPanel.js:83) — the panel is keyboard-reachable out of the
+  // box, which is why tabs.module.css must pair its `outline: none` with a
+  // `.content:focus-visible` ring. The ring itself is CSS and jsdom applies
+  // no stylesheets; what this guards is the premise the rule rests on: the
+  // open panel stays focusable (and would silently stop needing — or
+  // getting — a focus style if that default ever changed or was overridden
+  // away).
+  it('keeps the open panel keyboard-focusable', () => {
+    renderTabs();
+    const panel = screen.getByRole('tabpanel');
+    expect(panel.getAttribute('tabindex')).toBe('0');
+    panel.focus();
+    expect(document.activeElement).toBe(panel);
+  });
+
   it('switches every part to vertical orientation and keeps arrow-key navigation on its own axis', async () => {
     render(
       <Tabs defaultValue="account" orientation="vertical" data-testid="root">

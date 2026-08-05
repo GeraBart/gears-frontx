@@ -128,7 +128,7 @@
   font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
-  /* Colour-only transition, no transform/geometry — not motion under
+  /* Colour and box-shadow crossfades only, no transform/geometry — not motion under
      WCAG 2.3.3, so deliberately left unguarded under prefers-reduced-motion. */
   transition:
     color 150ms ease,
@@ -241,4 +241,22 @@
   font-size: 0.875rem;
   line-height: 1.25rem;
   outline: none;
+}
+
+/*
+ * Base UI puts the open panel in the tab order itself (`tabIndex: open ?
+ * 0 : -1`, TabsPanel.js:83), so keyboard users land here right after the
+ * tablist. `outline: none` above must not leave that stop invisible —
+ * restore the kit's ring idiom, same as `.trigger:focus-visible`.
+ */
+.content:focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent);
+}
+
+/* See button.module.css: forced-colors drops box-shadow, restore UA outline. */
+@media (forced-colors: active) {
+  .content:focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
 }
