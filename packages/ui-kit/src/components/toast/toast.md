@@ -45,8 +45,9 @@ removed, so they can reappear as space frees up), `toastManager`
 (defaults to the shared `toast` manager below), `container` (DOM node to
 portal the toast viewport into, default `<body>`), `closeLabel`
 (accessible name for each toast's close (X) button, default
-`'Close toast'` — the card's only kit-authored text, so the one string a
-non-English app needs to replace), `children` — wrap the
+`'Close toast'`), `label` (accessible name for the toast region landmark,
+default `'Notifications'`) — `closeLabel` and `label` are the two strings
+a non-English app needs to replace, `children` — wrap the
 app (or at least any subtree calling `useToastManager`) so it can reach
 the manager via context; the toast viewport itself always portals
 regardless of where `Toaster` sits in the tree.
@@ -94,13 +95,18 @@ version your installer dedupes to one copy and the context is shared; if
 you pin an incompatible version you get a second copy, and Base UI's
 Toast context — like any React context — does not cross between the two.
 
-`toast` is a module-scope singleton, which has two failure modes worth
+`toast` is a module-scope singleton, which has three failure modes worth
 knowing rather than debugging blind: it's safe under SSR (it holds no
 toast state itself, only a listener registered by whichever `Toaster`
 is mounted), but calling `toast.add(...)` before any `Toaster` has
 mounted, or from code that resolved a different copy of this package
 (e.g. a mixed CJS/ESM module graph), drops the toast silently — no
-error, nothing queued, it just never appears.
+error, nothing queued, it just never appears. The third is the inverse:
+mounting **two** `Toaster`s on the shared singleton (plausible in a
+shell + MFE setup where each fragment mounts its own) renders every
+toast twice, once per viewport. If a subtree genuinely needs its own
+viewport, give it an isolated manager via `createToastManager()` and
+pass that as its `Toaster`'s `toastManager`.
 
 The viewport portals to `<body>` by default, so if your theme lives on a
 subtree (`data-theme` on a section instead of `<html>`), pass that

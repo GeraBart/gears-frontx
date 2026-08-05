@@ -75,6 +75,54 @@ describe('Toast', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 
+  it('renames the region landmark via label for non-English apps', () => {
+    const manager = createToastManager();
+    render(<Toaster toastManager={manager} label="Уведомления" />);
+    expect(screen.getByRole('region', { name: 'Уведомления' })).toBeTruthy();
+    expect(screen.queryByRole('region', { name: 'Notifications' })).toBeNull();
+  });
+
+  // The stack arithmetic (index/height/gap CSS vars) was the source of the
+  // 2px height drift fixed earlier on this branch; this guards the stack's
+  // structure. The math itself is CSS — jsdom asserts the inputs Base UI
+  // writes (--toast-index per card), not painted geometry.
+  it('stacks multiple toasts and indexes them newest-first', async () => {
+    const manager = createToastManager();
+    render(<Toaster toastManager={manager} />);
+    act(() => {
+      manager.add({ title: 'first' });
+      manager.add({ title: 'second' });
+      manager.add({ title: 'third' });
+    });
+    const cards = await waitFor(() => {
+      const found = screen.getAllByRole('dialog');
+      expect(found).toHaveLength(3);
+      return found;
+    });
+    const byIndex = new Map(
+      cards.map((card) => [card.style.getPropertyValue('--toast-index'), card.textContent]),
+    );
+    expect(byIndex.get('0')).toContain('third');
+    expect(byIndex.get('1')).toContain('second');
+    expect(byIndex.get('2')).toContain('first');
+  });
+
+  it('keeps overflow toasts mounted but limited once past the limit', async () => {
+    const manager = createToastManager();
+    render(<Toaster toastManager={manager} limit={2} />);
+    act(() => {
+      manager.add({ title: 'one' });
+      manager.add({ title: 'two' });
+      manager.add({ title: 'three' });
+    });
+    // toast.md: overflow toasts stay mounted with data-limited rather than
+    // being removed, so they can reappear as space frees up.
+    await waitFor(() => {
+      expect(document.querySelectorAll('[data-limited]')).toHaveLength(1);
+    });
+    expect(screen.getAllByRole('dialog').length).toBeGreaterThanOrEqual(2);
+  });
+
   it('renames the close button via closeLabel for non-English apps', async () => {
     const manager = createToastManager();
     render(<Toaster toastManager={manager} closeLabel="Закрыть уведомление" />);

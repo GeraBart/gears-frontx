@@ -190,12 +190,16 @@ function ToastList({ closeLabel }: { closeLabel: string }) {
  * design-notes.md for why Base UI's Toast replaced sonner) without needing
  * a component to be inside a Provider's subtree or accept a manager prop.
  *
- * Two failure modes worth knowing about a singleton, both silent: it's
+ * Three failure modes worth knowing about a singleton, all silent: it's
  * SSR-safe (the object above holds no toast state itself, only a listener
  * registered by whichever `Toaster` mounts), but `toast.add(...)` called
  * before any `Toaster` has mounted, or from code that resolved a
  * different copy of this module (e.g. a mixed CJS/ESM require graph),
  * drops the toast with no error — there is no queue and nothing to catch.
+ * And the inverse: TWO mounted `Toaster`s on this shared manager render
+ * every toast twice, once per viewport (plausible in a shell + MFE setup
+ * where each fragment mounts its own) — a second viewport should get its
+ * own `createToastManager()` instead.
  */
 export const toast = ToastPrimitive.createToastManager();
 
@@ -237,11 +241,18 @@ export interface ToasterProps extends ToastPrimitive.Provider.Props {
    */
   container?: ToastPrimitive.Portal.Props['container'];
   /**
-   * Accessible name for each toast's close (X) button — the card's only
-   * kit-authored text, so the one string a non-English app needs to
-   * replace. @default 'Close toast'
+   * Accessible name for each toast's close (X) button — one of the two
+   * strings a non-English app needs to replace (`label` below is the
+   * other). @default 'Close toast'
    */
   closeLabel?: string;
+  /**
+   * Accessible name for the toast region landmark. Base UI puts
+   * `role="region" aria-label="Notifications"` on the viewport; without
+   * this prop a screen-reader user hears that English landmark name no
+   * matter what language the app is in. @default 'Notifications'
+   */
+  label?: string;
 }
 
 /**
@@ -257,6 +268,9 @@ export function Toaster({
   container,
   children,
   closeLabel = 'Close toast',
+  // Defaulted here rather than left to Base UI's own 'Notifications', so an
+  // explicit undefined can never wipe the landmark name in the merge.
+  label = 'Notifications',
   toastManager = toast,
   ...props
 }: ToasterProps) {
@@ -264,7 +278,7 @@ export function Toaster({
     <ToastPrimitive.Provider toastManager={toastManager} {...props}>
       {children}
       <ToastPrimitive.Portal container={container}>
-        <ToastPrimitive.Viewport className={styles.viewport}>
+        <ToastPrimitive.Viewport aria-label={label} className={styles.viewport}>
           <ToastList closeLabel={closeLabel} />
         </ToastPrimitive.Viewport>
       </ToastPrimitive.Portal>
