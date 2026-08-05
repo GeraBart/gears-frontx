@@ -19,6 +19,8 @@
    * button.tsx) — one declaration covers all three.
    */
   box-sizing: border-box;
+  /* Focus ring color; the variants below override it (see :focus-visible). */
+  --button-focus-ring: var(--ring);
   /* Anchors the absolutely-centered .spinner. */
   position: relative;
   display: inline-flex;
@@ -44,9 +46,21 @@
     box-shadow 150ms ease;
 }
 
+/*
+ * Focus per the mockups' drawn state matrices (frames 184:413/191:406): a
+ * 2px border in a color that contrasts the variant's fill — no translucent
+ * halo. NOT implemented as an actual border-width switch: a button's width
+ * is content-driven, so growing the border grows the button and shifts its
+ * label sideways on every focus/blur. Instead the 1px border recolors and
+ * an inset ring supplies the remaining thickness — same drawn 2px, zero
+ * geometry change. The per-variant color arrives via --button-focus-ring
+ * (set on .button below, overridden by the variants).
+ */
 .button:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent);
+  border-color: var(--button-focus-ring);
+  box-shadow: inset 0 0 0 calc(var(--border-width-focus) - var(--border-width))
+    var(--button-focus-ring);
 }
 
 /*
@@ -138,6 +152,31 @@
 
 .variantLink:hover {
   text-decoration: underline;
+}
+
+/*
+ * Focus colors, per variant as drawn: violet on violet vanishes, so the
+ * primary fill takes the system --info ring (the QA frame's own note:
+ * "Primary focus uses the system info ring for clear contrast");
+ * destructive and the borderless ghost/link take --primary-hover; outline
+ * (the mockups' "secondary", a bordered surface) thickens toward
+ * --border-strong. Our filled secondary has no drawn counterpart and
+ * border-strong reads too weak against its slate fill, so it borrows
+ * ghost's --primary-hover instead.
+ */
+.variantDefault {
+  --button-focus-ring: var(--info);
+}
+
+.variantDestructive,
+.variantGhost,
+.variantLink,
+.variantSecondary {
+  --button-focus-ring: var(--primary-hover);
+}
+
+.variantOutline {
+  --button-focus-ring: var(--border-strong);
 }
 
 /* Buttons sit on the control/height scale directly: sm/default/lg =

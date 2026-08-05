@@ -63,8 +63,11 @@
 
 .badge:focus-visible {
   outline: none;
+  /* The kit-wide 2px focus border in --ring, geometry-stable (see
+   * input.module.css). */
   border-color: var(--ring);
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent);
+  box-shadow: inset 0 0 0 calc(var(--border-width-focus) - var(--border-width))
+    var(--ring);
 }
 
 /* See button.module.css: forced-colors drops box-shadow, restore UA outline. */
@@ -75,10 +78,11 @@
   }
 }
 
-/* Declared after :focus-visible so the invalid ring wins while focused. */
+/* Declared after :focus-visible so the invalid border wins while focused. */
 .badge[aria-invalid='true'] {
   border-color: var(--destructive);
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--destructive) 20%, transparent);
+  box-shadow: inset 0 0 0 calc(var(--border-width-focus) - var(--border-width))
+    var(--destructive);
 }
 
 /*

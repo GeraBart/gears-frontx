@@ -46,8 +46,10 @@
 }
 
 .checkbox:focus-visible {
-  border-color: var(--ring);
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent);
+  /* Fixed-geometry control: a border switch would distort the glyph, so
+   * focus is the crisp 2px/--ring outline offset off the box. */
+  outline: var(--border-width-focus) solid var(--ring);
+  outline-offset: 2px;
 }
 
 /* See button.module.css: forced-colors drops box-shadow, restore UA outline. */
@@ -65,10 +67,9 @@
   opacity: 0.5;
 }
 
-/* Declared after :focus-visible so the invalid ring wins while focused. */
+/* Declared after :focus-visible so the invalid border wins while focused. */
 .checkbox[aria-invalid='true'] {
   border-color: var(--destructive);
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--destructive) 20%, transparent);
 }
 
 /* Invalid but checked: the filled box keeps its primary border. */

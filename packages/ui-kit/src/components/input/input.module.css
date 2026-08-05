@@ -62,8 +62,13 @@
 }
 
 .input:focus-visible {
+  /* The mockups' Field focus: a 2px --ring border, no halo (frame
+   * 193:383). Drawn as recolored 1px border + inset ring rather than a
+   * real width switch, so the text never shifts on focus/blur (see
+   * button.module.css). */
   border-color: var(--ring);
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent);
+  box-shadow: inset 0 0 0 calc(var(--border-width-focus) - var(--border-width))
+    var(--ring);
 }
 
 /* See button.module.css: forced-colors drops box-shadow, restore UA outline. */
@@ -80,10 +85,11 @@
   opacity: 0.5;
 }
 
-/* Declared after :focus-visible so the invalid ring wins while focused. */
+/* Declared after :focus-visible so the invalid border wins while focused. */
 .input[aria-invalid='true'] {
   border-color: var(--destructive);
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--destructive) 20%, transparent);
+  box-shadow: inset 0 0 0 calc(var(--border-width-focus) - var(--border-width))
+    var(--destructive);
 }
 
 /*

@@ -20,8 +20,10 @@
  * every other focusable kit part gets.
  */
 .tableContainer:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent);
+  /* Borderless focus stop — the crisp 2px/--ring outline idiom (see
+   * tabs.module.css's .content). */
+  outline: var(--border-width-focus) solid var(--ring);
+  outline-offset: 2px;
 }
 
 /* See button.module.css: forced-colors drops box-shadow, restore UA outline. */
