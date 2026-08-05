@@ -60,6 +60,8 @@ alone never starts the timer for a non-zero delay.)
 | `align` | `start` \| `center` \| `end` | `center` |
 | `sideOffset` / `alignOffset` | `number` | `4` / `0` |
 | `container` | DOM node to portal the popup into | `<body>` |
+| `positionMethod` | `absolute` \| `fixed` — pass `fixed` when the trigger sits inside a `transform`/`filter` container, where absolute positioning resolves against the wrong box | `absolute` |
+| `collisionBoundary` / `collisionPadding` | see Base UI Tooltip.Positioner — bound and pad the flip/shift collision logic | viewport / `5` |
 | `className` | `string` — merged after the kit class | — |
 
 The popup portals to `<body>` by default, so if your theme lives on a

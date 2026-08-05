@@ -42,7 +42,9 @@ Menu.Root.
 | `side` | `top` \| `bottom` \| `left` \| `right` \| `inline-start` \| `inline-end` | `bottom` (Content), `right` (SubContent) |
 | `align` | `start` \| `center` \| `end` | `start` |
 | `sideOffset` / `alignOffset` | `number` | `4` / `0` (Content), `0` / `-3` (SubContent) |
-| `container` | DOM node to portal the popup into | `<body>` |
+| `container` | DOM node to portal the popup into; `DropdownMenuSubContent` inherits the nearest Content's unless given its own | `<body>` |
+| `positionMethod` | `absolute` \| `fixed` — pass `fixed` when the trigger sits inside a `transform`/`filter` container (an animated panel), where absolute positioning resolves against the wrong box | `absolute` |
+| `collisionBoundary` / `collisionPadding` | see Base UI Menu.Positioner — bound and pad the flip/shift collision logic | viewport / `5` |
 | `className` | `string` — merged after the kit class | — |
 
 `DropdownMenuContent` sizes its popup to the trigger's width

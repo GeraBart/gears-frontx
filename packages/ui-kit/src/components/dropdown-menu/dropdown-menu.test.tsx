@@ -180,6 +180,72 @@ describe('DropdownMenu', () => {
     expect(submenuPopup?.className).toContain(styles.subPopup);
   });
 
+  // The scenario `container` exists for (a theme scoped to a subtree) must
+  // hold one level deep: without inheritance the submenu portals to <body>
+  // with the root theme — silently, since everything still renders.
+  it('inherits container into a nested submenu popup', async () => {
+    const container = document.createElement('div');
+    container.id = 'themed-section';
+    document.body.appendChild(container);
+    render(
+      <DropdownMenu defaultOpen>
+        <DropdownMenuTrigger>Open</DropdownMenuTrigger>
+        <DropdownMenuContent container={container}>
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>More tools</DropdownMenuSubTrigger>
+            <DropdownMenuSubContent>
+              <DropdownMenuItem>Extensions</DropdownMenuItem>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+        </DropdownMenuContent>
+      </DropdownMenu>,
+    );
+    fireEvent.click(screen.getByRole('menuitem', { name: 'More tools' }));
+    const submenuItem = await waitFor(() => screen.getByRole('menuitem', { name: 'Extensions' }));
+    expect(container.contains(submenuItem)).toBe(true);
+    container.remove();
+  });
+
+  // dropdown-menu.md documents keyboard navigation as part of the contract;
+  // nothing else in this suite leaves fireEvent.click. Same flush caveats as
+  // tabs.test.tsx: Base UI moves highlight in queued microtasks.
+  it('navigates and activates items from the keyboard', async () => {
+    const onProfile = vi.fn();
+    render(
+      <DropdownMenu defaultOpen>
+        <DropdownMenuTrigger>Open</DropdownMenuTrigger>
+        <DropdownMenuContent>
+          <DropdownMenuItem onClick={onProfile}>Profile</DropdownMenuItem>
+          <DropdownMenuItem disabled>Disabled</DropdownMenuItem>
+          <DropdownMenuItem>Settings</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>,
+    );
+    const menu = await waitFor(() => screen.getByRole('menu'));
+    fireEvent.keyDown(menu, { key: 'ArrowDown' });
+    const profile = screen.getByRole('menuitem', { name: 'Profile' });
+    await waitFor(() => expect(document.activeElement).toBe(profile));
+    // A disabled item is focusable but not activatable (the WAI-ARIA menu
+    // pattern Base UI implements: keyboard users must be able to discover
+    // it) — ArrowDown lands on it, Enter there is a no-op.
+    fireEvent.keyDown(profile, { key: 'ArrowDown' });
+    const disabled = screen.getByRole('menuitem', { name: 'Disabled' });
+    await waitFor(() => expect(document.activeElement).toBe(disabled));
+    fireEvent.keyDown(disabled, { key: 'Enter' });
+    expect(screen.getByRole('menu')).toBeTruthy();
+    fireEvent.keyDown(disabled, { key: 'ArrowDown' });
+    const settings = screen.getByRole('menuitem', { name: 'Settings' });
+    await waitFor(() => expect(document.activeElement).toBe(settings));
+    fireEvent.keyDown(settings, { key: 'ArrowUp' });
+    await waitFor(() => expect(document.activeElement).toBe(disabled));
+    fireEvent.keyDown(disabled, { key: 'ArrowUp' });
+    await waitFor(() => expect(document.activeElement).toBe(profile));
+    fireEvent.keyDown(profile, { key: 'Enter' });
+    await waitFor(() => expect(onProfile).toHaveBeenCalledTimes(1));
+    // Activating an item closes the menu.
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+  });
+
   it('portals the popup into a provided container', () => {
     const container = document.createElement('div');
     container.id = 'themed-section';

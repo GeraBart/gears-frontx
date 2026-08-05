@@ -36,7 +36,10 @@ raw value instead of the label until the popup has been opened once.
 `SelectValue`: renders the selected item's label. Pass `placeholder`
 directly to `SelectValue` (see example). `SelectContent`
 accepts positioning props (`side`, `sideOffset`, `align`, `alignOffset`,
-`alignItemWithTrigger`) and `container` — the popup portals to `<body>`
+`alignItemWithTrigger`, plus the escape hatch for triggers inside a
+`transform`/`filter` container: `positionMethod="fixed"`,
+`collisionBoundary`, `collisionPadding`) and `container` — the popup
+portals to `<body>`
 by default, so if your theme lives on a subtree (`data-theme` on a
 section instead of `<html>`), pass that section as `container` or the
 popup renders with the root theme. `SelectItem` takes `value` (required) and

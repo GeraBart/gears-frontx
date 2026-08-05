@@ -40,7 +40,18 @@ export function TooltipTrigger({ className, ...props }: TooltipTriggerProps) {
 
 export interface TooltipContentProps
   extends Omit<TooltipPrimitive.Popup.Props, 'className'>,
-    Pick<TooltipPrimitive.Positioner.Props, 'align' | 'alignOffset' | 'side' | 'sideOffset'> {
+    Pick<
+      TooltipPrimitive.Positioner.Props,
+      // positionMethod/collision*: see dropdown-menu.tsx — the escape hatch
+      // for anchors inside a transform/filter container.
+      | 'align'
+      | 'alignOffset'
+      | 'side'
+      | 'sideOffset'
+      | 'positionMethod'
+      | 'collisionBoundary'
+      | 'collisionPadding'
+    > {
   className?: string;
   /**
    * Where to portal the popup. Defaults to <body>. Pass a themed container
@@ -58,6 +69,9 @@ export function TooltipContent({
   sideOffset = 4,
   align = 'center',
   alignOffset = 0,
+  positionMethod,
+  collisionBoundary,
+  collisionPadding,
   ...props
 }: TooltipContentProps) {
   return (
@@ -67,6 +81,9 @@ export function TooltipContent({
         sideOffset={sideOffset}
         align={align}
         alignOffset={alignOffset}
+        positionMethod={positionMethod}
+        collisionBoundary={collisionBoundary}
+        collisionPadding={collisionPadding}
         className={styles.positioner}
       >
         <TooltipPrimitive.Popup className={cx(styles.popup, className)} {...props}>

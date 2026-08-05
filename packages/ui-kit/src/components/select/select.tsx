@@ -73,7 +73,16 @@ export interface SelectContentProps
   extends Omit<SelectPrimitive.Popup.Props, 'className'>,
     Pick<
       SelectPrimitive.Positioner.Props,
-      'align' | 'alignOffset' | 'side' | 'sideOffset' | 'alignItemWithTrigger'
+      // positionMethod/collision*: see dropdown-menu.tsx — the escape hatch
+      // for anchors inside a transform/filter container.
+      | 'align'
+      | 'alignOffset'
+      | 'side'
+      | 'sideOffset'
+      | 'alignItemWithTrigger'
+      | 'positionMethod'
+      | 'collisionBoundary'
+      | 'collisionPadding'
     > {
   className?: string;
   /**
@@ -93,6 +102,9 @@ export function SelectContent({
   align = 'center',
   alignOffset = 0,
   alignItemWithTrigger = true,
+  positionMethod,
+  collisionBoundary,
+  collisionPadding,
   ...props
 }: SelectContentProps) {
   return (
@@ -103,6 +115,9 @@ export function SelectContent({
         align={align}
         alignOffset={alignOffset}
         alignItemWithTrigger={alignItemWithTrigger}
+        positionMethod={positionMethod}
+        collisionBoundary={collisionBoundary}
+        collisionPadding={collisionPadding}
         className={styles.positioner}
       >
         <SelectPrimitive.Popup
@@ -170,12 +185,12 @@ export function SelectSeparator({ className, ...props }: SelectSeparatorProps) {
   return <SelectPrimitive.Separator className={cx(styles.separator, className)} {...props} />;
 }
 
-export function SelectScrollUpButton({
-  className,
-  ...props
-}: Omit<ComponentProps<typeof SelectPrimitive.ScrollUpArrow>, 'className'> & {
+export interface SelectScrollUpButtonProps
+  extends Omit<ComponentProps<typeof SelectPrimitive.ScrollUpArrow>, 'className'> {
   className?: string;
-}) {
+}
+
+export function SelectScrollUpButton({ className, ...props }: SelectScrollUpButtonProps) {
   return (
     <SelectPrimitive.ScrollUpArrow
       className={cx(styles.scrollArrow, styles.scrollArrowUp, className)}
@@ -186,12 +201,12 @@ export function SelectScrollUpButton({
   );
 }
 
-export function SelectScrollDownButton({
-  className,
-  ...props
-}: Omit<ComponentProps<typeof SelectPrimitive.ScrollDownArrow>, 'className'> & {
+export interface SelectScrollDownButtonProps
+  extends Omit<ComponentProps<typeof SelectPrimitive.ScrollDownArrow>, 'className'> {
   className?: string;
-}) {
+}
+
+export function SelectScrollDownButton({ className, ...props }: SelectScrollDownButtonProps) {
   return (
     <SelectPrimitive.ScrollDownArrow
       className={cx(styles.scrollArrow, styles.scrollArrowDown, className)}

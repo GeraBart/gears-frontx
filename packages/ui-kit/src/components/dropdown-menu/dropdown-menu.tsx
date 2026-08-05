@@ -1,8 +1,16 @@
 import { Menu as MenuPrimitive } from '@base-ui/react/menu';
 import { cva, cx, type VariantProps } from 'class-variance-authority';
-import type { ComponentProps } from 'react';
+import { type ComponentProps, createContext, useContext } from 'react';
 
 import styles from './dropdown-menu.module.css';
+
+/*
+ * Carries DropdownMenuContent's effective portal container down to nested
+ * submenus, so a theme scoped to a subtree holds one level deep without the
+ * consumer repeating `container` on every DropdownMenuSubContent. An
+ * explicit `container` on the submenu still wins.
+ */
+const MenuContainerContext = createContext<MenuPrimitive.Portal.Props['container']>(undefined);
 
 /* Inline lucide paths (ISC) — the kit carries no icon dependency. */
 function CheckIcon({ className }: { className?: string }) {
@@ -58,12 +66,27 @@ export function DropdownMenuTrigger({ className, ...props }: DropdownMenuTrigger
 
 export interface DropdownMenuContentProps
   extends Omit<MenuPrimitive.Popup.Props, 'className'>,
-    Pick<MenuPrimitive.Positioner.Props, 'align' | 'alignOffset' | 'side' | 'sideOffset'> {
+    Pick<
+      MenuPrimitive.Positioner.Props,
+      // positionMethod/collision*: the escape hatch for popups anchored
+      // inside a transform/filter container (an animated panel is the usual
+      // case), where the default absolute positioning resolves against the
+      // wrong containing block — positionMethod="fixed" is the standard
+      // fix, and it must be reachable without bypassing the kit.
+      | 'align'
+      | 'alignOffset'
+      | 'side'
+      | 'sideOffset'
+      | 'positionMethod'
+      | 'collisionBoundary'
+      | 'collisionPadding'
+    > {
   className?: string;
   /**
    * Where to portal the popup. Defaults to <body>. Pass a themed container
    * when the theme is scoped to a subtree (data-theme on a container that
    * isn't at document root) so the popup inherits its tokens and font.
+   * Inherited by nested DropdownMenuSubContent unless it passes its own.
    */
   container?: MenuPrimitive.Portal.Props['container'];
 }
@@ -76,22 +99,32 @@ export function DropdownMenuContent({
   sideOffset = 4,
   align = 'start',
   alignOffset = 0,
+  positionMethod,
+  collisionBoundary,
+  collisionPadding,
   ...props
 }: DropdownMenuContentProps) {
+  const inheritedContainer = useContext(MenuContainerContext);
+  const effectiveContainer = container ?? inheritedContainer;
   return (
-    <MenuPrimitive.Portal container={container}>
-      <MenuPrimitive.Positioner
-        side={side}
-        sideOffset={sideOffset}
-        align={align}
-        alignOffset={alignOffset}
-        className={styles.positioner}
-      >
-        <MenuPrimitive.Popup className={cx(styles.popup, className)} {...props}>
-          {children}
-        </MenuPrimitive.Popup>
-      </MenuPrimitive.Positioner>
-    </MenuPrimitive.Portal>
+    <MenuContainerContext.Provider value={effectiveContainer}>
+      <MenuPrimitive.Portal container={effectiveContainer}>
+        <MenuPrimitive.Positioner
+          side={side}
+          sideOffset={sideOffset}
+          align={align}
+          alignOffset={alignOffset}
+          positionMethod={positionMethod}
+          collisionBoundary={collisionBoundary}
+          collisionPadding={collisionPadding}
+          className={styles.positioner}
+        >
+          <MenuPrimitive.Popup className={cx(styles.popup, className)} {...props}>
+            {children}
+          </MenuPrimitive.Popup>
+        </MenuPrimitive.Positioner>
+      </MenuPrimitive.Portal>
+    </MenuContainerContext.Provider>
   );
 }
 
