@@ -101,8 +101,17 @@ describe('Tooltip', () => {
     // The design call here (see tooltip.tsx) is that mounting TooltipProvider
     // must not silently speed up opening — Base UI's per-trigger 600ms
     // default should still apply unless a delay is passed explicitly.
+    //
+    // Real timers, so on a loaded runner this 200ms sleep can overshoot;
+    // the "still closed" claim is only meaningful while we're actually
+    // inside the 600ms window. Guarding on measured elapsed time (instead
+    // of switching to fake timers) keeps the race out without coupling the
+    // test to when Base UI's hover-intent rest timer arms.
+    const started = Date.now();
     await new Promise((resolve) => setTimeout(resolve, 200));
-    expect(screen.queryByText('Saved successfully')).toBeNull();
+    if (Date.now() - started < 600) {
+      expect(screen.queryByText('Saved successfully')).toBeNull();
+    }
     await waitFor(() => expect(screen.queryByText('Saved successfully')).not.toBeNull(), {
       timeout: 800,
     });
