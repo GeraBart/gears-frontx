@@ -222,9 +222,9 @@ describe('theme tokens', () => {
     const darkAttrTokens = tokenMap(darkAttrBlock.body);
     const darkMediaTokens = tokenMap(darkMediaBlock.body);
 
-    // Shape/scrim, not color: declared once on the invariants block and
+    // Shape/scale/scrim, not color: declared once on the invariants block and
     // deliberately never redefined in any theme block, because a theme scope
-    // overrides colors, never shape or scrim (see the comment on theme.css's
+    // overrides colors, never shape or scale (see the comment on theme.css's
     // `:root` invariants block).
     const THEME_INVARIANT_TOKENS = new Set([
       // Scrim behind modal-style popups. A dark tint dims the page in both
@@ -241,6 +241,25 @@ describe('theme tokens', () => {
       '--radius-md',
       '--radius-lg',
       '--radius-xl',
+      // Spacing scale (Figma space/1–8; step number = value in 4px units,
+      // so there is no space/7).
+      '--space-1',
+      '--space-2',
+      '--space-3',
+      '--space-4',
+      '--space-5',
+      '--space-6',
+      '--space-8',
+      // Control metrics (Figma control/height/*, icon/size/*,
+      // border/width/*). Sizes, not colors — never per-theme.
+      '--control-height-sm',
+      '--control-height-md',
+      '--control-height-lg',
+      '--icon-size-sm',
+      '--icon-size-md',
+      '--icon-size-lg',
+      '--border-width',
+      '--border-width-focus',
     ]);
 
     it('defines the two dark blocks identically', () => {

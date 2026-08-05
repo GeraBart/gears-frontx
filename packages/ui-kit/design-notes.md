@@ -78,8 +78,10 @@ composite over `sheet`, `button`, `input`, `separator`, `skeleton` and
   import, and theme.css is deliberately never imported by JS. A consumer
   imports `theme.css` once; component CSS then arrives for free with each
   component import. No PostCSS/Tailwind requirements on either side.
-- Theme: semantic CSS variables (colors, radii), light/dark via `data-theme` /
-  `prefers-color-scheme`; neutral shadcn-style visual base. Component CSS
+- Theme: semantic CSS variables (colors, spacing, radii, control metrics),
+  light/dark via `data-theme` / `prefers-color-scheme`; shadcn-style token
+  structure carrying the Studio palette from the F-mockups Figma file
+  (variable collection "Studio / shadcn"). Component CSS
   consumes only these variables — the theme file is the single seam between
   kit styles and consumer brand. The theme file also paints the page surface
   itself (`body`/`[data-theme]` background and color, plus `color-scheme`),

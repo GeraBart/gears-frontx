@@ -6,8 +6,22 @@
  * enough for a consumer's page to render correctly light or dark out of the
  * box, with no data-theme attribute required — every component painting its
  * own surface from these same tokens is what makes the rest of the page
- * match. The neutral base derives from shadcn/ui (MIT, https://ui.shadcn.com);
- * see the repository NOTICE file for attribution.
+ * match. The token structure derives from shadcn/ui (MIT,
+ * https://ui.shadcn.com; see the repository NOTICE file for attribution);
+ * the values implement the Studio palette from the F-mockups Figma file
+ * (variable collection "Studio / shadcn", modes Light + Dark). Figma
+ * namespaces the same tokens under a `color/` folder (`color/background`);
+ * the CSS names stay unprefixed per the shadcn convention the collection
+ * itself is named after. A handful of collection entries are drawn by no
+ * mockup node, so their per-mode values are unreadable via the Figma API;
+ * those carry a `derived:` comment with the reasoning, and are the ones to
+ * re-check when the design file pins them down.
+ *
+ * Deliberately not here: the `color/workflow/*` and `color/scenario-canvas`
+ * entries from the same collection. Figma itself exports them under a
+ * separate `--studio-*` namespace — they are screen-level tokens for one
+ * consumer's workflow surfaces, not kit semantics, and belong to that app's
+ * own stylesheet.
  *
  * Basic branding happens on the consumer side by overriding these variables.
  * Dark mode: set data-theme="dark" on <html>/<body> for explicit control, or
@@ -15,9 +29,9 @@
  */
 
 /*
- * Theme-invariant tokens: shape and scrim, not color. Deliberately declared
- * on `:root` alone, outside every theme block below — a theme scope
- * overrides colors, never shape or scrim, so a `data-theme` subtree inherits
+ * Theme-invariant tokens: shape, scale and scrim, not color. Deliberately
+ * declared on `:root` alone, outside every theme block below — a theme scope
+ * overrides colors, never shape or scale, so a `data-theme` subtree inherits
  * whatever the consumer set globally instead of snapping back to these kit
  * defaults. Filing them under a theme selector (e.g. `[data-theme='light']`)
  * would break that: a `<section data-theme="light">` nested under a
@@ -36,40 +50,127 @@
   --overlay: oklch(0 0 0 / 50%);
 
   /*
-   * Radius scale (shadcn v4 convention). Components consume only the
-   * derived steps; consumers rebrand by overriding --radius alone and the
-   * whole scale follows. Corner shape isn't a light/dark concern, so it is
-   * never redefined per-theme.
+   * Radius scale. Components consume only the derived steps; consumers
+   * rebrand by overriding --radius alone and the whole scale follows. The
+   * offsets place the Studio scale (sm 6 / md 8 / lg 12 / xl 16) on the
+   * 8px base — note md, not lg, sits at the base value, unlike shadcn v4's
+   * derivation. --radius-xs has no Figma counterpart; it predates the
+   * Studio scale and keeps its 4px slot. Corner shape isn't a light/dark
+   * concern, so none of this is redefined per-theme.
    */
-  --radius: 0.625rem;
-  --radius-xs: calc(var(--radius) - 6px);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --radius: 0.5rem;
+  --radius-xs: calc(var(--radius) - 4px);
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 4px);
+  --radius-xl: calc(var(--radius) + 8px);
+
+  /* Spacing scale (Figma space/1–8; the step number is the value in 4px
+   * units, so there is no space/7). */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+
+  /*
+   * Control metrics (Figma control/height/*, icon/size/*, border/width/*).
+   * Heights follow the mockups' "Token architecture" spec (32/40/44); the
+   * drawn Button specimens measure 32/36/40 instead — an inconsistency
+   * inside the design file, flagged to design, spec chosen until resolved.
+   */
+  --control-height-sm: 2rem;
+  --control-height-md: 2.5rem;
+  --control-height-lg: 2.75rem;
+  --icon-size-sm: 1rem;
+  --icon-size-md: 1.25rem;
+  --icon-size-lg: 1.5rem;
+  --border-width: 1px;
+  --border-width-focus: 2px;
 }
 
 :root,
 [data-theme='light'] {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --background: #f8fafc;
+  --foreground: #0f172a;
+
+  /* Flat and raised panel fills. Both are white in light mode — the pair
+   * only separates visually in dark mode — but components must still pick
+   * the semantically right one so the dark theme comes out layered. */
+  --surface: #ffffff;
+  --surface-elevated: #ffffff;
+
+  --card: #ffffff;
+  --card-hover: #f8fafc;
+  --card-foreground: #0f172a;
+
+  /* derived: no mockup node draws with popover/*; overlays in the mockups
+   * sit on --surface-elevated, so popover mirrors it in both modes. */
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+
+  --primary: #8257e6;
+  /* derived (light only): the dark mode's hover is the light primary, so
+   * the light hover takes the dark primary — one step down the same ramp.
+   * The dark value is Figma's own. */
+  --primary-hover: #7c4fde;
+  --primary-foreground: #ffffff;
+  --secondary: #f1f5f9;
+  --secondary-foreground: #0f172a;
+  /* derived (dark only): light muted equals light secondary in the
+   * collection, so dark muted follows dark secondary the same way. */
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+  --subtle-foreground: #94a3b8;
+  --accent: #f3e8ff;
+  --accent-foreground: #6d28d9;
+
+  /* The collection carries both destructive/* (shadcn compatibility) and
+   * danger; no mockup node draws with destructive/*, so it aliases danger —
+   * one red, two names, both overridable separately. White text clears AA
+   * on both modes' reds (4.7:1 light, 4.6:1 dark). */
+  --destructive: #e11d48;
+  --destructive-foreground: #ffffff;
+
+  /* Status colors with their -soft fills (Alert/Badge/table-state
+   * backgrounds). Dark warning-soft and info-soft are corroborated by the
+   * workflow aliases that resolve to the same values; dark danger-soft and
+   * light warning-soft are drawn nowhere — derived: same tint recipe as
+   * their siblings. */
+  --success: #059669;
+  --success-soft: #e8f8f1;
+  --warning: #d97706;
+  --warning-soft: #fdf3e2;
+  --danger: #e11d48;
+  --danger-soft: #fff1f2;
+  --info: #0284c7;
+  --info-soft: #eaf6ff;
+  /* derived (light only): dark is Figma's blue-400; light takes the same
+   * Tailwind ramp one step down (blue-500). */
+  --blue: #3b82f6;
+
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+  /* derived: no mockup node draws with input; the drawn fields stroke with
+   * --border, so input mirrors it in both modes (shadcn's own pairing). */
+  --input: #e2e8f0;
+  /* derived (dark only): light ring is Figma's violet-500; it reads on both
+   * schemes and sits between the two mode primaries, so dark keeps it. */
+  --ring: #8b5cf6;
+
+  /* Sidebar Navigation block. The three derived entries are drawn nowhere
+   * in dark mode; they follow the tokens the light mode pairs them with
+   * (muted-foreground / foreground / border). */
+  --sidebar: #f1f5f9;
+  --sidebar-foreground: #64748b;
+  --sidebar-accent: #ffffff;
+  --sidebar-accent-foreground: #0f172a;
+  --sidebar-border: #e2e8f0;
+
+  --code-background: #f1f5f9;
+  --code-foreground: #334155;
 
   /*
    * Hands UA-owned surfaces (scrollbar, spellcheck underline, <input>
@@ -81,38 +182,47 @@
 }
 
 [data-theme='dark'] {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  /*
-   * Dark, not the near-white the light theme uses, and a deliberate deviation
-   * from the registry: dark mode lightens --destructive to 0.704 so it stays
-   * legible as *text* on a dark page (6.21:1 on --popover), but that same red
-   * is then far too light to carry white text — measured 2.77:1 for Button's
-   * solid destructive fill, a clear WCAG AA failure. Flipping this token is
-   * what fixes it (6.85:1) and it only affects that one solid fill: this is
-   * the single token in the palette read by exactly one rule
-   * (button.module.css's .variantDestructive). Darkening --destructive itself
-   * instead would fix the button and break every destructive *text* use —
-   * FieldError, DropdownMenu's destructive item, Toast's error icon — which
-   * all read it against a dark surface.
-   */
-  --destructive-foreground: oklch(0.145 0 0);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --background: #090b10;
+  --foreground: #f6f7f9;
+  --surface: #0f131b;
+  --surface-elevated: #131824;
+  --card: #111722;
+  --card-hover: #151c29;
+  --card-foreground: #f6f7f9;
+  --popover: #131824;
+  --popover-foreground: #f6f7f9;
+  --primary: #7c4fde;
+  --primary-hover: #8257e6;
+  --primary-foreground: #ffffff;
+  --secondary: #1e293b;
+  --secondary-foreground: #f8fafc;
+  --muted: #1e293b;
+  --muted-foreground: #8d96a8;
+  --subtle-foreground: #667085;
+  --accent: #2e1065;
+  --accent-foreground: #ede9fe;
+  --destructive: #d63853;
+  --destructive-foreground: #ffffff;
+  --success: #34d399;
+  --success-soft: #0d2921;
+  --warning: #fbbf24;
+  --warning-soft: #2e240a;
+  --danger: #d63853;
+  --danger-soft: #2b1119;
+  --info: #22d3ee;
+  --info-soft: #06262b;
+  --blue: #60a5fa;
+  --border: #222a38;
+  --border-strong: #303a4d;
+  --input: #222a38;
+  --ring: #8b5cf6;
+  --sidebar: #0c0f15;
+  --sidebar-foreground: #8d96a8;
+  --sidebar-accent: #172033;
+  --sidebar-accent-foreground: #f6f7f9;
+  --sidebar-border: #222a38;
+  --code-background: #0b1220;
+  --code-foreground: #e2e8f0;
 
   /* See the light block's color-scheme comment above for why this exists. */
   color-scheme: dark;
@@ -120,26 +230,47 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.205 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.205 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.922 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.704 0.191 22.216);
-    /* See the [data-theme='dark'] block above for why this one is dark. */
-    --destructive-foreground: oklch(0.145 0 0);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0);
+    --background: #090b10;
+    --foreground: #f6f7f9;
+    --surface: #0f131b;
+    --surface-elevated: #131824;
+    --card: #111722;
+    --card-hover: #151c29;
+    --card-foreground: #f6f7f9;
+    --popover: #131824;
+    --popover-foreground: #f6f7f9;
+    --primary: #7c4fde;
+    --primary-hover: #8257e6;
+    --primary-foreground: #ffffff;
+    --secondary: #1e293b;
+    --secondary-foreground: #f8fafc;
+    --muted: #1e293b;
+    --muted-foreground: #8d96a8;
+    --subtle-foreground: #667085;
+    --accent: #2e1065;
+    --accent-foreground: #ede9fe;
+    --destructive: #d63853;
+    --destructive-foreground: #ffffff;
+    --success: #34d399;
+    --success-soft: #0d2921;
+    --warning: #fbbf24;
+    --warning-soft: #2e240a;
+    --danger: #d63853;
+    --danger-soft: #2b1119;
+    --info: #22d3ee;
+    --info-soft: #06262b;
+    --blue: #60a5fa;
+    --border: #222a38;
+    --border-strong: #303a4d;
+    --input: #222a38;
+    --ring: #8b5cf6;
+    --sidebar: #0c0f15;
+    --sidebar-foreground: #8d96a8;
+    --sidebar-accent: #172033;
+    --sidebar-accent-foreground: #f6f7f9;
+    --sidebar-border: #222a38;
+    --code-background: #0b1220;
+    --code-foreground: #e2e8f0;
 
     /* See the light block's color-scheme comment above for why this exists. */
     color-scheme: dark;
