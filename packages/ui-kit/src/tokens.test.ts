@@ -160,6 +160,52 @@ describe('theme tokens', () => {
     }
   });
 
+  // Policy (Andrey, 2026-08-05): the token system wins over hand-set
+  // values — spacing sits on the --space-* grid and text metrics on the
+  // --text-* ramp, with off-scale drawn values snapped to the nearest
+  // step. This guard enforces it: in the guarded properties, every term
+  // must be a token reference (var/calc-of-var), 0, auto, or normal.
+  // Dimensions (width/height/inset/...) are NOT guarded — components have
+  // intrinsic sizes no token names (a 24px badge, a 38x22 switch track).
+  // Exceptions carry their reason inline; add one only with a constraint
+  // the token system genuinely cannot express.
+  it('keeps spacing and type metrics on the token scales', () => {
+    const GUARDED_PROP = /^(?:padding|margin)(?:-[a-z]+)*$|^(?:gap|row-gap|column-gap|font-size|line-height|letter-spacing)$/;
+    const EXCEPTIONS = new Set([
+      // 16px is the iOS Safari floor below which focusing a field zooms
+      // the page — a platform constraint, not a type role (the ramp takes
+      // over at the desktop breakpoint; see input/textarea.module.css).
+      'input.module.css|font-size|1rem',
+      'input.module.css|line-height|1.5rem',
+      'textarea.module.css|font-size|1rem',
+      'textarea.module.css|line-height|1.5rem',
+      // The drawn thumb's inset within the track, paired 1:1 with the
+      // checked-state translateX math (see switch.module.css) — position
+      // geometry, not an on-grid space.
+      'switch.module.css|margin-inline-start|2px',
+    ]);
+    for (const file of moduleFiles) {
+      const base = file.slice(file.lastIndexOf('/') + 1);
+      for (const rule of extractRules(readFileSync(file, 'utf8'))) {
+        for (const decl of Array.from(rule.body.matchAll(/([a-z-]+)\s*:\s*([^;]+);/g))) {
+          const [, prop = '', value = ''] = decl;
+          if (!GUARDED_PROP.test(prop) || EXCEPTIONS.has(`${base}|${prop}|${value.trim()}`)) {
+            continue;
+          }
+          const leftover = value
+            .replace(/var\(--[a-z0-9-]+\)/g, ' ')
+            .replace(/calc\(|\)|[+*]|-1\b/g, ' ')
+            .replace(/\b(?:0|auto|normal)\b/g, ' ')
+            .trim();
+          expect(
+            leftover,
+            `literal metric "${prop}: ${value.trim()}" in ${base} — use the token scales (or add a reasoned exception)`,
+          ).toBe('');
+        }
+      }
+    }
+  });
+
   it('keeps raw colors out of component modules', () => {
     // Function notations plus the named colors someone might actually
     // reach for. `white`/`black` need the lookarounds: `white-space` and

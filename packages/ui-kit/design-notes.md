@@ -227,14 +227,20 @@ Architecture's build bullet).
    text, Label for button-role text (the drawn buttons are bound to the
    Studio/Label style), Meta for field helpers and Badge; dropdown/select
    options and the tooltip follow the drawn Overlay specimen (12/17)
-   instead. Still open: the token values marked `derived:` in theme.css; a
-   broad spacing-token pass over per-component paddings (deferred; the
-   scale exists in theme.css); and the ramp-vs-specimen line-height
-   conflict — the type styles say Label 13/16 and Meta 12/16 while the
-   drawn component specimens hand-set 13/18 and 12/17 (and the table
-   header's 10px has no ramp role at all), so components keep the drawn
-   metrics and the ramp tokens carry the ramp's values until the designer
-   reconciles the two.
+   instead. A follow-up ruling (Andrey, 2026-08-05) then settled the
+   metric conflicts wholesale: the token system wins over hand-set
+   specimen values. Component CSS now consumes the token scales
+   everywhere — off-grid drawn spacing snapped to the nearest --space-*
+   step (the fields' 10px → 12, menu options' 6px → 8, the compact
+   table's 6px → 4), the specimens' 13/18 and 12/17 text normalized onto
+   Label/Meta, and the 10px table header onto Meta at the lg control
+   height — and a tokens.test.ts guard now rejects literal metrics in
+   spacing and type declarations (documented exceptions: the fields' 16px
+   iOS anti-zoom floor, the switch thumb's 2px inset geometry). Still
+   open: the token values marked `derived:` in theme.css; the table
+   header's --subtle-foreground AA miss (2.94:1 light); and the drawn
+   Overlay options' muted/active color language (a component-phase item,
+   not a token one).
 5. The twelve gap components, mockups-first: `popover`, `alert`, `avatar`,
    `empty` are in both the mockups and the `insight-front` set and go first;
    `pagination` and `breadcrumb` are the mockups-only additions;

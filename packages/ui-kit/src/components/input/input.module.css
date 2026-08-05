@@ -18,7 +18,7 @@
   /* The mockups' Field spec: 40px tall — the lg step of the control scale
    * (see theme.css; fields are drawn one step up from the md button). */
   height: var(--control-height-lg);
-  padding: 0.25rem 0.625rem;
+  padding: var(--space-1) var(--space-3);
   border: var(--border-width) solid var(--input);
   border-radius: var(--radius-md);
   /* Fields sit raised, not transparent, per the Field spec (frame 193:433). */
@@ -37,12 +37,14 @@
     box-shadow 150ms ease;
 }
 
-/* Studio field text: 13/18 (Field spec) — desktop only; small screens keep
+/* Studio/Label metrics (fields draw the value in regular weight; the
+ * specimens' hand-set 18px line normalizes to the ramp's 16 under the
+ * tokens-win ruling, see theme.css) — desktop only; small screens keep
  * 16px above so iOS Safari does not zoom on focus. */
 @media (min-width: 768px) {
   .input {
-    font-size: 0.8125rem;
-    line-height: 1.125rem;
+    font-size: var(--text-label-size);
+    line-height: var(--text-label-line-height);
   }
 }
 
@@ -109,7 +111,7 @@
 
 .searchIcon {
   position: absolute;
-  inset-inline-start: 0.6875rem;
+  inset-inline-start: var(--space-3);
   top: 50%;
   translate: 0 -50%;
   width: var(--icon-size-sm);
@@ -119,5 +121,6 @@
 }
 
 .searchInput {
-  padding-inline-start: 2.1875rem;
+  /* Icon inset + the icon + a gap, so the text clears the magnifier. */
+  padding-inline-start: calc(var(--space-3) + var(--icon-size-sm) + var(--space-2));
 }

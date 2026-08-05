@@ -62,7 +62,7 @@
    */
   grid-template-columns: minmax(0, 1fr);
   width: 100%;
-  max-width: calc(100% - 2rem);
+  max-width: calc(100% - var(--space-8));
   /*
    * The vertical counterpart of the max-width cap below: the popup is
    * `position: fixed`, so both percentages resolve against the viewport.
@@ -72,10 +72,10 @@
    * container for that case. Known trade-off: the absolutely-positioned
    * close button scrolls with the content.
    */
-  max-height: calc(100% - 2rem);
+  max-height: calc(100% - var(--space-8));
   overflow-y: auto;
-  gap: 1.5rem;
-  padding: 1.5rem;
+  gap: var(--space-6);
+  padding: var(--space-6);
   border: var(--border-width) solid color-mix(in oklab, var(--foreground) 10%, transparent);
   border-radius: var(--radius-xl);
   background-color: var(--popover);
@@ -119,20 +119,20 @@
 
 .closeButton {
   position: absolute;
-  top: 1rem;
-  right: 1rem;
+  top: var(--space-4);
+  right: var(--space-4);
 }
 
 .header {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 
 .footer {
   display: flex;
   flex-direction: column-reverse;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 
 @media (min-width: 640px) {

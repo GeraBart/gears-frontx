@@ -12,8 +12,8 @@
 .viewport {
   position: fixed;
   z-index: 50;
-  inset-inline: 1rem;
-  bottom: 1rem;
+  inset-inline: var(--space-4);
+  bottom: var(--space-4);
   width: auto;
   max-width: 24rem;
   margin-inline: auto;
@@ -23,7 +23,7 @@
 
 @media (min-width: 640px) {
   .viewport {
-    right: 1rem;
+    right: var(--space-4);
     left: auto;
     width: 100%;
     margin-inline: 0;
@@ -49,7 +49,7 @@
  * open modal, matching the source and typical toast UX.
  */
 .toast {
-  --gap: 0.75rem;
+  --gap: var(--space-3);
   --height: var(--toast-frontmost-height, var(--toast-height));
   --offset-y: calc(
     (var(--toast-offset-y) * -1) + (var(--toast-index) * var(--gap) * -1) +
@@ -234,8 +234,8 @@
   display: flex;
   align-items: center;
   height: 100%;
-  gap: 0.75rem;
-  padding: 1rem;
+  gap: var(--space-3);
+  padding: var(--space-4);
   overflow: hidden;
   /* Opacity-only, no transform/geometry — a crossfade isn't motion under
      WCAG 2.3.3, so deliberately left unguarded under prefers-reduced-motion. */
@@ -291,7 +291,7 @@
   flex: 1 1 0%;
   min-width: 0;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: var(--space-1);
 }
 
 /* Studio/Body Medium — Body metrics, the ramp's 500-weight variant. */
@@ -337,7 +337,7 @@ button.close:hover {
 button.close::after {
   content: '';
   position: absolute;
-  inset: -0.5rem;
+  inset: calc(-1 * var(--space-2));
 }
 
 .svgIcon {

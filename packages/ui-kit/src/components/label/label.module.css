@@ -10,11 +10,13 @@
 .label {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  /* Studio control labels: 13px, on the same scale as the field text. */
-  font-size: 0.8125rem;
-  line-height: 1.125rem;
-  font-weight: 500;
+  gap: var(--space-2);
+  /* Studio/Label (the specimens' hand-set 18px line normalizes to the
+   * ramp's 16 under the tokens-win ruling, see theme.css). */
+  font-size: var(--text-label-size);
+  line-height: var(--text-label-line-height);
+  font-weight: var(--text-label-weight);
+  letter-spacing: var(--text-label-tracking);
   user-select: none;
 }
 

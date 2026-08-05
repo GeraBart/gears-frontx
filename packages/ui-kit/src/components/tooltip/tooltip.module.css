@@ -35,16 +35,18 @@
   width: fit-content;
   max-width: 20rem;
   align-items: center;
-  gap: 0.375rem;
-  padding: 0.375rem 0.75rem;
+  gap: var(--space-2);
+  padding: var(--space-3);
   border-radius: var(--radius-md);
   background-color: var(--foreground);
   color: var(--background);
-  /* The drawn tooltip (Overlay symbol, 197:399): 12 medium on 17 — the
-   * specimens' hand-set 17px line again, so literal, not the Meta ramp
-   * tokens (which say 16). */
-  font-size: 0.75rem;
-  line-height: 1.0625rem;
+  /* The drawn tooltip (Overlay symbol, 197:399) is 12 medium — Meta at
+   * the 500-weight variant; its hand-set 17px line normalizes to the
+   * ramp's 16 under the tokens-win ruling (see theme.css). The padding
+   * above matches the drawn plate: 12px sides, drawn 11px vertical
+   * snapped up to 12 (a 40px plate vs the drawn 42). */
+  font-size: var(--text-meta-size);
+  line-height: var(--text-meta-line-height);
   font-weight: 500;
   transform-origin: var(--transform-origin);
   outline: none;

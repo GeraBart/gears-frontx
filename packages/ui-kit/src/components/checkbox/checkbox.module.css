@@ -22,9 +22,9 @@
   height: 1.25rem;
   padding: 0;
   border: var(--border-width) solid var(--input);
-  /* Drawn at rx 5 — between --radius-xs (4) and --radius-sm (6), so a
-   * literal, same as the drawn-value precedents flagged in theme.css. */
-  border-radius: 0.3125rem;
+  /* Drawn at rx 5, between --radius-xs (4) and --radius-sm (6); snapped
+   * up to --radius-sm under the tokens-win ruling (see theme.css). */
+  border-radius: var(--radius-sm);
   background-color: var(--surface-elevated);
   outline: none;
   /* Colour and box-shadow crossfades only, no transform/geometry — not motion under
@@ -39,7 +39,7 @@
 .checkbox::after {
   content: '';
   position: absolute;
-  inset: -0.5rem -0.75rem;
+  inset: calc(-1 * var(--space-2)) calc(-1 * var(--space-3));
 }
 
 .checkbox[data-checked] {

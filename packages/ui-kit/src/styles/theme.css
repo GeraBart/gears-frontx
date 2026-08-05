@@ -100,12 +100,13 @@
    * metrics close. "Body Medium"/"Mono Medium" are not separate roles —
    * the same metrics at weight 500.
    *
-   * A frozen conflict, on purpose: the ramp says Label 13/16 and Meta
-   * 12/16, but the drawn component specimens hand-set 13/18 (fields,
-   * control labels, tabs) and 12/17 (table cells, dropdown options,
-   * tooltip) — and the table header's 10px has no ramp role at all.
-   * Components keep their drawn metrics; these tokens carry the ramp's
-   * own values. Open designer question, tracked in design-notes.md.
+   * The specimens-vs-ramp conflict is settled: the drawn component
+   * specimens hand-set line-heights the ramp doesn't have (13/18, 12/17,
+   * plus a 10px table header with no role at all), and the ruling is
+   * that the token system wins (Andrey, 2026-08-05) — component text
+   * sits on these roles, off-ramp drawn metrics were normalized to the
+   * nearest role, and the same ruling snapped off-grid spacing onto
+   * --space-*.
    */
   --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;

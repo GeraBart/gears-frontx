@@ -50,9 +50,11 @@
   border-collapse: separate;
   border-spacing: 0 0.5rem;
   caption-side: bottom;
-  /* The mockups' Data Table cell text: 12/17 (frame 202:407). */
-  font-size: 0.75rem;
-  line-height: 1.0625rem;
+  /* The mockups' Data Table cell text is 12px — Meta; its hand-set 17px
+   * line normalizes to the ramp's 16 under the tokens-win ruling (see
+   * theme.css). */
+  font-size: var(--text-meta-size);
+  line-height: var(--text-meta-line-height);
 }
 
 /*
@@ -168,20 +170,21 @@
    */
   box-sizing: border-box;
   /*
-   * The mockups' header bar (frame 202:407): 42px, 10px medium column
-   * labels, uppercased with +0.5px tracking, in --subtle-foreground.
-   * Deliberately as drawn even though --subtle-foreground at 10px misses
-   * the 4.5:1 AA floor (2.94:1 light / 4.14:1 dark vs --surface) — the
-   * drawn mockups were ruled the source of truth (see theme.css); flagged
-   * rather than silently corrected.
+   * The mockups' header bar (frame 202:407) draws 42px tall with 10px
+   * medium column labels at +0.5px tracking — neither metric exists in
+   * the token system, so under the tokens-win ruling (see theme.css) the
+   * header snaps to the lg control height and Meta at the 500-weight
+   * variant. Still --subtle-foreground, which misses the 4.5:1 AA floor
+   * (2.94:1 light / 4.14:1 dark vs --surface) — flagged as an open
+   * designer question rather than silently corrected.
    */
-  height: 2.625rem;
-  padding: 0 1rem;
+  height: var(--control-height-lg);
+  padding: 0 var(--space-4);
   text-align: left;
   vertical-align: middle;
-  font-size: 0.625rem;
+  font-size: var(--text-meta-size);
   font-weight: 500;
-  letter-spacing: 0.5px;
+  letter-spacing: var(--text-meta-tracking);
   text-transform: uppercase;
   white-space: nowrap;
   color: var(--subtle-foreground);
@@ -198,7 +201,7 @@
      56px default row for single-line content; the drawn rows carry a
      second 11px line, which consumers add themselves. */
   box-sizing: border-box;
-  padding: 0.75rem 1rem;
+  padding: var(--space-3) var(--space-4);
   vertical-align: middle;
   white-space: nowrap;
 }
@@ -214,17 +217,17 @@
  * styling above, untouched.
  */
 .densityCompact .tableHead {
-  height: 2rem;
+  height: var(--control-height-sm);
 }
 
-/* Drawn compact rows sit 12px shorter than default (44 vs 56) — 6px off
- * each block edge. */
+/* Drawn compact rows shave the block padding; the drawn 6px snaps down
+ * to the grid's 4 (compact leans tighter) per the tokens-win ruling. */
 .densityCompact .tableCell {
-  padding-block: 0.375rem;
+  padding-block: var(--space-1);
 }
 
 .tableCaption {
-  margin-top: 1rem;
+  margin-top: var(--space-4);
   /* Studio/Body — a caption is page text, unlike the drawn 12/17 cells. */
   font-size: var(--text-body-size);
   line-height: var(--text-body-line-height);

@@ -31,7 +31,7 @@
    * so a size="default" Card nested inside a size="sm" one asserts its own
    * defaults instead of inheriting the outer card's.
    */
-  --card-spacing: 1.5rem;
+  --card-spacing: var(--space-6);
   /* The default title is Studio/Heading 2; the sm variant below steps it
    * down to a size the ramp has no role for, so that one stays literal. */
   --card-title-font-size: var(--text-heading-2-size);
@@ -74,16 +74,17 @@
 }
 
 .card.sizeSm {
-  --card-spacing: 1rem;
-  --card-title-font-size: 0.875rem;
-  --card-title-line-height: 1.25rem;
+  --card-spacing: var(--space-4);
+  /* One step down the ramp: the sm title reads at Body size. */
+  --card-title-font-size: var(--text-body-size);
+  --card-title-line-height: var(--text-body-line-height);
 }
 
 .cardHeader {
   display: grid;
   grid-auto-rows: min-content;
   align-items: start;
-  gap: 0.25rem;
+  gap: var(--space-1);
   border-top-left-radius: var(--radius-xl);
   border-top-right-radius: var(--radius-xl);
 }
