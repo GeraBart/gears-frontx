@@ -64,6 +64,15 @@ export interface DialogContentProps extends Omit<DialogPrimitive.Popup.Props, 'c
    * replace. Same contract as Toaster's closeLabel. @default 'Close'
    */
   closeLabel?: string;
+  /**
+   * Renders the dimming backdrop behind the popup. Pair with
+   * `modal={false}` on the root for a genuinely non-modal dialog: without
+   * this opt-out the backdrop still covers (and click-closes over) the
+   * page even when the root no longer traps focus or locks scroll, so
+   * `modal={false}` alone never yields a usable non-modal surface.
+   * @default true
+   */
+  showBackdrop?: boolean;
 }
 
 export function DialogContent({
@@ -71,12 +80,13 @@ export function DialogContent({
   children,
   container,
   showCloseButton = true,
+  showBackdrop = true,
   closeLabel = 'Close',
   ...props
 }: DialogContentProps) {
   return (
     <DialogPrimitive.Portal container={container}>
-      <DialogPrimitive.Backdrop className={styles.backdrop} />
+      {showBackdrop && <DialogPrimitive.Backdrop className={styles.backdrop} />}
       <DialogPrimitive.Popup className={cx(styles.popup, className)} {...props}>
         {children}
         {showCloseButton && (

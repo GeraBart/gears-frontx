@@ -104,6 +104,28 @@ describe('Dialog', () => {
     container.remove();
   });
 
+  // modal={false} alone never yielded a usable non-modal dialog: the
+  // backdrop still covered the page and click-closed over it. showBackdrop
+  // is the other half of that pairing.
+  it('omits the backdrop when showBackdrop is false', () => {
+    render(
+      <Dialog defaultOpen modal={false}>
+        <DialogTrigger>Open</DialogTrigger>
+        <DialogContent showBackdrop={false}>
+          <DialogTitle>Non-modal</DialogTitle>
+        </DialogContent>
+      </Dialog>,
+    );
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    expect(document.querySelector(`.${styles.backdrop}`)).toBeNull();
+  });
+
+  it('renders the backdrop by default', () => {
+    renderDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+    expect(document.querySelector(`.${styles.backdrop}`)).toBeTruthy();
+  });
+
   // dialog.md's contract for the opt-out: only disable the built-in X when
   // composing your own DialogClose inside the popup, so the dialog never
   // ships without an in-popup close control. This is that sanctioned shape.

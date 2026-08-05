@@ -24,8 +24,11 @@ Composition: `Dialog` (root, holds open state) → `DialogTrigger` →
 
 ## When not to use
 
-- Passive information that does not need to block the page — use a
-  non-modal surface instead (not in MVP scope).
+- Passive information that does not need to block the page — a dialog is
+  modal by default; if it genuinely must not block, pair `modal={false}`
+  on the root with `showBackdrop={false}` on `DialogContent` (one without
+  the other still blocks: `modal` alone leaves the backdrop covering and
+  click-closing over the page).
 - Menus of actions anchored to a trigger — use `dropdown-menu`.
 - Single-line contextual hints — use `tooltip`.
 
@@ -39,6 +42,7 @@ default; `false`; `'trap-focus'`) — see Base UI Dialog.Root.
 | Prop | Type | Default |
 |------|------|---------|
 | `showCloseButton` | `boolean` — renders a top-right close (X) button | `true` |
+| `showBackdrop` | `boolean` — renders the dimming backdrop; set `false` together with `modal={false}` on the root for a genuinely non-modal dialog | `true` |
 | `closeLabel` | `string` — accessible name for that button, the popup's only kit-authored text; same contract as `Toaster`'s `closeLabel` | `'Close'` |
 | `container` | DOM node to portal the popup into | `<body>` |
 | `initialFocus` / `finalFocus` | `boolean \| RefObject \| function` — see Base UI Dialog.Popup | default focus behavior |
