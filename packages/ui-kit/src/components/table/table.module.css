@@ -103,9 +103,9 @@
   border-bottom: 1px solid var(--border);
   /* Same four-property list as button/badge/tabs' "transition-colors"
      translation, kept for form consistency even though only
-     background-color actually changes on this part. Colour-only, no
-     transform/geometry — not motion under WCAG 2.3.3, so deliberately
-     left unguarded under prefers-reduced-motion. */
+     background-color actually changes on this part. Colour and box-shadow
+     crossfades only, no transform/geometry — not motion under WCAG 2.3.3,
+     so deliberately left unguarded under prefers-reduced-motion. */
   transition:
     color 150ms ease,
     background-color 150ms ease,

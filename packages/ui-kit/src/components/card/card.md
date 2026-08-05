@@ -22,9 +22,8 @@ Every part except `Card` itself is a passthrough over
 ## When not to use
 
 - A focused task that should block the rest of the page — use `dialog`.
-- Purely tabular data — a plain `<table>` (or a future kit table
-  component) fits rows/columns better than a boundary-and-padding
-  container.
+- Purely tabular data — the kit's `table` component fits rows/columns
+  better than a boundary-and-padding container.
 - A single line of muted supporting text with no need for a boundary or
   background — plain text is lighter.
 

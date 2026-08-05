@@ -168,9 +168,10 @@ left is writing them.
 
 ## Delivery plan
 
-A log of completed phases, oldest first — not a description of the current
-build (see Architecture for that; the tsup pipeline step 1 names was later
-replaced by Vite, per Architecture's build bullet).
+Oldest first; steps 1–3 are done, 4–5 remain. Completed steps are a log, not
+a description of the current build (see Architecture for that; the tsup
+pipeline step 1 names was later replaced by Vite, per Architecture's build
+bullet).
 
 1. Package skeleton + proven tsup/CSS Modules pipeline (later replaced by
    Vite; see Architecture) + Button.
