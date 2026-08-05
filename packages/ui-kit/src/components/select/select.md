@@ -31,6 +31,7 @@ raw value instead of the label until the popup has been opened once.
 | Prop | Type | Default |
 |------|------|---------|
 | `size` | `default` \| `sm` | `default` |
+| `variant` | `default` \| `filter` — `filter` is the compact toolbar filter chip: 36px tall and the label stays `--muted-foreground` even with a value chosen (in a filter the message is "this narrows the list", not the picked value). Compose the visible label yourself, e.g. `Filter · {count}` | `default` |
 | `className` | `string` — merged after the kit class | — |
 
 `SelectValue`: renders the selected item's label. Pass `placeholder`

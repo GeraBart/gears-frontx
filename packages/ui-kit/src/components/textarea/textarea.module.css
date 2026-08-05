@@ -21,7 +21,8 @@
   padding: 0.5rem 0.625rem;
   border: 1px solid var(--input);
   border-radius: var(--radius-md);
-  background-color: transparent;
+  /* Fields sit raised, not transparent, per the Field spec (frame 193:433). */
+  background-color: var(--surface-elevated);
   color: var(--foreground);
   font-family: inherit;
   /* text-base on small screens so iOS Safari does not zoom on focus */
@@ -36,10 +37,12 @@
     box-shadow 150ms ease;
 }
 
+/* Studio field text: 13/18 (Field spec) — desktop only; small screens keep
+ * 16px above so iOS Safari does not zoom on focus. */
 @media (min-width: 768px) {
   .textarea {
-    font-size: 0.875rem;
-    line-height: 1.25rem;
+    font-size: 0.8125rem;
+    line-height: 1.125rem;
   }
 }
 

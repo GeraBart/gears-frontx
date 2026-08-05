@@ -12,6 +12,21 @@ describe('Input', () => {
     const input = screen.getByPlaceholderText('Search');
     expect(input).toHaveProperty('tagName', 'INPUT');
     expect(input.className).toContain(styles.input);
+    // Every non-search type stays a bare input — no wrapper element.
+    expect(input.parentElement?.className ?? '').not.toContain(styles.searchWrap);
+  });
+
+  it('type="search" adds the decorated wrapper and keeps the searchbox role', () => {
+    render(<Input type="search" placeholder="Find" className="consumer" />);
+    const input = screen.getByRole('searchbox');
+    expect(input.className).toContain(styles.searchInput);
+    // The consumer className stays on the input itself, same as any type.
+    expect(input.className).toContain('consumer');
+    const wrap = input.parentElement;
+    expect(wrap?.className).toContain(styles.searchWrap);
+    // The magnifier is decoration; the accessible upgrade is the native type.
+    const icon = wrap?.querySelector('svg');
+    expect(icon?.getAttribute('aria-hidden')).toBe('true');
   });
 
   it('reports value changes through onValueChange', () => {

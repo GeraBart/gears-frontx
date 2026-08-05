@@ -323,22 +323,40 @@ function App() {
             <Input defaultValue="wrong value" aria-invalid />
             <FieldError match>Server rejected this value.</FieldError>
           </Field>
+          <Field name="query">
+            <FieldLabel>Search</FieldLabel>
+            <Input type="search" placeholder="Search projects…" />
+          </Field>
           <Field name="notes">
             <FieldLabel>Notes</FieldLabel>
             <Textarea placeholder="Multi-line text…" />
           </Field>
-          <Select value={region} onValueChange={setRegion} items={REGIONS}>
-            <SelectTrigger aria-label="Region">
-              <SelectValue placeholder="Pick a region" />
-            </SelectTrigger>
-            <SelectContent>
-              {REGIONS.map((item) => (
-                <SelectItem key={item.value} value={item.value}>
-                  {item.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Row>
+            <Select value={region} onValueChange={setRegion} items={REGIONS}>
+              <SelectTrigger aria-label="Region">
+                <SelectValue placeholder="Pick a region" />
+              </SelectTrigger>
+              <SelectContent>
+                {REGIONS.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select items={REGIONS}>
+              <SelectTrigger aria-label="Region filter" variant="filter">
+                <SelectValue placeholder="Filter · 2" />
+              </SelectTrigger>
+              <SelectContent>
+                {REGIONS.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Row>
           <Row>
             <Label>
               <Checkbox defaultChecked /> Checkbox

@@ -153,9 +153,10 @@
 
   --border: #e2e8f0;
   --border-strong: #cbd5e1;
-  /* derived: no mockup node draws with input; the drawn fields stroke with
-   * --border, so input mirrors it in both modes (shadcn's own pairing). */
-  --input: #e2e8f0;
+  /* Field-control borders. Not derived: the mockups' Field set (frame
+   * 193:433) strokes every input/textarea/select with the border-strong
+   * value, so input carries it in both modes. */
+  --input: #cbd5e1;
   /* derived (dark only): light ring is Figma's violet-500; it reads on both
    * schemes and sits between the two mode primaries, so dark keeps it. */
   --ring: #8b5cf6;
@@ -214,7 +215,7 @@
   --blue: #60a5fa;
   --border: #222a38;
   --border-strong: #303a4d;
-  --input: #222a38;
+  --input: #303a4d;
   --ring: #8b5cf6;
   --sidebar: #0c0f15;
   --sidebar-foreground: #8d96a8;
@@ -262,7 +263,7 @@
     --blue: #60a5fa;
     --border: #222a38;
     --border-strong: #303a4d;
-    --input: #222a38;
+    --input: #303a4d;
     --ring: #8b5cf6;
     --sidebar: #0c0f15;
     --sidebar-foreground: #8d96a8;

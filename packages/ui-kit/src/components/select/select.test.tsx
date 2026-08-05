@@ -105,4 +105,23 @@ describe('Select', () => {
     );
     expect(screen.getByRole('combobox', { name: 'Compact' }).className).toContain(styles.sizeSm);
   });
+
+  it('applies the filter trigger variant', () => {
+    render(
+      <Select>
+        <SelectTrigger aria-label="Status filter" variant="filter">
+          <SelectValue placeholder="Filter" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectGroup>
+            <SelectItem value="a">A</SelectItem>
+          </SelectGroup>
+        </SelectContent>
+      </Select>,
+    );
+    const trigger = screen.getByRole('combobox', { name: 'Status filter' });
+    expect(trigger.className).toContain(styles.variantFilter);
+    // The prop is a styling axis, not a DOM attribute.
+    expect(trigger.hasAttribute('variant')).toBe(false);
+  });
 });

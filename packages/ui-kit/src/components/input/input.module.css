@@ -15,11 +15,13 @@
   display: block;
   width: 100%;
   min-width: 0;
-  height: 2.25rem;
+  /* The mockups' Field spec: 40px tall — the control/height/md token. */
+  height: var(--control-height-md);
   padding: 0.25rem 0.625rem;
   border: 1px solid var(--input);
   border-radius: var(--radius-md);
-  background-color: transparent;
+  /* Fields sit raised, not transparent, per the Field spec (frame 193:433). */
+  background-color: var(--surface-elevated);
   color: var(--foreground);
   font-family: inherit;
   /* text-base on small screens so iOS Safari does not zoom on focus */
@@ -34,10 +36,12 @@
     box-shadow 150ms ease;
 }
 
+/* Studio field text: 13/18 (Field spec) — desktop only; small screens keep
+ * 16px above so iOS Safari does not zoom on focus. */
 @media (min-width: 768px) {
   .input {
-    font-size: 0.875rem;
-    line-height: 1.25rem;
+    font-size: 0.8125rem;
+    line-height: 1.125rem;
   }
 }
 
@@ -79,4 +83,31 @@
 .input[aria-invalid='true'] {
   border-color: var(--destructive);
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--destructive) 20%, transparent);
+}
+
+/*
+ * type="search" plumbing (see input.tsx): the wrapper positions the
+ * magnifier over the field; the input just clears space for it. The icon
+ * is aria-hidden decoration — the search semantic comes from the native
+ * type.
+ */
+.searchWrap {
+  position: relative;
+  display: block;
+  width: 100%;
+}
+
+.searchIcon {
+  position: absolute;
+  inset-inline-start: 0.6875rem;
+  top: 50%;
+  translate: 0 -50%;
+  width: var(--icon-size-sm);
+  height: var(--icon-size-sm);
+  color: var(--muted-foreground);
+  pointer-events: none;
+}
+
+.searchInput {
+  padding-inline-start: 2.1875rem;
 }

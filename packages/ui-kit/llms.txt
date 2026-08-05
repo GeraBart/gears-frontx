@@ -77,8 +77,9 @@ Rules for generated code:
   aria-describedby, and validation display automatically — the default
   way to build forms.
 - [Input](dist/docs/input.md): single-line text field; `onValueChange`
-  for the string value, `aria-invalid` for the error state; wires into
-  Field automatically.
+  for the string value, `aria-invalid` for the error state;
+  `type="search"` renders the leading magnifier and announces as a
+  searchbox — no extra prop; wires into Field automatically.
 - [Label](dist/docs/label.md): caption for a form control; native
   `<label>` props; associate via `htmlFor` or by nesting the control.
 - [RadioGroup](dist/docs/radio-group.md): mutually exclusive options
@@ -86,8 +87,9 @@ Rules for generated code:
   arrow-key navigation built in.
 - [Select](dist/docs/select.md): dropdown picking one value from a
   list (Select/SelectTrigger/SelectValue/SelectContent/SelectGroup/
-  SelectItem); trigger sizes default|sm; keyboard and typeahead built
-  in.
+  SelectItem); trigger sizes default|sm, trigger variants default|filter
+  (filter = compact toolbar filter chip, label stays muted); keyboard
+  and typeahead built in.
 - [Separator](dist/docs/separator.md): thin visual divider between content
   sections; orientation horizontal|vertical (default horizontal); no
   `decorative` prop — pass `aria-hidden="true"` for a purely visual

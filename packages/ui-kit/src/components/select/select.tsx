@@ -49,9 +49,20 @@ const triggerVariants = cva(styles.trigger, {
       default: styles.sizeDefault,
       sm: styles.sizeSm,
     },
+    /*
+     * `filter` is the mockups' Field/filter type (Figma frame 193:433): the
+     * same select, compacted into a toolbar filter chip — 36px, label in
+     * --muted-foreground even with a value chosen, because in a filter the
+     * enduring message is "this narrows the list", not the picked value.
+     */
+    variant: {
+      default: styles.variantDefault,
+      filter: styles.variantFilter,
+    },
   },
   defaultVariants: {
     size: 'default',
+    variant: 'default',
   },
 });
 
@@ -60,9 +71,9 @@ export interface SelectTriggerProps
   className?: string;
 }
 
-export function SelectTrigger({ className, size, children, ...props }: SelectTriggerProps) {
+export function SelectTrigger({ className, size, variant, children, ...props }: SelectTriggerProps) {
   return (
-    <SelectPrimitive.Trigger className={triggerVariants({ size, className })} {...props}>
+    <SelectPrimitive.Trigger className={triggerVariants({ size, variant, className })} {...props}>
       {children}
       <SelectPrimitive.Icon render={<Chevron direction="down" className={styles.triggerIcon} />} />
     </SelectPrimitive.Trigger>

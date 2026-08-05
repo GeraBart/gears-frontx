@@ -29,13 +29,21 @@ All other props are native `<input>` props (`type`, `placeholder`,
 `disabled`, `required`, `aria-invalid`, ...) and are forwarded as-is.
 `aria-invalid` switches the border and ring to the destructive color.
 
+`type="search"` upgrades the field visually as well as semantically: a
+leading magnifier icon (decorative, `aria-hidden`) renders inside the
+field via a presentational wrapper element, and the input announces as a
+searchbox. No prop needed — the native type is the switch.
+
 ## Examples
 
 ```tsx
 import { Input } from '@gears-frontx/ui-kit';
 
 // Uncontrolled with placeholder
-<Input placeholder="Search projects…" />
+<Input placeholder="Project name" />
+
+// Search field — the native type brings the magnifier and searchbox role
+<Input type="search" placeholder="Search projects…" />
 
 // Controlled
 <Input value={email} onValueChange={setEmail} type="email" />
