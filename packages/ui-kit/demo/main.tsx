@@ -146,6 +146,30 @@ function Swatch({ token }: { token: string }) {
   );
 }
 
+function DemoIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M8 2v12M2 8h12" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function LoadingDemo() {
+  const [busy, setBusy] = useState(false);
+  return (
+    <Button
+      variant="outline"
+      loading={busy}
+      onClick={() => {
+        setBusy(true);
+        setTimeout(() => setBusy(false), 1500);
+      }}
+    >
+      Click me
+    </Button>
+  );
+}
+
 function ThemeSwitch() {
   const [theme, setTheme] = useState('auto');
   useEffect(() => {
@@ -242,10 +266,22 @@ function App() {
           <Button size="sm">sm</Button>
           <Button>default</Button>
           <Button size="lg">lg</Button>
-          <Button size="icon" aria-label="icon button">
-            ✦
-          </Button>
           <Button disabled>disabled</Button>
+        </Row>
+        <Row>
+          <Button icon={<DemoIcon />}>with icon</Button>
+          <Button size="sm" icon={<DemoIcon />} aria-label="icon-only sm" />
+          <Button icon={<DemoIcon />} aria-label="icon-only default" />
+          <Button size="lg" icon={<DemoIcon />} aria-label="icon-only lg" />
+          <Button size="lg" variant="secondary" icon={<DemoIcon />} aria-label="secondary icon" />
+        </Row>
+        <Row>
+          <Button loading>loading</Button>
+          <Button variant="secondary" loading>
+            loading
+          </Button>
+          <Button variant="outline" loading icon={<DemoIcon />} aria-label="loading icon-only" />
+          <LoadingDemo />
         </Row>
       </Section>
 

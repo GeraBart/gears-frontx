@@ -91,12 +91,10 @@ export function DialogContent({
         {children}
         {showCloseButton && (
           <DialogPrimitive.Close
+            aria-label={closeLabel}
             className={styles.closeButton}
-            render={<Button variant="ghost" size="icon" />}
-          >
-            <CloseIcon />
-            <span className={styles.srOnly}>{closeLabel}</span>
-          </DialogPrimitive.Close>
+            render={<Button variant="ghost" icon={<CloseIcon />} />}
+          />
         )}
       </DialogPrimitive.Popup>
     </DialogPrimitive.Portal>

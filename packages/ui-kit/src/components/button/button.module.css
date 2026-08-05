@@ -13,12 +13,14 @@
    * matters for the documented `render` escape hatch (button.md's
    * `<Button render={<a/>} nativeButton={false}>` example): an <a> has no
    * such UA default, so content-box there piles this class's own border
-   * on top of each `.sizeIcon`-style height/width, rendering 38px instead
-   * of 36px. Declared on `.button` rather than each size class since
-   * every Button always combines one of those with this class on the
-   * same root (see button.tsx) — one declaration covers all four.
+   * on top of each size class's height, rendering 38px instead of 36px.
+   * Declared on `.button` rather than each size class since every Button
+   * always combines one of those with this class on the same root (see
+   * button.tsx) — one declaration covers all three.
    */
   box-sizing: border-box;
+  /* Anchors the absolutely-centered .spinner. */
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -148,8 +150,72 @@
   padding: 0 1.5rem;
 }
 
-.sizeIcon {
-  height: 2.25rem;
-  width: 2.25rem;
+/*
+ * Icon-only (an `icon` slot with no children, set by button.tsx as a data
+ * attribute): square up whatever size class is active. aspect-ratio from
+ * the size's height replaces the old fixed-width `size="icon"` class, so
+ * icon-only buttons exist at every size instead of one.
+ */
+.button[data-icon-only] {
+  aspect-ratio: 1;
   padding: 0;
+}
+
+/* Slots. The wrapper, not the consumer's svg, is the styling target: it
+ * normalizes icon size per button size and is what loading hides. */
+.icon {
+  display: inline-flex;
+}
+
+.icon svg {
+  width: var(--icon-size-sm);
+  height: var(--icon-size-sm);
+}
+
+.sizeLg .icon svg {
+  width: var(--icon-size-md);
+  height: var(--icon-size-md);
+}
+
+/*
+ * Loading hides content via opacity, NOT visibility: opacity keeps the
+ * label in the accessibility tree, so the button keeps its accessible name
+ * while aria-busy reports the state (visibility would strip the name and
+ * force a hardcoded, untranslated aria-label like react-kit's i18n one).
+ * The slots keep painting layout either way — no width jump.
+ */
+.button[data-loading] .icon,
+.button[data-loading] .label {
+  opacity: 0;
+}
+
+.spinner {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: var(--icon-size-sm);
+  height: var(--icon-size-sm);
+  border: 2px solid color-mix(in oklab, currentColor 25%, transparent);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: button-spin 0.8s linear infinite;
+}
+
+@keyframes button-spin {
+  to {
+    rotate: 360deg;
+  }
+}
+
+/*
+ * Slowed, not removed — deviating from skeleton.module.css, which drops its
+ * pulse entirely: the skeleton's shape still reads as "placeholder" when
+ * static, but a frozen spinner arc reads as *stuck*, not loading. The
+ * rotation is the information here, so reduced motion gets a calmer version
+ * of it rather than none.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation-duration: 2.4s;
+  }
 }

@@ -25,7 +25,9 @@ polymorphism, correct disabled/focus behavior, `type="button"` by default
 | Prop | Type | Default |
 |------|------|---------|
 | `variant` | `default` \| `destructive` \| `outline` \| `secondary` \| `ghost` \| `link` | `default` |
-| `size` | `default` \| `sm` \| `lg` \| `icon` | `default` |
+| `size` | `default` \| `sm` \| `lg` (the F-mockups' md/sm/lg scale; `default` is md) | `default` |
+| `icon` | `ReactNode` — leading icon slot, marked decorative (`aria-hidden`); the ONLY right place for a button icon | — |
+| `loading` | `boolean` — centered spinner, disables the button, sets `aria-busy`; content keeps its space and the button keeps its accessible name | `false` |
 | `render` | `ReactElement` — replaces the root element, button semantics are applied to it | — |
 | `nativeButton` | `boolean` — set to `false` whenever `render` is not a native `<button>` | `true` |
 | `focusableWhenDisabled` | `boolean` — keep the button in tab order when disabled | `false` |
@@ -33,6 +35,9 @@ polymorphism, correct disabled/focus behavior, `type="button"` by default
 
 All other props are native `<button>` props (`onClick`, `disabled`, `type`,
 `aria-*`, ...) and are forwarded as-is.
+
+Icon-only is derived, not a size: `icon` with no children renders a square
+button of the current `size`. There is no `size="icon"`.
 
 ## Examples
 
@@ -48,8 +53,14 @@ import { Button } from '@gears-frontx/ui-kit';
 // Secondary action next to a primary one
 <Button variant="outline" onClick={cancel}>Cancel</Button>
 
-// Icon-only: always label it
-<Button size="icon" aria-label="Close">✕</Button>
+// Icon next to the label goes in the icon slot, never in children
+<Button icon={<PlusIcon />} onClick={create}>New project</Button>
+
+// Icon-only (icon slot + no children): always label it
+<Button icon={<CrossIcon />} aria-label="Close" />
+
+// Async action: loading disables and spins, width does not jump
+<Button loading={saving} onClick={save}>Save</Button>
 
 // Button-semantic action over a real anchor (announced as a button,
 // cmd-clickable) — not for plain navigation
@@ -65,6 +76,12 @@ import { Button } from '@gears-frontx/ui-kit';
 
 - Do not restyle via inline `style` or ad-hoc CSS — brand changes belong in
   the theme tokens (`theme.css` CSS variables).
-- Do not use `size="icon"` without `aria-label`.
+- Do not put an icon in `children` next to text — it lands in the `icon`
+  slot, which is what sizes it, spaces it, hides it during `loading`, and
+  keeps it out of the accessible name.
+- Do not render an icon-only button (icon slot, no children) without
+  `aria-label` — the icon is decorative and carries no name.
+- Do not emulate `loading` by swapping children for a spinner — the button
+  loses its accessible name and jumps in width; pass `loading`.
 - Do not emulate disabled with CSS/`onClick` guards — pass `disabled`
   (add `focusableWhenDisabled` if it must stay discoverable by keyboard).

@@ -163,10 +163,8 @@ function ToastCard({
         <ToastPrimitive.Close
           aria-label={closeLabel}
           className={styles.close}
-          render={<Button variant="ghost" size="icon" />}
-        >
-          <CloseIcon />
-        </ToastPrimitive.Close>
+          render={<Button variant="ghost" icon={<CloseIcon />} />}
+        />
       </ToastPrimitive.Content>
     </ToastPrimitive.Root>
   );

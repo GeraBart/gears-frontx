@@ -73,4 +73,51 @@ describe('Button', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Nope' }));
     expect(onClick).not.toHaveBeenCalled();
   });
+
+  it('renders the icon slot as decorative and keeps the label as the name', () => {
+    render(
+      <Button icon={<svg data-testid="plus" />}>
+        Add
+      </Button>,
+    );
+    const button = screen.getByRole('button', { name: 'Add' });
+    const slot = screen.getByTestId('plus').parentElement;
+    expect(slot).toHaveProperty('tagName', 'SPAN');
+    expect(slot?.getAttribute('aria-hidden')).toBe('true');
+    // Icon next to a label is a regular button, not an icon-only one.
+    expect(button.hasAttribute('data-icon-only')).toBe(false);
+  });
+
+  it('squares up when the icon slot is the only content', () => {
+    render(<Button icon={<svg />} aria-label="Close" />);
+    const button = screen.getByRole('button', { name: 'Close' });
+    expect(button.hasAttribute('data-icon-only')).toBe(true);
+  });
+
+  it('loading disables the button, reports aria-busy, and keeps the accessible name', () => {
+    const onClick = vi.fn();
+    render(
+      <Button onClick={onClick} loading>
+        Save
+      </Button>,
+    );
+    // The name must survive loading: content is hidden with opacity, which
+    // stays in the accessibility tree (visibility would strip the name).
+    const button = screen.getByRole('button', { name: 'Save' });
+    expect(button.getAttribute('aria-busy')).toBe('true');
+    expect(button).toHaveProperty('disabled', true);
+    fireEvent.click(button);
+    expect(onClick).not.toHaveBeenCalled();
+    // The spinner is presentational; the state is carried by aria-busy.
+    const spinner = button.querySelector('[aria-hidden="true"]');
+    expect(spinner).not.toBeNull();
+  });
+
+  it('does not mark an idle button busy or icon-only', () => {
+    render(<Button>Idle</Button>);
+    const button = screen.getByRole('button', { name: 'Idle' });
+    expect(button.hasAttribute('aria-busy')).toBe(false);
+    expect(button.hasAttribute('data-loading')).toBe(false);
+    expect(button.hasAttribute('data-icon-only')).toBe(false);
+  });
 });
