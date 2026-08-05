@@ -11,8 +11,9 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 0.875rem;
-  line-height: 1;
+  /* Studio control labels: 13px, on the same scale as the field text. */
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
   font-weight: 500;
   user-select: none;
 }
@@ -21,5 +22,6 @@
  * the same attribute can be set manually outside a Field. */
 .label[data-disabled] {
   pointer-events: none;
-  opacity: 0.5;
+  /* 0.42, matching the controls' own disabled dim. */
+  opacity: 0.42;
 }

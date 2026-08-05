@@ -13,7 +13,7 @@
   /*
    * Substitutes for the preflight the kit lacks: without it, content-box
    * (this kit's ambient default) piles the border on top of the declared
-   * width/height, rendering an 18x18 box instead of 16x16 — same acute
+   * width/height, rendering a 22x22 circle instead of 20x20 — same acute
    * case as tabs.module.css/badge.module.css, scoped the same way (this
    * class only).
    */
@@ -21,12 +21,13 @@
   position: relative;
   display: flex;
   flex-shrink: 0;
-  width: 1rem;
-  height: 1rem;
+  /* The mockups' Selection Control spec (frame 195:409): a 20px circle. */
+  width: 1.25rem;
+  height: 1.25rem;
   padding: 0;
   border: var(--border-width) solid var(--input);
   border-radius: 9999px;
-  background-color: transparent;
+  background-color: var(--surface-elevated);
   outline: none;
   /* Colour and box-shadow crossfades only, no transform/geometry — not motion under
      WCAG 2.3.3, so deliberately left unguarded under prefers-reduced-motion. */
@@ -43,10 +44,15 @@
   inset: -0.5rem -0.75rem;
 }
 
+/*
+ * Checked per the drawn control (its SVG: the circle keeps the raised
+ * surface, gains a 2px --primary ring, and the dot fills --primary) — not
+ * the shadcn filled-disc look. The box is fixed-size border-box, so the
+ * width bump can't move anything.
+ */
 .item[data-checked] {
+  border-width: var(--border-width-focus);
   border-color: var(--primary);
-  background-color: var(--primary);
-  color: var(--primary-foreground);
 }
 
 .item:focus-visible {
@@ -65,9 +71,10 @@
 
 /* Base UI renders the item as a <span role="radio">, so :disabled can
  * never match — the stamped data-disabled attribute is the disabled state. */
+/* 0.42 per the mockups' disabled specimens. */
 .item[data-disabled] {
   cursor: not-allowed;
-  opacity: 0.5;
+  opacity: 0.42;
 }
 
 /* Declared after :focus-visible so the invalid border wins while focused. */
@@ -75,7 +82,7 @@
   border-color: var(--destructive);
 }
 
-/* Invalid but checked: the filled circle keeps its primary border. */
+/* Invalid but checked: the checked ring keeps its primary border. */
 .item[aria-invalid='true'][data-checked] {
   border-color: var(--primary);
 }
@@ -96,5 +103,7 @@
   height: 0.5rem;
   transform: translate(-50%, -50%);
   border-radius: 9999px;
-  background-color: var(--primary-foreground);
+  /* --primary, not --primary-foreground: the drawn dot is the accent on a
+   * raised surface, not a knockout on a filled disc. */
+  background-color: var(--primary);
 }
