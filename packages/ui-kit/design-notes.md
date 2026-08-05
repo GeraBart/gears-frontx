@@ -48,6 +48,14 @@ rule. `sidebar` (page layout templates) adds no dependencies but is a large
 composite over `sheet`, `button`, `input`, `separator`, `skeleton` and
 `tooltip` plus a mobile-detection hook: app layout, not a base component.
 
+The F-mockups draw larger blocks too — Sidebar Navigation, Top Bar / Page
+Header, an App Shell, a Data Table with toolbar, bulk-selection bar and row
+states, and the Studio AI cards. Those frames are titled "MVP Building
+blocks / shadcn compositions" in the design file itself: compositions over
+kit primitives, not kit components. They stay with consumers/templates, and
+the kit's contribution is composition recipes (see AI layer) — which keeps
+the `sidebar` / `data-table` exclusions above intact.
+
 ## Architecture
 
 - Component stack: **React 19 + Base UI (`@base-ui/react`) + CSS Modules + CVA**.
@@ -94,17 +102,18 @@ composite over `sheet`, `button`, `input`, `separator`, `skeleton` and
   ignore. Only after all of those gates pass is flipping `private` the release
   act.
 
-## Component set (MVP, 29 components)
+## Component set (MVP, 31 components)
 
-19 built, 10 planned — the ⏳-marked entries are the `insight-front` gap
-set, delivery-plan step 4 (see below), not yet in the package.
+19 built, 12 planned — the ⏳-marked entries are the `insight-front` gap set
+plus the two the F-mockups added (`pagination`, `breadcrumb`), delivery-plan
+step 5 (see below), not yet in the package.
 
 | Group    | Components |
 |----------|------------|
 | Forms    | `button`, `input`, `textarea`, `select`, `checkbox`, `radio-group`, `switch`, `label`, `field`, ⏳ `toggle`, ⏳ `toggle-group` |
 | Overlays | `dialog`, `dropdown-menu`, `tooltip`, `toast`, ⏳ `popover`, ⏳ `sheet`, ⏳ `preview-card` |
-| Structure| `card`, `tabs`, `badge`, `separator`, `skeleton`, ⏳ `alert`, ⏳ `avatar`, ⏳ `collapsible`, ⏳ `empty`, ⏳ `spinner` |
-| Data     | `table` (primitive markup) |
+| Structure| `card`, `tabs`, `badge`, `separator`, `skeleton`, ⏳ `alert`, ⏳ `avatar`, ⏳ `breadcrumb`, ⏳ `collapsible`, ⏳ `empty`, ⏳ `spinner` |
+| Data     | `table` (primitive markup), ⏳ `pagination` |
 
 Behavior and accessibility come from Base UI primitives; variant logic is CVA;
 styles are CSS Modules translated from shadcn/ui's Tailwind design (MIT,
@@ -126,6 +135,12 @@ overlays document. Two names diverge from their sources and will confuse the
 next reader: shadcn's registry calls `preview-card` `hover-card`, and `sheet`
 maps onto Base UI's `drawer` primitive.
 
+`pagination` and `breadcrumb` come from the F-mockups instead: the mockups'
+component mapping pairs pagination with the table (Toolbar · Row ·
+Pagination) and places breadcrumb inside the Top Bar composition. Both are
+pure markup/styling with no Base UI primitive, like `card` and `badge`;
+shadcn ships both, so the usual translation path applies.
+
 `toast` is built on Base UI's own Toast primitive (`@base-ui/react/toast`),
 not sonner: base-vega ships a `sonner.json` variant too, but that pulls in
 `sonner` + `next-themes` as extra runtime dependencies, breaking the kit's
@@ -142,18 +157,26 @@ usage doc per component (when to use, kit-level props, examples,
 anti-patterns) colocated as `src/components/<name>/<name>.md` and copied to
 `dist/docs/` at build. A unit test enforces that every component has a doc,
 is indexed in `llms.txt`, and documents every variant/size its CSS module
-defines. Still planned: three composition recipes (CRUD page, settings form,
-confirmation dialog). The components they compose now all exist, so what is
-left is writing them.
+defines. Still planned: composition recipes — the original trio (CRUD page,
+settings form, confirmation dialog) plus the F-mockups' building blocks
+(app shell with sidebar navigation, data-table page with toolbar and
+bulk-selection bar). The trio's components all exist, so writing those is
+unblocked; the mockup-block recipes additionally wait on step-5 components
+(`pagination`, `breadcrumb`, `avatar`).
 
 ## Testing and acceptance
 
 - Unit tests are written along with components: render + interaction smoke per
   component (vitest + jsdom + testing-library, versions pinned by the root
   test-dependency gate).
-- Kitchen-sink demo app (planned, `packages/ui-kit-example-web` following the
-  telemetry example pattern): every component in every state; live smoke and
-  the agent playground.
+- Kitchen-sink demo app: started as `demo/` inside the package (`npm run
+  demo`) — the same in-package pattern the telemetry demo actually uses,
+  superseding the separate `packages/ui-kit-example-web` package an earlier
+  revision of this plan named. All 19 components plus the full token set
+  (color swatches, radius/spacing scales) on one page with an
+  auto/light/dark switch; consumes the package by name, so it exercises the
+  built artifact, not src. Grow it to every component in every state as the
+  set lands; it doubles as the agent playground.
 - Acceptance: (1) `scripts/verify-consumer.sh` packs the package, installs the
   tarball into a clean Vite project, builds a page that imports a single
   component (`Button`) and asserts tokens, that component's styles and class
@@ -173,18 +196,44 @@ left is writing them.
 
 ## Delivery plan
 
-Oldest first; steps 1–3 are done, 4–5 remain. Completed steps are a log, not
-a description of the current build (see Architecture for that; the tsup
-pipeline step 1 names was later replaced by Vite, per Architecture's build
-bullet).
+Oldest first; steps 1–3 are done, 4 is in progress, 5–6 remain. Completed
+steps are a log, not a description of the current build (see Architecture
+for that; the tsup pipeline step 1 names was later replaced by Vite, per
+Architecture's build bullet).
 
 1. Package skeleton + proven tsup/CSS Modules pipeline (later replaced by
    Vite; see Architecture) + Button.
 2. Tokens polish + first component batch (forms) on `@base-ui/react`.
 3. Remaining components — done, the 19-component MVP set exists.
-4. The ten `insight-front` gap components. Before the release step, not after:
-   they are part of the MVP set the `private` gate names, and the kitchen-sink
-   app and composition recipes should cover the whole set once rather than be
-   extended right after publication.
-5. AI docs + kitchen-sink example app; satisfy the #495 publication gates,
-   remove the temporary artifact ignore, then flip `private` and publish.
+4. **Studio reskin (in progress).** The design source moved from shadcn's
+   neutral defaults to the Studio design: the F-mockups Figma file, page
+   `00 · Foundations`, tokens from its "Studio / shadcn" variable
+   collection. Done: theme.css carries the palette and the new token groups
+   (see Architecture's theme bullet). Remaining — adapt the existing 19
+   components to the mockups' component specs:
+   - Badge: status intents (`success`/`warning`/`info`/`danger`/`muted`)
+     in pill and dot forms — the mockups say "semantic intent only", which
+     retires the shadcn-inherited variant list;
+   - Button: `loading` state; the icon-button size×variant matrix (the
+     single `size="icon"` today vs sm/md/lg × primary/secondary drawn);
+   - Tabs: the `segment` kind next to the underline tabs;
+   - Field/Input/Select: `search` and `filter` field types;
+   - Table: density (compact/default) and the primitive-styling share of
+     row/table states (selected/stale/restricted, loading/empty/error) —
+     data-table *logic* stays out, per Non-goals;
+   - component CSS moves onto the new metric tokens (control heights, icon
+     sizes, spacing) where hardcoded px stands today.
+   Blocked on design answers: control heights (the mockups' token spec says
+   32/40/44 while the drawn buttons measure 32/36/40), and the eight token
+   values marked `derived:` in theme.css.
+5. The twelve gap components, mockups-first: `popover`, `alert`, `avatar`,
+   `empty` are in both the mockups and the `insight-front` set and go first;
+   `pagination` and `breadcrumb` are the mockups-only additions;
+   `toggle`, `toggle-group`, `sheet`, `preview-card`, `collapsible`,
+   `spinner` close the `insight-front` list. Before the release step, not
+   after: they are part of the MVP set the `private` gate names, and the
+   kitchen-sink app and composition recipes should cover the whole set once
+   rather than be extended right after publication.
+6. Composition recipes (incl. the mockup building blocks) + kitchen-sink to
+   full coverage; satisfy the #495 publication gates, remove the temporary
+   artifact ignore, then flip `private` and publish.
