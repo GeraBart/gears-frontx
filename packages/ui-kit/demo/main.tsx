@@ -287,12 +287,26 @@ function App() {
 
       <Section title="Badge">
         <Row>
-          <Badge>default</Badge>
-          <Badge variant="secondary">secondary</Badge>
-          <Badge variant="destructive">destructive</Badge>
-          <Badge variant="outline">outline</Badge>
-          <Badge variant="ghost">ghost</Badge>
-          <Badge variant="link">link</Badge>
+          <Badge intent="success">success</Badge>
+          <Badge intent="warning">warning</Badge>
+          <Badge intent="info">info</Badge>
+          <Badge intent="danger">danger</Badge>
+          <Badge>muted</Badge>
+        </Row>
+        <Row>
+          <Badge intent="success" form="dot">
+            success
+          </Badge>
+          <Badge intent="warning" form="dot">
+            warning
+          </Badge>
+          <Badge intent="info" form="dot">
+            info
+          </Badge>
+          <Badge intent="danger" form="dot">
+            danger
+          </Badge>
+          <Badge form="dot">muted</Badge>
         </Row>
       </Section>
 
@@ -353,7 +367,7 @@ function App() {
             <CardTitle>Project Amber</CardTitle>
             <CardDescription>Updated 2 hours ago</CardDescription>
             <CardAction>
-              <Badge>active</Badge>
+              <Badge intent="success">active</Badge>
             </CardAction>
           </CardHeader>
           <CardContent>Surfaces sit on --card with --border; hover state is up to the consumer.</CardContent>
@@ -398,14 +412,14 @@ function App() {
             <TableRow>
               <TableCell>gears-api</TableCell>
               <TableCell>
-                <Badge>running</Badge>
+                <Badge intent="success">running</Badge>
               </TableCell>
               <TableCell>eu-central</TableCell>
             </TableRow>
             <TableRow>
               <TableCell>gears-worker</TableCell>
               <TableCell>
-                <Badge variant="destructive">failed</Badge>
+                <Badge intent="danger">failed</Badge>
               </TableCell>
               <TableCell>us-east</TableCell>
             </TableRow>

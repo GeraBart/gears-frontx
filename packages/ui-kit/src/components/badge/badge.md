@@ -1,94 +1,79 @@
 # Badge
 
-A small pill-shaped label for a status, count, or category tag. Badge has no
-Base UI primitive — it's a styled `span`, plus a `render` prop (via Base
-UI's `useRender`/`mergeProps` utilities, the same building blocks Base UI's
-own primitives use) for the one case that needs it: rendering as a link.
+A status label: a colored dot plus an intent-colored caption, as a soft
+pill or a bare dot+label pair. Badge has no Base UI primitive — it's a
+styled `span`, plus a `render` prop (via Base UI's `useRender`/`mergeProps`
+utilities) for the one case that needs it: rendering as a link.
+
+Badge speaks **semantic intent only** (per the Studio design): you say what
+kind of state you're marking (`success`, `warning`, `info`, `danger`,
+`muted`), never how to paint it. There are no presentational variants.
 
 ## When to use
 
-- A status label attached to an entity in a list or a page header (`Active`,
-  `Draft`, `Failed`) — `default`, `secondary`, `destructive`, or `outline`.
-- A small count or category tag (`3 new`, `Beta`).
-- A label that should recede into the surrounding surface until it's
-  actually interactive — `ghost` has no fill or border at rest, only a
-  `--muted` background on hover.
-- A tag that should give the impression of inline text rather than a pill
-  — `link` has no fill or border at all, just `--primary`-colored text
-  that underlines on hover. It still keeps Badge's fixed height and
-  padding and won't wrap (see "When not to use"), so it reads like a link
-  without actually flowing as one.
-- A clickable tag or filter chip — pass `render={<a href="..." />}`. For
-  `default`/`secondary`/`destructive`/`outline`, hover feedback (a
-  background/text shift) only appears once the badge is actually rendered
-  as a link this way; a plain (non-`render`) instance of those four stays
-  visually inert, so it never looks clickable when it isn't. `ghost` and
-  `link` are the opposite — both hover unconditionally, `render` or not
-  (matching the source registry), so their hover style is never a signal
-  of clickability on its own.
-
-  When you do use `render` to make a badge clickable: the anchor joins the
-  page's normal tab order (Badge adds no `tabIndex` or focus trap of its
-  own), so place it where a keyboard user would expect a link, not buried
-  where tabbing to it is surprising. Give it discernible text — its own
-  children, or an `aria-label`/`title` on the anchor if the visible content
-  is an icon alone — since a badge with no accessible name is unusable via
-  keyboard or screen reader even though it's technically focusable. The
-  kit's own focus ring (`--ring`, or the destructive-tinted one for
-  `variant="destructive"`) appears automatically once the anchor receives
-  keyboard focus — no extra prop needed.
+- A status attached to an entity in a list, table cell, or page header:
+  `running` → `success`, `failed` → `danger`, `pending` → `warning`,
+  `beta`/`new` → `info`, anything neutral (`draft`, `archived`, a count,
+  a category) → `muted`.
+- `form="pill"` (default) on busy surfaces where the label needs its own
+  soft fill; `form="dot"` inline with text or in dense tables where a fill
+  would be noise — same dot and label, no pill behind them.
+- A clickable status filter — pass `render={<a href="..." />}`. The pill's
+  fill deepens on hover and the dot form underlines, but only when actually
+  rendered as a link; a plain badge stays visually inert and never looks
+  clickable when it isn't. The kit's focus ring appears automatically once
+  the anchor receives keyboard focus. Give it discernible text — a badge
+  with no accessible name is unusable via keyboard or screen reader.
 
 ## When not to use
 
-- A clickable action with its own visual weight — use `button` (`variant="outline"`
-  or `variant="secondary"` there reads as a real button, not a tag).
+- A clickable action with its own visual weight — use `button`.
 - Long or wrapping text — Badge is single-line (`white-space: nowrap`) and
-  clips overflow; use plain text or `card` for anything longer than a
-  short label.
+  clips overflow.
+- Prose-colored emphasis or arbitrary brand colors — intents are the whole
+  vocabulary; recoloring a badge via CSS breaks the semantic contract.
 
 ## Props (kit level)
 
 | Prop | Type | Default |
 |------|------|---------|
-| `variant` | `default` \| `secondary` \| `destructive` \| `outline` \| `ghost` \| `link` | `default` |
+| `intent` | `success` \| `warning` \| `info` \| `danger` \| `muted` | `muted` |
+| `form` | `pill` \| `dot` | `pill` |
 | `render` | `ReactElement` — replaces the root `span`, e.g. with an `<a>` | — |
-| `className` | `string` — merged after the variant class | — |
+| `className` | `string` — merged after the intent/form classes | — |
 
 All other props are native `<span>` props (or the target element's props
 when using `render`) and are forwarded as-is, including `aria-invalid`
-(shows a destructive-tinted border and ring, independent of `variant`).
+(shows a destructive-tinted border and ring, independent of `intent`).
 
 ## Examples
 
 ```tsx
 import { Badge } from '@gears-frontx/ui-kit';
 
-// Status labels
-<Badge>Active</Badge>
-<Badge variant="secondary">Draft</Badge>
-<Badge variant="destructive">Failed</Badge>
-<Badge variant="outline">Beta</Badge>
+// Status labels (pill is the default form)
+<Badge intent="success">Running</Badge>
+<Badge intent="danger">Failed</Badge>
+<Badge intent="warning">Degraded</Badge>
+<Badge intent="info">Beta</Badge>
+<Badge>Draft</Badge>  // muted is the default intent
 
-// ghost: recedes into the surface until interactive
-<Badge variant="ghost">Unread</Badge>
-
-// link: reads as inline text, not a pill
-<Badge variant="link">See changelog</Badge>
+// Bare dot+label for dense/inline placements
+<Badge intent="success" form="dot">Online</Badge>
 
 // A badge that is actually a link — hover feedback only applies here
-<Badge variant="outline" render={<a href="/filters/open" />}>
+<Badge intent="info" render={<a href="/filters/open" />}>
   3 open
 </Badge>
 ```
 
 ## Anti-patterns
 
-- Do not expect hover feedback from a plain (non-`render`) `default`,
-  `secondary`, `destructive`, or `outline` badge — those four stay visually
-  inert unless actually rendered as a link via `render`, matching the
-  source registry. Conversely, don't read `ghost` or `link` hovering as a
-  sign they're clickable — both hover the same way whether or not `render`
-  is set.
-- Do not nest interactive controls (buttons, links other than the one
-  supplied via `render`) inside a Badge — it is a label, not a container.
-- Do not restyle via inline `style` — brand changes belong in theme tokens.
+- Do not pick an intent for its color ("warning looks nice and orange") —
+  intents are semantics; if no state maps, use `muted`.
+- Do not recolor a badge via `className`/`style` — the intent palette and
+  its contrast math live in the kit; brand changes belong in theme tokens.
+- Do not expect hover feedback from a plain (non-`render`) badge — it only
+  appears when the badge actually renders as a link via `render`.
+- Do not nest interactive controls inside a Badge — it is a label, not a
+  container.

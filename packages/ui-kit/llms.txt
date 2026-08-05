@@ -41,11 +41,12 @@ Rules for generated code:
 
 ## Components
 
-- [Badge](dist/docs/badge.md): small pill-shaped status/count/category
-  label; variants default|secondary|destructive|outline|ghost|link; no
-  Base UI primitive; `render` (e.g. `<a>`) makes it a clickable tag —
-  hover feedback for default|secondary|destructive|outline only appears
-  once it is; ghost|link hover unconditionally either way.
+- [Badge](dist/docs/badge.md): status label, a colored dot + intent-colored
+  caption; intents success|warning|info|danger|muted (semantic intent ONLY
+  — pick by meaning, never by color; neutral/count/category = muted), forms
+  pill|dot (pill adds a soft fill; dot is the bare pair for dense/inline
+  spots); no Base UI primitive; `render` (e.g. `<a>`) makes it a clickable
+  tag — hover feedback only appears once it is.
 - [Button](dist/docs/button.md): action button; variants
   default|destructive|outline|secondary|ghost|link, sizes default|sm|lg;
   icons go in the `icon` slot prop, NEVER in children — `icon` with no
