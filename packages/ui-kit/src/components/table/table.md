@@ -109,21 +109,22 @@ the attribute; the kit only paints it (the Studio Data Table's carded,
 state-ringed rows are a composition on top of these hooks, not part of the
 primitive):
 
-- `data-state="selected"` — a solid `--accent` (violet) fill, for a row
-  the user has selected (e.g. via a leading checkbox column).
-- `data-state="stale"` — a `--warning-soft` fill, for a row whose data
+- `data-state="selected"` — a 2px `--primary` ring on a `--card-hover`
+  fill, for a row the user has selected (e.g. via a leading checkbox
+  column).
+- `data-state="stale"` — a 1px `--warning` ring, for a row whose data
   needs attention (out-of-date sync, pending action).
-- `data-state="restricted"` — a `--danger-soft` fill, for a row the
+- `data-state="restricted"` — a 1px `--danger` ring, for a row the
   viewer lacks access to.
 - Hover, and any row containing a descendant that is *currently*
   `aria-expanded="true"` (e.g. a row-level disclosure toggle, only while
   open — a collapsed toggle does not match) — a lighter, translucent
-  `--muted` tint. A `data-state` tint holds under hover.
+  `--muted` tint. A `data-state` treatment holds under hover.
 
-All three state fills clear AA against `--foreground` text by a wide
-margin (14:1+ both themes). If you put secondary `--muted-foreground` text
-inside a tinted row, check contrast yourself before shipping it — that
-pairing is yours, not the kit's.
+The rings follow the Studio Data Table's drawn state language (colored
+border, not a tinted surface); they are assembled from the row's cells,
+so they only close into a rectangle when the row's cells are direct
+children (`TableCell`/`TableHead` — the normal case).
 
 ## Props (kit level)
 

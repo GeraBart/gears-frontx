@@ -37,137 +37,114 @@
 .table {
   width: 100%;
   /*
-   * Substitutes for the preflight the kit lacks: without it, the table
-   * stays in the UA-default *separated* borders model, where every border
-   * declared below on a row/row-group (.tableHeader tr, .tableRow,
-   * .tableFooter) is silently ignored by the separated model's own
-   * rendering rules, and the UA default `border-spacing: 2px` gaps every
-   * cell, breaking the hover/selected/footer background tints into
-   * segmented strips instead of full-width rows. The source gets this for
-   * free from Tailwind's global preflight; this kit has none, so it's
-   * declared here explicitly.
+   * The SEPARATED borders model, on purpose — the opposite call from the
+   * shadcn translation this file started as. The mockups' Data Table
+   * (frame 202:407) draws every row as its own rounded card floating in
+   * the table: gaps between rows come from border-spacing (which only the
+   * separated model has), and each card's ring/fill/radius is assembled
+   * from the row's CELLS below, because a <tr> can neither clip a rounded
+   * background nor paint borders of its own in this model. The old
+   * collapse-model reasoning (row-level borders, full-width tint strips)
+   * left with the flat look it served.
    */
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0 0.5rem;
   caption-side: bottom;
-  font-size: 0.875rem;
-  line-height: 1.25rem;
+  /* The mockups' Data Table cell text: 12/17 (frame 202:407). */
+  font-size: 0.75rem;
+  line-height: 1.0625rem;
 }
 
 /*
- * Source: "[&_tr]:border-b" — every descendant row gets a bottom border
- * from the header itself, on top of (and redundant with, when the row is
- * this kit's own TableRow) .tableRow's own border-bottom below. Kept
- * faithful to the source rather than dropped as "redundant": it also
- * covers a plain <tr> rendered inside TableHeader without TableRow, which
- * this kit's types don't forbid.
+ * The carded row, assembled from its cells: every cell carries the top and
+ * bottom edge, the first and last close the sides and round the corners.
+ * Ring color/width and fill are row-level knobs (custom properties set on
+ * .tableRow and flipped by the state/hover rules below) so a state changes
+ * one declaration, not six.
+ *
+ * The card only closes into a rectangle when the row's cells are direct
+ * children — TableCell/TableHead, the normal case.
  */
-.tableHeader tr {
-  border-bottom: var(--border-width) solid var(--border);
+.tableRow {
+  --table-row-ring: var(--border);
+  --table-row-ring-width: var(--border-width);
+  --table-row-fill: var(--surface-elevated);
 }
 
-/*
- * Source: "[&_tr:last-child]:border-0" — a descendant selector, so it
- * reaches any last-child row nested inside .tableBody, not only a direct
- * child. Removes the border every row otherwise gets from .tableRow, so
- * the body doesn't end in a double line against its own bottom edge (or a
- * following footer's own border-top).
- */
-.tableBody tr:last-child {
-  border-bottom: 0;
+.tableRow > :is(td, th) {
+  border-block: var(--table-row-ring-width) solid var(--table-row-ring);
+  background-color: var(--table-row-fill);
+  /* Colour crossfades only, no transform/geometry — not motion under WCAG
+     2.3.3, so deliberately left unguarded under prefers-reduced-motion. */
+  transition:
+    color 150ms ease,
+    background-color 150ms ease,
+    border-color 150ms ease;
+}
+
+.tableRow > :is(td, th):first-child {
+  border-inline-start: var(--table-row-ring-width) solid var(--table-row-ring);
+  border-start-start-radius: var(--radius-md);
+  border-end-start-radius: var(--radius-md);
+}
+
+.tableRow > :is(td, th):last-child {
+  border-inline-end: var(--table-row-ring-width) solid var(--table-row-ring);
+  border-start-end-radius: var(--radius-md);
+  border-end-end-radius: var(--radius-md);
+}
+
+/* The header bar is the same card shape on the --surface fill (one shade
+ * off the rows in dark; both near-white in light). */
+.tableHeader .tableRow {
+  --table-row-fill: var(--surface);
+}
+
+/* The footer bar matches the header's --surface (frame 202:407).
+ * --foreground on --surface: 17.9:1 light / 15.5:1 dark. */
+.tableFooter .tableRow {
+  --table-row-fill: var(--surface);
 }
 
 .tableFooter {
-  border-top: var(--border-width) solid var(--border);
-  /*
-   * Source: bg-muted/50. Contrast checked with the kit's default text
-   * color (--foreground — neither <td> nor <tfoot> set an explicit color
-   * of their own, so this is the realistic ambient case) against this tint
-   * composited over --background (a footer has no background of its own
-   * beneath it to composite against), the way a browser actually renders
-   * it — alpha-over on gamma-encoded sRGB channels, not a blend in OKLab:
-   * 18.96:1 in light, 17.00:1 in dark — clears AA by a wide margin in
-   * both, same conclusion as .tableRow:hover below (identical tint).
-   */
-  background-color: color-mix(in oklab, var(--muted) 50%, transparent);
   font-weight: 500;
 }
 
 /*
- * Source: "[&>tr]:last:border-b-0" — a direct-child selector here, unlike
- * .tableBody's descendant one above: only the footer's own last row, not
- * any last-child row nested deeper inside it.
+ * Hover lifts the card one surface step; scoped to the body so the
+ * header/footer bars stay put. :has([aria-expanded='true']) keeps the
+ * shadcn behavior of holding the highlight while a row-level disclosure
+ * is open — value-tested, so a collapsed toggle does not match.
  */
-.tableFooter > tr:last-child {
-  border-bottom: 0;
-}
-
-.tableRow {
-  border-bottom: var(--border-width) solid var(--border);
-  /* Same four-property list as button/badge/tabs' "transition-colors"
-     translation, kept for form consistency even though only
-     background-color actually changes on this part. Colour and box-shadow
-     crossfades only, no transform/geometry — not motion under WCAG 2.3.3,
-     so deliberately left unguarded under prefers-reduced-motion. */
-  transition:
-    color 150ms ease,
-    background-color 150ms ease,
-    border-color 150ms ease,
-    box-shadow 150ms ease;
+.tableBody .tableRow:hover,
+.tableBody .tableRow:has([aria-expanded='true']) {
+  --table-row-fill: var(--card-hover);
 }
 
 /*
- * Source: bg-muted/50, same tint as .tableFooter above — see its comment
- * for the computed contrast (18.96:1 light / 17.00:1 dark against
- * --foreground text), which applies identically here.
- */
-.tableRow:hover {
-  background-color: color-mix(in oklab, var(--muted) 50%, transparent);
-}
-
-/*
- * Source: "has-aria-expanded:bg-muted/50" — compiled against the actual
- * Tailwind v4 output, this variant emits `:has([aria-expanded="true"])`,
- * not mere presence of the attribute: Tailwind's `aria-expanded` variant
- * tests the *value*, matching the ARIA boolean's true state specifically.
- * A row highlights only while it contains a descendant control that is
- * *currently* expanded (e.g. a row-level disclosure toggle in a
- * master-detail layout) — a collapsed toggle (`aria-expanded="false"`)
- * must not match, or every row with a toggle would stay permanently
- * tinted regardless of its state, inverting the rule's purpose. Same
- * tint, same contrast numbers as .tableRow:hover above.
- */
-.tableRow:has([aria-expanded='true']) {
-  background-color: color-mix(in oklab, var(--muted) 50%, transparent);
-}
-
-/*
- * Row state hooks, per the F-mockups' Data Table row states (frame
- * 200:493). The kit styles the attribute, the consumer's own logic sets it
- * (`<TableRow data-state="selected|stale|restricted">`) — no selection or
- * data logic lives here, in keeping with "primitive markup only". The
- * mockups draw these rows as cards ringed in the state color; that carded
- * treatment belongs to the data-table *composition* — the primitive share
- * is the tinted row surface, in the same state palette.
- *
- * selected moved from the shadcn bg-muted to the Studio --accent (the
- * palette's violet selection surface); stale/restricted take the matching
- * -soft status fills. All three checked against --foreground text, the
- * ambient cell color: selected 15.13:1 light / 14.21:1 dark, stale
- * 16.23:1 / 14.27:1, restricted 16.25:1 / 16.37:1 — nowhere near the AA
- * floor. Declared after :hover/:has() above: equal specificity, later
- * source order, so a state tint holds under hover instead of flickering
- * to the hover tint.
+ * Row state hooks, per the F-mockups' Data Table row states (frames
+ * 200:493 / 202:407). The kit styles the attribute, the consumer's own
+ * logic sets it (`<TableRow data-state="selected|stale|restricted">`) — no
+ * selection or data logic lives here, in keeping with "primitive markup
+ * only". The drawn language is the card's RING, not a tint:
+ * stale/restricted keep their surface and recolor the 1px ring; selected
+ * takes a 2px --primary ring on the --card-hover fill. The ring variables
+ * are untouched by the hover rule above, so a state's ring holds under
+ * hover while the fill still lifts for feedback (the hover rule's extra
+ * ancestor selector outweighs these on the fill).
  */
 .tableRow[data-state='selected'] {
-  background-color: var(--accent);
+  --table-row-ring: var(--primary);
+  --table-row-ring-width: var(--border-width-focus);
+  --table-row-fill: var(--card-hover);
 }
 
 .tableRow[data-state='stale'] {
-  background-color: var(--warning-soft);
+  --table-row-ring: var(--warning);
 }
 
 .tableRow[data-state='restricted'] {
-  background-color: var(--danger-soft);
+  --table-row-ring: var(--danger);
 }
 
 .tableHead {
@@ -190,13 +167,24 @@
    * behave as given.
    */
   box-sizing: border-box;
-  height: 2.5rem;
-  padding: 0 0.5rem;
+  /*
+   * The mockups' header bar (frame 202:407): 42px, 10px medium column
+   * labels, uppercased with +0.5px tracking, in --subtle-foreground.
+   * Deliberately as drawn even though --subtle-foreground at 10px misses
+   * the 4.5:1 AA floor (2.94:1 light / 4.14:1 dark vs --surface) — the
+   * drawn mockups were ruled the source of truth (see theme.css); flagged
+   * rather than silently corrected.
+   */
+  height: 2.625rem;
+  padding: 0 1rem;
   text-align: left;
   vertical-align: middle;
+  font-size: 0.625rem;
   font-weight: 500;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
   white-space: nowrap;
-  color: var(--foreground);
+  color: var(--subtle-foreground);
 }
 
 .tableHead:has([role='checkbox']) {
@@ -204,11 +192,13 @@
 }
 
 .tableCell {
-  /* Same reasoning as .tableHead above — the other half of the same
-     column-width collision, since a <td> can carry the identical
-     consumer-supplied width as its <th>. */
+  /* Same box-sizing reasoning as .tableHead above — the other half of the
+     same column-width collision, since a <td> can carry the identical
+     consumer-supplied width as its <th>. Metrics approximate the drawn
+     56px default row for single-line content; the drawn rows carry a
+     second 11px line, which consumers add themselves. */
   box-sizing: border-box;
-  padding: 0.5rem;
+  padding: 0.75rem 1rem;
   vertical-align: middle;
   white-space: nowrap;
 }
@@ -227,8 +217,10 @@
   height: 2rem;
 }
 
+/* Drawn compact rows sit 12px shorter than default (44 vs 56) — 6px off
+ * each block edge. */
 .densityCompact .tableCell {
-  padding-block: 0.25rem;
+  padding-block: 0.375rem;
 }
 
 .tableCaption {
