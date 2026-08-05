@@ -161,9 +161,14 @@ describe('theme tokens', () => {
   });
 
   it('keeps raw colors out of component modules', () => {
+    // Function notations plus the named colors someone might actually
+    // reach for. `white`/`black` need the lookarounds: `white-space` and
+    // custom-property names like `--color-black` must not trip this.
+    const rawColor =
+      /#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(|oklch\(|oklab\(|hwb\(|\blab\(|\blch\(|\bcolor\(|(?<![-\w])(?:white|black)(?![-\w])/i;
     for (const file of moduleFiles) {
       const css = readFileSync(file, 'utf8');
-      const raw = css.match(/#[0-9a-f]{3,8}\b|rgb\(|rgba\(|hsl\(|oklch\(/i);
+      const raw = css.match(rawColor);
       expect(raw, `raw color "${raw?.[0]}" in ${file}`).toBeNull();
     }
   });
