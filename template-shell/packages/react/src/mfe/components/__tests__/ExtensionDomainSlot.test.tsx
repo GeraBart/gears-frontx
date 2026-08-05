@@ -49,6 +49,10 @@ class FakeRegistry extends MfeRegistry {
     resolveLoadExtActionId: () => 'load_ext',
     resolveMountExtActionId: () => 'mount_ext',
     resolveUnmountExtActionId: () => 'unmount_ext',
+    resolveLifecycleStageInitId: () => 'init',
+    resolveLifecycleStageActivatedId: () => 'activated',
+    resolveLifecycleStageDeactivatedId: () => 'deactivated',
+    resolveLifecycleStageDestroyedId: () => 'destroyed',
   };
 
   private readonly mounsterByDomain = new Map<string, ExtensionMounter>();

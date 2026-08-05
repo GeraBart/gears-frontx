@@ -24,6 +24,7 @@
  * @packageDocumentation
  */
 // @cpt-dod:cpt-frontx-dod-mfe-isolation-blob-core:p1
+// @cpt-dod:cpt-frontx-dod-mfe-isolation-manifest-reference-resolution:p1
 // @cpt-state:cpt-frontx-state-mfe-isolation-module-lifecycle:p1
 // @cpt-state:cpt-frontx-state-mfe-loading-load-lifecycle:p1
 
@@ -598,24 +599,44 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
    * Resolve manifest from reference.
    *
    * Accepts an inline MfManifest object (caches it) or a string type ID
-   * (looks up from cache). Schema validation is the type system plugin's
-   * responsibility — the handler trusts registered manifests are valid.
+   * (looks up from cache, then from the registry-supplied type system).
+   * Schema validation is the type system plugin's responsibility — the
+   * handler trusts registered manifests are valid.
    */
   private async resolveManifest(manifestRef: string | MfManifest): Promise<MfManifest> {
+    // @cpt-begin:cpt-frontx-flow-mfe-isolation-load:p1:inst-manifest-inline
     if (typeof manifestRef === 'object' && manifestRef !== null) {
       this.manifestCache.cacheManifest(manifestRef);
       return manifestRef;
     }
+    // @cpt-end:cpt-frontx-flow-mfe-isolation-load:p1:inst-manifest-inline
 
     if (typeof manifestRef === 'string') {
+      // @cpt-begin:cpt-frontx-flow-mfe-isolation-load:p1:inst-manifest-by-id
       const cached = this.manifestCache.getManifest(manifestRef);
       if (cached) {
         return cached;
       }
+
+      // A string reference names a manifest the type system holds — the entry
+      // carries the id, not the document — so the cache only answers for
+      // remotes some earlier load already pulled in. The plugin arrives at
+      // registration, so an unregistered handler has none and stops here.
+      const fromTypeSystem = this.typeSystem?.getSchema(manifestRef);
+      if (isMfManifest(fromTypeSystem)) {
+        this.manifestCache.cacheManifest(fromTypeSystem);
+        return fromTypeSystem;
+      }
+      // @cpt-end:cpt-frontx-flow-mfe-isolation-load:p1:inst-manifest-by-id
+
+      // @cpt-begin:cpt-frontx-flow-mfe-isolation-load:p1:inst-manifest-unresolved-raise
       throw new MfeLoadError(
-        `Manifest '${manifestRef}' not found. Provide manifest inline in MfeEntryMF or ensure another entry from the same remote was loaded first.`,
+        `Manifest '${manifestRef}' not found. Provide the manifest inline in MfeEntryMF, ` +
+          'ensure another entry from the same remote was loaded first, or register the ' +
+          'manifest with the type system of the registry this handler is registered into.',
         manifestRef
       );
+      // @cpt-end:cpt-frontx-flow-mfe-isolation-load:p1:inst-manifest-unresolved-raise
     }
 
     throw new MfeLoadError(
@@ -1285,6 +1306,26 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
     const resolved = new URL(relativeSpecifier, fromUrl);
     return resolved.pathname.slice(1); // strip leading '/'
   }
+}
+
+/**
+ * Confirm that a value the type system returned for a manifest id is shaped
+ * like an `MfManifest`.
+ *
+ * The plugin's registry is keyed by opaque ids and holds every kind of schema
+ * a consumer registered, so a lookup can legitimately answer with something
+ * that is not a manifest at all; the load must fail on that as it would on a
+ * miss rather than cache the value and fail deeper in the chain. Whether the
+ * manifest's contents are themselves valid stays the plugin's responsibility.
+ */
+function isMfManifest(value: unknown): value is MfManifest {
+  if (typeof value !== 'object' || value === null) return false;
+  return (
+    'id' in value && typeof value.id === 'string' &&
+    'name' in value && typeof value.name === 'string' &&
+    'metaData' in value && typeof value.metaData === 'object' && value.metaData !== null &&
+    'shared' in value && Array.isArray(value.shared)
+  );
 }
 
 export { MfeHandlerMF };

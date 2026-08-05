@@ -27,10 +27,11 @@ import type { MfeRegistryConfig } from '../runtime/config';
  *
  * @example
  * ```typescript
- * import { mfeRegistryFactory } from '@gears-frontx/mfes';
+ * import { createMfeRegistryFactory } from '@gears-frontx/mfes';
  * import { gtsPlugin } from '@gears-frontx/gts-plugin';
  *
  * // Build the registry with GTS plugin at application wiring time
+ * const mfeRegistryFactory = createMfeRegistryFactory();
  * const registry = mfeRegistryFactory.build({ typeSystem: gtsPlugin });
  * ```
  */

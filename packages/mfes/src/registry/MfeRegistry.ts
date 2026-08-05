@@ -4,7 +4,7 @@
  * Abstract class defining the public API contract for the MFE runtime.
  * External consumers ALWAYS depend on this abstraction, never on concrete implementations.
  *
- * Obtain instances via mfeRegistryFactory.build(config).
+ * Obtain instances via createMfeRegistryFactory().build(config).
  *
  * @packageDocumentation
  */
@@ -29,7 +29,7 @@ import type { ExtensionMounter } from '../runtime/ExtensionMounter';
  * Abstract MfeRegistry - public contract for the MFE runtime facade.
  *
  * This is the ONLY type external consumers should depend on.
- * Obtain instances via mfeRegistryFactory.build(config).
+ * Obtain instances via createMfeRegistryFactory().build(config).
  *
  * Key Responsibilities:
  * - Type validation via TypeSystemPlugin
@@ -40,10 +40,10 @@ import type { ExtensionMounter } from '../runtime/ExtensionMounter';
  *
  * @example
  * ```typescript
- * import { mfeRegistryFactory } from '@gears-frontx/mfes';
+ * import { createMfeRegistryFactory } from '@gears-frontx/mfes';
  * import { gtsPlugin } from '@gears-frontx/gts-plugin';
  *
- * const registry = mfeRegistryFactory.build({ typeSystem: gtsPlugin });
+ * const registry = createMfeRegistryFactory().build({ typeSystem: gtsPlugin });
  * registry.registerDomain(myDomain, new MyDomainFactory());
  * await registry.registerExtension(myExtension);
  * ```

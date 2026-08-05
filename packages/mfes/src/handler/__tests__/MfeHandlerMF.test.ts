@@ -17,9 +17,16 @@ import { MfeLoadError } from '../../errors';
 import type { MfeEntryMF } from '../../types/mfe-entry-mf';
 import type { MfManifest } from '../../manifest/mf-manifest';
 
+// Fixture type IDs use a mock notation rather than the real GTS strings: the
+// handler treats them as opaque cache keys and error context, and MFES-1
+// forbids @gears-frontx/mfes from carrying type-format literals at all.
+const MANIFEST_ID = 'mock.mfe.mf_manifest.v1~test.manifest.v1';
+const ENTRY_BASE_ID = 'mock.mfe.entry.v1~';
+const ENTRY_ID = `${ENTRY_BASE_ID}test.entry.v1`;
+
 function buildManifest(publicPath: string): MfManifest {
   return {
-    id: 'gts.frontx.mfes.mfe.mf_manifest.v1~test.manifest.v1',
+    id: MANIFEST_ID,
     name: 'testMfe',
     metaData: {
       name: 'testMfe',
@@ -35,7 +42,7 @@ function buildManifest(publicPath: string): MfManifest {
 
 function buildEntry(manifest: MfManifest): MfeEntryMF {
   return {
-    id: 'gts.frontx.mfes.mfe.entry.v1~test.entry.v1',
+    id: ENTRY_ID,
     requiredProperties: [],
     actions: [],
     domainActions: [],
@@ -55,7 +62,7 @@ describe('MfeHandlerMF — unresolved publicPath placeholder guard', () => {
       // retries: 0 — the guard's rejection is deterministic and must not be
       // masked by RetryHandler's exponential-backoff retries (default 2
       // retries would add seconds of real delay per assertion here).
-      const handler = new MfeHandlerMF('gts.frontx.mfes.mfe.entry.v1~', { retries: 0 });
+      const handler = new MfeHandlerMF(ENTRY_BASE_ID, { retries: 0 });
       const entry = buildEntry(buildManifest(placeholder));
 
       // Fetch must never be reached — the guard fires before any network
@@ -75,7 +82,7 @@ describe('MfeHandlerMF — unresolved publicPath placeholder guard', () => {
   );
 
   it('does not reject a concrete resolved publicPath at the guard step', async () => {
-    const handler = new MfeHandlerMF('gts.frontx.mfes.mfe.entry.v1~', { retries: 0 });
+    const handler = new MfeHandlerMF(ENTRY_BASE_ID, { retries: 0 });
     const entry = buildEntry(buildManifest('http://localhost:3099/'));
 
     // A concrete publicPath passes the guard and proceeds to fetch the

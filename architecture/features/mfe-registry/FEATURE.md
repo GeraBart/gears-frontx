@@ -33,7 +33,7 @@
 
 ### 1.1 Overview
 
-This feature provides the abstract `MfeRegistry` façade — built via `mfeRegistryFactory` with the type-system provider injected — that owns microfrontend registration and on-demand load orchestration, resolving each unit's handler by its declared base type via the injected type system.
+This feature provides the abstract `MfeRegistry` façade — built via `createMfeRegistryFactory()` with the type-system provider injected — that owns microfrontend registration and on-demand load orchestration, resolving each unit's handler by its declared base type via the injected type system.
 
 ### 1.2 Purpose
 
@@ -82,7 +82,7 @@ User-facing interactions that start with an actor (human or external system) and
 - Domain contract matching fails — the extension is rejected before load.
 
 **Steps**:
-1. [ ] - `p1` - Developer obtains a registry instance by calling `mfeRegistryFactory.build` with an injected `TypeSystemPlugin` - `inst-flow-rvm-01`
+1. [ ] - `p1` - Developer obtains a registry instance by calling `createMfeRegistryFactory().build` with an injected `TypeSystemPlugin` - `inst-flow-rvm-01`
 2. [ ] - `p1` - Developer calls `registry.registerDomain` with an `ExtensionDomain` declaration and an `ExtensionDomainImplementationFactory` - `inst-flow-rvm-02`
 3. [ ] - `p1` - Registry validates the domain declaration through `typeSystem.register` and synchronously constructs the domain implementation via the factory - `inst-flow-rvm-03`
 4. [ ] - `p1` - **IF** validation fails **THEN** registry throws, domain is not registered, flow ends - `inst-flow-rvm-04`
@@ -99,7 +99,7 @@ User-facing interactions that start with an actor (human or external system) and
 
 ### Build Registry via Factory
 
-- [ ] `p2` - **ID**: `cpt-frontx-flow-mfe-registry-factory-build`
+- [x] `p2` - **ID**: `cpt-frontx-flow-mfe-registry-factory-build`
 
 **Actor**: `cpt-frontx-actor-project-developer`
 
@@ -111,11 +111,12 @@ User-facing interactions that start with an actor (human or external system) and
 - Subsequent call supplies a different `TypeSystemPlugin` — factory throws a configuration mismatch error.
 
 **Steps**:
-1. [ ] - `p1` - Developer calls `mfeRegistryFactory.build` with a configuration containing a `TypeSystemPlugin` - `inst-flow-fb-01`
-2. [ ] - `p1` - **IF** a cached instance already exists, validate that the supplied plugin matches the cached configuration - `inst-flow-fb-02`
-   1. [ ] - `p1` - **IF** the plugin differs, throw a configuration mismatch error and **RETURN** - `inst-flow-fb-02a`
-   2. [ ] - `p1` - **IF** the plugin matches, **RETURN** cached instance - `inst-flow-fb-02b`
-3. [ ] - `p1` - Create a new registry implementation bound to the supplied `TypeSystemPlugin`, cache it alongside the configuration, and **RETURN** the new instance - `inst-flow-fb-03`
+1. [x] - `p1` - Developer creates the factory the composition root owns by calling `createMfeRegistryFactory()`, the package's sole creation path - `inst-flow-fb-create`
+2. [x] - `p1` - Developer calls `build` on that factory with a configuration containing a `TypeSystemPlugin` - `inst-flow-fb-01`
+3. [x] - `p1` - **IF** a cached instance already exists, validate that the supplied plugin is the one the cached instance was built with - `inst-flow-fb-02`
+   1. [x] - `p1` - **IF** the plugin differs, throw a configuration mismatch error and **RETURN** - `inst-flow-fb-02a`
+   2. [x] - `p1` - **IF** the plugin matches, **RETURN** cached instance - `inst-flow-fb-02b`
+4. [x] - `p1` - Create a new registry implementation bound to the supplied `TypeSystemPlugin`, cache it alongside that plugin rather than the caller's configuration object, and **RETURN** the new instance - `inst-flow-fb-03`
 
 ## 3. Processes / Business Logic (CDSL)
 
@@ -130,11 +131,12 @@ Internal system functions and procedures that do not interact with actors direct
 **Output**: The matched `MfeHandler`, or a resolution failure
 
 **Steps**:
-1. [x] - `p1` - Sort the registered handler list by descending `handler.priority` — handlers with equal priority retain insertion order - `inst-algo-hr-01`
-2. [ ] - `p1` - **FOR EACH** handler in sorted order - `inst-algo-hr-02`
+1. [x] - `p1` - Supply the registry's injected `TypeSystemPlugin` to each handler as it is registered, so a handler the developer constructed before any registry existed can resolve the references its own load path owns; matching itself stays with the registry - `inst-algo-hr-attach-type-system`
+2. [x] - `p1` - Sort the registered handler list by descending `handler.priority` — handlers with equal priority retain insertion order - `inst-algo-hr-01`
+3. [ ] - `p1` - **FOR EACH** handler in sorted order - `inst-algo-hr-02`
    1. [ ] - `p1` - Evaluate `typeSystem.isTypeOf(entryTypeId, handler.handledBaseTypeId)` through the injected `TypeSystemPlugin` - `inst-algo-hr-02a`
    2. [x] - `p1` - **IF** `isTypeOf` returns true, **RETURN** this handler as the match — stop iterating - `inst-algo-hr-02b`
-3. [x] - `p1` - **IF** no handler matched after iterating all handlers, **RETURN** resolution failure indicating no registered handler covers the given entry type - `inst-algo-hr-03`
+4. [x] - `p1` - **IF** no handler matched after iterating all handlers, **RETURN** resolution failure indicating no registered handler covers the given entry type - `inst-algo-hr-03`
 
 ### Extension Registration and Entry Storage
 
@@ -176,15 +178,15 @@ Internal system functions and procedures that do not interact with actors direct
 
 ### Factory Cache Lifecycle
 
-- [ ] `p2` - **ID**: `cpt-frontx-state-mfe-registry-factory-cache`
+- [x] `p2` - **ID**: `cpt-frontx-state-mfe-registry-factory-cache`
 
 **States**: EMPTY, CACHED
 
 **Initial State**: EMPTY
 
 **Transitions**:
-1. [ ] - `p1` - **FROM** EMPTY **TO** CACHED **WHEN** `build` is called for the first time and a new registry instance is created and stored - `inst-state-fc-01`
-2. [ ] - `p1` - **FROM** CACHED **TO** CACHED **WHEN** `build` is called again with a matching configuration — returns the existing instance - `inst-state-fc-02`
+1. [x] - `p1` - **FROM** EMPTY **TO** CACHED **WHEN** `build` is called for the first time and a new registry instance is created and stored - `inst-state-fc-01`
+2. [x] - `p1` - **FROM** CACHED **TO** CACHED **WHEN** `build` is called again with a matching configuration — returns the existing instance - `inst-state-fc-02`
 
 ## 5. Definitions of Done
 
@@ -192,7 +194,7 @@ Internal system functions and procedures that do not interact with actors direct
 
 - [x] `p1` - **ID**: `cpt-frontx-dod-mfe-registry-registry-contract`
 
-The system **MUST** expose the abstract `MfeRegistry` as the sole public runtime contract, obtainable only through `mfeRegistryFactory.build({ typeSystem })`, with the concrete implementation and internal coordination machinery remaining inaccessible to consumers.
+The system **MUST** expose the abstract `MfeRegistry` as the sole public runtime contract, obtainable only through `createMfeRegistryFactory().build({ typeSystem })`, with the concrete implementation and internal coordination machinery remaining inaccessible to consumers.
 
 **Implements**:
 - `cpt-frontx-flow-mfe-registry-factory-build`
@@ -234,7 +236,7 @@ The system **MUST** own and orchestrate the complete register → type-validate 
 
 - [x] `p1` - **ID**: `cpt-frontx-dod-mfe-registry-type-contracts`
 
-The system **MUST** define the `MfeHandler` abstract class with `handledBaseTypeId`, `priority`, `bridgeFactory`, and `load(entry, extensionId)` — and MUST NOT include any `canHandle`-style self-selection method on the handler.
+The system **MUST** define the `MfeHandler` abstract class with `handledBaseTypeId`, `priority`, `bridgeFactory`, `load(entry, extensionId)`, and a registration-time `attachTypeSystem(typeSystem)` the base class implements for every handler — and MUST NOT include any `canHandle`-style self-selection method on the handler. Type matching **MUST** remain the registry's, evaluated against `handledBaseTypeId`; the plugin a handler receives **MUST** serve only the references its own load path owns, and registration **MUST** be the sole channel by which a handler obtains one. A handler **MUST** bind to a single plugin for its lifetime: re-attaching the plugin it already holds is a no-op, and attaching a different one **MUST** be refused rather than swapped in, since the handler's own caches are keyed by extension and manifest id alone and cannot tell the two plugins' answers apart.
 
 **Implements**:
 - `cpt-frontx-algo-mfe-registry-handler-resolution`
@@ -245,9 +247,10 @@ The system **MUST** define the `MfeHandler` abstract class with `handledBaseType
 
 ## 6. Acceptance Criteria
 
-- [ ] The abstract `MfeRegistry` is the only exported public runtime contract; consumers obtain instances via `mfeRegistryFactory.build({ typeSystem })`.
+- [ ] The abstract `MfeRegistry` is the only exported public runtime contract; consumers obtain instances via `createMfeRegistryFactory().build({ typeSystem })`.
 - [ ] Handler resolution uses `typeSystem.isTypeOf(entryTypeId, handler.handledBaseTypeId)` exclusively — no type-format string literals appear in the registry's resolution logic.
-- [ ] `MfeHandler` declares `handledBaseTypeId`, `priority`, `bridgeFactory`, and `load` — no self-selection predicate.
+- [ ] `MfeHandler` declares `handledBaseTypeId`, `priority`, `bridgeFactory`, `load`, and `attachTypeSystem` — no self-selection predicate.
+- [ ] A handler constructed with no type system and passed to the registry through `mfeHandlers` resolves its own type-system-owned references after registration, with no change at the construction site.
 - [ ] The factory-with-cache pattern returns the same instance on repeated calls with matching configuration, and throws on configuration mismatch.
 - [ ] An extension whose type validation fails is rejected without being placed into its extension domain.
 - [ ] An extension with no matching handler is rejected with a handler-not-found error.

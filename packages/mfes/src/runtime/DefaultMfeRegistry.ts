@@ -5,7 +5,7 @@
  * It wires all collaborators together and implements the facade API.
  *
  * INTERNAL: This class is NOT exported from the public barrel.
- * External consumers obtain instances via mfeRegistryFactory.build(config).
+ * External consumers obtain instances via createMfeRegistryFactory().build(config).
  *
  * @packageDocumentation
  * @internal
@@ -125,7 +125,7 @@ export class DefaultMfeRegistry extends MfeRegistry {
       throw new Error(
         'MfeRegistry requires a TypeSystemPlugin. ' +
         'Provide it via config.typeSystem parameter. ' +
-        'Use mfeRegistryFactory.build({ typeSystem: gtsPlugin }) to create an instance.'
+        'Use createMfeRegistryFactory().build({ typeSystem: gtsPlugin }) to create an instance.'
       );
     }
 
@@ -167,6 +167,7 @@ export class DefaultMfeRegistry extends MfeRegistry {
       extensionManager: this.extensionManager,
       resolveHandler: (entryTypeId) => this.resolveHandler(entryTypeId),
       coordinator: this.coordinator,
+      typeSystem: this.typeSystem,
       triggerLifecycle: (extensionId, stageId) =>
         this.triggerLifecycleStageInternal(extensionId, stageId),
       executeActionsChain: (chain) => this.executeActionsChain(chain),
@@ -184,6 +185,13 @@ export class DefaultMfeRegistry extends MfeRegistry {
 
     if (config.mfeHandlers) {
       for (const handler of config.mfeHandlers) {
+        // @cpt-begin:cpt-frontx-algo-mfe-registry-handler-resolution:p1:inst-algo-hr-attach-type-system
+        // Handlers are constructed by the host application, which has no
+        // registry yet and therefore no plugin to hand them. Registration is
+        // where the two meet: without this, a handler resolving a reference
+        // the type system owns (a manifest named by id) has nothing to ask.
+        handler.attachTypeSystem(this.typeSystem);
+        // @cpt-end:cpt-frontx-algo-mfe-registry-handler-resolution:p1:inst-algo-hr-attach-type-system
         this.handlers.push(handler);
       }
       // @cpt-begin:cpt-frontx-algo-mfe-registry-handler-resolution:p1:inst-algo-hr-01
@@ -357,9 +365,12 @@ export class DefaultMfeRegistry extends MfeRegistry {
     );
 
     // Step 8: Fire-and-forget 'init' lifecycle stage (errors logged to console.error).
+    // The stage ID comes from the injected plugin: MFES-1 forbids this package
+    // from spelling a concrete type-format literal, and a consumer whose stages
+    // live in another notation would otherwise never be matched.
     this.triggerDomainOwnLifecycleStageInternal(
       declaration.id,
-      'gts.frontx.mfes.lifecycle.stage.v1~frontx.mfes.lifecycle.init.v1'
+      this.typeSystem.resolveLifecycleStageInitId()
     ).catch(error => {
       console.error('[DefaultMfeRegistry] Domain init error:', error, { domainId: declaration.id });
     });
@@ -646,8 +657,12 @@ export class DefaultMfeRegistry extends MfeRegistry {
 
   async unregisterDomain(domainId: string): Promise<void> {
     return this.operationSerializer.serializeOperation(domainId, async () => {
+      // Invariant: teardown hooks must still be able to dispatch. The manager
+      // unmounts the extensions and fires the domain's `destroyed` stage, whose
+      // chains target this domain — so the handlers stay attached until it
+      // returns. Detaching after also drops anything a teardown hook registered.
+      await this.extensionManager.unregisterDomain(domainId);
       this.mediator.unregisterAllHandlers(domainId);
-      return this.extensionManager.unregisterDomain(domainId);
     });
   }
 
