@@ -57,8 +57,11 @@
   background-color: transparent;
   color: var(--foreground);
   font-family: inherit;
-  font-size: 0.875rem;
-  font-weight: 500;
+  /* It acts as a button, so it reads as one: Studio/Label, like Button. */
+  font-size: var(--text-label-size);
+  line-height: var(--text-label-line-height);
+  font-weight: var(--text-label-weight);
+  letter-spacing: var(--text-label-tracking);
 }
 
 .input:focus-visible {

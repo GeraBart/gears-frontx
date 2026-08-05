@@ -294,18 +294,20 @@
   gap: 0.25rem;
 }
 
+/* Studio/Body Medium — Body metrics, the ramp's 500-weight variant. */
 .title {
   margin: 0;
-  font-size: 0.875rem;
-  line-height: 1.25rem;
+  font-size: var(--text-body-size);
+  line-height: var(--text-body-line-height);
   font-weight: 500;
 }
 
 .description {
   margin: 0;
   color: var(--muted-foreground);
-  font-size: 0.875rem;
-  line-height: 1.25rem;
+  /* Studio/Body, muted — was the shadcn translation's 14px. */
+  font-size: var(--text-body-size);
+  line-height: var(--text-body-line-height);
 }
 
 .action {

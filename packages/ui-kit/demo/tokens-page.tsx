@@ -61,6 +61,17 @@ const COLOR_GROUPS: { title: string; tokens: string[] }[] = [
   },
 ];
 
+const TYPE_ROLES = [
+  { role: 'display', sample: 'Build with evidence' },
+  { role: 'heading-1', sample: 'Delivery is at risk' },
+  { role: 'heading-2', sample: 'Connected sources' },
+  { role: 'body', sample: 'Computed signals explain what changed.' },
+  { role: 'label', sample: 'Review connection' },
+  { role: 'meta', sample: 'Last healthy sync · 18m ago' },
+  { role: 'mono', sample: 'SIG-1042 · WORKSPACE 01' },
+];
+const FONT_FAMILIES = ['font-sans', 'font-mono'];
+
 const RADII = ['', '-xs', '-sm', '-md', '-lg', '-xl'];
 const SPACES = ['1', '2', '3', '4', '5', '6', '8'];
 const CONTROL_HEIGHTS = ['sm', 'md', 'lg'];
@@ -69,6 +80,10 @@ const BORDER_WIDTHS = ['border-width', 'border-width-focus'];
 
 const ALL_TOKENS = [
   ...COLOR_GROUPS.flatMap((group) => group.tokens),
+  ...FONT_FAMILIES,
+  ...TYPE_ROLES.flatMap(({ role }) =>
+    ['size', 'line-height', 'weight', 'tracking'].map((part) => `text-${role}-${part}`),
+  ),
   ...RADII.map((step) => `radius${step}`),
   ...SPACES.map((step) => `space-${step}`),
   ...CONTROL_HEIGHTS.map((step) => `control-height-${step}`),
@@ -136,6 +151,44 @@ export function TokensPage() {
           </Row>
         </Section>
       ))}
+
+      <Section title="Typography">
+        <div style={{ display: 'grid', gap: 'var(--space-4)' }}>
+          {TYPE_ROLES.map(({ role, sample }) => (
+            <div
+              key={role}
+              style={{
+                display: 'flex',
+                alignItems: 'baseline',
+                gap: 'var(--space-6)',
+                flexWrap: 'wrap',
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: role === 'mono' ? 'var(--font-mono)' : 'var(--font-sans)',
+                  fontSize: `var(--text-${role}-size)`,
+                  lineHeight: `var(--text-${role}-line-height)`,
+                  fontWeight: `var(--text-${role}-weight)` as never,
+                  letterSpacing: `var(--text-${role}-tracking)`,
+                }}
+              >
+                {sample}
+              </span>
+              <code style={{ fontSize: 11, color: 'var(--muted-foreground)' }}>
+                --text-{role}-* · {values[`text-${role}-size`]}/{values[`text-${role}-line-height`]}{' '}
+                · {values[`text-${role}-weight`]} · {values[`text-${role}-tracking`]}
+              </code>
+            </div>
+          ))}
+          {FONT_FAMILIES.map((token) => (
+            <div key={token} style={{ fontSize: 11 }}>
+              <code>--{token}</code>{' '}
+              <code style={{ color: 'var(--muted-foreground)' }}>{values[token]}</code>
+            </div>
+          ))}
+        </div>
+      </Section>
 
       <Section title="Radius">
         <Row>

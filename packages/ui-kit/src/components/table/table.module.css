@@ -225,8 +225,9 @@
 
 .tableCaption {
   margin-top: 1rem;
-  font-size: 0.875rem;
-  line-height: 1.25rem;
+  /* Studio/Body — a caption is page text, unlike the drawn 12/17 cells. */
+  font-size: var(--text-body-size);
+  line-height: var(--text-body-line-height);
   /*
    * Source: text-muted-foreground, against --background (a caption sits
    * outside any row/footer tint, so no mixed-tint approximation is

@@ -31,9 +31,13 @@
   border: var(--border-width) solid transparent;
   border-radius: var(--radius-md);
   font-family: inherit;
-  font-size: 0.875rem;
-  line-height: 1.25rem;
-  font-weight: 500;
+  /* The drawn buttons (frame 182:371) are BOUND to the Studio/Label text
+   * style — the one component text that references the ramp instead of
+   * hand-set metrics — so the label consumes the ramp tokens directly. */
+  font-size: var(--text-label-size);
+  line-height: var(--text-label-line-height);
+  font-weight: var(--text-label-weight);
+  letter-spacing: var(--text-label-tracking);
   cursor: pointer;
   user-select: none;
   text-decoration: none;

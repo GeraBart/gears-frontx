@@ -22,10 +22,16 @@ Rules for generated code:
   yields a correct, legible dark page (background, text, and UA-owned
   surfaces like the scrollbar) out of the box — no setup step required for
   that case.
-- Set the app font AND, for explicit control instead of following the OS
-  preference, `data-theme` on `<html>`/`<body>`, not on an inner container:
-  overlay components (Select, Dialog, DropdownMenu, Tooltip, Toaster) portal
-  their popup to `<body>` and inherit theme tokens and font from there. A
+- Fonts come from the kit's own tokens: `--font-sans` (Inter, then system
+  fallbacks) is set on the page by theme.css, `--font-mono` (JetBrains
+  Mono) is for code-like text. The kit ships no font FILES — load Inter/
+  JetBrains Mono in the app for the true Studio look (the fallbacks stay
+  legible without them), or override the tokens to rebrand.
+- Font overrides AND, for explicit control instead of following the OS
+  preference, `data-theme` go on `<html>`/`<body>`, not on an inner
+  container: overlay components (Select, Dialog, DropdownMenu, Tooltip,
+  Toaster) portal their popup to `<body>` and inherit theme tokens and
+  font from there. A
   `data-theme` subtree (anywhere, not just `<html>`/`<body>`) paints its own
   surface, not just its descendants' tokens, so it can be nested inside a
   page carrying the opposite theme. If a subtree must carry its own theme,
@@ -36,6 +42,12 @@ Rules for generated code:
   overriding kit class names.
 - Rounding is a scale derived from `--radius` (`--radius-xs|sm|md|lg|xl`);
   override `--radius` alone and every component follows.
+- Page typography uses the Studio type ramp tokens:
+  `--text-<role>-size|line-height|weight|tracking` for roles
+  display|heading-1|heading-2|body|label|meta|mono (e.g. a page title is
+  `font-size: var(--text-heading-1-size)` etc.; medium-weight body text is
+  the body role at `font-weight: 500`). Use the ramp for template text
+  instead of inventing sizes — kit components already sit on it.
 - Per-component docs below list the kit-level props; everything else is the
   underlying native element's props.
 

@@ -91,6 +91,59 @@
   --icon-size-lg: 1.5rem;
   --border-width: 1px;
   --border-width-focus: 2px;
+
+  /*
+   * Typography (Figma "Typography / Specimens", frame 175:371 — the Studio
+   * text styles, recorded verbatim). The kit ships no font FILES: loading
+   * Inter/JetBrains Mono (@font-face, preload, subsetting) is the
+   * consumer's build concern; until they load, the fallback stacks keep
+   * metrics close. "Body Medium"/"Mono Medium" are not separate roles —
+   * the same metrics at weight 500.
+   *
+   * A frozen conflict, on purpose: the ramp says Label 13/16 and Meta
+   * 12/16, but the drawn component specimens hand-set 13/18 (fields,
+   * control labels, tabs) and 12/17 (table cells, dropdown options,
+   * tooltip) — and the table header's 10px has no ramp role at all.
+   * Components keep their drawn metrics; these tokens carry the ramp's
+   * own values. Open designer question, tracked in design-notes.md.
+   */
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  /* Display: 28/34 semibold. */
+  --text-display-size: 1.75rem;
+  --text-display-line-height: 2.125rem;
+  --text-display-weight: 600;
+  --text-display-tracking: -0.4px;
+  /* Heading 1: 20/28 semibold. */
+  --text-heading-1-size: 1.25rem;
+  --text-heading-1-line-height: 1.75rem;
+  --text-heading-1-weight: 600;
+  --text-heading-1-tracking: -0.2px;
+  /* Heading 2: 16/24 semibold. */
+  --text-heading-2-size: 1rem;
+  --text-heading-2-line-height: 1.5rem;
+  --text-heading-2-weight: 600;
+  --text-heading-2-tracking: -0.1px;
+  /* Body: 15/20 regular (Body Medium = weight 500). */
+  --text-body-size: 0.9375rem;
+  --text-body-line-height: 1.25rem;
+  --text-body-weight: 400;
+  --text-body-tracking: 0px;
+  /* Label: 13/16 medium. */
+  --text-label-size: 0.8125rem;
+  --text-label-line-height: 1rem;
+  --text-label-weight: 500;
+  --text-label-tracking: 0.1px;
+  /* Meta: 12/16 regular. */
+  --text-meta-size: 0.75rem;
+  --text-meta-line-height: 1rem;
+  --text-meta-weight: 400;
+  --text-meta-tracking: 0.1px;
+  /* Mono: 11/16 regular, --font-mono (Mono Medium = weight 500). */
+  --text-mono-size: 0.6875rem;
+  --text-mono-line-height: 1rem;
+  --text-mono-weight: 400;
+  --text-mono-tracking: 0px;
 }
 
 :root,
@@ -328,4 +381,10 @@ body,
 [data-theme] {
   background-color: var(--background);
   color: var(--foreground);
+  /* The app font, same override story as the colors: consumers rebrand by
+   * overriding --font-sans, not this rule. On `body` (not `html`) so it
+   * shares the single-element specificity reasoning above; repeated on
+   * [data-theme] only for symmetry with the paint — font-family inherits
+   * anyway, so a themed subtree changes nothing here. */
+  font-family: var(--font-sans);
 }

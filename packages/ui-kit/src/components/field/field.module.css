@@ -15,14 +15,22 @@
   color: var(--destructive);
 }
 
+/*
+ * Studio/Meta for both helpers. No drawn specimen exists (the Field symbol,
+ * 193:433, draws no caption), so this is role-reasoned: the field's own
+ * text is 13px, and the shadcn translation's 14px helper OUTSIZED the field
+ * it annotates; Meta is the ramp's supporting-text role below Label.
+ */
 .description {
   color: var(--muted-foreground);
-  font-size: 0.875rem;
-  line-height: 1.375;
+  font-size: var(--text-meta-size);
+  line-height: var(--text-meta-line-height);
+  letter-spacing: var(--text-meta-tracking);
 }
 
 .error {
   color: var(--destructive);
-  font-size: 0.875rem;
-  line-height: 1.375;
+  font-size: var(--text-meta-size);
+  line-height: var(--text-meta-line-height);
+  letter-spacing: var(--text-meta-tracking);
 }

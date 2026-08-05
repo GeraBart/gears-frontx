@@ -40,8 +40,12 @@
   border-radius: var(--radius-md);
   background-color: var(--foreground);
   color: var(--background);
+  /* The drawn tooltip (Overlay symbol, 197:399): 12 medium on 17 — the
+   * specimens' hand-set 17px line again, so literal, not the Meta ramp
+   * tokens (which say 16). */
   font-size: 0.75rem;
-  line-height: 1rem;
+  line-height: 1.0625rem;
+  font-weight: 500;
   transform-origin: var(--transform-origin);
   outline: none;
   transition:

@@ -27,13 +27,13 @@
   overflow: hidden;
   border: var(--border-width) solid transparent;
   border-radius: 9999px;
-  /* Studio/Meta: 12/16 regular, +0.1px tracking (not the 500 weight the
-   * shadcn translation used — the mockups set status labels in regular). */
+  /* Studio/Meta (not the 500 weight the shadcn translation used — the
+   * mockups set status labels in regular), via the ramp tokens. */
   font-family: inherit;
-  font-size: 0.75rem;
-  line-height: 1rem;
-  font-weight: 400;
-  letter-spacing: 0.1px;
+  font-size: var(--text-meta-size);
+  line-height: var(--text-meta-line-height);
+  font-weight: var(--text-meta-weight);
+  letter-spacing: var(--text-meta-tracking);
   white-space: nowrap;
   color: var(--badge-text);
   /* Colour and box-shadow crossfades only, no transform/geometry — not motion under

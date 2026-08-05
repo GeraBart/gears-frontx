@@ -216,8 +216,9 @@
 
 .content {
   flex: 1 1 0%;
-  font-size: 0.875rem;
-  line-height: 1.25rem;
+  /* Studio/Body — panel content is page text, not control text. */
+  font-size: var(--text-body-size);
+  line-height: var(--text-body-line-height);
   outline: none;
 }
 

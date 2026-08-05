@@ -205,7 +205,7 @@ Architecture's build bullet).
    Vite; see Architecture) + Button.
 2. Tokens polish + first component batch (forms) on `@base-ui/react`.
 3. Remaining components — done, the 19-component MVP set exists.
-4. **Studio reskin (done, two design answers pending).** The design source
+4. **Studio reskin (done, design answers pending).** The design source
    moved from shadcn's neutral defaults to the Studio design: the
    F-mockups Figma file, page `00 · Foundations`, tokens from its
    "Studio / shadcn" variable collection. Landed: theme.css carries the
@@ -219,10 +219,22 @@ Architecture's build bullet).
    density + selected/stale/restricted row hooks, and component CSS on the
    metric tokens. The drawn-vs-spec control-height discrepancy was ruled
    in favor of the drawn specimens (32/36/40; buttons map sm/default/lg
-   directly, fields sit on the lg step, the filter chip on md). Still
-   open: the token values marked `derived:` in theme.css, and a broad
-   spacing-token pass over per-component paddings (deferred; the scale
-   exists in theme.css).
+   directly, fields sit on the lg step, the filter chip on md). A later
+   typography pass added `--font-sans`/`--font-mono` (families only — the
+   kit ships no font files) and the Studio type ramp as `--text-<role>-*`
+   tokens (frame 175:371), then moved the remaining shadcn-legacy 14px
+   text onto ramp roles: Body for card/dialog/toast/tab-panel/caption
+   text, Label for button-role text (the drawn buttons are bound to the
+   Studio/Label style), Meta for field helpers and Badge; dropdown/select
+   options and the tooltip follow the drawn Overlay specimen (12/17)
+   instead. Still open: the token values marked `derived:` in theme.css; a
+   broad spacing-token pass over per-component paddings (deferred; the
+   scale exists in theme.css); and the ramp-vs-specimen line-height
+   conflict — the type styles say Label 13/16 and Meta 12/16 while the
+   drawn component specimens hand-set 13/18 and 12/17 (and the table
+   header's 10px has no ramp role at all), so components keep the drawn
+   metrics and the ramp tokens carry the ramp's values until the designer
+   reconciles the two.
 5. The twelve gap components, mockups-first: `popover`, `alert`, `avatar`,
    `empty` are in both the mockups and the `insight-front` set and go first;
    `pagination` and `breadcrumb` are the mockups-only additions;

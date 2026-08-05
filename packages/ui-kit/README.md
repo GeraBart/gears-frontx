@@ -46,6 +46,15 @@ For explicit control instead, set `data-theme="dark"` or `data-theme="light"`
 on `<html>` — or on any inner subtree, which then paints its own surface
 independently of the page around it.
 
+Text renders in `--font-sans` (Inter first, then system fallbacks), with
+`--font-mono` (JetBrains Mono) reserved for code-like text; theme.css sets
+the page font itself. The package ships no font files — load Inter/JetBrains
+Mono in your app for the exact Studio look (the fallbacks stay legible
+without them). Type sizes come from the Studio ramp tokens
+(`--text-<role>-size|line-height|weight|tracking`, roles
+`display|heading-1|heading-2|body|label|meta|mono`) — use them for your own
+page text too.
+
 To re-brand, override the CSS variables from `theme.css` in your own styles.
 
 ## Development

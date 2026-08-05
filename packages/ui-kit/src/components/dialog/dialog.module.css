@@ -80,8 +80,9 @@
   border-radius: var(--radius-xl);
   background-color: var(--popover);
   color: var(--popover-foreground);
-  font-size: 0.875rem;
-  line-height: 1.25rem;
+  /* Studio/Body — was the shadcn translation's 14px, migrated to the ramp. */
+  font-size: var(--text-body-size);
+  line-height: var(--text-body-line-height);
   outline: none;
   transform: translate(-50%, -50%);
   box-shadow:
@@ -141,17 +142,20 @@
   }
 }
 
+/* Studio/Heading 2 — the dialog's one heading-role text. */
 .title {
   margin: 0;
-  font-size: 1rem;
-  line-height: 1;
-  font-weight: 500;
+  font-size: var(--text-heading-2-size);
+  line-height: var(--text-heading-2-line-height);
+  font-weight: var(--text-heading-2-weight);
+  letter-spacing: var(--text-heading-2-tracking);
 }
 
 .description {
   color: var(--muted-foreground);
-  font-size: 0.875rem;
-  line-height: 1.25rem;
+  /* Studio/Body, muted — same migration as the popup root. */
+  font-size: var(--text-body-size);
+  line-height: var(--text-body-line-height);
 }
 
 .svgIcon {

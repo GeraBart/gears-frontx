@@ -4,13 +4,19 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ui-kit demo</title>
+    <!-- The kit sets font-family itself (--font-sans/--font-mono in
+         theme.css) but ships no font files; the demo loads the real
+         families the way any consumer app would, so the mockup metrics
+         are reviewed in the actual fonts. Dev-only network dependency —
+         the fallback stacks keep the page legible offline. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+    />
     <style>
       body {
-        font-family:
-          'Inter',
-          system-ui,
-          -apple-system,
-          sans-serif;
         margin: 0;
       }
     </style>

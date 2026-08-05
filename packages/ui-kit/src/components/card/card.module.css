@@ -10,8 +10,9 @@
   border-radius: var(--radius-xl);
   background-color: var(--card);
   color: var(--card-foreground);
-  font-size: 0.875rem;
-  line-height: 1.25rem;
+  /* Studio/Body — was the shadcn translation's 14px, migrated to the ramp. */
+  font-size: var(--text-body-size);
+  line-height: var(--text-body-line-height);
   /*
    * --card-spacing/--card-title-* are the source's own mechanism (Tailwind
    * arbitrary properties: `[--card-spacing:--spacing(6)]` etc. on the card
@@ -31,8 +32,10 @@
    * defaults instead of inheriting the outer card's.
    */
   --card-spacing: 1.5rem;
-  --card-title-font-size: 1rem;
-  --card-title-line-height: 1.5rem;
+  /* The default title is Studio/Heading 2; the sm variant below steps it
+   * down to a size the ramp has no role for, so that one stays literal. */
+  --card-title-font-size: var(--text-heading-2-size);
+  --card-title-line-height: var(--text-heading-2-line-height);
   gap: var(--card-spacing);
   padding: var(--card-spacing) 0;
   /*
@@ -101,7 +104,8 @@
 }
 
 .cardTitle {
-  font-weight: 500;
+  font-weight: var(--text-heading-2-weight);
+  letter-spacing: var(--text-heading-2-tracking);
 }
 
 .card .cardTitle {
@@ -111,8 +115,9 @@
 
 .cardDescription {
   color: var(--muted-foreground);
-  font-size: 0.875rem;
-  line-height: 1.25rem;
+  /* Studio/Body, muted — same migration as the card root. */
+  font-size: var(--text-body-size);
+  line-height: var(--text-body-line-height);
 }
 
 .cardAction {
