@@ -13,7 +13,7 @@
 # from a component the page never imported (Table, Dialog — both have large,
 # distinctive CSS) absent.
 #
-# THREE bundler-facing legs, not one, plus a types leg. This is not
+# FOUR bundler-facing legs, not one, plus a types leg. This is not
 # belt-and-braces — each guards something the others provably do not:
 #
 #   - [vite]: the ecosystem's own tooling; primary consumer check.
@@ -58,6 +58,21 @@
 #     [esbuild-barrel]'s assertions: a barrel entry cannot pass a CSS-absence
 #     check under esbuild today, and asserting it there would either be a
 #     permanently-red check or a silently-weakened one.
+#   - [webpack]: the barrel import through webpack 5 in production mode.
+#     Exists because webpack is the one bundler here that actually READS
+#     `sideEffects` from package.json — and the one bundler none of the
+#     other legs run. Mutation-tested: with `sideEffects` flipped to
+#     `false` (a plausible-looking future "simplification"), webpack
+#     silently drops every component's CSS import as dead code — Button's
+#     own styles included — while [vite], both [esbuild-*] legs and
+#     [types] all stay green (Vite re-marks CSS side-effectful in its own
+#     CSS plugin; esbuild ignores the field for CSS entirely). So the exact
+#     regression that would blank out every webpack consumer — and
+#     insight-front, the kit's first declared consumer, builds with
+#     webpack — was invisible to the whole gate. This leg's CSS-presence
+#     assertion is the guard; its absence assertions also prove webpack's
+#     sideEffects-driven pruning keeps working in the wanted direction
+#     (unused components' CSS *should* drop out of a barrel build).
 #   - [types]: `tsc` under both `moduleResolution: "nodenext"` and
 #     `"bundler"`, for the barrel and three subpaths. Exists because the
 #     per-entry repackaging's relative `.d.ts` specifiers are a types-only
@@ -83,6 +98,13 @@ TYPESCRIPT_VERSION="5.4.2"
 # Matches the root package.json `overrides.esbuild` pin (a CVE fix), so this
 # script never resolves a different esbuild than the rest of the monorepo.
 ESBUILD_VERSION="0.25.12"
+# The webpack toolchain has no in-monorepo counterpart to stay in step with
+# (nothing here builds with webpack — that's exactly why the [webpack] leg
+# exists); pinned so the leg reports on the kit, not on a webpack release.
+WEBPACK_VERSION="5.109.2"
+WEBPACK_CLI_VERSION="7.2.2"
+CSS_LOADER_VERSION="7.1.4"
+MINI_CSS_EXTRACT_VERSION="2.10.2"
 
 echo "==> Building and packing @gears-frontx/ui-kit"
 cd "$UIKIT_DIR"
@@ -365,6 +387,72 @@ echo "==> [esbuild-subpath] Bundle report (Button-only via subpath, react/react-
 wc -c dist/out.js dist/out.css
 
 echo
+echo "==> [webpack] Scaffolding a webpack consumer (barrel import) in $WORKDIR/webpack-consumer"
+WP="$WORKDIR/webpack-consumer"
+mkdir -p "$WP/src"
+cd "$WP"
+
+cat > package.json <<'EOF'
+{ "name": "ui-kit-webpack-check", "private": true }
+EOF
+
+# Plain .js, no JSX — like the esbuild legs, this measures bundle contents,
+# not runtime behavior, and skipping JSX means no babel/swc loader.
+cat > src/main.js <<'EOF'
+import '@gears-frontx/ui-kit/theme.css';
+
+import { Button } from '@gears-frontx/ui-kit';
+
+console.log(Button);
+EOF
+
+# mode: production is load-bearing: that's what turns on usedExports +
+# sideEffects optimization — the exact machinery this leg exists to
+# exercise. A development-mode build keeps every module and would pass the
+# absence assertions never (and the presence ones vacuously).
+cat > webpack.config.cjs <<'EOF'
+const MiniCssExtractPlugin = require('mini-css-extract-plugin');
+
+module.exports = {
+  mode: 'production',
+  entry: './src/main.js',
+  output: { filename: 'out.js', clean: true },
+  externals: {
+    react: 'react',
+    'react-dom': 'react-dom',
+    'react/jsx-runtime': 'react/jsx-runtime',
+  },
+  module: {
+    rules: [{ test: /\.css$/, use: [MiniCssExtractPlugin.loader, 'css-loader'] }],
+  },
+  plugins: [new MiniCssExtractPlugin({ filename: 'out.css' })],
+};
+EOF
+
+echo "==> [webpack] Installing tarball and deps"
+npm install --no-audit --no-fund --silent \
+  "$TARBALL" "react@$REACT_VERSION" "react-dom@$REACT_VERSION" \
+  "webpack@$WEBPACK_VERSION" "webpack-cli@$WEBPACK_CLI_VERSION" \
+  "css-loader@$CSS_LOADER_VERSION" "mini-css-extract-plugin@$MINI_CSS_EXTRACT_VERSION"
+
+echo "==> [webpack] Bundling (imports only Button from the barrel, production mode)"
+npx webpack --config webpack.config.cjs >/dev/null
+
+echo "==> [webpack] Asserting Button's CSS survived sideEffects handling (the guard: sideEffects:false silently drops ALL kit CSS here, and only here)"
+grep -q -- '--primary' dist/out.css || { echo 'FAIL: [webpack] theme variables missing from bundle'; exit 1; }
+assert_present_in_glob "[webpack] Button styles"    "$BUTTON_CLASS" 'dist/out.css'
+assert_present_in_glob "[webpack] Button class map" "$BUTTON_CLASS" 'dist/out.js'
+
+echo "==> [webpack] Asserting components never imported (Table, Dialog) were pruned, CSS included"
+assert_absent_from_glob "[webpack] Table styles"    "$TABLE_CLASS"  'dist/out.css'
+assert_absent_from_glob "[webpack] Table JS"        "$TABLE_CLASS"  'dist/out.js'
+assert_absent_from_glob "[webpack] Dialog styles"   "$DIALOG_CLASS" 'dist/out.css'
+assert_absent_from_glob "[webpack] Dialog JS"       "$DIALOG_CLASS" 'dist/out.js'
+
+echo "==> [webpack] Bundle report (Button-only barrel consumer, react/react-dom external)"
+wc -c dist/out.js dist/out.css
+
+echo
 echo "==> [types] Type-checking the barrel and three subpaths under both moduleResolution settings"
 TYPES_CHECK="$WORKDIR/types-check"
 mkdir -p "$TYPES_CHECK/src"
@@ -433,4 +521,4 @@ echo "==> [types] tsc --noEmit under moduleResolution: bundler"
 npx tsc -p tsconfig.bundler.json || { echo 'FAIL: [types] bundler type-check failed — see tsc output above'; exit 1; }
 
 echo
-echo "OK: consumer check passed (vite + esbuild-barrel + esbuild-subpath + types)"
+echo "OK: consumer check passed (vite + esbuild-barrel + esbuild-subpath + webpack + types)"
