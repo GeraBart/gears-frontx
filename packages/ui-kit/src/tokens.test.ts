@@ -4,6 +4,9 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
+import { contrastRatio } from './__test-utils__/contrast';
+import { extractRules } from './__test-utils__/css-rules';
+
 // Guards the theme seam: every CSS variable a component module consumes must
 // be defined by theme.css (the single branding surface), except the vars the
 // Base UI positioner provides at runtime.
@@ -100,22 +103,12 @@ describe('theme tokens', () => {
     return selector.match(/\.[a-z][a-z0-9-]*/i)?.[0];
   }
 
-  // A lightweight rule splitter, not a real CSS parser: matches each
-  // innermost `selector { declarations-without-nested-braces }` pair. An
-  // @media/@keyframes wrapper's own `{` never closes before hitting the
-  // nested rule's `{`, so `[^{}]*` fails to match it and the wrapper is
-  // skipped on its own — only real declaration blocks come out of this.
-  // Comments are stripped first: otherwise the "selector" capture (which
-  // runs back to the previous `}`) swallows whatever comment precedes the
-  // rule, and prose mentioning a dotted filename (`theme.css`,
-  // `tokens.test.ts`) parses as a bogus leading class.
-  function extractRules(css: string) {
-    const withoutComments = css.replace(/\/\*[\s\S]*?\*\//g, ' ');
-    return Array.from(withoutComments.matchAll(/([^{}]+)\{([^{}]*)\}/g), (match) => ({
-      selector: (match[1] ?? '').trim(),
-      body: match[2] ?? '',
-    }));
-  }
+  // extractRules is imported from __test-utils__/css-rules (shared with
+  // button.test.tsx's focus-ring contrast guard, which reads
+  // button.module.css the same way this file reads theme.css/every
+  // component module) — see that file for the rule-splitter's own
+  // comments, including why its body keeps the trailing `}` (the
+  // metric-scale guard below relies on that for its `[;}]` terminator).
 
   it.each(moduleFiles)('%s consumes only theme-defined or same-part local variables', (file) => {
     const css = readFileSync(file, 'utf8');
@@ -384,6 +377,64 @@ describe('theme tokens', () => {
           `${token} is theme-invariant but redefined in the prefers-color-scheme block`,
         ).toBe(false);
       }
+    });
+
+    // WCAG contrast guard for the theme-level pairs the 2026-08-06 fix
+    // series corrected (link text, the table header) — parses the SAME
+    // lightTokens/darkAttrTokens maps above, live off theme.css, so a
+    // token drifting back under its floor fails this test instead of
+    // shipping a color no one re-measured. Button's OWN focus-ring cases
+    // (A1) live in button.test.tsx instead: they need to read
+    // button.module.css's actual --button-focus-ring{,-inner} declarations
+    // per variant, which makes them a Button-specific guard, not a
+    // theme-level one — see that file for why, and for the shared
+    // contrastRatio/extractRules utilities both files import.
+    //
+    // Every case below reads a token's LITERAL hex out of theme.css via
+    // `token()` — never a var() reference — so a guarded token can't be
+    // "fixed" by aliasing it to another token's `var(--x)` instead of
+    // carrying its own measured value; contrastRatio has no way to resolve
+    // that alias and the parse would produce garbage input, which is the
+    // point (see contrast.ts's own comment, and light --link-foreground in
+    // theme.css, which duplicates --primary-hover's hex as a literal for
+    // exactly this reason rather than referencing it).
+    describe('WCAG contrast floors', () => {
+      function token(tokens: Map<string, string>, name: string) {
+        const value = tokens.get(name);
+        expect(value, `${name} missing from the theme block being checked`).toBeDefined();
+        return value as string;
+      }
+
+      const themes: Array<[string, Map<string, string>]> = [
+        ['light', lightTokens],
+        ['dark', darkAttrTokens],
+      ];
+
+      // A2: Button's link variant text against --background specifically —
+      // the page background the borderless variant actually sits on. Not
+      // verified against --card/--surface (a Link button drawn on a raised
+      // panel instead of the bare page): scoped to the one backdrop this
+      // variant is documented to sit on, not widened into a full
+      // every-surface matrix no drawn spec asks for.
+      it('link button text clears 4.5:1 against the page background', () => {
+        for (const [themeName, tokens] of themes) {
+          expect(
+            contrastRatio(token(tokens, '--link-foreground'), token(tokens, '--background')),
+            themeName,
+          ).toBeGreaterThanOrEqual(4.5);
+        }
+      });
+
+      // A3: the table header label against the header bar's own fill
+      // (--surface, not --background — see table.module.css).
+      it('table header text clears 4.5:1 against the header bar fill', () => {
+        for (const [themeName, tokens] of themes) {
+          expect(
+            contrastRatio(token(tokens, '--subtle-foreground'), token(tokens, '--surface')),
+            themeName,
+          ).toBeGreaterThanOrEqual(4.5);
+        }
+      });
     });
   });
 });

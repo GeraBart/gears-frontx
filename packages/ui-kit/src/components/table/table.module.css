@@ -48,13 +48,17 @@
    * left with the flat look it served.
    */
   border-collapse: separate;
-  border-spacing: 0 0.5rem;
+  border-spacing: 0 var(--space-2);
   caption-side: bottom;
   /* The mockups' Data Table cell text is 12px — Meta; its hand-set 17px
    * line normalizes to the ramp's 16 under the tokens-win ruling (see
-   * theme.css). */
+   * theme.css). Applied whole (size/line-height/weight/tracking), not just
+   * the two metrics the row cards themselves need — see .tableHead below
+   * for the header bar's own full application of the role. */
   font-size: var(--text-meta-size);
   line-height: var(--text-meta-line-height);
+  font-weight: var(--text-meta-weight);
+  letter-spacing: var(--text-meta-tracking);
 }
 
 /*
@@ -108,8 +112,11 @@
   --table-row-fill: var(--surface);
 }
 
+/* Emphasis over the body's Meta weight, expressed as --text-label-weight
+ * (also 500) rather than the literal shadcn translation kept — no "Meta at
+ * 500" style exists in the Studio ramp to name instead. */
 .tableFooter {
-  font-weight: 500;
+  font-weight: var(--text-label-weight);
 }
 
 /*
@@ -173,17 +180,25 @@
    * The mockups' header bar (frame 202:407) draws 42px tall with 10px
    * medium column labels at +0.5px tracking — neither metric exists in
    * the token system, so under the tokens-win ruling (see theme.css) the
-   * header snaps to the lg control height and Meta at the 500-weight
-   * variant. Still --subtle-foreground, which misses the 4.5:1 AA floor
-   * (2.94:1 light / 4.14:1 dark vs --surface) — flagged as an open
-   * designer question rather than silently corrected.
+   * header snaps to the lg control height and Meta's own size/line-height/
+   * tracking at --text-label-weight (500) for the emphasis, the same
+   * "role at a different weight" idiom as Body Medium elsewhere in the
+   * kit — not the literal `500` the shadcn translation hand-set, and not
+   * a style called "Meta at the 500-weight variant" (no such style exists
+   * in the Studio ramp). --subtle-foreground was corrected 2026-08-06
+   * (Andrey) after it measured 2.56:1 light / 3.74:1 dark against this
+   * bar's --surface fill — under the 4.5:1 AA floor in both themes (an
+   * earlier in-code note claiming 2.94/4.14 measured against the wrong
+   * backdrop); see theme.css for the corrected value and the open
+   * designer question it leaves pinned.
    */
   height: var(--control-height-lg);
   padding: 0 var(--space-4);
-  text-align: left;
+  text-align: start;
   vertical-align: middle;
   font-size: var(--text-meta-size);
-  font-weight: 500;
+  line-height: var(--text-meta-line-height);
+  font-weight: var(--text-label-weight);
   letter-spacing: var(--text-meta-tracking);
   text-transform: uppercase;
   white-space: nowrap;
@@ -191,7 +206,7 @@
 }
 
 .tableHead:has([role='checkbox']) {
-  padding-right: 0;
+  padding-inline-end: 0;
 }
 
 .tableCell {
@@ -207,7 +222,7 @@
 }
 
 .tableCell:has([role='checkbox']) {
-  padding-right: 0;
+  padding-inline-end: 0;
 }
 
 /*
@@ -228,7 +243,8 @@
 
 .tableCaption {
   margin-top: var(--space-4);
-  /* Studio/Body — a caption is page text, unlike the drawn 12/17 cells. */
+  /* Studio/Body — a caption is page text, unlike the cells above (drawn
+   * 12/17, shipped at the ramp's Meta 12/16). */
   font-size: var(--text-body-size);
   line-height: var(--text-body-line-height);
   /*

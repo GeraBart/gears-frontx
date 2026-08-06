@@ -179,22 +179,52 @@
    * collection, so dark muted follows dark secondary the same way. */
   --muted: #f1f5f9;
   --muted-foreground: #64748b;
-  --subtle-foreground: #94a3b8;
+  /*
+   * Table's header row is the only consumer (tokens.test.ts's leading-class
+   * guard doesn't reach theme.css itself, but a grep confirms it — see
+   * table.module.css). Corrected 2026-08-06 (Andrey): the drawn value
+   * (#94a3b8, slate-400) measured 2.56:1 light / 3.74:1 dark against the
+   * header's --surface fill — under the 4.5:1 AA floor in both themes, not
+   * the 2.94/4.14 an earlier, wrongly-backdropped measurement claimed. AA
+   * leaves this token no room to read lighter than --muted-foreground in
+   * light mode (anything less saturated than ~this value fails against
+   * --surface's near-white), so light converges close to it; dark keeps a
+   * visibly dimmer, genuinely "subtler" step since --surface is dark enough
+   * to leave headroom. Resolved as a ruling, not a silent fix — open
+   * question for the designer to pin a value in the Figma file now that
+   * the drawn one is known to fail AA.
+   */
+  --subtle-foreground: #5f6f88;
   --accent: #f3e8ff;
   --accent-foreground: #6d28d9;
 
-  /* The collection carries both destructive/* (shadcn compatibility) and
-   * danger; no mockup node draws with destructive/*, so it aliases danger —
+  /* derived: no mockup node draws with destructive/*, so it aliases danger —
    * one red, two names, both overridable separately. White text clears AA
    * on both modes' reds (4.7:1 light, 4.6:1 dark). */
   --destructive: #e11d48;
   --destructive-foreground: #ffffff;
 
+  /*
+   * Link text token — Button's `link` variant, which has no drawn
+   * counterpart to align to (D2/D3 in the 2026-08-06 fix series only cover
+   * variants the mockups draw). --primary itself measured 4.51:1 light
+   * (barely over the 4.5:1 AA floor for this 13px text — 0.005 of headroom,
+   * so close that a future one-step nudge to --background could silently
+   * fail it again) and 3.78:1 dark (a clear fail) against the page
+   * background the borderless variant sits on. derived: light takes
+   * --primary-hover's value instead of --primary's own (still the same
+   * violet family, one step darker) for real headroom — 4.98:1, not a
+   * borderline pass; dark takes a lighter tint of the same hue.
+   */
+  --link-foreground: #7c4fde;
+
   /* Status colors with their -soft fills (Alert/Badge/table-state
    * backgrounds). Dark warning-soft and info-soft are corroborated by the
    * workflow aliases that resolve to the same values; dark danger-soft and
-   * light warning-soft are drawn nowhere — derived: same tint recipe as
-   * their siblings. */
+   * light warning-soft are drawn nowhere — derived: chosen to sit in the
+   * same tint family as their corroborated siblings, not from one
+   * reproducible mix recipe (the four -soft values don't share a single
+   * formula against their base hue). */
   --success: #059669;
   --success-soft: #e8f8f1;
   --warning: #d97706;
@@ -218,13 +248,16 @@
    * primary value), so neither mode is derived. */
   --ring: #8b5cf6;
 
-  /* Sidebar Navigation block. The three derived entries are drawn nowhere
-   * in dark mode; they follow the tokens the light mode pairs them with
-   * (muted-foreground / foreground / border). */
+  /* Sidebar Navigation block. --sidebar/--sidebar-accent are each drawn by
+   * their own dark-mode mockup node; the other three are not — named
+   * individually below, per this file's derived-marker convention. */
   --sidebar: #f1f5f9;
+  /* derived (dark only): follows dark --muted-foreground. */
   --sidebar-foreground: #64748b;
   --sidebar-accent: #ffffff;
+  /* derived (dark only): follows dark --foreground. */
   --sidebar-accent-foreground: #0f172a;
+  /* derived (dark only): follows dark --border. */
   --sidebar-border: #e2e8f0;
 
   --code-background: #f1f5f9;
@@ -256,11 +289,12 @@
   --secondary-foreground: #f8fafc;
   --muted: #1e293b;
   --muted-foreground: #8d96a8;
-  --subtle-foreground: #667085;
+  --subtle-foreground: #7a8396;
   --accent: #2e1065;
   --accent-foreground: #ede9fe;
   --destructive: #d63853;
   --destructive-foreground: #ffffff;
+  --link-foreground: #a78bfa;
   --success: #34d399;
   --success-soft: #0d2921;
   --warning: #fbbf24;
@@ -304,11 +338,12 @@
     --secondary-foreground: #f8fafc;
     --muted: #1e293b;
     --muted-foreground: #8d96a8;
-    --subtle-foreground: #667085;
+    --subtle-foreground: #7a8396;
     --accent: #2e1065;
     --accent-foreground: #ede9fe;
     --destructive: #d63853;
     --destructive-foreground: #ffffff;
+    --link-foreground: #a78bfa;
     --success: #34d399;
     --success-soft: #0d2921;
     --warning: #fbbf24;

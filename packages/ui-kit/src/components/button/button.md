@@ -75,7 +75,13 @@ import { Button } from '@gears-frontx/ui-kit';
 ## Anti-patterns
 
 - Do not restyle via inline `style` or ad-hoc CSS — brand changes belong in
-  the theme tokens (`theme.css` CSS variables).
+  the theme tokens (`theme.css` CSS variables). If you rebrand the focus
+  ring specifically via `--button-focus-ring`, note that the `default` and
+  `destructive` variants also set an explicit `--button-focus-ring-inner`
+  of their own (a two-tone ring, needed to clear WCAG contrast against
+  their own fill) — overriding only `--button-focus-ring` on those two
+  leaves the old inner color in place instead of following it; set both
+  properties together when rebranding either variant's ring.
 - Do not put an icon in `children` next to text — it lands in the `icon`
   slot, which is what sizes it, spaces it, hides it during `loading`, and
   keeps it out of the accessible name.

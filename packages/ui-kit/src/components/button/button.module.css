@@ -19,8 +19,22 @@
    * button.tsx) — one declaration covers all three.
    */
   box-sizing: border-box;
-  /* Focus ring color; the variants below override it (see :focus-visible). */
+  /*
+   * Focus ring colors; the variants below override one or both (see
+   * :focus-visible). Two custom properties, not one: the ring is drawn as
+   * an outer 1px border plus an inner 1px inset shadow (see the geometry
+   * comment below), and those two painted pixels have different WCAG
+   * neighbors — the border sits against the page background outside the
+   * button, the inset shadow sits against the button's own fill just
+   * inside it. A single hue clears both for outline/secondary/ghost/link,
+   * but default and destructive's fills sit too close in luminance to any
+   * one drawn accent color to pass on that side too, so those two are
+   * genuinely two-toned. --button-focus-ring-inner defaults to the outer
+   * value so a variant that only sets --button-focus-ring still gets one
+   * matching color both places.
+   */
   --button-focus-ring: var(--ring);
+  --button-focus-ring-inner: var(--button-focus-ring);
   /* Anchors the absolutely-centered .spinner. */
   position: relative;
   display: inline-flex;
@@ -64,7 +78,7 @@
   outline: none;
   border-color: var(--button-focus-ring);
   box-shadow: inset 0 0 0 calc(var(--border-width-focus) - var(--border-width))
-    var(--button-focus-ring);
+    var(--button-focus-ring-inner);
 }
 
 /*
@@ -148,9 +162,19 @@
   color: var(--accent-foreground);
 }
 
+/*
+ * --link-foreground, not --primary: measured on the page background this
+ * borderless variant actually sits on, --primary itself is 4.51:1 light
+ * (barely over the 4.5:1 AA floor — 0.005 of headroom) and only 3.78:1
+ * dark (a clear fail). Link has no drawn counterpart to match, so
+ * --link-foreground is a text-safe token of its own — --primary-hover's
+ * value in light (same violet family, real headroom at 4.98:1 instead of a
+ * borderline pass), a lighter tint of the same hue in dark (see
+ * theme.css).
+ */
 .variantLink {
   background-color: transparent;
-  color: var(--primary);
+  color: var(--link-foreground);
   text-underline-offset: 4px;
 }
 
@@ -159,28 +183,50 @@
 }
 
 /*
- * Focus colors, per variant as drawn: violet on violet vanishes, so the
- * primary fill takes the system --info ring (the QA frame's own note:
- * "Primary focus uses the system info ring for clear contrast");
- * destructive and the borderless ghost/link take --primary-hover; outline
- * (the mockups' "secondary", a bordered surface) thickens toward
- * --border-strong. Our filled secondary has no drawn counterpart and
- * border-strong reads too weak against its slate fill, so it borrows
- * ghost's --primary-hover instead.
+ * Focus colors, verified against WCAG 1.4.11's >=3:1 floor for BOTH
+ * surfaces the ring's two painted pixels actually touch (see the
+ * --button-focus-ring-inner comment on .button above) — ratios below are
+ * light/dark, WCAG relative-luminance math, and mirrored by the
+ * tokens.test.ts contrast guard so a token drift fails the test suite
+ * instead of shipping unmeasured:
+ *
+ *   default:     outer --info on the page bg          3.91 / 10.89
+ *                inner --foreground on --primary fill  3.79 /  4.86
+ *   destructive: outer --primary-hover on the page bg  4.98 /  4.18
+ *                inner --destructive-foreground on
+ *                      --destructive fill               4.70 /  4.62
+ *   ghost/link/
+ *   secondary:   --primary-hover — single-tone, since it already clears
+ *                3:1 against both their fill (--secondary, or the page bg
+ *                for the two borderless ones) and the page bg itself
+ *                                                       4.76+/ 3.10+
+ *
+ * default and destructive genuinely need two tones: violet-on-violet
+ * vanishes for the primary fill (the QA frame's own note, "Primary focus
+ * uses the system info ring for clear contrast", is why --info is the
+ * OUTER tone here), and no single hue clears both the mid-tone fill and
+ * the near-white/near-black page background at once for either variant.
+ * outline (the mockups' "secondary", a bordered surface) has no working
+ * override at all — every drawn candidate (--border-strong) reads too
+ * weak against both its --surface-elevated fill and the page bg in both
+ * themes, so it deliberately falls through to .button's own --ring
+ * default, which clears 3:1 against both (4.23/3.40 fill, 4.05/3.78 page
+ * bg) — the same ring every non-Button kit control already uses.
  */
 .variantDefault {
   --button-focus-ring: var(--info);
+  --button-focus-ring-inner: var(--foreground);
 }
 
-.variantDestructive,
+.variantDestructive {
+  --button-focus-ring: var(--primary-hover);
+  --button-focus-ring-inner: var(--destructive-foreground);
+}
+
 .variantGhost,
 .variantLink,
 .variantSecondary {
   --button-focus-ring: var(--primary-hover);
-}
-
-.variantOutline {
-  --button-focus-ring: var(--border-strong);
 }
 
 /* Buttons sit on the control/height scale directly: sm/default/lg =
