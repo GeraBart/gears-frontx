@@ -40,6 +40,11 @@ describe('Select', () => {
     const trigger = screen.getByRole('combobox', { name: 'Region' });
     expect(trigger.className).toContain(styles.trigger);
     expect(trigger.className).toContain(styles.sizeDefault);
+    // The negative half of the variant axis: `.variantFilter` overrides
+    // `.sizeDefault`'s height by source order, so a regression that applied
+    // the class unconditionally would silently shrink every default trigger
+    // from 40px to 36px while the positive test below kept passing.
+    expect(trigger.className).not.toContain(styles.variantFilter);
     expect(trigger.textContent).toContain('Pick a region');
     expect(screen.queryByRole('listbox')).toBeNull();
   });

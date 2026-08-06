@@ -31,21 +31,42 @@ export function extractRules(css: string): CssRule[] {
   }));
 }
 
+export interface CssDeclaration {
+  prop: string;
+  value: string;
+}
+
 /*
- * Every declaration in a rule's body as a plain name->value map — custom
- * properties (`--foo: ...`) and ordinary properties (`color: ...`) alike,
- * since `[a-z-]` as the first character class matches both a letter and
- * the leading `-` of `--foo`. `[;}]` as the terminator, not `;` alone, for
- * the same last-declaration reason extractRules keeps the closing brace.
- * Last declaration of a given name wins (a plain object literal via
- * Array.from -> Map already does this), matching how the cascade would
- * resolve two declarations of the same property in one rule.
+ * Every declaration in a rule's body, in source order — custom properties
+ * (`--foo: ...`) and ordinary properties (`color: ...`) alike, since
+ * `[a-z-]` as the first character class matches both a letter and the
+ * leading `-` of `--foo`.
+ *
+ * `[;}]` as the terminator, not `;` alone: a rule's last declaration is
+ * valid CSS without a trailing semicolon (`padding: 12px }`), and a
+ * `;`-only terminator never matches that declaration at all — silently
+ * exempting it from whatever the caller checks. `body` always ends in `}`
+ * (see extractRules), so this terminator always finds the end of the last
+ * declaration whether or not the source had a semicolon there. The value
+ * capture excludes both terminators so a `}`-terminated value doesn't carry
+ * the brace along.
+ *
+ * The array is the primitive, not the map below: a guard scanning for a
+ * banned value has to see BOTH declarations of a twice-declared property,
+ * since collapsing to the winning one would hide the loser from the scan.
+ */
+export function declarations(body: string): CssDeclaration[] {
+  return Array.from(body.matchAll(/([a-z-][a-z0-9-]*)\s*:\s*([^;}]+)[;}]/g), (match) => ({
+    prop: match[1] ?? '',
+    value: (match[2] ?? '').trim(),
+  }));
+}
+
+/*
+ * The same declarations as a name->value map, for callers comparing two
+ * blocks token by token. Last declaration of a given name wins, matching
+ * how the cascade would resolve two declarations of one property in a rule.
  */
 export function declarationMap(body: string): Map<string, string> {
-  return new Map(
-    Array.from(body.matchAll(/([a-z-][a-z0-9-]*)\s*:\s*([^;}]+)[;}]/g), (match) => [
-      match[1] ?? '',
-      (match[2] ?? '').trim(),
-    ]),
-  );
+  return new Map(declarations(body).map(({ prop, value }) => [prop, value]));
 }

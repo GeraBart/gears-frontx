@@ -152,6 +152,22 @@ describe('Button', () => {
     expect(button.hasAttribute('data-icon-only')).toBe(true);
   });
 
+  it('squares up for an empty-string label', () => {
+    // The other falsy shape, and the one Children.toArray does NOT drop:
+    // `toArray('')` has length 1, so an array-emptiness test alone reads
+    // this button as labelled and leaves it a wide pill wrapping an empty
+    // span. `{label}` with a blank `label` is how it arrives in practice.
+    const label = '';
+    render(
+      <Button icon={<svg />} aria-label="Create">
+        {label}
+      </Button>,
+    );
+    const button = screen.getByRole('button', { name: 'Create' });
+    expect(button.hasAttribute('data-icon-only')).toBe(true);
+    expect(button.querySelector(`.${styles.label}`)).toBeNull();
+  });
+
   it('stays icon-only while loading', () => {
     render(<Button icon={<svg />} loading aria-label="Refresh" />);
     const button = screen.getByRole('button', { name: 'Refresh' });
@@ -186,9 +202,9 @@ describe('Button', () => {
 });
 
 /*
- * Focus-ring contrast guard (A1), moved here from tokens.test.ts: unlike
- * the link-text/table-header cases that stayed there (genuinely theme-
- * level pairs), a Button focus ring is DERIVED from two things this file
+ * Focus-ring contrast guard. It lives here rather than in tokens.test.ts
+ * with the link-text/table-header cases (genuinely theme-level pairs),
+ * because a Button focus ring is DERIVED from two things this file
  * already owns — which token button.module.css's --button-focus-ring{,
  * -inner} actually resolve to per variant, and which token that variant's
  * own `background-color` resolves to. Hardcoding "default's ring is --info

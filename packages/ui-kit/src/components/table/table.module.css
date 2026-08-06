@@ -176,7 +176,7 @@
  */
 .tableRow[data-state='selected'] {
   --table-row-ring: var(--primary);
-  --table-row-ring-inset: calc(var(--border-width-focus) - var(--border-width));
+  --table-row-ring-inset: var(--ring-inset);
   --table-row-fill: var(--card-hover);
 }
 
@@ -217,12 +217,10 @@
    * "role at a different weight" idiom as Body Medium elsewhere in the
    * kit — not the literal `500` the shadcn translation hand-set, and not
    * a style called "Meta at the 500-weight variant" (no such style exists
-   * in the Studio ramp). --subtle-foreground was corrected 2026-08-06
-   * (Andrey) after it measured 2.56:1 light / 3.74:1 dark against this
-   * bar's --surface fill — under the 4.5:1 AA floor in both themes (an
-   * earlier in-code note claiming 2.94/4.14 measured against the wrong
-   * backdrop); see theme.css for the corrected value and the open
-   * designer question it leaves pinned.
+   * in the Studio ramp). This bar's --surface fill is the backdrop
+   * --subtle-foreground has to clear 4.5:1 against; neither mode's drawn
+   * value did, so the token carries AA-passing values instead of the drawn
+   * ones — see theme.css and design-notes.md.
    */
   height: var(--control-height-lg);
   padding: 0 var(--space-4);

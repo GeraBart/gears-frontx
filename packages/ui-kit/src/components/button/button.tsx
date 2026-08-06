@@ -85,10 +85,16 @@ export function Button({
   // one — `<Button icon={x}>{cond && 'Save'}</Button>` with cond=false
   // passes `false` as children, which is neither null nor renderable, so
   // checking each spot with its own logic could (and did) disagree about
-  // whether the button has a label. Children.toArray drops exactly the
-  // values React itself would render nothing for (false/null/undefined/
-  // ''/[]), so "the array is empty" is the one true test.
-  const hasLabel = Children.toArray(children).length > 0;
+  // whether the button has a label.
+  //
+  // Children.toArray drops `false`/`null`/`undefined`/`[]` but KEEPS the
+  // empty string (`toArray('')` has length 1), so the array being non-empty
+  // is not on its own the same question as "renders something visible" —
+  // hence the explicit `!== ''` filter. `<Button icon={x}>{label}</Button>`
+  // with an empty `label` is the case it covers: without the filter that
+  // button stays a wide pill wrapping an empty label span instead of going
+  // icon-only. `0` is deliberately NOT filtered — React renders it.
+  const hasLabel = Children.toArray(children).some((child) => child !== '');
   const iconOnly = icon != null && !hasLabel;
   return (
     <ButtonPrimitive
@@ -97,8 +103,8 @@ export function Button({
       /*
        * Derived attributes are spread AFTER `...props` so a caller's own
        * conflicting `aria-busy`/`data-loading`/`data-icon-only` can never
-       * shadow the state this component just computed (B3) — the button
-       * IS loading/icon-only/not, regardless of what a stray prop says.
+       * shadow the state this component just computed — the button IS
+       * loading/icon-only/not, regardless of what a stray prop says.
        *
        * `focusableWhenDisabled` while `loading`: a native `disabled`
        * attribute blurs the element the instant it lands, which would

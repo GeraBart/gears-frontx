@@ -2,10 +2,10 @@
 
 > Standard React component base for FrontX templates. Behavior comes from
 > Base UI primitives, styling is compiled CSS on semantic design tokens,
-> variants via cva-driven props (most components take `variant`/`size`;
-> some, like Badge, take other prop names for their axes — see each
-> component's own doc below). Consumers need no CSS framework or build
-> plugins.
+> variants via cva-driven props — `variant` for the paint/kind axis and
+> `size` for the scale one, plus the occasional extra axis where a component
+> genuinely has one (Badge's `shape`, Table's `density`). Consumers need no
+> CSS framework or build plugins.
 
 Rules for generated code:
 
@@ -55,9 +55,9 @@ Rules for generated code:
 
 ## Components
 
-- [Badge](dist/docs/badge.md): status label, a colored dot + intent-colored
-  caption; intents success|warning|info|danger|muted (semantic intent ONLY
-  — pick by meaning, never by color; neutral/count/category = muted), forms
+- [Badge](dist/docs/badge.md): status label, a colored dot + matching
+  caption; variants success|warning|info|danger|muted (semantic states ONLY
+  — pick by meaning, never by color; neutral/count/category = muted), shapes
   pill|dot (pill adds a soft fill; dot is the bare pair for dense/inline
   spots); no Base UI primitive; `render` (e.g. `<a>`) makes it a clickable
   tag — hover feedback only appears once it is.

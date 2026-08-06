@@ -103,7 +103,7 @@ wider than 100.
 
 ## Row states
 
-`TableRow` reads attributes for its background tint, forwarded like any
+`TableRow` reads plain `data-*` attributes for its state, forwarded like any
 other prop rather than driven by a kit-specific prop. Your own logic sets
 the attribute; the kit only paints it. Every row renders as the Studio Data
 Table's carded, ringed row unconditionally — the card shape (rounded

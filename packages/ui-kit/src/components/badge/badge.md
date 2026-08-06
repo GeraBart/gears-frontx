@@ -7,7 +7,10 @@ utilities) for the one case that needs it: rendering as a link.
 
 Badge speaks **semantic intent only** (per the Studio design): you say what
 kind of state you're marking (`success`, `warning`, `info`, `danger`,
-`muted`), never how to paint it. There are no presentational variants.
+`muted`), never how to paint it. The prop is the kit-wide `variant` — like
+every other component — but its values are states, not paint jobs: there is
+no `primary`/`outline`/`ghost` here, and picking `warning` because you want
+orange is a misuse, not a style choice.
 
 ## When to use
 
@@ -15,11 +18,11 @@ kind of state you're marking (`success`, `warning`, `info`, `danger`,
   `running` → `success`, `failed` → `danger`, `pending` → `warning`,
   `beta`/`new` → `info`, anything neutral (`draft`, `archived`, a count,
   a category) → `muted`.
-- `form="pill"` (default) on busy surfaces where the label needs its own
-  soft fill; `form="dot"` inline with text or in dense tables where a fill
+- `shape="pill"` (default) on busy surfaces where the label needs its own
+  soft fill; `shape="dot"` inline with text or in dense tables where a fill
   would be noise — same dot and label, no pill behind them.
 - A clickable status filter — pass `render={<a href="..." />}`. The pill's
-  fill deepens on hover and the dot form underlines, but only when actually
+  fill deepens on hover and the dot shape underlines, but only when actually
   rendered as a link; a plain badge stays visually inert and never looks
   clickable when it isn't. The kit's focus ring appears automatically once
   the anchor receives keyboard focus. Give it discernible text — a badge
@@ -37,39 +40,39 @@ kind of state you're marking (`success`, `warning`, `info`, `danger`,
 
 | Prop | Type | Default |
 |------|------|---------|
-| `intent` | `success` \| `warning` \| `info` \| `danger` \| `muted` | `muted` |
-| `form` | `pill` \| `dot` | `pill` |
+| `variant` | `success` \| `warning` \| `info` \| `danger` \| `muted` | `muted` |
+| `shape` | `pill` \| `dot` | `pill` |
 | `render` | `ReactElement` — replaces the root `span`, e.g. with an `<a>` | — |
-| `className` | `string` — merged after the intent/form classes | — |
+| `className` | `string` — merged after the variant/shape classes | — |
 
 All other props are native `<span>` props (or the target element's props
 when using `render`) and are forwarded as-is, including `aria-invalid`
-(shows a destructive-tinted border and ring, independent of `intent`).
+(shows a destructive-tinted border and ring, independent of `variant`).
 
 ## Examples
 
 ```tsx
 import { Badge } from '@gears-frontx/ui-kit';
 
-// Status labels (pill is the default form)
-<Badge intent="success">Running</Badge>
-<Badge intent="danger">Failed</Badge>
-<Badge intent="warning">Degraded</Badge>
-<Badge intent="info">Beta</Badge>
-<Badge>Draft</Badge>  // muted is the default intent
+// Status labels (pill is the default shape)
+<Badge variant="success">Running</Badge>
+<Badge variant="danger">Failed</Badge>
+<Badge variant="warning">Degraded</Badge>
+<Badge variant="info">Beta</Badge>
+<Badge>Draft</Badge>  // muted is the default variant
 
 // Bare dot+label for dense/inline placements
-<Badge intent="success" form="dot">Online</Badge>
+<Badge variant="success" shape="dot">Online</Badge>
 
 // A badge that is actually a link — hover feedback only applies here
-<Badge intent="info" render={<a href="/filters/open" />}>
+<Badge variant="info" render={<a href="/filters/open" />}>
   3 open
 </Badge>
 ```
 
 ## Anti-patterns
 
-- Do not pick an intent for its color ("warning looks nice and orange") —
+- Do not pick a variant for its color ("warning looks nice and orange") —
   intents are semantics; if no state maps, use `muted`.
 - Do not recolor a badge via `className`/`style` — the intent palette and
   its contrast math live in the kit; brand changes belong in theme tokens.

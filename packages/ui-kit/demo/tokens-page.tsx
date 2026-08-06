@@ -121,9 +121,15 @@ function useTokenValues(): Record<string, string> {
   return values;
 }
 
+// Specimen captions read as Meta, the ramp's smallest role — the swatch
+// GEOMETRY below (148/44/56, the 2px grid gaps) is specimen furniture with no
+// token to name it, but the caption text is ordinary UI text and takes the
+// role it is here to showcase.
 function Swatch({ token, value }: { token: string; value?: string }) {
   return (
-    <div style={{ width: 148, fontSize: 11, display: 'grid', gap: 2 }}>
+    <div
+      style={{ width: 148, fontSize: 'var(--text-meta-size)', display: 'grid', gap: 2 }}
+    >
       <div
         style={{
           height: 44,
@@ -175,14 +181,14 @@ export function TokensPage() {
               >
                 {sample}
               </span>
-              <code style={{ fontSize: 11, color: 'var(--muted-foreground)' }}>
+              <code style={{ fontSize: 'var(--text-meta-size)', color: 'var(--muted-foreground)' }}>
                 --text-{role}-* · {values[`text-${role}-size`]}/{values[`text-${role}-line-height`]}{' '}
                 · {values[`text-${role}-weight`]} · {values[`text-${role}-tracking`]}
               </code>
             </div>
           ))}
           {FONT_FAMILIES.map((token) => (
-            <div key={token} style={{ fontSize: 11 }}>
+            <div key={token} style={{ fontSize: 'var(--text-meta-size)' }}>
               <code>--{token}</code>{' '}
               <code style={{ color: 'var(--muted-foreground)' }}>{values[token]}</code>
             </div>
@@ -193,7 +199,7 @@ export function TokensPage() {
       <Section title="Radius">
         <Row>
           {RADII.map((step) => (
-            <div key={step} style={{ textAlign: 'center', fontSize: 11, display: 'grid', gap: 2 }}>
+            <div key={step} style={{ textAlign: 'center', fontSize: 'var(--text-meta-size)', display: 'grid', gap: 2 }}>
               <div
                 style={{
                   width: 56,
@@ -213,7 +219,7 @@ export function TokensPage() {
       <Section title="Spacing">
         <Row style={{ alignItems: 'end' }}>
           {SPACES.map((step) => (
-            <div key={step} style={{ textAlign: 'center', fontSize: 11, display: 'grid', gap: 2 }}>
+            <div key={step} style={{ textAlign: 'center', fontSize: 'var(--text-meta-size)', display: 'grid', gap: 2 }}>
               <div
                 style={{
                   width: `var(--space-${step})`,
@@ -233,7 +239,7 @@ export function TokensPage() {
       <Section title="Controls scale">
         <Row style={{ alignItems: 'end' }}>
           {CONTROL_HEIGHTS.map((step) => (
-            <div key={step} style={{ textAlign: 'center', fontSize: 11, display: 'grid', gap: 2 }}>
+            <div key={step} style={{ textAlign: 'center', fontSize: 'var(--text-meta-size)', display: 'grid', gap: 2 }}>
               <div
                 style={{
                   width: 88,
@@ -251,7 +257,7 @@ export function TokensPage() {
           ))}
           <Separator orientation="vertical" style={{ height: 56 }} aria-hidden="true" />
           {ICON_SIZES.map((step) => (
-            <div key={step} style={{ textAlign: 'center', fontSize: 11, display: 'grid', gap: 2 }}>
+            <div key={step} style={{ textAlign: 'center', fontSize: 'var(--text-meta-size)', display: 'grid', gap: 2 }}>
               <div
                 style={{
                   width: `var(--icon-size-${step})`,
@@ -267,7 +273,7 @@ export function TokensPage() {
           ))}
           <Separator orientation="vertical" style={{ height: 56 }} aria-hidden="true" />
           {BORDER_WIDTHS.map((token) => (
-            <div key={token} style={{ textAlign: 'center', fontSize: 11, display: 'grid', gap: 2 }}>
+            <div key={token} style={{ textAlign: 'center', fontSize: 'var(--text-meta-size)', display: 'grid', gap: 2 }}>
               <div
                 style={{
                   width: 88,

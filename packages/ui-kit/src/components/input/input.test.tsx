@@ -53,14 +53,14 @@ describe('Input', () => {
   });
 
   it('marks the input disabled', () => {
-    // Renamed from "does not accept input when disabled": jsdom's
+    // Asserts the attribute, not "the change handler never fired": jsdom's
     // fireEvent dispatches a change event directly, bypassing the browser
     // input pipeline that a real disabled attribute blocks — it fires the
-    // handler regardless, so asserting "the spy was not called" here would
-    // pass or fail for reasons unrelated to Input's own behavior. What this
-    // component controls, and what a real browser enforces the rest of the
-    // way, is the native `disabled` attribute itself.
-    render(<Input disabled onValueChange={vi.fn()} />);
+    // handler regardless, so a spy assertion here would pass or fail for
+    // reasons unrelated to Input's own behavior. What this component
+    // controls, and what a real browser enforces the rest of the way, is
+    // the native `disabled` attribute itself — so there is no spy to pass.
+    render(<Input disabled />);
     const input = screen.getByRole('textbox');
     expect(input).toHaveProperty('disabled', true);
   });

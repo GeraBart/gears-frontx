@@ -3,7 +3,20 @@ import type { CSSProperties, ReactNode } from 'react';
 export function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section style={{ display: 'grid', gap: 'var(--space-4)' }}>
-      <h2 style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>{title}</h2>
+      {/* Heading 1 off the ramp, not a hand-set 20/600 — the demo is the
+          first thing a consumer copies from, and llms.txt tells them to use
+          the roles rather than invent sizes. */}
+      <h2
+        style={{
+          margin: 0,
+          fontSize: 'var(--text-heading-1-size)',
+          lineHeight: 'var(--text-heading-1-line-height)',
+          fontWeight: 'var(--text-heading-1-weight)' as CSSProperties['fontWeight'],
+          letterSpacing: 'var(--text-heading-1-tracking)',
+        }}
+      >
+        {title}
+      </h2>
       {children}
     </section>
   );

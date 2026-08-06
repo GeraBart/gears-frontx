@@ -118,26 +118,26 @@ export function ComponentsPage() {
 
       <Section title="Badge">
         <Row>
-          <Badge intent="success">success</Badge>
-          <Badge intent="warning">warning</Badge>
-          <Badge intent="info">info</Badge>
-          <Badge intent="danger">danger</Badge>
+          <Badge variant="success">success</Badge>
+          <Badge variant="warning">warning</Badge>
+          <Badge variant="info">info</Badge>
+          <Badge variant="danger">danger</Badge>
           <Badge>muted</Badge>
         </Row>
         <Row>
-          <Badge intent="success" form="dot">
+          <Badge variant="success" shape="dot">
             success
           </Badge>
-          <Badge intent="warning" form="dot">
+          <Badge variant="warning" shape="dot">
             warning
           </Badge>
-          <Badge intent="info" form="dot">
+          <Badge variant="info" shape="dot">
             info
           </Badge>
-          <Badge intent="danger" form="dot">
+          <Badge variant="danger" shape="dot">
             danger
           </Badge>
-          <Badge form="dot">muted</Badge>
+          <Badge shape="dot">muted</Badge>
         </Row>
       </Section>
 
@@ -216,7 +216,7 @@ export function ComponentsPage() {
             <CardTitle>Project Amber</CardTitle>
             <CardDescription>Updated 2 hours ago</CardDescription>
             <CardAction>
-              <Badge intent="success">active</Badge>
+              <Badge variant="success">active</Badge>
             </CardAction>
           </CardHeader>
           <CardContent>Surfaces sit on --card with --border; hover state is up to the consumer.</CardContent>
@@ -261,35 +261,35 @@ export function ComponentsPage() {
             <TableRow>
               <TableCell>gears-api</TableCell>
               <TableCell>
-                <Badge intent="success">running</Badge>
+                <Badge variant="success">running</Badge>
               </TableCell>
               <TableCell>eu-central</TableCell>
             </TableRow>
             <TableRow>
               <TableCell>gears-worker</TableCell>
               <TableCell>
-                <Badge intent="danger">failed</Badge>
+                <Badge variant="danger">failed</Badge>
               </TableCell>
               <TableCell>us-east</TableCell>
             </TableRow>
             <TableRow data-state="selected">
               <TableCell>gears-scheduler (selected)</TableCell>
               <TableCell>
-                <Badge intent="success">running</Badge>
+                <Badge variant="success">running</Badge>
               </TableCell>
               <TableCell>eu-west</TableCell>
             </TableRow>
             <TableRow data-state="stale">
               <TableCell>gears-connector (stale)</TableCell>
               <TableCell>
-                <Badge intent="warning">needs action</Badge>
+                <Badge variant="warning">needs action</Badge>
               </TableCell>
               <TableCell>eu-central</TableCell>
             </TableRow>
             <TableRow data-state="restricted">
               <TableCell>gears-vault (restricted)</TableCell>
               <TableCell>
-                <Badge form="dot">no access</Badge>
+                <Badge shape="dot">no access</Badge>
               </TableCell>
               <TableCell>—</TableCell>
             </TableRow>

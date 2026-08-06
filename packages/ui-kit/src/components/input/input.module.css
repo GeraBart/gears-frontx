@@ -78,7 +78,7 @@
    * real width switch, so the text never shifts on focus/blur (see
    * button.module.css). */
   border-color: var(--ring);
-  box-shadow: inset 0 0 0 calc(var(--border-width-focus) - var(--border-width))
+  box-shadow: inset 0 0 0 var(--ring-inset)
     var(--ring);
 }
 
@@ -107,7 +107,7 @@
 /* Declared after :focus-visible so the invalid border wins while focused. */
 .input[aria-invalid='true'] {
   border-color: var(--destructive);
-  box-shadow: inset 0 0 0 calc(var(--border-width-focus) - var(--border-width))
+  box-shadow: inset 0 0 0 var(--ring-inset)
     var(--destructive);
 }
 

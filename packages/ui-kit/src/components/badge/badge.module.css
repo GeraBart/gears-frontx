@@ -5,7 +5,7 @@
  * ring/forced-colors/aria-invalid plumbing carries over from that
  * translation. Consumes only theme.css variables — no raw colors.
  *
- * Every selector here leads with `.badge` so the per-intent custom
+ * Every selector here leads with `.badge` so the per-variant custom
  * properties (--badge-accent, --badge-text) stay same-part local under
  * tokens.test's leading-class scoping.
  */
@@ -14,7 +14,7 @@
   /*
    * Safe fallbacks for --badge-accent/--badge-text — the muted recipe
    * (cva's defaultVariants sets `intent: 'muted'`, so this is what every
-   * Badge gets today), declared HERE instead of on `.intentMuted` (now
+   * Badge gets today), declared HERE instead of on `.variantMuted` (now
    * deliberately empty below) so there is exactly one copy of it. A real
    * cascade default, not a var() fallback expression, so it works the
    * same way --button-focus-ring's base value does in button.module.css:
@@ -79,7 +79,7 @@
   /* The kit-wide 2px focus border in --ring, geometry-stable (see
    * input.module.css). */
   border-color: var(--ring);
-  box-shadow: inset 0 0 0 calc(var(--border-width-focus) - var(--border-width))
+  box-shadow: inset 0 0 0 var(--ring-inset)
     var(--ring);
 }
 
@@ -94,7 +94,7 @@
 /* Declared after :focus-visible so the invalid border wins while focused. */
 .badge[aria-invalid='true'] {
   border-color: var(--destructive);
-  box-shadow: inset 0 0 0 calc(var(--border-width-focus) - var(--border-width))
+  box-shadow: inset 0 0 0 var(--ring-inset)
     var(--destructive);
 }
 
@@ -109,57 +109,56 @@
 }
 
 /*
- * Intents. --badge-accent paints the dot raw; --badge-text mixes 20%
- * --foreground into the accent because most raw accents fail AA for this
- * 12px label (light, vs the pill fill: success 3.36:1, warning 2.84:1,
- * info 3.65:1 raw). Measured at 80/20, worst case across pill fill, --card
- * and --background: success 4.72:1 light / 9.63:1 dark, info 5.04 / 10.12,
- * danger 5.63 / 4.96, muted 5.70 / 6.91. Warning alone still misses at
- * 80/20 (4.07:1 light) and takes 70/30: 4.91:1 light / 11.26:1 dark. Same
- * per-variant tuning precedent as the old destructive variant's measured
- * mix.
+ * Variants. --badge-accent paints the dot raw; --badge-text mixes
+ * --foreground into that accent because no raw status color clears 4.5:1 for
+ * this 12px label against all three surfaces it can sit on (the pill fill,
+ * --card, --background). 80/20 carries every variant but warning, the
+ * lightest accent, which takes 70/30. The measured ratios are in
+ * design-notes.md — these mixes resolve at runtime, so no test can recompute
+ * them from the CSS the way button's focus rings are checked.
  */
-.badge.intentSuccess {
+.badge.variantSuccess {
   --badge-accent: var(--success);
   --badge-text: color-mix(in oklab, var(--success) 80%, var(--foreground) 20%);
 }
 
-.badge.intentWarning {
+.badge.variantWarning {
   --badge-accent: var(--warning);
   --badge-text: color-mix(in oklab, var(--warning) 70%, var(--foreground) 30%);
 }
 
-.badge.intentInfo {
+.badge.variantInfo {
   --badge-accent: var(--info);
   --badge-text: color-mix(in oklab, var(--info) 80%, var(--foreground) 20%);
 }
 
-.badge.intentDanger {
+.badge.variantDanger {
   --badge-accent: var(--danger);
   --badge-text: color-mix(in oklab, var(--danger) 80%, var(--foreground) 20%);
 }
 
 /* Deliberately empty — do not delete as dead CSS. Same idiom as
-   card.module.css's `.sizeDefault {}`: kept so `intent="muted"` is a real
+   card.module.css's `.sizeDefault {}`: kept so `variant="muted"` is a real
    DOM-visible class and cva has a defaultVariants target, but the values
    it would set already live on `.badge` itself above (see its fallback
    comment) — muted IS the fallback, not a separate recipe, so there is
    nothing left to override here. */
-.badge.intentMuted {
+.badge.variantMuted {
 }
 
 /*
- * Forms. The pill's fill is a neutral 5% --foreground tint over the local
- * surface, not a status-colored -soft token — matching the mockups, whose
- * badge panel touches no *-soft variable (those belong to Alert); the tint
- * flips with the theme by construction.
+ * Shapes. The pill's fill is a neutral 5% --foreground tint over the local
+ * surface, not a status-colored *-soft token: the mockups' badge panel draws
+ * it neutral, and a tint mixed from --foreground flips with the theme by
+ * construction. (The *-soft tokens exist in the palette but no component
+ * reads them — see theme.css.)
  */
-.badge.formPill {
+.badge.shapePill {
   background-color: color-mix(in oklab, var(--foreground) 5%, transparent);
   padding: 0 var(--space-2);
 }
 
-.badge.formDot {
+.badge.shapeDot {
   background-color: transparent;
   padding: 0;
 }
@@ -170,11 +169,11 @@
  * deepens a step. The bare dot form gets underline instead — it has no fill
  * to deepen.
  */
-a.badge.formPill:hover {
+a.badge.shapePill:hover {
   background-color: color-mix(in oklab, var(--foreground) 9%, transparent);
 }
 
-a.badge.formDot:hover {
+a.badge.shapeDot:hover {
   text-decoration: underline;
   text-underline-offset: 4px;
 }

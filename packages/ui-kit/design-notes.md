@@ -234,9 +234,9 @@ Architecture's build bullet).
    text, Label for button-role text (the drawn buttons are bound to the
    Studio/Label style), Meta for field helpers and Badge; dropdown/select
    options and the tooltip follow the drawn Overlay specimen (12/17)
-   instead. A follow-up ruling (Andrey, 2026-08-05) then settled the
-   metric conflicts wholesale: the token system wins over hand-set
-   specimen values. Component CSS now consumes the token scales
+   instead. A follow-up ruling then settled the metric conflicts
+   wholesale: the token system wins over hand-set specimen values.
+   Component CSS now consumes the token scales
    everywhere — off-grid drawn spacing snapped to the nearest --space-*
    step (the fields' 10px → 12, menu options' 6px → 8, the compact
    table's 6px → 4), the specimens' 13/18 and 12/17 text normalized onto
@@ -248,33 +248,39 @@ Architecture's build bullet).
    Overlay options' muted/active color language (a component-phase item,
    not a token one).
 
-   **2026-08-06 accessibility + spec-alignment pass (Andrey).** A review
-   pass over the reskin found WCAG failures and undocumented deviations
-   from the drawn spec; resolved as rulings rather than left flagged, per
-   the standing instruction that a color failing WCAG gets a new color,
-   not a "kept as drawn" footnote:
+   **Accessibility + spec-alignment pass.** A pass over the reskin found
+   WCAG failures and undocumented deviations from the drawn spec; all
+   resolved as rulings rather than left flagged, per the standing
+   instruction that a color failing WCAG gets a new color, not a "kept as
+   drawn" footnote:
    - **Button focus rings** (every variant, both themes) now clear the
      3:1 floor against both the fill and the page background — `default`
      and `destructive` needed a genuinely two-toned ring (the geometry
      already supported one: an outer border color plus a separately
      colorable inset shadow), `outline` gave up on `--border-strong`
-     entirely and now falls back to the kit-wide `--ring`. Measured
-     ratios are in button.module.css's focus-color comment and mirrored
-     by a new tokens.test.ts contrast guard.
-   - **`--subtle-foreground`** (the table header label) measured 2.56:1
-     light / 3.74:1 dark against the header's `--surface` fill — an
-     earlier in-code note claiming 2.94/4.14 had measured against the
-     wrong backdrop. Corrected to a value clearing 4.5:1 in both themes
-     (theme.css). Open designer question: pin a value in the Figma file
-     now that the drawn one (#94a3b8) is confirmed to fail AA.
+     entirely and now falls back to the kit-wide `--ring`. Ratios as
+     measured (light/dark), with button.test.tsx recomputing them from
+     the live CSS on every run:
+
+     | variant | ring vs page bg | inner tone vs fill |
+     |---|---|---|
+     | `default` | `--info` 3.91 / 10.89 | `--foreground` 3.79 / 4.86 |
+     | `destructive` | `--primary-hover` 4.98 / 4.18 | `--destructive-foreground` 4.70 / 4.62 |
+     | `ghost`, `link`, `secondary` | `--primary-hover` 4.76+ / 3.10+ | single-tone |
+     | `outline` | `--ring` 4.05 / 3.78 | `--ring` 4.23 / 3.40 |
+   - **`--subtle-foreground`** (the table header label): each mode's drawn
+     value failed the 4.5:1 AA floor against the header's own `--surface`
+     fill — light `#94a3b8` at 2.56:1, dark `#667085` at 3.74:1. Both
+     corrected to values clearing 4.5:1 (theme.css). Note the measurement
+     is per-mode against that mode's fill: `#94a3b8` reads 7.25:1 on the
+     dark `--surface` and fails only in light. Open designer question: pin
+     AA-passing values in the Figma file for both modes.
    - **Button's `link` variant** had no drawn counterpart and read
      `--primary` directly (3.78:1 dark, a clear AA fail); given a
-     text-safe `--link-foreground` token instead (theme.css). Light
-     started as `--primary`'s own value (4.51:1 — technically over the
-     4.5:1 floor, but only by 0.005, with no margin against a future
-     one-step nudge to `--background`); QA's follow-up review flagged the
-     razor-thin margin, so light now takes `--primary-hover`'s value
-     instead — same violet family, 4.98:1, real headroom.
+     text-safe `--link-foreground` token instead (theme.css). Light takes
+     `--primary-hover`'s value — 4.98:1, real headroom — rather than
+     `--primary`'s own, which clears the 4.5:1 floor by 0.005 and would
+     silently fail again on any one-step nudge to `--background`.
    - **Outline variant fill/border** aligned to the drawn "secondary"
      specimen (`--surface-elevated` + `--border-strong`, was `--background`
      + `--border`) — the button.md-documented outline↔secondary mapping
@@ -292,6 +298,26 @@ Architecture's build bullet).
      `--text-label-weight` — same numeral, but a real ramp reference
      instead of a literal, and their comments no longer claim a "Meta at
      500" style that has no entry in the Studio ramp.
+   - **Badge label colors.** No raw status color clears 4.5:1 for the 12px
+     label against all three surfaces it can sit on (the pill fill,
+     `--card`, `--background`) — raw, in light: success 3.36:1, warning
+     2.84:1, info 3.65:1. So `--badge-text` mixes `--foreground` into the
+     accent; the dot keeps the raw color and is exempt from the 3:1
+     non-text floor as pure decoration duplicating the label. Worst case
+     across the three surfaces, light/dark:
+
+     | variant | mix | ratio |
+     |---|---|---|
+     | `success` | 80/20 | 4.72 / 9.63 |
+     | `info` | 80/20 | 5.04 / 10.12 |
+     | `danger` | 80/20 | 5.63 / 4.96 |
+     | `muted` | 80/20 | 5.70 / 6.91 |
+     | `warning` | 70/30 | 4.91 / 11.26 |
+
+     Warning is the lightest accent and misses at 80/20 (4.07:1 light),
+     hence its deeper mix. These are `color-mix()` results, resolved by
+     the browser at runtime — unlike Button's focus rings, no test can
+     recompute them from the CSS, so this table is their only record.
 
    **Consumer-facing changes from this pass** (flagged for `insight-front`,
    the kit's first consumer — see the architecture's Non-goals/AI-layer
@@ -310,13 +336,25 @@ Architecture's build bullet).
      #5f6f88, dark #667085 -> #7a8396) — same token name, same single
      consumer (Table's header label), but a visibly darker/dimmer color in
      both themes now that it clears AA against the header's fill.
-   - Three new tokens: `--link-foreground` (Button's `link` variant text),
+   - Badge's props are `variant`/`shape`, not `intent`/`form`. The
+     semantic-only rule is unchanged — the values are still states, never
+     paint jobs — but it is carried by the value names and the doc rather
+     than by an axis name only this component used, so every component in
+     the kit is driven by `variant` (+ `size`, or the occasional real extra
+     axis: Badge's `shape`, Table's `density`). `shape` rather than `size`
+     because the values are pill vs. bare dot and Badge has no size axis;
+     not `form`, which is a real HTML attribute a styling prop would shadow
+     for anyone rendering a form-associated element via `render`.
+   - Four new tokens: `--link-foreground` (Button's `link` variant text),
      `--popover-border`/`--popover-shadow` (the ring-plus-shadow recipe
      every card-like popup — Dialog/DropdownMenu/Select/Toast — now shares
-     instead of hand-duplicating; see Architecture's theme bullet). None
-     replace an existing consumer-facing token; a consumer overriding
-     theme.css wholesale (rather than layering on top of it) should add
-     these three to stay in sync.
+     instead of hand-duplicating; see Architecture's theme bullet), and
+     `--ring-inset` (the inward thickness that lets a 2px ring — focus,
+     `aria-invalid`, Table's selected row — thicken without changing the
+     element's box; eight modules previously spelled the same `calc()` out
+     by hand). None replace an existing consumer-facing token; a consumer
+     overriding theme.css wholesale (rather than layering on top of it)
+     should add these four to stay in sync.
 5. The twelve gap components, mockups-first: `popover`, `alert`, `avatar`,
    `empty` are in both the mockups and the `insight-front` set and go first;
    `pagination` and `breadcrumb` are the mockups-only additions;

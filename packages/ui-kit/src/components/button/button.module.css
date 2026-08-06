@@ -77,7 +77,7 @@
 .button:focus-visible {
   outline: none;
   border-color: var(--button-focus-ring);
-  box-shadow: inset 0 0 0 calc(var(--border-width-focus) - var(--border-width))
+  box-shadow: inset 0 0 0 var(--ring-inset)
     var(--button-focus-ring-inner);
 }
 
@@ -154,8 +154,7 @@
  * The drawn bordered button ("secondary" in the Figma component list,
  * mapped to this kit's `outline` per button.md) sits on --surface-elevated
  * with a --border-strong border, not the flat page background + hairline
- * border the shadcn translation started from (Andrey, 2026-08-06 —
- * recorded in design-notes.md).
+ * border the shadcn translation started from.
  */
 .variantOutline {
   border-color: var(--border-strong);
@@ -215,35 +214,26 @@
 }
 
 /*
- * Focus colors, verified against WCAG 1.4.11's >=3:1 floor for BOTH
- * surfaces the ring's two painted pixels actually touch (see the
- * --button-focus-ring-inner comment on .button above) — ratios below are
- * light/dark, WCAG relative-luminance math, and mirrored by the
- * tokens.test.ts contrast guard so a token drift fails the test suite
- * instead of shipping unmeasured:
+ * Focus colors. The constraint: the ring's two painted pixels touch two
+ * different surfaces — the fill and the page background (see the
+ * --button-focus-ring-inner comment on .button above) — and each must clear
+ * WCAG 1.4.11's 3:1 floor.
  *
- *   default:     outer --info on the page bg          3.91 / 10.89
- *                inner --foreground on --primary fill  3.79 /  4.86
- *   destructive: outer --primary-hover on the page bg  4.98 /  4.18
- *                inner --destructive-foreground on
- *                      --destructive fill               4.70 /  4.62
- *   ghost/link/
- *   secondary:   --primary-hover — single-tone, since it already clears
- *                3:1 against both their fill (--secondary, or the page bg
- *                for the two borderless ones) and the page bg itself
- *                                                       4.76+/ 3.10+
+ * default and destructive need two TONES because no single hue clears both
+ * of their surfaces at once: violet-on-violet vanishes against the primary
+ * fill (the QA frame says so itself — "Primary focus uses the system info
+ * ring for clear contrast", which is why --info is the outer tone), and the
+ * mid-tone fills sit too close to a near-white/near-black page. ghost, link
+ * and secondary take one tone, --primary-hover, which clears both of theirs.
+ * outline gets no override at all: every drawn candidate (--border-strong)
+ * reads too weak against both its --surface-elevated fill and the page, so
+ * it falls through to .button's own --ring — the same ring every non-Button
+ * kit control uses.
  *
- * default and destructive genuinely need two tones: violet-on-violet
- * vanishes for the primary fill (the QA frame's own note, "Primary focus
- * uses the system info ring for clear contrast", is why --info is the
- * OUTER tone here), and no single hue clears both the mid-tone fill and
- * the near-white/near-black page background at once for either variant.
- * outline (the mockups' "secondary", a bordered surface) has no working
- * override at all — every drawn candidate (--border-strong) reads too
- * weak against both its --surface-elevated fill and the page bg in both
- * themes, so it deliberately falls through to .button's own --ring
- * default, which clears 3:1 against both (4.23/3.40 fill, 4.05/3.78 page
- * bg) — the same ring every non-Button kit control already uses.
+ * The ratios are not repeated here: button.test.tsx recomputes all six
+ * variants against both surfaces in both themes from THIS file's live
+ * values, so a token drift fails the suite instead of silently outdating a
+ * hand-copied table. design-notes.md records the measured numbers.
  */
 .variantDefault {
   --button-focus-ring: var(--info);

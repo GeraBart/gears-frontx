@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import { contrastRatio } from './__test-utils__/contrast';
-import { extractRules } from './__test-utils__/css-rules';
+import { declarationMap, declarations, extractRules } from './__test-utils__/css-rules';
 
 // Guards the theme seam: every CSS variable a component module consumes must
 // be defined by theme.css (the single branding surface), except the vars the
@@ -45,6 +45,12 @@ const componentsDir = join(srcDir, 'components');
 const moduleFiles = readdirSync(componentsDir, { recursive: true, encoding: 'utf8' })
   .filter((file) => file.endsWith('.module.css'))
   .map((file) => join(componentsDir, file));
+
+// The properties the metric-scale guard below polices. Module scope, because
+// the guard and its synthetic fixture must test the SAME pattern — two
+// copies would let an edit to one keep passing against the other.
+const GUARDED_PROP =
+  /^(?:padding|margin|scroll-margin)(?:-[a-z]+)*$|^(?:gap|row-gap|column-gap|font-size|line-height|letter-spacing|font-weight|border-spacing)$/;
 
 describe('theme tokens', () => {
   it('defines the radius scale derived from --radius', () => {
@@ -153,18 +159,26 @@ describe('theme tokens', () => {
     }
   });
 
-  // Policy (Andrey, 2026-08-05): the token system wins over hand-set
-  // values — spacing sits on the --space-* grid and text metrics on the
-  // --text-* ramp, with off-scale drawn values snapped to the nearest
-  // step. This guard enforces it: in the guarded properties, every term
-  // must be a token reference (var/calc-of-var), 0, auto, or normal.
+  // Policy: the token system wins over hand-set values — spacing sits on
+  // the --space-* grid and text metrics on the --text-* ramp, with
+  // off-scale drawn values snapped to the nearest step. This guard enforces
+  // it: in the guarded properties, every term must be a token reference
+  // (var/calc-of-var), 0, auto, or normal.
   // Dimensions (width/height/inset/...) are NOT guarded — components have
   // intrinsic sizes no token names (a 24px badge, a 38x22 switch track).
   // Exceptions carry their reason inline; add one only with a constraint
   // the token system genuinely cannot express.
+  //
+  // Known blind spot: a literal metric can be laundered through a local
+  // custom property. `--foo: 12px` is itself a declaration whose "property"
+  // is `--foo`, which GUARDED_PROP never matches, and the `padding:
+  // var(--foo)` that reads it strips to nothing. Guarding custom properties
+  // directly is not the fix — plenty of them legitimately hold literal
+  // geometry (Toast's stacked-card math, Card's spacing arithmetic) that
+  // this guard deliberately leaves alone for dimensions. It would take
+  // resolving each local var to its value before scanning. Not exploited
+  // today: both local metric literals in the kit feed unguarded properties.
   it('keeps spacing and type metrics on the token scales', () => {
-    const GUARDED_PROP =
-      /^(?:padding|margin|scroll-margin)(?:-[a-z]+)*$|^(?:gap|row-gap|column-gap|font-size|line-height|letter-spacing|font-weight|border-spacing)$/;
     const EXCEPTIONS = new Set([
       // 16px is the iOS Safari floor below which focusing a field zooms
       // the page — a platform constraint, not a type role (the ramp takes
@@ -184,24 +198,15 @@ describe('theme tokens', () => {
       // the small size carries no margin at all and instead gets that
       // same 2px inset from the OTHER thumb rule's `calc(100% - 2px)`
       // checked-state math (see switch.module.css). Both sizes are
-      // geometrically correct on their own terms — they just don't share
-      // a mechanism the way an earlier version of this comment claimed.
+      // geometrically correct on their own terms — they just don't share a
+      // mechanism.
       'switch.module.css|margin-inline-start|2px',
     ]);
     for (const file of moduleFiles) {
       const base = file.slice(file.lastIndexOf('/') + 1);
       for (const rule of extractRules(readFileSync(file, 'utf8'))) {
-        // `[;}]`, not just `;`: a rule's last declaration is valid CSS
-        // without a trailing semicolon (`padding: 12px }`), and a
-        // `;`-only terminator never matches that declaration at all —
-        // silently exempting it from every check below. `body` always
-        // ends in `}` (see extractRules), so this terminator always finds
-        // the end of the last declaration whether or not the source had a
-        // semicolon there. The value capture excludes both terminators so
-        // a `}`-terminated value doesn't carry the brace into `leftover`.
-        for (const decl of Array.from(rule.body.matchAll(/([a-z-]+)\s*:\s*([^;}]+)[;}]/g))) {
-          const [, prop = '', value = ''] = decl;
-          if (!GUARDED_PROP.test(prop) || EXCEPTIONS.has(`${base}|${prop}|${value.trim()}`)) {
+        for (const { prop, value } of declarations(rule.body)) {
+          if (!GUARDED_PROP.test(prop) || EXCEPTIONS.has(`${base}|${prop}|${value}`)) {
             continue;
           }
           const leftover = value
@@ -211,30 +216,28 @@ describe('theme tokens', () => {
             .trim();
           expect(
             leftover,
-            `literal metric "${prop}: ${value.trim()}" in ${base} — use the token scales (or add a reasoned exception)`,
+            `literal metric "${prop}: ${value}" in ${base} — use the token scales (or add a reasoned exception)`,
           ).toBe('');
         }
       }
     }
   });
 
-  // Synthetic fixture for the `[;}]` terminator fix above: a rule whose
-  // LAST declaration has no trailing semicolon used to be invisible to the
-  // `;`-only version of this guard (no `;` in the source meant no match at
-  // all), letting a literal metric slip through undetected. Exercises the
-  // guard's own regex directly rather than the whole test, since the guard
-  // reads real component files and this fixture is neither.
+  // Synthetic fixture for the declaration splitter's `[;}]` terminator: a
+  // rule whose LAST declaration has no trailing semicolon is invisible to a
+  // `;`-only terminator (no `;` in the source means no match at all),
+  // letting a literal metric slip through undetected. Exercises the pieces
+  // the guard above is built from — the same `declarations` splitter and the
+  // same module-scope GUARDED_PROP, so an edit to either shows up here —
+  // rather than the whole test, which reads real component files this
+  // fixture is not one of.
   it('does not let a semicolon-less final declaration bypass the metric guard', () => {
-    const GUARDED_PROP =
-      /^(?:padding|margin|scroll-margin)(?:-[a-z]+)*$|^(?:gap|row-gap|column-gap|font-size|line-height|letter-spacing|font-weight|border-spacing)$/;
     const fixture = '.fixture { color: red; padding: 12px }';
     const [rule] = extractRules(fixture);
     expect(rule, 'fixture failed to parse as a single rule').toBeDefined();
-    const declarations = Array.from(
-      (rule?.body ?? '').matchAll(/([a-z-]+)\s*:\s*([^;}]+)[;}]/g),
-      (match) => ({ prop: match[1], value: (match[2] ?? '').trim() }),
+    const literalPadding = declarations(rule?.body ?? '').find(({ prop }) =>
+      GUARDED_PROP.test(prop),
     );
-    const literalPadding = declarations.find(({ prop }) => prop && GUARDED_PROP.test(prop));
     expect(literalPadding, 'the semicolon-less "padding: 12px" declaration was not seen at all').toEqual({
       prop: 'padding',
       value: '12px',
@@ -263,19 +266,13 @@ describe('theme tokens', () => {
   describe('theme.css token blocks stay in sync', () => {
     const themeRules = extractRules(themeCss);
 
-    // Every declaration, not just custom properties: the theme blocks also
+    // declarationMap, not a custom-property-only scan: the theme blocks also
     // carry `color-scheme`, and it needs the same drift guarantees — the two
     // dark blocks must both say `dark` (identity test), and a light-block
-    // declaration must have dark counterparts (parity test). Custom-property
-    // names start with `--`, ordinary properties with a letter; both match.
-    function tokenMap(body: string) {
-      return new Map(
-        Array.from(body.matchAll(/([a-z-][a-z0-9-]*)\s*:\s*([^;]+);/g), (match) => [
-          match[1] ?? '',
-          (match[2] ?? '').trim(),
-        ]),
-      );
-    }
+    // declaration must have dark counterparts (parity test). The shared util
+    // matches custom properties (leading `--`) and ordinary properties alike,
+    // and carries the `[;}]` terminator that catches a block's last
+    // declaration when it has no trailing semicolon.
 
     // Identify each block by selector shape rather than array position, so
     // reordering theme.css doesn't silently break this test. `invariantsBlock`
@@ -298,10 +295,10 @@ describe('theme tokens', () => {
       );
     }
 
-    const invariantTokensDeclared = tokenMap(invariantsBlock.body);
-    const lightTokens = tokenMap(lightBlock.body);
-    const darkAttrTokens = tokenMap(darkAttrBlock.body);
-    const darkMediaTokens = tokenMap(darkMediaBlock.body);
+    const invariantTokensDeclared = declarationMap(invariantsBlock.body);
+    const lightTokens = declarationMap(lightBlock.body);
+    const darkAttrTokens = declarationMap(darkAttrBlock.body);
+    const darkMediaTokens = declarationMap(darkMediaBlock.body);
 
     // Shape/scale/scrim, not color: declared once on the invariants block and
     // deliberately never redefined in any theme block, because a theme scope
@@ -429,15 +426,15 @@ describe('theme tokens', () => {
       }
     });
 
-    // WCAG contrast guard for the theme-level pairs the 2026-08-06 fix
-    // series corrected (link text, the table header) — parses the SAME
-    // lightTokens/darkAttrTokens maps above, live off theme.css, so a
-    // token drifting back under its floor fails this test instead of
-    // shipping a color no one re-measured. Button's OWN focus-ring cases
-    // (A1) live in button.test.tsx instead: they need to read
-    // button.module.css's actual --button-focus-ring{,-inner} declarations
-    // per variant, which makes them a Button-specific guard, not a
-    // theme-level one — see that file for why, and for the shared
+    // WCAG contrast guard for the theme-level pairs whose colors are picked
+    // for a measured floor rather than taken from the mockups (link text,
+    // the table header) — parses the SAME lightTokens/darkAttrTokens maps
+    // above, live off theme.css, so a token drifting back under its floor
+    // fails this test instead of shipping a color no one re-measured.
+    // Button's OWN focus-ring cases live in button.test.tsx instead: they
+    // need to read button.module.css's actual --button-focus-ring{,-inner}
+    // declarations per variant, which makes them a Button-specific guard,
+    // not a theme-level one — see that file for why, and for the shared
     // contrastRatio/extractRules utilities both files import.
     //
     // Every case below reads a token's LITERAL hex out of theme.css via

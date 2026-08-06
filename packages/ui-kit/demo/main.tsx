@@ -1,4 +1,4 @@
-import { StrictMode, useEffect, useState } from 'react';
+import { StrictMode, useEffect, useState, type CSSProperties } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import '@gears-frontx/ui-kit/theme.css';
@@ -94,7 +94,18 @@ function App() {
           flexWrap: 'wrap',
         }}
       >
-        <h1 style={{ margin: 0, fontSize: 28, fontWeight: 600 }}>ui-kit demo</h1>
+        {/* Display off the ramp — see shared.tsx's Section heading. */}
+        <h1
+          style={{
+            margin: 0,
+            fontSize: 'var(--text-display-size)',
+            lineHeight: 'var(--text-display-line-height)',
+            fontWeight: 'var(--text-display-weight)' as CSSProperties['fontWeight'],
+            letterSpacing: 'var(--text-display-tracking)',
+          }}
+        >
+          ui-kit demo
+        </h1>
         <nav>
           <Row>
             {PAGES.map((page) => (

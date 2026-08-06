@@ -60,7 +60,7 @@
    * change (see input.module.css) — the trigger is fit-content, a real
    * width switch would make it jump. */
   border-color: var(--ring);
-  box-shadow: inset 0 0 0 calc(var(--border-width-focus) - var(--border-width))
+  box-shadow: inset 0 0 0 var(--ring-inset)
     var(--ring);
 }
 
@@ -81,7 +81,7 @@
 /* Declared after :focus-visible so the invalid border wins while focused. */
 .trigger[aria-invalid='true'] {
   border-color: var(--destructive);
-  box-shadow: inset 0 0 0 calc(var(--border-width-focus) - var(--border-width))
+  box-shadow: inset 0 0 0 var(--ring-inset)
     var(--destructive);
 }
 

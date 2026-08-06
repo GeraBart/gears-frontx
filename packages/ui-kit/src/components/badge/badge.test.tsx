@@ -12,30 +12,30 @@ describe('Badge', () => {
     const badge = screen.getByText('New');
     expect(badge.tagName).toBe('SPAN');
     expect(badge.className).toContain(styles.badge);
-    expect(badge.className).toContain(styles.intentMuted);
-    expect(badge.className).toContain(styles.formPill);
+    expect(badge.className).toContain(styles.variantMuted);
+    expect(badge.className).toContain(styles.shapePill);
   });
 
   it.each([
-    ['success', styles.intentSuccess],
-    ['warning', styles.intentWarning],
-    ['info', styles.intentInfo],
-    ['danger', styles.intentDanger],
-    ['muted', styles.intentMuted],
-  ] as const)('applies the %s intent class', (intent, intentClass) => {
-    render(<Badge intent={intent}>Label</Badge>);
-    expect(screen.getByText('Label').className).toContain(intentClass);
+    ['success', styles.variantSuccess],
+    ['warning', styles.variantWarning],
+    ['info', styles.variantInfo],
+    ['danger', styles.variantDanger],
+    ['muted', styles.variantMuted],
+  ] as const)('applies the %s variant class', (variant, variantClass) => {
+    render(<Badge variant={variant}>Label</Badge>);
+    expect(screen.getByText('Label').className).toContain(variantClass);
   });
 
-  it('applies the dot form class', () => {
+  it('applies the dot shape class', () => {
     render(
-      <Badge intent="success" form="dot">
+      <Badge variant="success" shape="dot">
         Online
       </Badge>,
     );
     const badge = screen.getByText('Online');
-    expect(badge.className).toContain(styles.formDot);
-    expect(badge.className).not.toContain(styles.formPill);
+    expect(badge.className).toContain(styles.shapeDot);
+    expect(badge.className).not.toContain(styles.shapePill);
   });
 
   it('merges a consumer className without dropping the kit class', () => {
@@ -45,15 +45,15 @@ describe('Badge', () => {
     expect(badge.className).toContain('consumer');
   });
 
-  it('does not leak the intent or form props to the DOM as attributes', () => {
+  it('does not leak the variant or shape props to the DOM as attributes', () => {
     render(
-      <Badge intent="info" form="dot">
+      <Badge variant="info" shape="dot">
         Tag
       </Badge>,
     );
     const badge = screen.getByText('Tag');
-    expect(badge.hasAttribute('intent')).toBe(false);
-    expect(badge.hasAttribute('form')).toBe(false);
+    expect(badge.hasAttribute('variant')).toBe(false);
+    expect(badge.hasAttribute('shape')).toBe(false);
   });
 
   it('forwards native span props such as data-testid', () => {
@@ -63,7 +63,7 @@ describe('Badge', () => {
 
   it('renders as a different element via the render prop, keeping the kit class', () => {
     render(
-      <Badge render={<a href="/filters/open" />} intent="info">
+      <Badge render={<a href="/filters/open" />} variant="info">
         Open
       </Badge>,
     );
@@ -71,6 +71,6 @@ describe('Badge', () => {
     expect(link).toHaveProperty('tagName', 'A');
     expect(link).toHaveProperty('href', expect.stringContaining('/filters/open'));
     expect(link.className).toContain(styles.badge);
-    expect(link.className).toContain(styles.intentInfo);
+    expect(link.className).toContain(styles.variantInfo);
   });
 });
