@@ -31,11 +31,16 @@
   background-color: var(--surface-elevated);
   color: var(--foreground);
   font-family: inherit;
-  /* Studio/Label metrics, like the other fields (see input.module.css). A
-   * button never triggers the iOS focus zoom, so no 16px small-screen
-   * escape hatch is needed here. */
+  /* Studio/Label metrics, applied whole (size/line-height/tracking) and
+   * regular-weight — the same field-text recipe as Input/Textarea (see
+   * input.module.css), so the selected value reads exactly like a typed
+   * one despite the trigger rendering as a real <button>. A button never
+   * triggers the iOS focus zoom, so no 16px small-screen escape hatch is
+   * needed here either. */
   font-size: var(--text-label-size);
   line-height: var(--text-label-line-height);
+  font-weight: var(--text-body-weight);
+  letter-spacing: var(--text-label-tracking);
   white-space: nowrap;
   outline: none;
   /* Colour and box-shadow crossfades only, no transform/geometry — not motion under
@@ -67,9 +72,10 @@
   }
 }
 
+/* 0.42 per the mockups' disabled specimens — see input.module.css. */
 .trigger:disabled {
   cursor: not-allowed;
-  opacity: 0.5;
+  opacity: 0.42;
 }
 
 /* Declared after :focus-visible so the invalid border wins while focused. */
@@ -117,7 +123,7 @@
   align-items: center;
   gap: var(--space-2);
   overflow: hidden;
-  text-align: left;
+  text-align: start;
   text-overflow: ellipsis;
 }
 
@@ -148,12 +154,12 @@
   overflow-x: hidden;
   overflow-y: auto;
   border-radius: var(--radius-md);
-  border: var(--border-width) solid color-mix(in oklab, var(--foreground) 10%, transparent);
+  border: var(--border-width) solid var(--popover-border);
   background-color: var(--popover);
   color: var(--popover-foreground);
-  box-shadow:
-    0 4px 6px -1px color-mix(in oklab, var(--foreground) 10%, transparent),
-    0 2px 4px -2px color-mix(in oklab, var(--foreground) 10%, transparent);
+  /* --popover-shadow: the ring-plus-drop-shadow recipe every card-like
+   * popup in the kit shares (see theme.css) — was hand-duplicated here. */
+  box-shadow: var(--popover-shadow);
   transform-origin: var(--transform-origin);
   transition:
     opacity 100ms ease,
@@ -186,7 +192,7 @@
 
 .group {
   padding: var(--space-1);
-  scroll-margin: 0.25rem 0;
+  scroll-margin: var(--space-1) 0;
 }
 
 .groupLabel {
@@ -232,9 +238,11 @@
   color: var(--accent-foreground);
 }
 
+/* 0.42, unified with every other disabled control in the kit — see
+ * input.module.css. */
 .item[data-disabled] {
   pointer-events: none;
-  opacity: 0.5;
+  opacity: 0.42;
 }
 
 .itemText {
@@ -248,7 +256,7 @@
 .itemIndicator {
   pointer-events: none;
   position: absolute;
-  right: var(--space-2);
+  inset-inline-end: var(--space-2);
   display: flex;
   width: var(--icon-size-sm);
   height: var(--icon-size-sm);

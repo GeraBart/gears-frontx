@@ -37,14 +37,20 @@
     box-shadow 150ms ease;
 }
 
-/* Studio/Label metrics (fields draw the value in regular weight; the
- * specimens' hand-set 18px line normalizes to the ramp's 16 under the
- * tokens-win ruling, see theme.css) — desktop only; small screens keep
+/* Studio/Label metrics, applied whole (size/line-height/tracking) — fields
+ * draw the value in regular weight, not Label's own 500, so --text-body-
+ * weight stands in for the one metric this deliberately doesn't borrow
+ * from the role (kept explicit rather than left to inherit, so Input/
+ * Textarea/Select's field text all state the same thing the same way).
+ * The specimens' hand-set 18px line normalizes to the ramp's 16 under the
+ * tokens-win ruling (see theme.css) — desktop only; small screens keep
  * 16px above so iOS Safari does not zoom on focus. */
 @media (min-width: 768px) {
   .input {
     font-size: var(--text-label-size);
     line-height: var(--text-label-line-height);
+    font-weight: var(--text-body-weight);
+    letter-spacing: var(--text-label-tracking);
   }
 }
 

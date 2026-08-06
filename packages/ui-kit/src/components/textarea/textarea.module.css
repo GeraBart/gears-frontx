@@ -37,12 +37,17 @@
     box-shadow 150ms ease;
 }
 
-/* Studio field text: 13/18 (Field spec) — desktop only; small screens keep
- * 16px above so iOS Safari does not zoom on focus. */
+/* Studio/Label metrics, applied whole (size/line-height/tracking) — same
+ * field-text recipe as Input, --text-body-weight standing in for the one
+ * metric fields deliberately don't take from Label (see input.module.css)
+ * — desktop only; small screens keep 16px above so iOS Safari does not
+ * zoom on focus. */
 @media (min-width: 768px) {
   .textarea {
     font-size: var(--text-label-size);
     line-height: var(--text-label-line-height);
+    font-weight: var(--text-body-weight);
+    letter-spacing: var(--text-label-tracking);
   }
 }
 

@@ -163,24 +163,43 @@ describe('theme tokens', () => {
   // Exceptions carry their reason inline; add one only with a constraint
   // the token system genuinely cannot express.
   it('keeps spacing and type metrics on the token scales', () => {
-    const GUARDED_PROP = /^(?:padding|margin)(?:-[a-z]+)*$|^(?:gap|row-gap|column-gap|font-size|line-height|letter-spacing)$/;
+    const GUARDED_PROP =
+      /^(?:padding|margin|scroll-margin)(?:-[a-z]+)*$|^(?:gap|row-gap|column-gap|font-size|line-height|letter-spacing|font-weight|border-spacing)$/;
     const EXCEPTIONS = new Set([
       // 16px is the iOS Safari floor below which focusing a field zooms
       // the page — a platform constraint, not a type role (the ramp takes
       // over at the desktop breakpoint; see input/textarea.module.css).
+      // Its own reason, not the font-size one re-used: the paired 1.5rem
+      // line-height is that same 16px at a 1.5x ratio (WCAG 1.4.12's own
+      // recommended floor for line spacing) — it shares a numeral with
+      // --text-heading-2-line-height by coincidence, not by role.
       'input.module.css|font-size|1rem',
       'input.module.css|line-height|1.5rem',
       'textarea.module.css|font-size|1rem',
       'textarea.module.css|line-height|1.5rem',
-      // The drawn thumb's inset within the track, paired 1:1 with the
-      // checked-state translateX math (see switch.module.css) — position
-      // geometry, not an on-grid space.
+      // Position geometry, not an on-grid space — but two INDEPENDENT
+      // solutions for the same 2px inset, not one shared with the other:
+      // the default size insets its thumb with this margin and travels
+      // its own full width (`translateX(100%)`, overridden right below);
+      // the small size carries no margin at all and instead gets that
+      // same 2px inset from the OTHER thumb rule's `calc(100% - 2px)`
+      // checked-state math (see switch.module.css). Both sizes are
+      // geometrically correct on their own terms — they just don't share
+      // a mechanism the way an earlier version of this comment claimed.
       'switch.module.css|margin-inline-start|2px',
     ]);
     for (const file of moduleFiles) {
       const base = file.slice(file.lastIndexOf('/') + 1);
       for (const rule of extractRules(readFileSync(file, 'utf8'))) {
-        for (const decl of Array.from(rule.body.matchAll(/([a-z-]+)\s*:\s*([^;]+);/g))) {
+        // `[;}]`, not just `;`: a rule's last declaration is valid CSS
+        // without a trailing semicolon (`padding: 12px }`), and a
+        // `;`-only terminator never matches that declaration at all —
+        // silently exempting it from every check below. `body` always
+        // ends in `}` (see extractRules), so this terminator always finds
+        // the end of the last declaration whether or not the source had a
+        // semicolon there. The value capture excludes both terminators so
+        // a `}`-terminated value doesn't carry the brace into `leftover`.
+        for (const decl of Array.from(rule.body.matchAll(/([a-z-]+)\s*:\s*([^;}]+)[;}]/g))) {
           const [, prop = '', value = ''] = decl;
           if (!GUARDED_PROP.test(prop) || EXCEPTIONS.has(`${base}|${prop}|${value.trim()}`)) {
             continue;
@@ -197,6 +216,29 @@ describe('theme tokens', () => {
         }
       }
     }
+  });
+
+  // Synthetic fixture for the `[;}]` terminator fix above: a rule whose
+  // LAST declaration has no trailing semicolon used to be invisible to the
+  // `;`-only version of this guard (no `;` in the source meant no match at
+  // all), letting a literal metric slip through undetected. Exercises the
+  // guard's own regex directly rather than the whole test, since the guard
+  // reads real component files and this fixture is neither.
+  it('does not let a semicolon-less final declaration bypass the metric guard', () => {
+    const GUARDED_PROP =
+      /^(?:padding|margin|scroll-margin)(?:-[a-z]+)*$|^(?:gap|row-gap|column-gap|font-size|line-height|letter-spacing|font-weight|border-spacing)$/;
+    const fixture = '.fixture { color: red; padding: 12px }';
+    const [rule] = extractRules(fixture);
+    expect(rule, 'fixture failed to parse as a single rule').toBeDefined();
+    const declarations = Array.from(
+      (rule?.body ?? '').matchAll(/([a-z-]+)\s*:\s*([^;}]+)[;}]/g),
+      (match) => ({ prop: match[1], value: (match[2] ?? '').trim() }),
+    );
+    const literalPadding = declarations.find(({ prop }) => prop && GUARDED_PROP.test(prop));
+    expect(literalPadding, 'the semicolon-less "padding: 12px" declaration was not seen at all').toEqual({
+      prop: 'padding',
+      value: '12px',
+    });
   });
 
   it('keeps raw colors out of component modules', () => {
@@ -271,6 +313,14 @@ describe('theme tokens', () => {
       // mode and brighten instead of dim (see the --overlay comment in
       // theme.css).
       '--overlay',
+      // Popover chrome (ring + drop shadow) shared by every card-like
+      // popup, named after the --popover/--popover-foreground pair every
+      // consumer already paints with (see theme.css for why not
+      // "--overlay-*"). Both are mixed from --foreground, so the computed
+      // value already flips correctly per theme without a separate
+      // light/dark declaration — same rationale as --overlay above.
+      '--popover-border',
+      '--popover-shadow',
       // Radius scale derived from --radius. Corner shape isn't a light/dark
       // concern — consumers rebrand it by overriding --radius alone, in
       // either theme.

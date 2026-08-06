@@ -33,21 +33,23 @@
    */
   --card-spacing: var(--space-6);
   /* The default title is Studio/Heading 2; the sm variant below steps it
-   * down to a size the ramp has no role for, so that one stays literal. */
+   * down to Studio/Body, one role down the ramp (see .card.sizeSm). */
   --card-title-font-size: var(--text-heading-2-size);
   --card-title-line-height: var(--text-heading-2-line-height);
   gap: var(--card-spacing);
   padding: var(--card-spacing) 0;
   /*
    * Source combines a shadow-xs drop shadow with a 1px ring the same
-   * strength as Dialog's popup border (foreground/10%) into one box-shadow
-   * layer list — a real `border` would add to the box model on top of the
-   * kit's known missing box-sizing (tracked separately, not fixed here);
-   * box-shadow keeps Card's layout unaffected either way.
+   * strength as the other popups' --popover-border (see theme.css) into
+   * one box-shadow layer list — a real `border` would add to the box model
+   * on top of the kit's known missing box-sizing (tracked separately, not
+   * fixed here); box-shadow keeps Card's layout unaffected either way. The
+   * drop-shadow layer is Card's own (no other part shares this fainter
+   * 5% mix), so only the ring layer draws from the shared token.
    */
   box-shadow:
     0 1px 2px 0 color-mix(in oklab, var(--foreground) 5%, transparent),
-    0 0 0 1px color-mix(in oklab, var(--foreground) 10%, transparent);
+    0 0 0 1px var(--popover-border);
 }
 
 /* Highest-specificity rule in the file on purpose: must win over `.card`'s

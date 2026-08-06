@@ -93,13 +93,13 @@
    * source's rounded-2xl is one step larger. Capped here rather than
    * growing the shared scale for this one component.
    */
-  border: var(--border-width) solid color-mix(in oklab, var(--foreground) 10%, transparent);
+  border: var(--border-width) solid var(--popover-border);
   border-radius: var(--radius-xl);
   background-color: var(--popover);
   color: var(--popover-foreground);
-  box-shadow:
-    0 4px 6px -1px color-mix(in oklab, var(--foreground) 10%, transparent),
-    0 2px 4px -2px color-mix(in oklab, var(--foreground) 10%, transparent);
+  /* --popover-shadow: the ring-plus-drop-shadow recipe every card-like
+   * popup in the kit shares (see theme.css) — was hand-duplicated here. */
+  box-shadow: var(--popover-shadow);
   outline: none;
   user-select: none;
   pointer-events: auto;
@@ -294,12 +294,15 @@
   gap: var(--space-1);
 }
 
-/* Studio/Body Medium — Body metrics, the ramp's 500-weight variant. */
+/* Studio/Body Medium — Body metrics at --text-label-weight (also 500;
+ * "Body Medium" is a real ramp role per theme.css's own header comment,
+ * unlike the "Meta at 500" phrasing elsewhere in the kit that named a
+ * style with no ramp entry). */
 .title {
   margin: 0;
   font-size: var(--text-body-size);
   line-height: var(--text-body-line-height);
-  font-weight: 500;
+  font-weight: var(--text-label-weight);
 }
 
 .description {

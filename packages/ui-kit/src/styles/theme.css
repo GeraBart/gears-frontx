@@ -50,6 +50,29 @@
   --overlay: oklch(0 0 0 / 50%);
 
   /*
+   * Popover chrome shared by every card-like popup (Dialog/DropdownMenu/
+   * Select/Toast): a 1px ring plus a two-layer drop shadow, previously
+   * hand-duplicated verbatim in all four modules (plus the ring half in
+   * Card, which has no real `border` to spend — see card.module.css). All
+   * four consumers already paint their surface from the --popover/
+   * --popover-foreground pair, so this chrome takes the same family name
+   * rather than "--overlay-*", which would read as a variant of --overlay
+   * above (the modal *scrim*, an unrelated concept — a popover has no
+   * backdrop) and reversed word order from it besides. --popover-shadow is
+   * COMPOSED from --popover-border (both its layers are that same color),
+   * not just co-located with it: rebranding the hairline recolors the
+   * shadow along with it, by construction, not as a separate edit anyone
+   * has to remember to make. Same rationale as --overlay above for living
+   * here un-redefined regardless: both are mixed from --foreground, so the
+   * computed value already flips correctly per theme without a separate
+   * light/dark declaration.
+   */
+  --popover-border: color-mix(in oklab, var(--foreground) 10%, transparent);
+  --popover-shadow:
+    0 4px 6px -1px var(--popover-border),
+    0 2px 4px -2px var(--popover-border);
+
+  /*
    * Radius scale. Components consume only the derived steps; consumers
    * rebrand by overriding --radius alone and the whole scale follows. The
    * offsets place the Studio scale (sm 6 / md 8 / lg 12 / xl 16) on the

@@ -36,12 +36,12 @@
   overflow-y: auto;
   padding: var(--space-1);
   border-radius: var(--radius-md);
-  border: var(--border-width) solid color-mix(in oklab, var(--foreground) 10%, transparent);
+  border: var(--border-width) solid var(--popover-border);
   background-color: var(--popover);
   color: var(--popover-foreground);
-  box-shadow:
-    0 4px 6px -1px color-mix(in oklab, var(--foreground) 10%, transparent),
-    0 2px 4px -2px color-mix(in oklab, var(--foreground) 10%, transparent);
+  /* --popover-shadow: the ring-plus-drop-shadow recipe every card-like
+   * popup in the kit shares (see theme.css) — was hand-duplicated here. */
+  box-shadow: var(--popover-shadow);
   transform-origin: var(--transform-origin);
   outline: none;
   transition:
@@ -98,19 +98,26 @@
   min-width: 6rem;
 }
 
+/* A group caption over Meta-sized items, emphasized via --text-label-weight
+ * (also 500) rather than a literal — no "Meta at 500" style exists in the
+ * Studio ramp to name instead (see table.module.css's .tableFooter for the
+ * same idiom). Applied whole, like .item/.checkboxItem/.radioItem/
+ * .subTrigger below: all five of this file's Meta-sized parts now state
+ * the same four metrics instead of each dropping a different one or two. */
 .label {
   padding: var(--space-1) var(--space-2);
   color: var(--muted-foreground);
-  /* Meta at the 500-weight variant — a group caption over Meta-sized items. */
   font-size: var(--text-meta-size);
-  font-weight: 500;
   line-height: var(--text-meta-line-height);
+  font-weight: var(--text-label-weight);
+  letter-spacing: var(--text-meta-tracking);
 }
 
 /* Item text (here and on .checkboxItem/.radioItem/.subTrigger below): the
  * drawn dropdown options (Overlay symbol, 197:399) are 12px — Meta; their
  * hand-set 17px line normalizes to the ramp's 16 under the tokens-win
- * ruling (see theme.css). */
+ * ruling (see theme.css). Applied whole (size/line-height/weight/
+ * tracking), matching .label above. */
 .item {
   position: relative;
   display: flex;
@@ -122,6 +129,8 @@
   user-select: none;
   font-size: var(--text-meta-size);
   line-height: var(--text-meta-line-height);
+  font-weight: var(--text-meta-weight);
+  letter-spacing: var(--text-meta-tracking);
   outline: none;
 }
 
@@ -131,9 +140,11 @@
   color: var(--accent-foreground);
 }
 
+/* 0.42, unified with every other disabled control in the kit — see
+ * input.module.css. */
 .item[data-disabled] {
   pointer-events: none;
-  opacity: 0.5;
+  opacity: 0.42;
 }
 
 .variantDefault {
@@ -172,6 +183,8 @@
   user-select: none;
   font-size: var(--text-meta-size);
   line-height: var(--text-meta-line-height);
+  font-weight: var(--text-meta-weight);
+  letter-spacing: var(--text-meta-tracking);
   outline: none;
 }
 
@@ -183,16 +196,18 @@
   color: var(--accent-foreground);
 }
 
+/* 0.42, unified with every other disabled control in the kit — see
+ * input.module.css. */
 .checkboxItem[data-disabled],
 .radioItem[data-disabled] {
   pointer-events: none;
-  opacity: 0.5;
+  opacity: 0.42;
 }
 
 .itemIndicator {
   pointer-events: none;
   position: absolute;
-  right: var(--space-2);
+  inset-inline-end: var(--space-2);
   display: flex;
   width: var(--icon-size-sm);
   height: var(--icon-size-sm);
@@ -208,9 +223,11 @@
 }
 
 .shortcut {
-  margin-left: auto;
+  margin-inline-start: auto;
   color: var(--muted-foreground);
   font-size: var(--text-meta-size);
+  line-height: var(--text-meta-line-height);
+  font-weight: var(--text-meta-weight);
   letter-spacing: var(--text-meta-tracking);
 }
 
@@ -229,6 +246,8 @@
   user-select: none;
   font-size: var(--text-meta-size);
   line-height: var(--text-meta-line-height);
+  font-weight: var(--text-meta-weight);
+  letter-spacing: var(--text-meta-tracking);
   outline: none;
 }
 
@@ -239,13 +258,15 @@
   color: var(--accent-foreground);
 }
 
+/* 0.42, unified with every other disabled control in the kit — see
+ * input.module.css. */
 .subTrigger[data-disabled] {
   pointer-events: none;
-  opacity: 0.5;
+  opacity: 0.42;
 }
 
 .subTriggerIcon {
-  margin-left: auto;
+  margin-inline-start: auto;
   flex-shrink: 0;
 }
 

@@ -40,14 +40,17 @@
   border-radius: var(--radius-md);
   background-color: var(--foreground);
   color: var(--background);
-  /* The drawn tooltip (Overlay symbol, 197:399) is 12 medium — Meta at
-   * the 500-weight variant; its hand-set 17px line normalizes to the
+  /* The drawn tooltip (Overlay symbol, 197:399) is 12 medium — Meta's own
+   * size/line-height at --text-label-weight (also 500) for the emphasis,
+   * the same "role at a different weight" idiom as Table's header/footer
+   * and DropdownMenu's .label — no "Meta at 500" style exists in the
+   * Studio ramp to name instead. The hand-set 17px line normalizes to the
    * ramp's 16 under the tokens-win ruling (see theme.css). The padding
    * above matches the drawn plate: 12px sides, drawn 11px vertical
    * snapped up to 12 (a 40px plate vs the drawn 42). */
   font-size: var(--text-meta-size);
   line-height: var(--text-meta-line-height);
-  font-weight: 500;
+  font-weight: var(--text-label-weight);
   transform-origin: var(--transform-origin);
   outline: none;
   transition:
@@ -113,6 +116,16 @@
   width: 0.625rem;
   height: 0.625rem;
   rotate: 45deg;
+  /*
+   * Documented exception, deliberately off the --radius scale: the
+   * smallest step, --radius-xs, is 4px — twice this, and visibly blunter
+   * on a rotated 10px square this small. The intent here isn't a rounded
+   * corner in the scale's sense, it's softening the diamond's point just
+   * enough that it doesn't read as a sharp spike; --radius-xs rounds it
+   * into a visibly curved tip instead. border-radius isn't a guarded
+   * property (tokens.test.ts only guards spacing/type metrics), so this
+   * is a manual call, not a guard bypass.
+   */
   border-radius: 2px;
   background-color: var(--foreground);
 }
