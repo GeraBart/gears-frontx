@@ -38,7 +38,17 @@ function canonicalHash(route: Route): string {
 function useHashRoute(): [Route, (route: Route) => void] {
   const [route, setRoute] = useState<Route>(() => parseHash(window.location.hash));
   useEffect(() => {
-    const follow = () => setRoute(parseHash(window.location.hash));
+    const follow = () => {
+      const next = parseHash(window.location.hash);
+      // A hand-edited garbage hash can parse to the route already held —
+      // setState alone would bail without a re-render and leave the bad
+      // URL in place, so normalize here too (same replaceState reasoning
+      // as the effect below).
+      if (window.location.hash !== canonicalHash(next)) {
+        window.history.replaceState(null, '', canonicalHash(next));
+      }
+      setRoute(next);
+    };
     window.addEventListener('hashchange', follow);
     return () => window.removeEventListener('hashchange', follow);
   }, []);

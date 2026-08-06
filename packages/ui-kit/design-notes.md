@@ -202,7 +202,8 @@ unblocked; the mockup-block recipes additionally wait on step-5 components
 
 ## Delivery plan
 
-Oldest first; steps 1–3 are done, 4 is in progress, 5–6 remain. Completed
+Oldest first; steps 1–4 are done (step 4's design answers are still
+pending, see its entry), 5–6 remain. Completed
 steps are a log, not a description of the current build (see Architecture
 for that; the tsup pipeline step 1 names was later replaced by Vite, per
 Architecture's build bullet).

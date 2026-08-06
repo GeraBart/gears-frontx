@@ -64,40 +64,72 @@
 /*
  * The carded row, assembled from its cells: every cell carries the top and
  * bottom edge, the first and last close the sides and round the corners.
- * Ring color/width and fill are row-level knobs (custom properties set on
- * .tableRow and flipped by the state/hover rules below) so a state changes
- * one declaration, not six.
+ * Ring color, extra ring thickness, and fill are row-level knobs (custom
+ * properties set on .tableRow and flipped by the state/hover rules below)
+ * so a state changes one declaration, not six.
+ *
+ * The border itself is ALWAYS 1px; a thicker state ring adds the
+ * difference as an inset shadow instead — the kit's geometry-stable
+ * idiom (see button.module.css). Body cells have no fixed height for
+ * border-box to absorb a wider border into, so a real 2px border would
+ * grow the selected row and shift every row below it. The shadow strips
+ * are per-edge (a full inset ring on the first/last cell would paint a
+ * vertical seam where it meets its neighbor), which makes them physical
+ * x/y offsets — under RTL the first cell's strip lands on its visual
+ * left while its logical border sits right; harmless while the extra
+ * thickness only ever backs an already-colored ring.
  *
  * The card only closes into a rectangle when the row's cells are direct
  * children — TableCell/TableHead, the normal case.
  */
 .tableRow {
   --table-row-ring: var(--border);
-  --table-row-ring-width: var(--border-width);
+  /* Extra ring thickness, drawn inward. States raise this, never the
+     border width. */
+  --table-row-ring-inset: 0px;
   --table-row-fill: var(--surface-elevated);
 }
 
 .tableRow > :is(td, th) {
-  border-block: var(--table-row-ring-width) solid var(--table-row-ring);
+  border-block: var(--border-width) solid var(--table-row-ring);
   background-color: var(--table-row-fill);
+  box-shadow:
+    inset 0 var(--table-row-ring-inset) 0 0 var(--table-row-ring),
+    inset 0 calc(-1 * var(--table-row-ring-inset)) 0 0 var(--table-row-ring);
   /* Colour crossfades only, no transform/geometry — not motion under WCAG
      2.3.3, so deliberately left unguarded under prefers-reduced-motion. */
   transition:
     color 150ms ease,
     background-color 150ms ease,
-    border-color 150ms ease;
+    border-color 150ms ease,
+    box-shadow 150ms ease;
 }
 
 .tableRow > :is(td, th):first-child {
-  border-inline-start: var(--table-row-ring-width) solid var(--table-row-ring);
+  border-inline-start: var(--border-width) solid var(--table-row-ring);
   border-start-start-radius: var(--radius-md);
   border-end-start-radius: var(--radius-md);
+  box-shadow:
+    inset 0 var(--table-row-ring-inset) 0 0 var(--table-row-ring),
+    inset 0 calc(-1 * var(--table-row-ring-inset)) 0 0 var(--table-row-ring),
+    inset var(--table-row-ring-inset) 0 0 0 var(--table-row-ring);
 }
 
 .tableRow > :is(td, th):last-child {
-  border-inline-end: var(--table-row-ring-width) solid var(--table-row-ring);
+  border-inline-end: var(--border-width) solid var(--table-row-ring);
   border-start-end-radius: var(--radius-md);
   border-end-end-radius: var(--radius-md);
+  box-shadow:
+    inset 0 var(--table-row-ring-inset) 0 0 var(--table-row-ring),
+    inset 0 calc(-1 * var(--table-row-ring-inset)) 0 0 var(--table-row-ring),
+    inset calc(-1 * var(--table-row-ring-inset)) 0 0 0 var(--table-row-ring);
+}
+
+/* A one-column row's cell is first AND last child, but only the later
+ * rule above applies — with no neighbor to seam against, the plain full
+ * inset ring covers all four edges at once. */
+.tableRow > :is(td, th):only-child {
+  box-shadow: inset 0 0 0 var(--table-row-ring-inset) var(--table-row-ring);
 }
 
 /* The header bar is the same card shape on the --surface fill (one shade
@@ -144,7 +176,7 @@
  */
 .tableRow[data-state='selected'] {
   --table-row-ring: var(--primary);
-  --table-row-ring-width: var(--border-width-focus);
+  --table-row-ring-inset: calc(var(--border-width-focus) - var(--border-width));
   --table-row-fill: var(--card-hover);
 }
 
