@@ -42,7 +42,7 @@ no router dependency. The header switches pages and pins the theme: `auto` follo
 
 | Page | Shows |
 | --- | --- |
-| `#/tokens` | Every `theme.css` token with its resolved value read from the live cascade - colors grouped by role (surfaces, text, brand, status, borders), the radius and spacing scales, and the controls scale (heights, icon sizes, border widths). Values re-read on `data-theme` changes and OS scheme flips, so the labels always state what the current theme computes. |
+| `#/tokens` | Every `theme.css` token with its resolved value read from the live cascade - colors grouped by role (surfaces, text, brand, status, borders), the radius and spacing scales, the controls scale (heights, icon sizes, border widths), and a Typography section rendering each `--text-<role>-*` group (display/heading-1/heading-2/body/label/meta/mono) as live sample text plus its family swatches. Values re-read on `data-theme` changes and OS scheme flips, so the labels always state what the current theme computes. |
 | `#/components` | A kitchen sink of every exported component across its variants, sizes and states - buttons including the `icon` slot and `loading`, form controls wired through `Field`, overlays and toasts, table row states and densities. |
 
 The sandbox drives the kit directly, the way any React consumer would. Wiring it into a FrontX app
@@ -58,3 +58,8 @@ is a separate concern and lives in template territory, not here.
 - The demo has its own `tsconfig.json`; `type-check:demo` runs it, and the root
   `type-check:packages:ui-kit` includes it, so a kit API change that breaks the sandbox fails the
   regular type gate.
+- `demo/index.html` loads real Inter/JetBrains Mono from Google Fonts so the Typography section (and
+  everything else) previews in the actual fonts the kit's `--font-sans`/`--font-mono` name. This is a
+  dev-only network dependency of the sandbox itself, not of the shipped package - the kit ships no
+  font files and never fetches any (see llms.txt); a consumer app loads its own fonts, or accepts the
+  fallback stacks.

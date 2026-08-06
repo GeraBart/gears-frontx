@@ -12,6 +12,19 @@
 
 .badge {
   /*
+   * Safe fallbacks for --badge-accent/--badge-text — the muted recipe
+   * (cva's defaultVariants sets `intent: 'muted'`, so this is what every
+   * Badge gets today), declared HERE instead of on `.intentMuted` (now
+   * deliberately empty below) so there is exactly one copy of it. A real
+   * cascade default, not a var() fallback expression, so it works the
+   * same way --button-focus-ring's base value does in button.module.css:
+   * whichever per-intent class is present overrides it via ordinary
+   * specificity, and a Badge rendered without one (bypassing cva) still
+   * paints instead of going transparent/colorless.
+   */
+  --badge-accent: var(--muted-foreground);
+  --badge-text: color-mix(in oklab, var(--muted-foreground) 80%, var(--foreground) 20%);
+  /*
    * The mockups draw the pill at a fixed 24px; without a global border-box
    * preflight, content-box would inflate past it — same acute case as
    * tabs.module.css, scoped the same way (this class only).
@@ -126,9 +139,13 @@
   --badge-text: color-mix(in oklab, var(--danger) 80%, var(--foreground) 20%);
 }
 
+/* Deliberately empty — do not delete as dead CSS. Same idiom as
+   card.module.css's `.sizeDefault {}`: kept so `intent="muted"` is a real
+   DOM-visible class and cva has a defaultVariants target, but the values
+   it would set already live on `.badge` itself above (see its fallback
+   comment) — muted IS the fallback, not a separate recipe, so there is
+   nothing left to override here. */
 .badge.intentMuted {
-  --badge-accent: var(--muted-foreground);
-  --badge-text: color-mix(in oklab, var(--muted-foreground) 80%, var(--foreground) 20%);
 }
 
 /*

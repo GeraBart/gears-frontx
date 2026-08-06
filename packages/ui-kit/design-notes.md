@@ -86,15 +86,18 @@ the `sidebar` / `data-table` exclusions above intact.
   import, and theme.css is deliberately never imported by JS. A consumer
   imports `theme.css` once; component CSS then arrives for free with each
   component import. No PostCSS/Tailwind requirements on either side.
-- Theme: semantic CSS variables (colors, spacing, radii, control metrics),
-  light/dark via `data-theme` / `prefers-color-scheme`; shadcn-style token
-  structure carrying the Studio palette from the F-mockups Figma file
-  (variable collection "Studio / shadcn"). Component CSS
-  consumes only these variables — the theme file is the single seam between
-  kit styles and consumer brand. The theme file also paints the page surface
-  itself (`body`/`[data-theme]` background and color, plus `color-scheme`),
-  not just the tokens: a bare consumer page goes correctly dark under
-  `prefers-color-scheme` with no attribute and no CSS of its own.
+- Theme: semantic CSS variables (colors, spacing, radii, control metrics,
+  and the Studio type ramp — families plus per-role size/line-height/
+  weight/tracking, `--text-<role>-*` for display/heading-1/heading-2/body/
+  label/meta/mono; see step 4 below), light/dark via `data-theme` /
+  `prefers-color-scheme`; shadcn-style token structure carrying the Studio
+  palette from the F-mockups Figma file (variable collection "Studio /
+  shadcn"). Component CSS consumes only these variables — the theme file is
+  the single seam between kit styles and consumer brand. The theme file
+  also paints the page surface itself (`body`/`[data-theme]` background and
+  color, plus `color-scheme`), not just the tokens: a bare consumer page
+  goes correctly dark under `prefers-color-scheme` with no attribute and no
+  CSS of its own.
 - Publishing: version-gated like every ecosystem package. `private: true`
   remains in place until both the MVP component set lands and #495 approves
   the package's architecture ownership, traceability, and version policy. The
@@ -172,11 +175,14 @@ unblocked; the mockup-block recipes additionally wait on step-5 components
 - Kitchen-sink demo app: started as `demo/` inside the package (`npm run
   demo`) — the same in-package pattern the telemetry demo actually uses,
   superseding the separate `packages/ui-kit-example-web` package an earlier
-  revision of this plan named. All 19 components plus the full token set
-  (color swatches, radius/spacing scales) on one page with an
-  auto/light/dark switch; consumes the package by name, so it exercises the
-  built artifact, not src. Grow it to every component in every state as the
-  set lands; it doubles as the agent playground.
+  revision of this plan named. Two hash-routed pages sharing an
+  auto/light/dark switch (`#/tokens`: the full token set — color swatches,
+  radius/spacing/control scales, and the Studio type ramp; `#/components`:
+  all 19 components in every variant/size/state) — split from the original
+  single page once both grew large enough to want their own scroll; see
+  `demo/README.md`. Consumes the package by name, so it exercises the built
+  artifact, not src. Grow it to every component in every state as the set
+  lands; it doubles as the agent playground.
 - Acceptance: (1) `scripts/verify-consumer.sh` packs the package, installs the
   tarball into a clean Vite project, builds a page that imports a single
   component (`Button`) and asserts tokens, that component's styles and class
@@ -237,10 +243,79 @@ Architecture's build bullet).
    height — and a tokens.test.ts guard now rejects literal metrics in
    spacing and type declarations (documented exceptions: the fields' 16px
    iOS anti-zoom floor, the switch thumb's 2px inset geometry). Still
-   open: the token values marked `derived:` in theme.css; the table
-   header's --subtle-foreground AA miss (2.94:1 light); and the drawn
+   open: the token values marked `derived:` in theme.css; and the drawn
    Overlay options' muted/active color language (a component-phase item,
    not a token one).
+
+   **2026-08-06 accessibility + spec-alignment pass (Andrey).** A review
+   pass over the reskin found WCAG failures and undocumented deviations
+   from the drawn spec; resolved as rulings rather than left flagged, per
+   the standing instruction that a color failing WCAG gets a new color,
+   not a "kept as drawn" footnote:
+   - **Button focus rings** (every variant, both themes) now clear the
+     3:1 floor against both the fill and the page background — `default`
+     and `destructive` needed a genuinely two-toned ring (the geometry
+     already supported one: an outer border color plus a separately
+     colorable inset shadow), `outline` gave up on `--border-strong`
+     entirely and now falls back to the kit-wide `--ring`. Measured
+     ratios are in button.module.css's focus-color comment and mirrored
+     by a new tokens.test.ts contrast guard.
+   - **`--subtle-foreground`** (the table header label) measured 2.56:1
+     light / 3.74:1 dark against the header's `--surface` fill — an
+     earlier in-code note claiming 2.94/4.14 had measured against the
+     wrong backdrop. Corrected to a value clearing 4.5:1 in both themes
+     (theme.css). Open designer question: pin a value in the Figma file
+     now that the drawn one (#94a3b8) is confirmed to fail AA.
+   - **Button's `link` variant** had no drawn counterpart and read
+     `--primary` directly (3.78:1 dark, a clear AA fail); given a
+     text-safe `--link-foreground` token instead (theme.css). Light
+     started as `--primary`'s own value (4.51:1 — technically over the
+     4.5:1 floor, but only by 0.005, with no margin against a future
+     one-step nudge to `--background`); QA's follow-up review flagged the
+     razor-thin margin, so light now takes `--primary-hover`'s value
+     instead — same violet family, 4.98:1, real headroom.
+   - **Outline variant fill/border** aligned to the drawn "secondary"
+     specimen (`--surface-elevated` + `--border-strong`, was `--background`
+     + `--border`) — the button.md-documented outline↔secondary mapping
+     was already correct, only the paint wasn't.
+   - **Ghost variant rest text** aligned to the drawn `--muted-foreground`
+     (was always `--foreground`) — verified first that `--muted-foreground`
+     clears 4.5:1 against the page background in both themes before
+     aligning, per the standing "recolor only if it still passes" check.
+   - **Disabled dim** unified on 0.42 everywhere (Button/Input/Textarea/
+     Select, plus DropdownMenu's/Select's disabled items) — Checkbox/
+     RadioGroup/Switch/Label already matched the mockups' 0.42 specimens;
+     these were the outliers still at the shadcn-inherited 0.5.
+   - **Hand-set `font-weight: 500`** (five spots: Table's header/footer,
+     DropdownMenu's `.label`, Tooltip, Toast's `.title`) now read
+     `--text-label-weight` — same numeral, but a real ramp reference
+     instead of a literal, and their comments no longer claim a "Meta at
+     500" style that has no entry in the Studio ramp.
+
+   **Consumer-facing changes from this pass** (flagged for `insight-front`,
+   the kit's first consumer — see the architecture's Non-goals/AI-layer
+   framing for why that team migrates onto the kit's API rather than the
+   kit chasing theirs):
+   - Button's `loading` no longer sets the native `disabled` attribute; it
+     now reports state via `aria-disabled` and stays focusable
+     (`focusableWhenDisabled`, forced on while `loading` — see button.md
+     and button.tsx). Consumer code asserting `button:disabled` in CSS, or
+     the native `disabled` DOM property/`toBeDisabled()` in tests, will no
+     longer see a `loading` Button that way; check `aria-disabled`/
+     `aria-busy` instead. Also: a raw DOM listener attached via `ref`/
+     `addEventListener` is not suppressed while `loading` the way `onClick`
+     is — see button.md's anti-patterns note.
+   - `--subtle-foreground` changed VALUE in both themes (light #94a3b8 ->
+     #5f6f88, dark #667085 -> #7a8396) — same token name, same single
+     consumer (Table's header label), but a visibly darker/dimmer color in
+     both themes now that it clears AA against the header's fill.
+   - Three new tokens: `--link-foreground` (Button's `link` variant text),
+     `--popover-border`/`--popover-shadow` (the ring-plus-shadow recipe
+     every card-like popup — Dialog/DropdownMenu/Select/Toast — now shares
+     instead of hand-duplicating; see Architecture's theme bullet). None
+     replace an existing consumer-facing token; a consumer overriding
+     theme.css wholesale (rather than layering on top of it) should add
+     these three to stay in sync.
 5. The twelve gap components, mockups-first: `popover`, `alert`, `avatar`,
    `empty` are in both the mockups and the `insight-front` set and go first;
    `pagination` and `breadcrumb` are the mockups-only additions;

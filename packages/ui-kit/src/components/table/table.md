@@ -105,9 +105,11 @@ wider than 100.
 
 `TableRow` reads attributes for its background tint, forwarded like any
 other prop rather than driven by a kit-specific prop. Your own logic sets
-the attribute; the kit only paints it (the Studio Data Table's carded,
-state-ringed rows are a composition on top of these hooks, not part of the
-primitive):
+the attribute; the kit only paints it. Every row renders as the Studio Data
+Table's carded, ringed row unconditionally — the card shape (rounded
+corners, 1px ring, raised fill) is the primitive itself, not a composition
+layered on top of these hooks; the hooks below only change the ring's
+color/width or lift the fill, they don't turn carding on:
 
 - `data-state="selected"` — a 2px `--primary` ring on a `--card-hover`
   fill, for a row the user has selected (e.g. via a leading checkbox
@@ -118,8 +120,10 @@ primitive):
   viewer lacks access to.
 - Hover, and any row containing a descendant that is *currently*
   `aria-expanded="true"` (e.g. a row-level disclosure toggle, only while
-  open — a collapsed toggle does not match) — a lighter, translucent
-  `--muted` tint. A `data-state` treatment holds under hover.
+  open — a collapsed toggle does not match) — the fill lifts to
+  `--card-hover`, an opaque surface one step up from the row's resting
+  `--surface-elevated` (not a translucent tint). A `data-state` ring holds
+  under hover; only the fill lifts.
 
 The rings follow the Studio Data Table's drawn state language (colored
 border, not a tinted surface); they are assembled from the row's cells,

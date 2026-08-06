@@ -37,7 +37,7 @@
     box-shadow 150ms ease;
 }
 
-/* Enlarged touch target beyond the 1rem circle. */
+/* Enlarged touch target beyond the 1.25rem circle. */
 .item::after {
   content: '';
   position: absolute;

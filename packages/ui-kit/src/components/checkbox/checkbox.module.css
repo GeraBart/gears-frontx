@@ -35,7 +35,7 @@
     box-shadow 150ms ease;
 }
 
-/* Enlarged touch target beyond the 1rem box. */
+/* Enlarged touch target beyond the 1.25rem box. */
 .checkbox::after {
   content: '';
   position: absolute;

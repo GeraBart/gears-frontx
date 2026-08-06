@@ -2,8 +2,10 @@
 
 > Standard React component base for FrontX templates. Behavior comes from
 > Base UI primitives, styling is compiled CSS on semantic design tokens,
-> variants via a `variant`/`size` prop pair. Consumers need no CSS framework
-> or build plugins.
+> variants via cva-driven props (most components take `variant`/`size`;
+> some, like Badge, take other prop names for their axes — see each
+> component's own doc below). Consumers need no CSS framework or build
+> plugins.
 
 Rules for generated code:
 
