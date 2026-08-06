@@ -19,7 +19,22 @@ function parseHash(hash: string): Route {
   return hash.replace(/^#\/?/, '') === 'components' ? 'components' : 'tokens';
 }
 
-/** Two-way binding to location.hash, so back/forward and deep links work. */
+function canonicalHash(route: Route): string {
+  return `#/${route}`;
+}
+
+/**
+ * Two-way binding to location.hash, so back/forward and deep links work.
+ *
+ * Normalization (an empty hash on first load, or an unrecognized one from
+ * a hand-edited URL) uses history.replaceState, not a hash assignment:
+ * assigning to `location.hash` always pushes a new history entry, even
+ * when the "navigation" is really this hook correcting the URL to match
+ * state it already decided on. Doing that on load pushed an entry nobody
+ * asked for, so Back needed two presses to actually leave the page instead
+ * of one. Hash assignment is reserved for `navigate` below, the one path
+ * a user actually chose to go somewhere.
+ */
 function useHashRoute(): [Route, (route: Route) => void] {
   const [route, setRoute] = useState<Route>(() => parseHash(window.location.hash));
   useEffect(() => {
@@ -28,9 +43,15 @@ function useHashRoute(): [Route, (route: Route) => void] {
     return () => window.removeEventListener('hashchange', follow);
   }, []);
   useEffect(() => {
-    window.location.hash = `/${route}`;
+    if (window.location.hash !== canonicalHash(route)) {
+      window.history.replaceState(null, '', canonicalHash(route));
+    }
   }, [route]);
-  return [route, setRoute];
+  const navigate = (next: Route) => {
+    setRoute(next);
+    window.location.hash = `/${next}`;
+  };
+  return [route, navigate];
 }
 
 function App() {
