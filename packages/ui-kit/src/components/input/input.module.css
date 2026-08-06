@@ -90,10 +90,18 @@
   }
 }
 
+/*
+ * cursor: not-allowed only — no pointer-events: none paired with it (that
+ * combination is self-cancelling: an element with no pointer events never
+ * gets to show a hover cursor at all, so the cursor rule would be dead
+ * code). A native `:disabled` input already refuses focus/typing on its
+ * own; this only supplies the hover affordance. 0.42 per the mockups'
+ * disabled specimens, matching Checkbox/RadioGroup/Switch/Label (this and
+ * Textarea/Select/Button were the outliers at 0.5).
+ */
 .input:disabled {
-  pointer-events: none;
   cursor: not-allowed;
-  opacity: 0.5;
+  opacity: 0.42;
 }
 
 /* Declared after :focus-visible so the invalid border wins while focused. */

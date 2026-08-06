@@ -157,13 +157,17 @@
 /*
  * Base UI keeps a disabled Tab focusable (arrow-key navigation must still
  * reach and skip it) rather than setting the native `disabled` attribute,
- * so only `data-disabled` — never `:disabled` — ever matches here.
+ * so only `data-disabled` — never `:disabled` — ever matches here. Base UI
+ * itself guards the click/keyboard handlers against `disabled` (see
+ * TabsTab's own `useButton` usage) — no `pointer-events: none` needed to
+ * block activation, and pairing one with `cursor: not-allowed` would have
+ * been self-cancelling anyway: an element with no pointer events never
+ * gets to show a hover cursor at all. cursor is the only mechanism here.
+ * 0.42, not the shadcn 0.5 — the mockup specimens set disabled tabs at
+ * opacity 42.
  */
-/* 0.42, not the shadcn 0.5 — the mockup specimens set disabled tabs at
- * opacity 42. */
 .trigger[data-disabled] {
   cursor: not-allowed;
-  pointer-events: none;
   opacity: 0.42;
 }
 

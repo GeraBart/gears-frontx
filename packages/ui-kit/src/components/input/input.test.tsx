@@ -52,9 +52,15 @@ describe('Input', () => {
     expect(screen.getByRole('textbox').getAttribute('aria-invalid')).toBe('true');
   });
 
-  it('does not accept input when disabled', () => {
-    const onValueChange = vi.fn();
-    render(<Input disabled onValueChange={onValueChange} />);
+  it('marks the input disabled', () => {
+    // Renamed from "does not accept input when disabled": jsdom's
+    // fireEvent dispatches a change event directly, bypassing the browser
+    // input pipeline that a real disabled attribute blocks — it fires the
+    // handler regardless, so asserting "the spy was not called" here would
+    // pass or fail for reasons unrelated to Input's own behavior. What this
+    // component controls, and what a real browser enforces the rest of the
+    // way, is the native `disabled` attribute itself.
+    render(<Input disabled onValueChange={vi.fn()} />);
     const input = screen.getByRole('textbox');
     expect(input).toHaveProperty('disabled', true);
   });

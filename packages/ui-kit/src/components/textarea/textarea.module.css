@@ -71,9 +71,10 @@
   }
 }
 
+/* 0.42 per the mockups' disabled specimens — see input.module.css. */
 .textarea:disabled {
   cursor: not-allowed;
-  opacity: 0.5;
+  opacity: 0.42;
 }
 
 /* Declared after :focus-visible so the invalid border wins while focused. */
