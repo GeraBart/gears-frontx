@@ -1,6 +1,6 @@
 import { Button as ButtonPrimitive } from '@base-ui/react/button';
 import { cva, type VariantProps } from 'class-variance-authority';
-import type { ReactNode } from 'react';
+import { Children, type ReactNode } from 'react';
 
 import styles from './button.module.css';
 
@@ -39,13 +39,33 @@ export interface ButtonProps
    */
   icon?: ReactNode;
   /**
-   * Shows a centered spinner and disables the button. Content is hidden
+   * Shows a centered spinner and reports `aria-busy`. Content is hidden
    * with opacity, not visibility: it keeps painting the button's size (no
    * width jump) and, unlike visibility, stays in the accessibility tree —
    * the button keeps its name while `aria-busy` reports the state, with no
    * hardcoded "Loading" label the kit would otherwise have to translate.
+   * Clicks are suppressed the same way `disabled` suppresses them, but the
+   * button does NOT become natively `disabled` — it forces
+   * `focusableWhenDisabled` (see below) instead, so it stays in the tab
+   * order and reports `aria-disabled` rather than blurring itself the
+   * instant a native `disabled` attribute would land. Consumer code
+   * checking the native `disabled` property or a `:disabled` CSS selector
+   * will NOT see a `loading` button the way it sees a plain `disabled`
+   * one — check `aria-disabled`/`aria-busy` instead.
    */
   loading?: boolean;
+  /**
+   * Keep the button in the tab order (and reporting `aria-disabled`
+   * instead of the native `disabled` attribute) while disabled — inherited
+   * from Base UI's Button, re-declared here because `loading` above forces
+   * this to `true` regardless of what's passed: a native `disabled`
+   * attribute blurs the button the instant it lands, which `loading` can't
+   * afford (it needs `aria-busy` to still be announced to something). An
+   * explicit `focusableWhenDisabled={false}` is silently overridden while
+   * `loading` is `true`.
+   * @default false
+   */
+  focusableWhenDisabled?: boolean;
 }
 
 export function Button({
@@ -55,21 +75,46 @@ export function Button({
   icon,
   loading,
   disabled,
+  focusableWhenDisabled,
   children,
   ...props
 }: ButtonProps) {
-  // Icon-only is derived, not declared: an icon with no children is the
-  // whole content, so the button squares up (react-kit's AcvButton
-  // auto-detects the same way).
-  const iconOnly = icon != null && children == null;
+  // One predicate for "does this button have a visible label", driving
+  // BOTH the icon-only derivation below and the label-render guard at the
+  // bottom: `children == null` only catches a missing prop, not a falsy
+  // one — `<Button icon={x}>{cond && 'Save'}</Button>` with cond=false
+  // passes `false` as children, which is neither null nor renderable, so
+  // checking each spot with its own logic could (and did) disagree about
+  // whether the button has a label. Children.toArray drops exactly the
+  // values React itself would render nothing for (false/null/undefined/
+  // ''/[]), so "the array is empty" is the one true test.
+  const hasLabel = Children.toArray(children).length > 0;
+  const iconOnly = icon != null && !hasLabel;
   return (
     <ButtonPrimitive
       className={buttonVariants({ variant, size, className })}
+      {...props}
+      /*
+       * Derived attributes are spread AFTER `...props` so a caller's own
+       * conflicting `aria-busy`/`data-loading`/`data-icon-only` can never
+       * shadow the state this component just computed (B3) — the button
+       * IS loading/icon-only/not, regardless of what a stray prop says.
+       *
+       * `focusableWhenDisabled` while `loading`: a native `disabled`
+       * attribute blurs the element the instant it lands, which would
+       * silently steal focus off a button the user just clicked and make
+       * `aria-busy` announce to no one. Base UI's `focusableWhenDisabled`
+       * keeps it in the tab order and reports the state via
+       * `aria-disabled` instead (see useFocusableWhenDisabled) — clicks
+       * still get suppressed via `disabled` below either way. A plain
+       * `disabled` with no `loading` keeps its ordinary native behavior
+       * unless the caller opts into `focusableWhenDisabled` itself.
+       */
+      focusableWhenDisabled={loading || focusableWhenDisabled}
+      disabled={disabled || loading}
       data-icon-only={iconOnly || undefined}
       data-loading={loading || undefined}
       aria-busy={loading || undefined}
-      disabled={disabled || loading}
-      {...props}
     >
       {loading && <span className={styles.spinner} aria-hidden="true" />}
       {icon != null && (
@@ -77,7 +122,7 @@ export function Button({
           {icon}
         </span>
       )}
-      {children != null && <span className={styles.label}>{children}</span>}
+      {hasLabel && <span className={styles.label}>{children}</span>}
     </ButtonPrimitive>
   );
 }

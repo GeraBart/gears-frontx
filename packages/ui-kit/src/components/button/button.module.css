@@ -93,9 +93,27 @@
   }
 }
 
+/* 0.42 per the mockups' disabled specimens (see checkbox/radio-group/
+ * switch/label, which already drew it that way — this and Input/Textarea/
+ * Select were the outliers at 0.5). */
 .button:disabled {
   pointer-events: none;
-  opacity: 0.5;
+  opacity: 0.42;
+}
+
+/*
+ * Loading stopped setting the native `disabled` attribute (see button.tsx):
+ * a genuinely disabled button drops out of the tab order and blurs itself
+ * the instant `disabled` lands, which would silently steal focus off a
+ * button the user just clicked and leave `aria-busy` announced to no one.
+ * `focusableWhenDisabled` keeps it focusable instead (Base UI reports the
+ * state via `aria-disabled`, not the native attribute), so `:disabled`
+ * above no longer matches during `loading` and needs this rule of its own
+ * to keep the same dimmed look the button always had while spinning.
+ */
+.button[data-loading] {
+  pointer-events: none;
+  opacity: 0.42;
 }
 
 .variantDefault {

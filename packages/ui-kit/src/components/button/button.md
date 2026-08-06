@@ -39,6 +39,15 @@ All other props are native `<button>` props (`onClick`, `disabled`, `type`,
 Icon-only is derived, not a size: `icon` with no children renders a square
 button of the current `size`. There is no `size="icon"`.
 
+`loading` keeps the button focusable instead of setting the native
+`disabled` attribute (so `aria-busy` has somewhere to be announced to,
+rather than blurring on a button the user just clicked) — clicks are still
+suppressed, but only at the layer React's own `onClick` sits on. A raw DOM
+listener attached via `ref`/`addEventListener` is not suppressed the same
+way and WILL still fire while `loading` is true; wire button activation
+through `onClick`, not a manual listener, if you need it to respect
+`loading`.
+
 ## Examples
 
 ```tsx

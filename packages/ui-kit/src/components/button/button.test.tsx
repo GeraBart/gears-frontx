@@ -112,12 +112,21 @@ describe('Button', () => {
     // stays in the accessibility tree (visibility would strip the name).
     const button = screen.getByRole('button', { name: 'Save' });
     expect(button.getAttribute('aria-busy')).toBe('true');
-    expect(button).toHaveProperty('disabled', true);
+    // aria-disabled, not the native `disabled` attribute: a real `disabled`
+    // would blur the element the instant it landed and pull it out of the
+    // tab order, leaving aria-busy announced to nothing (see the dedicated
+    // focus test below). Clicks are still suppressed either way.
+    expect(button.getAttribute('aria-disabled')).toBe('true');
+    expect(button).toHaveProperty('disabled', false);
     fireEvent.click(button);
     expect(onClick).not.toHaveBeenCalled();
-    // The spinner is presentational; the state is carried by aria-busy.
-    const spinner = button.querySelector('[aria-hidden="true"]');
-    expect(spinner).not.toBeNull();
+    // The spinner specifically, not just "some aria-hidden descendant" —
+    // the icon slot is aria-hidden too, and a selector that only checks
+    // that attribute would pass even if the spinner never rendered.
+    const spinner = Array.from(button.querySelectorAll('span')).find((el) =>
+      el.classList.contains(styles.spinner),
+    );
+    expect(spinner).not.toBeUndefined();
   });
 
   it('does not mark an idle button busy or icon-only', () => {
