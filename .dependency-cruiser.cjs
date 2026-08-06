@@ -191,7 +191,11 @@ module.exports = {
     {
       name: 'frontx-ui-kit-1-no-template-content',
       severity: 'error',
-      from: { path: '^packages/ui-kit/src/', pathNot: '\\.test\\.' },
+      // __test-utils__ is test-only plumbing (never built: not a Vite
+      // entry, nulled in the exports map) and legitimately reads theme.css
+      // via node:fs — the same carve-out telemetry's rule above gives its
+      // __tests__ dir. Shipped component source stays fully covered.
+      from: { path: '^packages/ui-kit/src/', pathNot: '\\.test\\.|__test-utils__' },
       to: { path: '^(?!packages/|node_modules/|internal/|scripts/).+' },
       comment:
         'ecosystem-boundaries: @gears-frontx/ui-kit is an ecosystem package and must not import template territory at the source level.',
