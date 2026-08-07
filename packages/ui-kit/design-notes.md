@@ -262,12 +262,19 @@ Architecture's build bullet).
      measured (light/dark), with button.test.tsx recomputing them from
      the live CSS on every run:
 
-     | variant | ring vs page bg | inner tone vs fill |
+     | variant | outer tone vs page bg | inner tone vs fill |
      |---|---|---|
      | `default` | `--info` 3.91 / 10.89 | `--foreground` 3.79 / 4.86 |
      | `destructive` | `--primary-hover` 4.98 / 4.18 | `--destructive-foreground` 4.70 / 4.62 |
-     | `ghost`, `link`, `secondary` | `--primary-hover` 4.76+ / 3.10+ | single-tone |
-     | `outline` | `--ring` 4.05 / 3.78 | `--ring` 4.23 / 3.40 |
+     | `secondary` | `--primary-hover` 4.98 / 4.18 | same tone vs `--secondary` 4.76 / 3.10 |
+     | `ghost`, `link` | `--primary-hover` 4.98 / 4.18 | no fill of their own — the page bg again |
+     | `outline` | `--ring` 4.05 / 3.78 | `--ring` vs `--surface-elevated` 4.23 / 3.40 |
+
+     `secondary`, `ghost` and `link` are single-tone: `--primary-hover`
+     alone clears 3:1 on both of their surfaces, so they set no inner
+     override. 3.10 (dark `secondary`, the ring against its own fill) is
+     the tightest number in the table and the one to watch if `--secondary`
+     or `--primary-hover` ever moves.
    - **`--subtle-foreground`** (the table header label): each mode's drawn
      value failed the 4.5:1 AA floor against the header's own `--surface`
      fill — light `#94a3b8` at 2.56:1, dark `#667085` at 3.74:1. Both

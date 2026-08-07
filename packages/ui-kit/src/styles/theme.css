@@ -263,13 +263,14 @@
   --link-foreground: #7c4fde;
 
   /* Status colors with their -soft fills. The status colors themselves are
-   * consumed (Badge's ring, Table's stale/restricted row rings); the four
-   * -soft fills are NOT read by any component yet — nothing in the kit
-   * currently paints a tinted status surface, since Badge and the table
-   * states both went to a colored ring on the drawn surface instead. They
-   * are kept as the Figma collection's own pairs so a later tinted surface
-   * doesn't have to re-derive them, and because the pair is what makes the
-   * derivation below reviewable. Dark warning-soft and info-soft are
+   * consumed — Badge's dot and label text, Table's stale/restricted row
+   * rings; the four -soft fills are NOT read by any component yet — nothing
+   * in the kit currently paints a tinted status surface, since Badge draws
+   * its status on the dot and label over a neutral fill and the table states
+   * recolor the row's ring. They are kept as the Figma collection's own
+   * pairs so a later tinted surface doesn't have to re-derive them, and
+   * because the pair is what makes the derivation below reviewable. Dark
+   * warning-soft and info-soft are
    * corroborated by the workflow aliases that resolve to the same values;
    * dark danger-soft and light warning-soft are drawn nowhere — derived:
    * chosen to sit in the same tint family as their corroborated siblings,

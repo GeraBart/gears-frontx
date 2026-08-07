@@ -13,12 +13,12 @@
 .badge {
   /*
    * Safe fallbacks for --badge-accent/--badge-text — the muted recipe
-   * (cva's defaultVariants sets `intent: 'muted'`, so this is what every
+   * (cva's defaultVariants sets `variant: 'muted'`, so this is what every
    * Badge gets today), declared HERE instead of on `.variantMuted` (now
    * deliberately empty below) so there is exactly one copy of it. A real
    * cascade default, not a var() fallback expression, so it works the
    * same way --button-focus-ring's base value does in button.module.css:
-   * whichever per-intent class is present overrides it via ordinary
+   * whichever per-variant class is present overrides it via ordinary
    * specificity, and a Badge rendered without one (bypassing cva) still
    * paints instead of going transparent/colorless.
    */

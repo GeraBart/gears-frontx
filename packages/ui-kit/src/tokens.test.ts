@@ -173,11 +173,13 @@ describe('theme tokens', () => {
   // custom property. `--foo: 12px` is itself a declaration whose "property"
   // is `--foo`, which GUARDED_PROP never matches, and the `padding:
   // var(--foo)` that reads it strips to nothing. Guarding custom properties
-  // directly is not the fix — plenty of them legitimately hold literal
-  // geometry (Toast's stacked-card math, Card's spacing arithmetic) that
-  // this guard deliberately leaves alone for dimensions. It would take
-  // resolving each local var to its value before scanning. Not exploited
-  // today: both local metric literals in the kit feed unguarded properties.
+  // directly is not the fix: a local can legitimately hold literal geometry
+  // for an UNguarded property, which this guard leaves alone by design —
+  // Toast's `--peek: 0.75rem` feeds its stacked-card transform. Closing it
+  // takes resolving each local var to its value before scanning the property
+  // that reads it. Not exploited today: the kit declares exactly two locals
+  // holding a literal (Toast's `--peek`, Table's `--table-row-ring-inset`),
+  // and both feed unguarded properties — a transform and a box-shadow.
   it('keeps spacing and type metrics on the token scales', () => {
     const EXCEPTIONS = new Set([
       // 16px is the iOS Safari floor below which focusing a field zooms
@@ -457,8 +459,8 @@ describe('theme tokens', () => {
         ['dark', darkAttrTokens],
       ];
 
-      // A2: Button's link variant text against --background specifically —
-      // the page background the borderless variant actually sits on. Not
+      // Button's link variant text against --background specifically — the
+      // page background the borderless variant actually sits on. Not
       // verified against --card/--surface (a Link button drawn on a raised
       // panel instead of the bare page): scoped to the one backdrop this
       // variant is documented to sit on, not widened into a full
@@ -472,7 +474,7 @@ describe('theme tokens', () => {
         }
       });
 
-      // A3: the table header label against the header bar's own fill
+      // The table header label against the header bar's own fill
       // (--surface, not --background — see table.module.css).
       it('table header text clears 4.5:1 against the header bar fill', () => {
         for (const [themeName, tokens] of themes) {
