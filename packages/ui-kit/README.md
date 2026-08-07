@@ -66,8 +66,10 @@ npm run test:unit --workspace=@gears-frontx/ui-kit
 npm run demo:ui-kit                              # browser sandbox: tokens + components pages (demo/)
 ```
 
-See [design-notes.md](design-notes.md) for the design and its history. The package is
-`private` until the MVP component set lands and #495 approves its architecture
-ownership, traceability, and version policy. The required CDSL artifacts must
-also replace the temporary `artifacts.toml` ignore. Only then may `private` be
-removed for publication through the standard version-gated workflow.
+See [design-notes.md](design-notes.md) for the design and its history. The package
+publishes on the `alpha` channel through the standard version-gated workflow while
+it matures: the 19-component set is live, the remaining MVP components land under
+the same pre-release line. A stable (`latest`) release stays gated on the full MVP
+component set and on #495 approving the package's architecture ownership,
+traceability, and version policy — the required CDSL artifacts must also replace
+the temporary `artifacts.toml` ignore before a stable version may be cut.

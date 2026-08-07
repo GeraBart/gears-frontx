@@ -98,12 +98,14 @@ the `sidebar` / `data-table` exclusions above intact.
   color, plus `color-scheme`), not just the tokens: a bare consumer page
   goes correctly dark under `prefers-color-scheme` with no attribute and no
   CSS of its own.
-- Publishing: version-gated like every ecosystem package. `private: true`
-  remains in place until both the MVP component set lands and #495 approves
-  the package's architecture ownership, traceability, and version policy. The
-  required CDSL artifacts must then replace the temporary `artifacts.toml`
-  ignore. Only after all of those gates pass is flipping `private` the release
-  act.
+- Publishing: version-gated like every ecosystem package. Originally
+  `private: true` gated *any* publication on the full MVP set plus #495; that
+  gate was consciously revised (2026-08-07) — the `alpha` pre-release channel
+  opened with the 19-component set so templates can consume the kit while the
+  remaining MVP components land. The original gates now guard the *stable*
+  (`latest`) release instead: the full MVP component set, #495 approving the
+  package's architecture ownership, traceability, and version policy, and the
+  required CDSL artifacts replacing the temporary `artifacts.toml` ignore.
 
 ## Component set (MVP, 31 components)
 
@@ -203,7 +205,10 @@ unblocked; the mockup-block recipes additionally wait on step-5 components
 ## Delivery plan
 
 Oldest first; steps 1–4 are done (step 4's design answers are still
-pending, see its entry), 5–6 remain. Completed
+pending, see its entry), 5–6 remain. The first `alpha` publication
+(0.3.0-alpha.1, 2026-08-07) happened *before* step 5, per the revised
+Publishing gate above — steps 5–6 now gate the stable release, not
+publication as such. Completed
 steps are a log, not a description of the current build (see Architecture
 for that; the tsup pipeline step 1 names was later replaced by Vite, per
 Architecture's build bullet).
@@ -366,10 +371,10 @@ Architecture's build bullet).
    `empty` are in both the mockups and the `insight-front` set and go first;
    `pagination` and `breadcrumb` are the mockups-only additions;
    `toggle`, `toggle-group`, `sheet`, `preview-card`, `collapsible`,
-   `spinner` close the `insight-front` list. Before the release step, not
-   after: they are part of the MVP set the `private` gate names, and the
+   `spinner` close the `insight-front` list. Before the stable release, not
+   after: they are part of the MVP set the stable gate names, and the
    kitchen-sink app and composition recipes should cover the whole set once
-   rather than be extended right after publication.
+   rather than be extended right after the stable release.
 6. Composition recipes (incl. the mockup building blocks) + kitchen-sink to
-   full coverage; satisfy the #495 publication gates, remove the temporary
-   artifact ignore, then flip `private` and publish.
+   full coverage; satisfy the #495 gates, remove the temporary
+   artifact ignore, then cut the first stable (`latest`) version.
