@@ -1,7 +1,8 @@
 /*
  * Badge styles — the F-mockups' Badge/Status design (Figma frame 196:397):
- * a colored status dot plus an intent-colored label, as a soft pill or a
- * bare dot+label. Replaces the shadcn-translated variant set; the focus
+ * an intent-colored label, as a soft pill or a bare label, with an
+ * opt-in status dot (`dot` prop) or leading icon (`icon` slot) in front of
+ * it. Replaces the shadcn-translated variant set; the focus
  * ring/forced-colors/aria-invalid plumbing carries over from that
  * translation. Consumes only theme.css variables — no raw colors.
  *

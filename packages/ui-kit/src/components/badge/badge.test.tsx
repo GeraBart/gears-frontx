@@ -72,6 +72,28 @@ describe('Badge', () => {
     expect(screen.getByTestId('both-icon')).toBeTruthy();
   });
 
+  it('lets its own derived data-dot win over a conflicting prop of the same name', () => {
+    // A caller passing a literal data-dot that disagrees with the derived
+    // value must not shadow it — same shadow-proofing as Button's
+    // data-loading (see button.test.tsx).
+    render(
+      <Badge variant="success" dot data-dot="literal">
+        Running
+      </Badge>,
+    );
+    expect(screen.getByText('Running').getAttribute('data-dot')).toBe('true');
+  });
+
+  it('keeps data-dot absent when icon wins over dot, even with a caller-supplied data-dot', () => {
+    render(
+      <Badge variant="success" dot icon={<svg data-testid="icon-wins" />} data-dot="literal">
+        Up
+      </Badge>,
+    );
+    expect(screen.getByText('Up').hasAttribute('data-dot')).toBe(false);
+    expect(screen.getByTestId('icon-wins')).toBeTruthy();
+  });
+
   it('merges a consumer className without dropping the kit class', () => {
     render(<Badge className="consumer">Tag</Badge>);
     const badge = screen.getByText('Tag');
