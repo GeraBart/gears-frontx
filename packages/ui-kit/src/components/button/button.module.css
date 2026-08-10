@@ -32,6 +32,14 @@
    * genuinely two-toned. --button-focus-ring-inner defaults to the outer
    * value so a variant that only sets --button-focus-ring still gets one
    * matching color both places.
+   *
+   * The --button-bg/--button-fg/--button-border{,-hover} family below works
+   * the same way: consumer-override hooks that no kit rule ever declares —
+   * each variant CONSUMES them with its own token as the var() fallback, so
+   * a consumer class that sets them recolors the button without fighting
+   * the cascade, and hover falls back to the consumer's rest color (not the
+   * variant's token) via the var(--button-bg-hover, var(--button-bg, ...))
+   * chain. See button.md's "Custom colors".
    */
   --button-focus-ring: var(--ring);
   --button-focus-ring-inner: var(--button-focus-ring);
@@ -42,7 +50,7 @@
   justify-content: center;
   gap: var(--space-2);
   white-space: nowrap;
-  border: var(--border-width) solid transparent;
+  border: var(--border-width) solid var(--button-border, transparent);
   border-radius: var(--radius-md);
   font-family: inherit;
   /* The drawn buttons (frame 182:371) are BOUND to the Studio/Label text
@@ -117,8 +125,8 @@
 }
 
 .variantDefault {
-  background-color: var(--primary);
-  color: var(--primary-foreground);
+  background-color: var(--button-bg, var(--primary));
+  color: var(--button-fg, var(--primary-foreground));
 }
 
 /*
@@ -128,12 +136,13 @@
  * the fill stays fully opaque instead of letting the page tint through.
  */
 .variantDefault:hover {
-  background-color: var(--primary-hover);
+  background-color: var(--button-bg-hover, var(--button-bg, var(--primary-hover)));
+  color: var(--button-fg-hover, var(--button-fg, var(--primary-foreground)));
 }
 
 .variantDestructive {
-  background-color: var(--destructive);
-  color: var(--destructive-foreground);
+  background-color: var(--button-bg, var(--destructive));
+  color: var(--button-fg, var(--destructive-foreground));
 }
 
 /*
@@ -147,7 +156,8 @@
  * badge.module.css's destructive variant.
  */
 .variantDestructive:hover {
-  background-color: color-mix(in oklab, var(--destructive) 90%, var(--foreground) 10%);
+  background-color: var(--button-bg-hover, var(--button-bg, color-mix(in oklab, var(--destructive) 90%, var(--foreground) 10%)));
+  color: var(--button-fg-hover, var(--button-fg, var(--destructive-foreground)));
 }
 
 /*
@@ -157,23 +167,24 @@
  * border the shadcn translation started from.
  */
 .variantOutline {
-  border-color: var(--border-strong);
-  background-color: var(--surface-elevated);
-  color: var(--foreground);
+  border-color: var(--button-border, var(--border-strong));
+  background-color: var(--button-bg, var(--surface-elevated));
+  color: var(--button-fg, var(--foreground));
 }
 
 .variantOutline:hover {
-  background-color: var(--accent);
-  color: var(--accent-foreground);
+  background-color: var(--button-bg-hover, var(--button-bg, var(--accent)));
+  color: var(--button-fg-hover, var(--button-fg, var(--accent-foreground)));
 }
 
 .variantSecondary {
-  background-color: var(--secondary);
-  color: var(--secondary-foreground);
+  background-color: var(--button-bg, var(--secondary));
+  color: var(--button-fg, var(--secondary-foreground));
 }
 
 .variantSecondary:hover {
-  background-color: color-mix(in oklab, var(--secondary) 80%, transparent);
+  background-color: var(--button-bg-hover, var(--button-bg, color-mix(in oklab, var(--secondary) 80%, transparent)));
+  color: var(--button-fg-hover, var(--button-fg, var(--secondary-foreground)));
 }
 
 /*
@@ -184,13 +195,13 @@
  * 13px label text, so the alignment carries no WCAG cost.
  */
 .variantGhost {
-  background-color: transparent;
-  color: var(--muted-foreground);
+  background-color: var(--button-bg, transparent);
+  color: var(--button-fg, var(--muted-foreground));
 }
 
 .variantGhost:hover {
-  background-color: var(--accent);
-  color: var(--accent-foreground);
+  background-color: var(--button-bg-hover, var(--button-bg, var(--accent)));
+  color: var(--button-fg-hover, var(--button-fg, var(--accent-foreground)));
 }
 
 /*
@@ -204,12 +215,14 @@
  * theme.css).
  */
 .variantLink {
-  background-color: transparent;
-  color: var(--link-foreground);
+  background-color: var(--button-bg, transparent);
+  color: var(--button-fg, var(--link-foreground));
   text-underline-offset: 4px;
 }
 
 .variantLink:hover {
+  background-color: var(--button-bg-hover, var(--button-bg, transparent));
+  color: var(--button-fg-hover, var(--button-fg, var(--link-foreground)));
   text-decoration: underline;
 }
 

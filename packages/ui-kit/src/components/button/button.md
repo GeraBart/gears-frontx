@@ -36,6 +36,32 @@ polymorphism, correct disabled/focus behavior, `type="button"` by default
 All other props are native `<button>` props (`onClick`, `disabled`, `type`,
 `aria-*`, ...) and are forwarded as-is.
 
+## Custom colors
+
+Variant colors are consumed through CSS custom properties, so a one-off
+brand/status button is a consumer class away — no new variant needed:
+
+| Property | Drives |
+|----------|--------|
+| `--button-bg` / `--button-fg` | fill / text at rest |
+| `--button-bg-hover` / `--button-fg-hover` | fill / text on hover |
+| `--button-border` | border color (visible on `outline`; transparent elsewhere) |
+
+```css
+.buy { --button-bg: var(--success); --button-bg-hover: color-mix(in oklab, var(--success) 90%, var(--foreground) 10%); --button-fg: #fff; }
+```
+
+```tsx
+<Button className={styles.buy}>Buy now</Button>
+```
+
+Setting only `--button-bg` keeps the button that color in EVERY state
+(hover falls back to your rest color, never back to the variant's token);
+add `--button-bg-hover` to restore hover feedback. Contrast is yours to
+keep once you override: check your pairs against WCAG like the kit does
+for its own variants, and give the focus ring the same care via
+`--button-focus-ring`/`--button-focus-ring-inner` (see Anti-patterns).
+
 Icon-only is derived, not a size: `icon` with no children renders a square
 button of the current `size`. There is no `size="icon"`.
 
@@ -83,8 +109,10 @@ import { Button } from '@gears-frontx/ui-kit';
 
 ## Anti-patterns
 
-- Do not restyle via inline `style` or ad-hoc CSS — brand changes belong in
-  the theme tokens (`theme.css` CSS variables). If you rebrand the focus
+- Do not restyle via inline `style` or ad-hoc CSS rules against the kit's
+  classes — kit-wide brand changes belong in the theme tokens (`theme.css`
+  CSS variables), one-off button colors in the `--button-*` properties
+  above. If you rebrand the focus
   ring specifically via `--button-focus-ring`, note that the `default` and
   `destructive` variants also set an explicit `--button-focus-ring-inner`
   of their own (a two-tone ring, needed to clear WCAG contrast against

@@ -202,75 +202,91 @@ describe('Button', () => {
 });
 
 /*
- * Focus-ring contrast guard. It lives here rather than in tokens.test.ts
- * with the link-text/table-header cases (genuinely theme-level pairs),
- * because a Button focus ring is DERIVED from two things this file
- * already owns — which token button.module.css's --button-focus-ring{,
- * -inner} actually resolve to per variant, and which token that variant's
- * own `background-color` resolves to. Hardcoding "default's ring is --info
- * against --primary" here would restate the CSS instead of reading it: if
- * a future edit re-points --button-focus-ring, this guard needs to notice
- * on its own, not keep asserting yesterday's mapping. So it parses the raw
- * button.module.css source (not the hashed `styles` import, which has no
- * selector names or values left in it) with the same extractRules the
- * theme.css guards use, resolves each variant's custom-property cascade by
- * hand (button.module.css declares --button-focus-ring{,-inner} in more
- * than one rule per variant — a rest-fill rule and a separate focus-color
- * rule further down the file — so "merge every matching rule in source
- * order" is what actually reproduces the cascade, not a single lookup).
+ * Focus-ring contrast guard's raw-CSS parsing, shared with the
+ * custom-color API guard below. It lives here rather than in
+ * tokens.test.ts with the link-text/table-header cases (genuinely
+ * theme-level pairs), because a Button focus ring is DERIVED from two
+ * things this file already owns — which token button.module.css's
+ * --button-focus-ring{,-inner} actually resolve to per variant, and which
+ * token that variant's own `background-color` resolves to. Hardcoding
+ * "default's ring is --info against --primary" here would restate the CSS
+ * instead of reading it: if a future edit re-points --button-focus-ring,
+ * this guard needs to notice on its own, not keep asserting yesterday's
+ * mapping. So it parses the raw button.module.css source (not the hashed
+ * `styles` import, which has no selector names or values left in it) with
+ * the same extractRules the theme.css guards use, resolves each variant's
+ * custom-property cascade by hand (button.module.css declares
+ * --button-focus-ring{,-inner} in more than one rule per variant — a
+ * rest-fill rule and a separate focus-color rule further down the file —
+ * so "merge every matching rule in source order" is what actually
+ * reproduces the cascade, not a single lookup).
  */
-describe('Button focus-ring contrast', () => {
-  const cssPath = join(dirname(fileURLToPath(import.meta.url)), 'button.module.css');
-  const rules = extractRules(readFileSync(cssPath, 'utf8'));
-  const { light, dark } = readThemeTokens();
+const cssPath = join(dirname(fileURLToPath(import.meta.url)), 'button.module.css');
+const rules = extractRules(readFileSync(cssPath, 'utf8'));
 
-  // Every declaration from every rule whose selector list includes `.button`
-  // (the shared base) or `targetClass`, applied in source order — the same
-  // property from a later rule overrides an earlier one, same as the
-  // cascade would resolve two same-specificity rules for the same class.
-  function effectiveDeclarations(targetClass: string): Map<string, string> {
-    const merged = new Map<string, string>();
-    for (const rule of rules) {
-      const selectors = rule.selector.split(',').map((selector) => selector.replace(/\s+/g, ''));
-      if (selectors.includes('.button') || selectors.includes(targetClass)) {
-        for (const [prop, value] of declarationMap(rule.body)) {
-          merged.set(prop, value);
-        }
+// Every declaration from every rule whose selector list includes `.button`
+// (the shared base) or `targetClass`, applied in source order — the same
+// property from a later rule overrides an earlier one, same as the
+// cascade would resolve two same-specificity rules for the same class.
+function effectiveDeclarations(targetClass: string): Map<string, string> {
+  const merged = new Map<string, string>();
+  for (const rule of rules) {
+    const selectors = rule.selector.split(',').map((selector) => selector.replace(/\s+/g, ''));
+    if (selectors.includes('.button') || selectors.includes(targetClass)) {
+      for (const [prop, value] of declarationMap(rule.body)) {
+        merged.set(prop, value);
       }
     }
-    return merged;
   }
+  return merged;
+}
 
-  function localVarName(value: string): string | null {
-    return value.trim().match(/^var\((--[a-z0-9-]+)\)$/)?.[1] ?? null;
+const variants = [
+  'variantDefault',
+  'variantDestructive',
+  'variantOutline',
+  'variantSecondary',
+  'variantGhost',
+  'variantLink',
+];
+
+describe('Button focus-ring contrast', () => {
+  const { light, dark } = readThemeTokens();
+
+  // Parses `var(--name)` / `var(--name, <fallback>)`. Returns null for
+  // anything that isn't a var() expression (literal colors, `transparent`).
+  function parseVar(value: string): { name: string; fallback: string | null } | null {
+    const match = value.trim().match(/^var\(\s*(--[a-z0-9-]+)\s*(?:,\s*([\s\S]+))?\)$/);
+    if (!match) return null;
+    return { name: match[1] as string, fallback: match[2] ?? null };
   }
 
   // Peels away button.module.css's OWN indirection (--button-focus-ring-
-  // inner defaulting to `var(--button-focus-ring)`, or one variant class
-  // pointing at another local custom property) until the value names a
-  // token that ISN'T declared in `scope` — at that point it can only be a
-  // real theme.css token, which is what every caller here actually wants.
+  // inner defaulting to `var(--button-focus-ring)`, or a color routed
+  // through the consumer-override hooks like `var(--button-bg,
+  // var(--primary))`) until the value names a token that ISN'T declared in
+  // `scope`. An undeclared name WITH a fallback is an override hook nobody
+  // set — the fallback IS the kit default, so resolution descends into it;
+  // an undeclared name with NO fallback can only be a real theme.css token.
   function resolveThemeToken(rawValue: string, scope: Map<string, string>): string | null {
     let current = rawValue.trim();
     const seen = new Set<string>();
     for (;;) {
-      const name = localVarName(current);
-      if (!name) return null; // not a var() at all (e.g. a literal color, `transparent`)
-      if (!scope.has(name)) return name;
-      if (seen.has(name)) return null; // cycle guard — should never trigger
-      seen.add(name);
-      current = scope.get(name) as string;
+      const parsed = parseVar(current);
+      if (!parsed) return null; // not a var() at all (e.g. a literal color, `transparent`)
+      if (scope.has(parsed.name)) {
+        if (seen.has(parsed.name)) return null; // cycle guard — should never trigger
+        seen.add(parsed.name);
+        current = scope.get(parsed.name) as string;
+        continue;
+      }
+      if (parsed.fallback !== null) {
+        current = parsed.fallback;
+        continue;
+      }
+      return parsed.name;
     }
   }
-
-  const variants = [
-    'variantDefault',
-    'variantDestructive',
-    'variantOutline',
-    'variantSecondary',
-    'variantGhost',
-    'variantLink',
-  ];
 
   const themes: Array<[string, Map<string, string>]> = [
     ['light', light],
@@ -314,5 +330,44 @@ describe('Button focus-ring contrast', () => {
         `${themeName} ${variant} inner vs fill`,
       ).toBeGreaterThanOrEqual(3);
     }
+  });
+});
+
+/*
+ * Guards the custom-color override API: every variant's rest and hover
+ * colors must route through the documented --button-* hooks (with the
+ * variant's own token as the var() fallback), so a consumer class setting
+ * `--button-bg`/`--button-bg-hover`/`--button-fg`/`--button-fg-hover`
+ * recolors the button in every state. A hard-coded color here silently
+ * breaks that contract — this suite is what notices.
+ */
+describe('Button custom-color API', () => {
+  function hoverDeclarations(targetClass: string): Map<string, string> {
+    const merged = new Map<string, string>();
+    for (const rule of rules) {
+      const selectors = rule.selector.split(',').map((selector) => selector.replace(/\s+/g, ''));
+      if (selectors.includes(`${targetClass}:hover`)) {
+        for (const [prop, value] of declarationMap(rule.body)) {
+          merged.set(prop, value);
+        }
+      }
+    }
+    return merged;
+  }
+
+  it.each(variants)('%s routes rest colors through --button-bg/--button-fg', (variant) => {
+    const rest = effectiveDeclarations(`.${variant}`);
+    expect(rest.get('background-color'), `${variant} background-color`).toMatch(/^var\(--button-bg,/);
+    expect(rest.get('color'), `${variant} color`).toMatch(/^var\(--button-fg,/);
+  });
+
+  it.each(variants)('%s routes hover colors through the -hover chain', (variant) => {
+    const hover = hoverDeclarations(`.${variant}`);
+    expect(hover.get('background-color'), `${variant}:hover background-color`).toMatch(
+      /^var\(\s*--button-bg-hover,\s*var\(\s*--button-bg,/,
+    );
+    expect(hover.get('color'), `${variant}:hover color`).toMatch(
+      /^var\(\s*--button-fg-hover,\s*var\(\s*--button-fg,/,
+    );
   });
 });
