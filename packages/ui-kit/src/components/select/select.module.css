@@ -265,9 +265,21 @@
   justify-content: center;
 }
 
+/*
+ * The separator now carries the ENTIRE gap between sections, not half of
+ * it: before the list took over the dropdown's padding (see .list above),
+ * a separator's block margin (--space-1) combined with the adjoining
+ * group's own padding (--space-1) for an 8px gap on each side. .group no
+ * longer pads, so this rule alone must supply that 8px — hence
+ * --space-2 rather than --space-1 — and this holds whether or not the
+ * consumer wraps items in a SelectGroup, since it no longer depends on
+ * grouping at all. The inline value is untouched: it still cancels
+ * exactly against the list's own --space-1 padding, so the rule still
+ * bleeds to the popup's left/right edges.
+ */
 .separator {
   pointer-events: none;
-  margin: var(--space-1) calc(-1 * var(--space-1));
+  margin: var(--space-2) calc(-1 * var(--space-1));
   height: var(--border-width);
   background-color: var(--border);
 }
