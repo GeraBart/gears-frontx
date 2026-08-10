@@ -14,6 +14,9 @@ describe('Badge', () => {
     expect(badge.className).toContain(styles.badge);
     expect(badge.className).toContain(styles.variantMuted);
     expect(badge.className).toContain(styles.shapePill);
+    // Neither dot nor icon by default.
+    expect(badge.hasAttribute('data-dot')).toBe(false);
+    expect(badge.querySelector('svg')).toBeNull();
   });
 
   it.each([
@@ -27,15 +30,46 @@ describe('Badge', () => {
     expect(screen.getByText('Label').className).toContain(variantClass);
   });
 
-  it('applies the dot shape class', () => {
+  it('applies the plain shape class', () => {
     render(
-      <Badge variant="success" shape="dot">
+      <Badge variant="success" shape="plain">
         Online
       </Badge>,
     );
     const badge = screen.getByText('Online');
-    expect(badge.className).toContain(styles.shapeDot);
+    expect(badge.className).toContain(styles.shapePlain);
     expect(badge.className).not.toContain(styles.shapePill);
+  });
+
+  it('renders the dot only when asked', () => {
+    render(
+      <Badge variant="success" dot>
+        Running
+      </Badge>,
+    );
+    expect(screen.getByText('Running').getAttribute('data-dot')).toBe('true');
+  });
+
+  it('renders the icon slot as decorative content', () => {
+    render(
+      <Badge variant="info" icon={<svg data-testid="beta-icon" />}>
+        Beta
+      </Badge>,
+    );
+    const slot = screen.getByTestId('beta-icon').parentElement;
+    expect(slot).toHaveProperty('tagName', 'SPAN');
+    expect(slot?.className).toContain(styles.icon);
+    expect(slot?.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('resolves icon over dot when both are passed', () => {
+    render(
+      <Badge variant="success" dot icon={<svg data-testid="both-icon" />}>
+        Up
+      </Badge>,
+    );
+    expect(screen.getByText('Up').hasAttribute('data-dot')).toBe(false);
+    expect(screen.getByTestId('both-icon')).toBeTruthy();
   });
 
   it('merges a consumer className without dropping the kit class', () => {
@@ -47,13 +81,15 @@ describe('Badge', () => {
 
   it('does not leak the variant or shape props to the DOM as attributes', () => {
     render(
-      <Badge variant="info" shape="dot">
+      <Badge variant="info" shape="plain" dot icon={<svg />}>
         Tag
       </Badge>,
     );
     const badge = screen.getByText('Tag');
     expect(badge.hasAttribute('variant')).toBe(false);
     expect(badge.hasAttribute('shape')).toBe(false);
+    expect(badge.hasAttribute('dot')).toBe(false);
+    expect(badge.hasAttribute('icon')).toBe(false);
   });
 
   it('forwards native span props such as data-testid', () => {

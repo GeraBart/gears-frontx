@@ -140,19 +140,27 @@ export function ComponentsPage() {
           <Badge>muted</Badge>
         </Row>
         <Row>
-          <Badge variant="success" shape="dot">
+          <Badge variant="success" shape="plain" dot>
             success
           </Badge>
-          <Badge variant="warning" shape="dot">
+          <Badge variant="warning" shape="plain" dot>
             warning
           </Badge>
-          <Badge variant="info" shape="dot">
+          <Badge variant="info" shape="plain" dot>
             info
           </Badge>
-          <Badge variant="danger" shape="dot">
+          <Badge variant="danger" shape="plain" dot>
             danger
           </Badge>
-          <Badge shape="dot">muted</Badge>
+          <Badge shape="plain" dot>muted</Badge>
+        </Row>
+        <Row>
+          <Badge variant="success" dot>
+            with dot
+          </Badge>
+          <Badge variant="info" icon={<DemoIcon />}>
+            with icon
+          </Badge>
         </Row>
       </Section>
 
@@ -323,7 +331,7 @@ export function ComponentsPage() {
             <TableRow data-state="restricted">
               <TableCell>gears-vault (restricted)</TableCell>
               <TableCell>
-                <Badge shape="dot">no access</Badge>
+                <Badge shape="plain" dot>no access</Badge>
               </TableCell>
               <TableCell>—</TableCell>
             </TableRow>
