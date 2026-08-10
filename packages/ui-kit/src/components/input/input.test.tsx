@@ -57,6 +57,19 @@ describe('Input', () => {
     expect(onClear).toHaveBeenCalledTimes(1);
   });
 
+  it('treats a false icon and end as absent, staying a bare input', () => {
+    // `icon={cond && <Icon/>}` with cond=false passes `false` — a valid
+    // ReactNode that renders nothing, but `icon != null`/`end != null` alone
+    // read it as present. That rendered the presentational wrapper plus
+    // stray hasIcon/hasEnd padding for slots with nothing in them; see
+    // hasIcon/hasEnd in input.tsx.
+    const { container } = render(<Input placeholder="Find" icon={false} end={false} />);
+    const input = screen.getByPlaceholderText('Find');
+    expect(input.parentElement).toBe(container);
+    expect(input.className).not.toContain(styles.hasIcon);
+    expect(input.className).not.toContain(styles.hasEnd);
+  });
+
   it('renders both slots at once', () => {
     render(<Input placeholder="Find" icon={<svg data-testid="lead" />} end={<span data-testid="trail" />} />);
     const input = screen.getByPlaceholderText('Find');

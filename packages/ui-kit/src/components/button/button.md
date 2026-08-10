@@ -45,7 +45,7 @@ brand/status button is a consumer class away — no new variant needed:
 |----------|--------|
 | `--button-bg` / `--button-fg` | fill / text at rest |
 | `--button-bg-hover` / `--button-fg-hover` | fill / text on hover |
-| `--button-border` | border color (visible on `outline`; transparent elsewhere) |
+| `--button-border` | border color on every variant (transparent by default outside `outline`) |
 
 ```css
 .buy { --button-bg: var(--success); --button-bg-hover: color-mix(in oklab, var(--success) 90%, var(--foreground) 10%); --button-fg: #fff; }

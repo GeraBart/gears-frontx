@@ -1,7 +1,7 @@
 import { mergeProps } from '@base-ui/react/merge-props';
 import { useRender } from '@base-ui/react/use-render';
 import { cva, type VariantProps } from 'class-variance-authority';
-import type { ReactNode } from 'react';
+import { Children, type ReactNode } from 'react';
 
 import styles from './badge.module.css';
 
@@ -62,6 +62,12 @@ export interface BadgeProps
 }
 
 export function Badge({ className, variant, shape, dot, icon, render, children, ...props }: BadgeProps) {
+  // `icon != null` is true for `icon={false}` — a valid ReactNode that
+  // renders nothing — which is exactly what `icon={cond && <Icon/>}` passes
+  // when `cond` is false. Same predicate as Button's `hasLabel`, applied to
+  // a slot instead of children: it answers "is this renderable" rather than
+  // "is this set".
+  const hasIcon = Children.toArray(icon).some((child) => child !== '');
   return useRender({
     defaultTagName: 'span',
     render,
@@ -76,10 +82,10 @@ export function Badge({ className, variant, shape, dot, icon, render, children, 
      */
     props: {
       ...mergeProps<'span'>({ className: badgeVariants({ variant, shape, className }) }, props),
-      'data-dot': (dot && icon == null) || undefined,
+      'data-dot': (dot && !hasIcon) || undefined,
       children: (
         <>
-          {icon != null && (
+          {hasIcon && (
             <span className={styles.icon} aria-hidden="true">
               {icon}
             </span>

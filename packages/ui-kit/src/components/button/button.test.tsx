@@ -101,6 +101,24 @@ describe('Button', () => {
     expect(button.hasAttribute('data-icon-only')).toBe(true);
   });
 
+  it('treats a false icon as absent, never going icon-only', () => {
+    // `icon={cond && <Icon/>}` with cond=false passes `false` — a valid
+    // ReactNode that renders nothing, but `icon != null` alone read it as
+    // present, forcing icon-only geometry around an empty square; see
+    // hasIcon in button.tsx.
+    render(<Button icon={false} aria-label="Refresh" />);
+    const button = screen.getByRole('button', { name: 'Refresh' });
+    expect(button.hasAttribute('data-icon-only')).toBe(false);
+    expect(button.querySelector(`.${styles.icon}`)).toBeNull();
+  });
+
+  it('treats a false icon as absent while a label is present', () => {
+    render(<Button icon={false}>Save</Button>);
+    const button = screen.getByRole('button', { name: 'Save' });
+    expect(button.hasAttribute('data-icon-only')).toBe(false);
+    expect(button.querySelector(`.${styles.icon}`)).toBeNull();
+  });
+
   it('loading disables the button, reports aria-busy, and keeps the accessible name', () => {
     const onClick = vi.fn();
     render(

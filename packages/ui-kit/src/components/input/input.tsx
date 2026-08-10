@@ -1,6 +1,6 @@
 import { Input as InputPrimitive } from '@base-ui/react/input';
 import { cx } from 'class-variance-authority';
-import type { ReactNode } from 'react';
+import { Children, type ReactNode } from 'react';
 
 import styles from './input.module.css';
 
@@ -32,29 +32,36 @@ export interface InputProps extends Omit<InputPrimitive.Props, 'className'> {
  * wiring is unaffected — the primitive is still the control Field talks to.
  */
 export function Input({ className, icon, end, ...props }: InputProps) {
+  // `icon != null`/`end != null` are true for `icon={false}`/`end={false}` —
+  // a valid ReactNode that renders nothing — which is exactly what
+  // `icon={cond && <Icon/>}` passes when `cond` is false. Same predicate as
+  // Button's `hasLabel`, applied to a slot instead of children: it answers
+  // "is this renderable" rather than "is this set".
+  const hasIcon = Children.toArray(icon).some((child) => child !== '');
+  const hasEnd = Children.toArray(end).some((child) => child !== '');
   const input = (
     <InputPrimitive
       className={cx(
         styles.input,
-        icon != null && styles.hasIcon,
-        end != null && styles.hasEnd,
+        hasIcon && styles.hasIcon,
+        hasEnd && styles.hasEnd,
         className,
       )}
       {...props}
     />
   );
-  if (icon == null && end == null) {
+  if (!hasIcon && !hasEnd) {
     return input;
   }
   return (
     <span className={styles.wrap}>
-      {icon != null && (
+      {hasIcon && (
         <span className={styles.icon} aria-hidden="true">
           {icon}
         </span>
       )}
       {input}
-      {end != null && <span className={styles.end}>{end}</span>}
+      {hasEnd && <span className={styles.end}>{end}</span>}
     </span>
   );
 }

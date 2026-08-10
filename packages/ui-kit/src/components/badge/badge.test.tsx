@@ -72,6 +72,21 @@ describe('Badge', () => {
     expect(screen.getByTestId('both-icon')).toBeTruthy();
   });
 
+  it('treats a false icon as absent, keeping the dot and rendering no icon span', () => {
+    // `icon={cond && <Icon/>}` with cond=false passes `false` — a valid
+    // ReactNode that renders nothing, but `icon != null` alone reads it as
+    // present. That both suppressed the dot and rendered an empty icon
+    // wrapper; see hasIcon in badge.tsx.
+    render(
+      <Badge variant="success" dot icon={false}>
+        Running
+      </Badge>,
+    );
+    const badge = screen.getByText('Running');
+    expect(badge.getAttribute('data-dot')).toBe('true');
+    expect(badge.querySelector(`.${styles.icon}`)).toBeNull();
+  });
+
   it('lets its own derived data-dot win over a conflicting prop of the same name', () => {
     // A caller passing a literal data-dot that disagrees with the derived
     // value must not shadow it — same shadow-proofing as Button's
