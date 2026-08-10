@@ -35,12 +35,15 @@ raw value instead of the label until the popup has been opened once.
 | `className` | `string` — merged after the kit class | — |
 
 `SelectValue`: renders the selected item's label. Pass `placeholder`
-directly to `SelectValue` (see example). `SelectContent`
-accepts positioning props (`side`, `sideOffset`, `align`, `alignOffset`,
-`alignItemWithTrigger`, plus the escape hatch for triggers inside a
-`transform`/`filter` container: `positionMethod="fixed"`,
-`collisionBoundary`, `collisionPadding`) and `container` — the popup
-portals to `<body>`
+directly to `SelectValue` (see example). `SelectContent` always opens the
+list on its `side` (below the trigger by default) — it never overlays the
+trigger the way a native `<select>` does. With no value selected the list
+starts scrolled to the top; when the selected option is beyond the fold,
+it is scrolled into view on open. `SelectContent` accepts positioning
+props (`side`, `sideOffset`, `align`, `alignOffset`, plus the escape
+hatch for triggers inside a `transform`/`filter` container:
+`positionMethod="fixed"`, `collisionBoundary`, `collisionPadding`) and
+`container` — the popup portals to `<body>`
 by default, so if your theme lives on a subtree (`data-theme` on a
 section instead of `<html>`), pass that section as `container` or the
 popup renders with the root theme. `SelectItem` takes `value` (required) and

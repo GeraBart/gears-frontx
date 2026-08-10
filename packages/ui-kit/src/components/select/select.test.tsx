@@ -129,4 +129,13 @@ describe('Select', () => {
     // The prop is a styling axis, not a DOM attribute.
     expect(trigger.hasAttribute('variant')).toBe(false);
   });
+
+  it('renders the popup without the align-with-trigger overlay mode', () => {
+    renderSelect({ defaultOpen: true });
+    const popup = screen.getByRole('listbox').closest(`.${styles.popup}`);
+    // The popup exists and no longer advertises the retired overlay mode —
+    // the attribute is gone entirely, not set to "false".
+    expect(popup).not.toBeNull();
+    expect(popup?.hasAttribute('data-align-trigger')).toBe(false);
+  });
 });

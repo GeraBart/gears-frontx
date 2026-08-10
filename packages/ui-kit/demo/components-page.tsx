@@ -34,6 +34,7 @@ import {
   RadioGroupItem,
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -63,6 +64,11 @@ const REGIONS = [
   { value: 'eu-west', label: 'Dublin' },
   { value: 'us-east', label: 'Virginia' },
 ];
+
+const HOURS = Array.from({ length: 24 }, (_, hour) => ({
+  value: String(hour),
+  label: `${String(hour).padStart(2, '0')}:00`,
+}));
 
 function LoadingDemo() {
   const [busy, setBusy] = useState(false);
@@ -185,6 +191,20 @@ export function ComponentsPage() {
                     {item.label}
                   </SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+            <Select defaultValue="18" items={HOURS}>
+              <SelectTrigger aria-label="Hour">
+                <SelectValue placeholder="Hour" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  {HOURS.map((item) => (
+                    <SelectItem key={item.value} value={item.value}>
+                      {item.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
               </SelectContent>
             </Select>
           </Row>

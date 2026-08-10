@@ -184,12 +184,6 @@
   transform: scale(0.95);
 }
 
-/* When the popup aligns an item over the trigger (native-select feel),
- * entering with a scale animation would visibly shift it — skip it. */
-.popup[data-align-trigger='true'] {
-  transition: none;
-}
-
 .group {
   padding: var(--space-1);
   scroll-margin: var(--space-1) 0;
