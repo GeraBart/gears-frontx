@@ -218,6 +218,14 @@
    * The dark value is Figma's own. */
   --primary-hover: #7c4fde;
   --primary-foreground: #ffffff;
+  /* Button default variant's focus-ring tone, measured against
+   * --background (6.79:1) — a literal hex, not a var() alias, because the
+   * contrast tests parse hex directly (see src/__test-utils__/contrast.ts).
+   * A dedicated token, not --primary itself: the ring is drawn OUTSIDE the
+   * button (see button.module.css), so it only ever borders the page, and
+   * a violet a shade darker than --primary reads more clearly there than
+   * --primary's own value would. */
+  --primary-ring: #6d28d9;
   --secondary: #f1f5f9;
   --secondary-foreground: #0f172a;
   /* derived (dark only): light muted equals light secondary in the
@@ -246,6 +254,12 @@
    * on both modes' reds (4.7:1 light, 4.6:1 dark). */
   --destructive: #e11d48;
   --destructive-foreground: #ffffff;
+  /* Button destructive variant's focus-ring tone, measured against
+   * --background (6.01:1) — a literal hex, not a var() alias, for the same
+   * reason as --primary-ring above: the contrast tests parse hex directly
+   * (see src/__test-utils__/contrast.ts). The ring is drawn outside the
+   * button, so it only ever borders the page. */
+  --destructive-ring: #be123c;
 
   /*
    * Link text token — Button's `link` variant, which has no drawn
@@ -344,6 +358,10 @@
   --primary: #7c4fde;
   --primary-hover: #8257e6;
   --primary-foreground: #ffffff;
+  /* Button default variant's focus-ring tone, measured against
+   * --background (7.23:1). See the light block's --primary-ring comment
+   * for why this is a literal hex rather than a var() alias. */
+  --primary-ring: #a78bfa;
   --secondary: #1e293b;
   --secondary-foreground: #f8fafc;
   --muted: #1e293b;
@@ -353,6 +371,10 @@
   --accent-foreground: #ede9fe;
   --destructive: #d63853;
   --destructive-foreground: #ffffff;
+  /* Button destructive variant's focus-ring tone, measured against
+   * --background (7.89:1). See the light block's --destructive-ring
+   * comment for why this is a literal hex rather than a var() alias. */
+  --destructive-ring: #f87f8f;
   --link-foreground: #a78bfa;
   --success: #34d399;
   --success-soft: #0d2921;
@@ -393,6 +415,10 @@
     --primary: #7c4fde;
     --primary-hover: #8257e6;
     --primary-foreground: #ffffff;
+    /* Button default variant's focus-ring tone, measured against
+     * --background (7.23:1). See the light block's --primary-ring comment
+     * for why this is a literal hex rather than a var() alias. */
+    --primary-ring: #a78bfa;
     --secondary: #1e293b;
     --secondary-foreground: #f8fafc;
     --muted: #1e293b;
@@ -402,6 +428,10 @@
     --accent-foreground: #ede9fe;
     --destructive: #d63853;
     --destructive-foreground: #ffffff;
+    /* Button destructive variant's focus-ring tone, measured against
+     * --background (7.89:1). See the light block's --destructive-ring
+     * comment for why this is a literal hex rather than a var() alias. */
+    --destructive-ring: #f87f8f;
     --link-foreground: #a78bfa;
     --success: #34d399;
     --success-soft: #0d2921;

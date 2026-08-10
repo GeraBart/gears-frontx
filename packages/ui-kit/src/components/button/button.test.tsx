@@ -205,21 +205,20 @@ describe('Button', () => {
  * Focus-ring contrast guard's raw-CSS parsing, shared with the
  * custom-color API guard below. It lives here rather than in
  * tokens.test.ts with the link-text/table-header cases (genuinely
- * theme-level pairs), because a Button focus ring is DERIVED from two
- * things this file already owns — which token button.module.css's
- * --button-focus-ring{,-inner} actually resolve to per variant, and which
- * token that variant's own `background-color` resolves to. Hardcoding
- * "default's ring is --info against --primary" here would restate the CSS
- * instead of reading it: if a future edit re-points --button-focus-ring,
- * this guard needs to notice on its own, not keep asserting yesterday's
+ * theme-level pairs), because a Button focus ring is DERIVED from
+ * something this file already owns — which token button.module.css's
+ * --button-focus-ring actually resolves to per variant. Hardcoding
+ * "default's ring is --primary-ring" here would restate the CSS instead
+ * of reading it: if a future edit re-points --button-focus-ring, this
+ * guard needs to notice on its own, not keep asserting yesterday's
  * mapping. So it parses the raw button.module.css source (not the hashed
  * `styles` import, which has no selector names or values left in it) with
  * the same extractRules the theme.css guards use, resolves each variant's
  * custom-property cascade by hand (button.module.css declares
- * --button-focus-ring{,-inner} in more than one rule per variant — a
- * rest-fill rule and a separate focus-color rule further down the file —
- * so "merge every matching rule in source order" is what actually
- * reproduces the cascade, not a single lookup).
+ * --button-focus-ring in more than one rule per variant — a rest-fill
+ * rule and a separate focus-color rule further down the file — so "merge
+ * every matching rule in source order" is what actually reproduces the
+ * cascade, not a single lookup).
  */
 const cssPath = join(dirname(fileURLToPath(import.meta.url)), 'button.module.css');
 const rules = extractRules(readFileSync(cssPath, 'utf8'));
@@ -261,13 +260,14 @@ describe('Button focus-ring contrast', () => {
     return { name: match[1] as string, fallback: match[2] ?? null };
   }
 
-  // Peels away button.module.css's OWN indirection (--button-focus-ring-
-  // inner defaulting to `var(--button-focus-ring)`, or a color routed
-  // through the consumer-override hooks like `var(--button-bg,
-  // var(--primary))`) until the value names a token that ISN'T declared in
-  // `scope`. An undeclared name WITH a fallback is an override hook nobody
-  // set — the fallback IS the kit default, so resolution descends into it;
-  // an undeclared name with NO fallback can only be a real theme.css token.
+  // Peels away scope's own declared aliases — the base rule's
+  // `--button-focus-ring: var(--ring)`, a variant's own `var(--primary-
+  // ring)` / `var(--destructive-ring)` — until the value names a token
+  // that ISN'T declared in `scope`. An undeclared name WITH a fallback is
+  // an override hook nobody set (no current --button-focus-ring value
+  // actually carries one, but the branch stays general for the same
+  // reason the custom-color hooks below need it); an undeclared name with
+  // NO fallback can only be a real theme.css token.
   function resolveThemeToken(rawValue: string, scope: Map<string, string>): string | null {
     let current = rawValue.trim();
     const seen = new Set<string>();
@@ -304,31 +304,41 @@ describe('Button focus-ring contrast', () => {
     return hex as string;
   }
 
-  it.each(variants)('%s clears 3:1 against both the fill and the page background', (variant) => {
+  // The ring now lives OUTSIDE the button (see button.module.css's
+  // `:focus-visible`), so it only ever borders the page background —
+  // there is no second, fill-side surface to check anymore.
+  it.each(variants)('%s clears 3:1 against the page background', (variant) => {
     const scope = effectiveDeclarations(`.${variant}`);
-    const outerName = resolveThemeToken(scope.get('--button-focus-ring') ?? '', scope);
-    const innerName = resolveThemeToken(scope.get('--button-focus-ring-inner') ?? '', scope);
-    // Only --background is checked as the "page background" side — the
-    // one surface every variant is documented/drawn to sit on. A variant
-    // placed on --card/--surface instead is unverified; scoped to the one
-    // pair the brief actually asks about, not widened into a full matrix.
-    const fillName = resolveThemeToken(scope.get('background-color') ?? '', scope);
+    const ringName = resolveThemeToken(scope.get('--button-focus-ring') ?? '', scope);
     for (const [themeName, tokens] of themes) {
       const background = hexFor('--background', tokens, '--background');
-      const outerHex = hexFor(outerName, tokens, `${variant}'s --button-focus-ring`);
-      const innerHex = hexFor(innerName, tokens, `${variant}'s --button-focus-ring-inner`);
-      // A `transparent` (or otherwise unresolved) fill means the variant
-      // has no fill of its own — ghost/link's actual backdrop is the page
-      // itself, so the "fill" side of the check collapses onto --background.
-      const fillHex = fillName ? hexFor(fillName, tokens, `${variant}'s background-color`) : background;
+      const ringHex = hexFor(ringName, tokens, `${variant}'s --button-focus-ring`);
       expect(
-        contrastRatio(outerHex, background),
-        `${themeName} ${variant} outer vs page bg`,
+        contrastRatio(ringHex, background),
+        `${themeName} ${variant} ring vs page bg`,
       ).toBeGreaterThanOrEqual(3);
-      expect(
-        contrastRatio(innerHex, fillHex),
-        `${themeName} ${variant} inner vs fill`,
-      ).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  // The single-tone model's whole point is that only default and
+  // destructive need a family color of their own now that violet-on-violet
+  // is no longer the failure mode — everything else shares the kit-wide
+  // --ring, same as every non-Button control. Guards against a future edit
+  // silently re-special-casing one of those four (the old two-tone version
+  // of this file special-cased ghost/link/secondary too, and nothing here
+  // would have caught it drifting).
+  it('resolves default and destructive to their own ring tone and the rest to --ring', () => {
+    const ringNameFor = (variant: string) => {
+      const scope = effectiveDeclarations(`.${variant}`);
+      return resolveThemeToken(scope.get('--button-focus-ring') ?? '', scope);
+    };
+    expect(ringNameFor('variantDefault')).toBe('--primary-ring');
+    expect(ringNameFor('variantDestructive')).toBe('--destructive-ring');
+    const sharedRingVariants = variants.filter(
+      (variant) => variant !== 'variantDefault' && variant !== 'variantDestructive',
+    );
+    for (const variant of sharedRingVariants) {
+      expect(ringNameFor(variant), variant).toBe('--ring');
     }
   });
 });
