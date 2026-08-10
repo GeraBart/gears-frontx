@@ -130,6 +130,22 @@ describe('Select', () => {
     expect(trigger.hasAttribute('variant')).toBe(false);
   });
 
+  it('pads the list directly, so items placed without a SelectGroup are still inset', () => {
+    render(
+      <Select items={ITEMS} defaultOpen>
+        <SelectTrigger aria-label="Region">
+          <SelectValue placeholder="Pick a region" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="eu">Europe</SelectItem>
+          <SelectItem value="us">Americas</SelectItem>
+        </SelectContent>
+      </Select>,
+    );
+    const listbox = screen.getByRole('listbox');
+    expect(listbox.className).toContain(styles.list);
+  });
+
   it('renders the popup without the align-with-trigger overlay mode', () => {
     renderSelect({ defaultOpen: true });
     const popup = screen.getByRole('listbox').closest(`.${styles.popup}`);

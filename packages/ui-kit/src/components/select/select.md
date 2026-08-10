@@ -6,7 +6,10 @@ form submission (hidden native input on the root) come from Base UI.
 
 Composition: `Select` (root, holds the value) → `SelectTrigger` (+
 `SelectValue` for the current label) → `SelectContent` → `SelectGroup` /
-`SelectLabel` / `SelectItem` / `SelectSeparator`.
+`SelectLabel` / `SelectItem` / `SelectSeparator`. `SelectGroup` is only for
+labelled sections — it is optional; the dropdown's inner padding lives on
+the list itself, not on the group, so items placed directly under
+`SelectContent` are padded the same either way.
 
 ## When to use
 
@@ -95,8 +98,6 @@ const REGIONS = [
 
 ## Anti-patterns
 
-- Do not put items directly under `SelectContent` without a `SelectGroup`
-  — the group carries the list padding.
 - Do not use a select for navigation — that is a menu/link pattern.
 - Do not omit a placeholder or default value — an empty trigger gives the
   user (and the agent) nothing to read.

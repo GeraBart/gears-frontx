@@ -140,7 +140,7 @@ export function SelectContent({
       >
         <SelectPrimitive.Popup className={cx(styles.popup, className)} {...props}>
           <SelectScrollUpButton />
-          <SelectPrimitive.List>{children}</SelectPrimitive.List>
+          <SelectPrimitive.List className={styles.list}>{children}</SelectPrimitive.List>
           <SelectScrollDownButton />
         </SelectPrimitive.Popup>
       </SelectPrimitive.Positioner>

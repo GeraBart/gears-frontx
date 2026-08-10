@@ -184,8 +184,15 @@
   transform: scale(0.95);
 }
 
-.group {
+/*
+ * The list — not the group — carries the dropdown's inner padding, so a
+ * groupless list (items placed directly under SelectContent) is padded too.
+ */
+.list {
   padding: var(--space-1);
+}
+
+.group {
   scroll-margin: var(--space-1) 0;
 }
 
