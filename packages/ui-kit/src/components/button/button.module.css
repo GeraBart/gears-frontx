@@ -29,13 +29,14 @@
    * everything else falls through to this kit-wide --ring, same as every
    * non-Button control.
    *
-   * The --button-bg/--button-fg/--button-border{,-hover} family below works
-   * the same way: consumer-override hooks that no kit rule ever declares —
-   * each variant CONSUMES them with its own token as the var() fallback, so
-   * a consumer class that sets them recolors the button without fighting
-   * the cascade, and hover falls back to the consumer's rest color (not the
-   * variant's token) via the var(--button-bg-hover, var(--button-bg, ...))
-   * chain. See button.md's "Custom colors".
+   * The --button-bg/--button-fg/--button-bg-hover/--button-fg-hover/
+   * --button-border family below works the same way: consumer-override
+   * hooks that no kit rule ever declares — each variant CONSUMES them with
+   * its own token as the var() fallback, so a consumer class that sets them
+   * recolors the button without fighting the cascade, and hover falls back
+   * to the consumer's rest color (not the variant's token) via the
+   * var(--button-bg-hover, var(--button-bg, ...)) chain. See button.md's
+   * "Custom colors".
    */
   --button-focus-ring: var(--ring);
   /* Anchors the absolutely-centered .spinner. */

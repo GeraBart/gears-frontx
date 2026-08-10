@@ -61,8 +61,8 @@ describe('Select', () => {
     renderSelect({ defaultOpen: true, onValueChange });
     const option = screen.getByRole('option', { name: 'Europe' });
     // Base UI commits a mouse selection only when the click started on the
-    // item (guards against alignItemWithTrigger placing an item under the
-    // cursor), so the pointerdown must precede the click.
+    // item (guards against a stray pointerup landing on an item that wasn't
+    // clicked), so the pointerdown must precede the click.
     fireEvent.pointerDown(option);
     fireEvent.click(option);
     expect(onValueChange).toHaveBeenCalledTimes(1);

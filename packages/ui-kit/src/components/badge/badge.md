@@ -91,3 +91,6 @@ import { Badge } from '@gears-frontx/ui-kit';
   container.
 - Do not pass both `icon` and `dot` expecting both to render — `icon`
   replaces the dot by design.
+- Do not drop an icon into Badge's children (`<Badge><Icon />label</Badge>`)
+  — the kit no longer sizes a bare svg child; use the `icon` prop, which is
+  sized and accent-colored automatically.

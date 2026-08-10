@@ -126,14 +126,16 @@
   --border-width-focus: 2px;
   /*
    * The thickness a --border-width-focus ring adds INSIDE a --border-width
-   * border. Every 2px ring in the kit — focus, aria-invalid, and Table's
-   * selected row — is drawn as a recolored 1px border plus an inset shadow
-   * of this width rather than as a real border-width switch, so the ring
+   * border. Every 2px ring drawn this way — a recolored 1px border plus an
+   * inset shadow of this width, rather than a real border-width switch —
    * thickens without the element's box changing: a genuine width switch
    * grows it 1px on each edge, which shifts a control's text and, in a
-   * table, every row below the selected one. Named here rather than spelled
-   * out per module because it is one decision shared by eight components,
-   * not eight coincidences.
+   * table, every row below the selected one. Named here rather than
+   * spelled out per module because it is one decision shared by the seven
+   * components that draw it this way (Tabs, Input, Toast, Table's selected
+   * row, Textarea, Badge, Select), not seven coincidences. Button is the
+   * deliberate exception: its focus ring is drawn OUTSIDE the button as an
+   * `outline` (see button.module.css), so it never consumes --ring-inset.
    */
   --ring-inset: calc(var(--border-width-focus) - var(--border-width));
 
