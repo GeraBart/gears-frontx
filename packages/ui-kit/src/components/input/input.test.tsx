@@ -8,25 +8,62 @@ afterEach(cleanup);
 
 describe('Input', () => {
   it('renders a native input with the base class', () => {
-    render(<Input placeholder="Search" />);
+    const { container } = render(<Input placeholder="Search" />);
     const input = screen.getByPlaceholderText('Search');
     expect(input).toHaveProperty('tagName', 'INPUT');
     expect(input.className).toContain(styles.input);
-    // Every non-search type stays a bare input — no wrapper element.
-    expect(input.parentElement?.className ?? '').not.toContain(styles.searchWrap);
+    // No slots — no wrapper element: the input is the root.
+    expect(input.parentElement).toBe(container);
   });
 
-  it('type="search" adds the decorated wrapper and keeps the searchbox role', () => {
-    render(<Input type="search" placeholder="Find" className="consumer" />);
+  it('type="search" no longer decorates itself', () => {
+    const { container } = render(<Input type="search" placeholder="Find" />);
     const input = screen.getByRole('searchbox');
-    expect(input.className).toContain(styles.searchInput);
-    // The consumer className stays on the input itself, same as any type.
+    // Still a bare input (the searchbox role comes from the native type);
+    // the magnifier is gone — icons are always explicit now.
+    expect(input.parentElement).toBe(container);
+    expect(container.querySelector('svg')).toBeNull();
+  });
+
+  it('icon renders in a decorative leading slot and pads the input', () => {
+    render(<Input icon={<svg data-testid="magnifier" />} placeholder="Find" className="consumer" />);
+    const input = screen.getByPlaceholderText('Find');
+    expect(input.parentElement?.className).toContain(styles.wrap);
+    expect(input.className).toContain(styles.hasIcon);
+    // The consumer className stays on the input itself, wrapper or not.
     expect(input.className).toContain('consumer');
-    const wrap = input.parentElement;
-    expect(wrap?.className).toContain(styles.searchWrap);
-    // The magnifier is decoration; the accessible upgrade is the native type.
-    const icon = wrap?.querySelector('svg');
-    expect(icon?.getAttribute('aria-hidden')).toBe('true');
+    const slot = screen.getByTestId('magnifier').parentElement;
+    expect(slot).toHaveProperty('tagName', 'SPAN');
+    expect(slot?.className).toContain(styles.icon);
+    expect(slot?.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('end renders an interactive trailing slot after the input in the DOM', () => {
+    const onClear = vi.fn();
+    render(
+      <Input
+        placeholder="Find"
+        end={<button type="button" aria-label="Clear" onClick={onClear} />}
+      />,
+    );
+    const input = screen.getByPlaceholderText('Find');
+    expect(input.className).toContain(styles.hasEnd);
+    const clear = screen.getByRole('button', { name: 'Clear' });
+    // Live content, not aria-hidden decoration — and placed after the
+    // input, so tab order is field first, then the slot.
+    expect(clear.closest(`.${styles.end}`)).not.toBeNull();
+    expect(input.nextElementSibling?.contains(clear)).toBe(true);
+    fireEvent.click(clear);
+    expect(onClear).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders both slots at once', () => {
+    render(<Input placeholder="Find" icon={<svg data-testid="lead" />} end={<span data-testid="trail" />} />);
+    const input = screen.getByPlaceholderText('Find');
+    expect(screen.getByTestId('lead')).toBeTruthy();
+    expect(screen.getByTestId('trail')).toBeTruthy();
+    expect(input.className).toContain(styles.hasIcon);
+    expect(input.className).toContain(styles.hasEnd);
   });
 
   it('reports value changes through onValueChange', () => {

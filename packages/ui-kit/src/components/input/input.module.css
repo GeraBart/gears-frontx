@@ -112,29 +112,48 @@
 }
 
 /*
- * type="search" plumbing (see input.tsx): the wrapper positions the
- * magnifier over the field; the input just clears space for it. The icon
- * is aria-hidden decoration — the search semantic comes from the native
- * type.
+ * icon/end slot plumbing (see input.tsx): the wrapper positions the slots
+ * over the field; the input just clears space for whichever slots are
+ * present. The icon slot is aria-hidden decoration with pointer events
+ * off; the end slot is live content overlaid on the field's end padding.
  */
-.searchWrap {
+.wrap {
   position: relative;
   display: block;
   width: 100%;
 }
 
-.searchIcon {
+.icon {
   position: absolute;
   inset-inline-start: var(--space-3);
   top: 50%;
   translate: 0 -50%;
-  width: var(--icon-size-sm);
-  height: var(--icon-size-sm);
+  display: inline-flex;
   color: var(--muted-foreground);
   pointer-events: none;
 }
 
-.searchInput {
-  /* Icon inset + the icon + a gap, so the text clears the magnifier. */
+.icon svg {
+  width: var(--icon-size-sm);
+  height: var(--icon-size-sm);
+}
+
+.end {
+  position: absolute;
+  inset-inline-end: var(--space-2);
+  top: 50%;
+  translate: 0 -50%;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Icon inset + the icon + a gap, so the text clears the leading icon. */
+.hasIcon {
   padding-inline-start: calc(var(--space-3) + var(--icon-size-sm) + var(--space-2));
+}
+
+/* The end slot's stated maximum — a compact 32px icon-button — plus its
+ * inset and a gap. Wider end content is the consumer's padding to extend. */
+.hasEnd {
+  padding-inline-end: calc(var(--space-2) + var(--control-height-sm) + var(--space-1));
 }

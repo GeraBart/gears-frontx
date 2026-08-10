@@ -70,6 +70,15 @@ const HOURS = Array.from({ length: 24 }, (_, hour) => ({
   label: `${String(hour).padStart(2, '0')}:00`,
 }));
 
+function MagnifierIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.5" />
+      <path d="m10.5 10.5 3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function LoadingDemo() {
   const [busy, setBusy] = useState(false);
   return (
@@ -162,7 +171,12 @@ export function ComponentsPage() {
           </Field>
           <Field name="query">
             <FieldLabel>Search</FieldLabel>
-            <Input type="search" placeholder="Search projects…" />
+            <Input
+              type="search"
+              placeholder="Search projects…"
+              icon={<MagnifierIcon />}
+              end={<Button variant="ghost" size="sm" icon={<DemoIcon />} aria-label="Clear search" />}
+            />
           </Field>
           <Field name="notes">
             <FieldLabel>Notes</FieldLabel>

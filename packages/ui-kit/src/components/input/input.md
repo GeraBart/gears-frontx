@@ -23,16 +23,19 @@ error, validation state) when rendered inside one.
 |------|------|---------|
 | `value` / `defaultValue` | controlled / uncontrolled value | — |
 | `onValueChange` | `(value: string, eventDetails) => void` — fires on every change | — |
+| `icon` | `ReactNode` — leading icon slot, decorative (`aria-hidden`, no pointer events); pair with the right native `type` for semantics | — |
+| `end` | `ReactNode` — trailing slot for live content (icon-button, adornment); rendered after the input, sized for an icon or a compact `size="sm"` icon-only Button | — |
 | `className` | `string` — merged after the kit class | — |
 
 All other props are native `<input>` props (`type`, `placeholder`,
 `disabled`, `required`, `aria-invalid`, ...) and are forwarded as-is.
 `aria-invalid` switches the border and ring to the destructive color.
 
-`type="search"` upgrades the field visually as well as semantically: a
-leading magnifier icon (decorative, `aria-hidden`) renders inside the
-field via a presentational wrapper element, and the input announces as a
-searchbox. No prop needed — the native type is the switch.
+Icons are explicit: `icon` draws a leading icon inside the field (via a
+presentational wrapper the component adds only when a slot is present),
+`end` overlays trailing content such as a clear button. Semantics still
+come from the native `type` — a search field is `type="search"` (searchbox
+role) plus a magnifier passed to `icon`; nothing renders automatically.
 
 ## Examples
 
@@ -42,8 +45,14 @@ import { Input } from '@gears-frontx/ui-kit';
 // Uncontrolled with placeholder
 <Input placeholder="Project name" />
 
-// Search field — the native type brings the magnifier and searchbox role
-<Input type="search" placeholder="Search projects…" />
+// Search field: the native type brings the searchbox role, the icon slot
+// brings the magnifier, and `end` can hold a clear button
+<Input
+  type="search"
+  placeholder="Search projects…"
+  icon={<MagnifierIcon />}
+  end={<Button variant="ghost" size="sm" icon={<CrossIcon />} aria-label="Clear" />}
+/>
 
 // Controlled
 <Input value={email} onValueChange={setEmail} type="email" />
@@ -63,3 +72,5 @@ import { Input } from '@gears-frontx/ui-kit';
   containers, colors to theme tokens.
 - Do not build a labelled input by hand — the `Field` composition handles
   label/error/description wiring.
+- Do not put an interactive control in `icon` — that slot is aria-hidden
+  and pointer-transparent; live content goes in `end`.
