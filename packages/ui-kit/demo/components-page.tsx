@@ -96,6 +96,7 @@ function LoadingDemo() {
 }
 
 export function ComponentsPage() {
+  const [query, setQuery] = useState('');
   const [region, setRegion] = useState<string | null>(null);
   return (
     <>
@@ -181,9 +182,11 @@ export function ComponentsPage() {
             <FieldLabel>Search</FieldLabel>
             <Input
               type="search"
+              value={query}
+              onChange={(e) => setQuery(e.currentTarget.value)}
               placeholder="Search projects…"
               icon={<MagnifierIcon />}
-              end={<Button variant="ghost" size="sm" icon={<DemoIcon />} aria-label="Clear search" />}
+              end={<Button variant="ghost" size="sm" icon={<DemoIcon />} aria-label="Clear search" onClick={() => setQuery('')} />}
             />
           </Field>
           <Field name="notes">

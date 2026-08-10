@@ -464,9 +464,10 @@ describe('theme tokens', () => {
     // above, live off theme.css, so a token drifting back under its floor
     // fails this test instead of shipping a color no one re-measured.
     // Button's OWN focus-ring cases live in button.test.tsx instead: they
-    // need to read button.module.css's actual --button-focus-ring{,-inner}
-    // declarations per variant, which makes them a Button-specific guard,
-    // not a theme-level one — see that file for why, and for the shared
+    // need to read button.module.css's actual --button-focus-ring
+    // declaration (a single tone drawn outside the button via outline +
+    // outline-offset), which makes them a Button-specific guard, not a
+    // theme-level one — see that file for why, and for the shared
     // contrastRatio/extractRules utilities both files import.
     //
     // Every case below reads a token's LITERAL hex out of theme.css via
