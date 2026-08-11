@@ -145,14 +145,23 @@
    * only).
    */
   box-sizing: border-box;
+  /*
+   * The popup itself does NOT scroll — .list does (see below). It stays a
+   * flex column that clips (`overflow: hidden`) so its child (the List,
+   * bracketed by the scroll arrows) is capped at `--available-height` and
+   * never spills past its border; `position: relative` remains because the
+   * arrows anchor to this box via their own `position: absolute` (set
+   * inline by Base UI's SelectScrollArrow).
+   */
+  display: flex;
+  flex-direction: column;
   position: relative;
   isolation: isolate;
   z-index: 50;
   max-height: var(--available-height);
   width: var(--anchor-width);
   min-width: 9rem;
-  overflow-x: hidden;
-  overflow-y: auto;
+  overflow: hidden;
   border-radius: var(--radius-md);
   border: var(--border-width) solid var(--popover-border);
   background-color: var(--popover);
@@ -187,9 +196,44 @@
 /*
  * The list — not the group — carries the dropdown's inner padding, so a
  * groupless list (items placed directly under SelectContent) is padded too.
+ *
+ * The list is also the scroller, not .popup. Base UI's own scroller styles
+ * (LIST_FUNCTIONAL_STYLES: position/max-height/overflow) apply to
+ * Select.List only in its retired align-with-trigger mode (see
+ * node_modules/@base-ui/react/select/list/SelectList.mjs) — this kit always
+ * renders the popup below the trigger (select.tsx pins
+ * `alignItemWithTrigger={false}`), so those styles never land and something
+ * here must scroll instead. It has to be THIS element specifically, not
+ * .popup: Base UI computes scroll-arrow visibility from `store.state.
+ * listElement` (set by SelectList's ref callback), reading ITS scrollTop/
+ * scrollHeight/clientHeight — a scrolling .popup with a non-overflowing
+ * .list leaves that element permanently maxed at zero scroll, so the up/
+ * down arrows compute as never-visible and never mount. `min-height: 0`
+ * is required alongside `overflow-y: auto`: as a child of .popup's flex
+ * column, .list would otherwise refuse to shrink below its content's
+ * height and grow the popup instead of scrolling within it.
+ *
+ * `scroll-padding-block` keeps a scrolled-into-view item clear of the
+ * arrows: Base UI scrolls the active item with `block: 'nearest'`, which
+ * can park it flush against the scrollport edge, and the arrows are
+ * `position: absolute` against .popup, overlaying that same edge — this
+ * reserves exactly one arrow's box height as scroll padding so `nearest`
+ * never lands an item underneath either arrow. The height is a local
+ * custom property, not a shared one on .popup: the token-guard test
+ * (tokens.test.ts) scopes a locally-declared `var()` to the rule's own
+ * leading class, so .list and .scrollArrow below each declare the same
+ * formula rather than one declaring it and the other reading it across
+ * classes. Both derive it from the same two theme tokens (never a literal),
+ * so the two declarations can't drift into different numbers even though
+ * they're textually duplicated.
  */
 .list {
+  --select-scroll-arrow-height: calc(var(--icon-size-sm) + var(--space-2));
+  overflow-x: hidden;
+  overflow-y: auto;
+  min-height: 0;
   padding: var(--space-1);
+  scroll-padding-block: var(--select-scroll-arrow-height);
 }
 
 .group {
@@ -284,10 +328,25 @@
   background-color: var(--border);
 }
 
+/*
+ * `height` is pinned explicitly (not left to the icon + padding to imply
+ * it) so it shares one formula with .list's `scroll-padding-block` above —
+ * see that comment for why each declares its own copy of the custom
+ * property rather than one reading the other's. `box-sizing: border-box`
+ * is required for that formula to equal the box's actual rendered height:
+ * without it (content-box, this kit's ambient default — see .trigger/
+ * .popup/.item above for the same substitution), the padding below would
+ * add on top of the 24px `height` instead of being absorbed into it,
+ * rendering the arrow 8px taller than .list's reserved scroll padding and
+ * leaving the selected item's edge visible underneath it again.
+ */
 .scrollArrow {
+  --select-scroll-arrow-height: calc(var(--icon-size-sm) + var(--space-2));
+  box-sizing: border-box;
   z-index: 10;
   display: flex;
   width: 100%;
+  height: var(--select-scroll-arrow-height);
   align-items: center;
   justify-content: center;
   padding: var(--space-1) 0;
