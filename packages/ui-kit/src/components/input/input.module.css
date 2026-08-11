@@ -147,6 +147,18 @@
   align-items: center;
 }
 
+/*
+ * .end is a sibling inside .wrap, not a descendant of .input, so
+ * .input:disabled above never reaches it: a disabled field's clear button
+ * (or whatever else lives in `end`) would otherwise stay fully opaque and
+ * clickable. Match the same 0.42 disabled dim as .input itself and make it
+ * inert.
+ */
+.input:disabled ~ .end {
+  opacity: 0.42;
+  pointer-events: none;
+}
+
 /* Icon inset + the icon + a gap, so the text clears the leading icon. */
 .hasIcon {
   padding-inline-start: calc(var(--space-3) + var(--icon-size-sm) + var(--space-2));

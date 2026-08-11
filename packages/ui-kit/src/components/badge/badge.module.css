@@ -113,8 +113,8 @@
 }
 
 .badge .icon svg {
-  width: 0.75rem;
-  height: 0.75rem;
+  width: var(--icon-size-xs);
+  height: var(--icon-size-xs);
 }
 
 /*

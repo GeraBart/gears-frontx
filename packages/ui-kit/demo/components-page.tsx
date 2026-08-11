@@ -36,6 +36,7 @@ import {
   SelectContent,
   SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
   Skeleton,
@@ -224,6 +225,7 @@ export function ComponentsPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectGroup>
+                  <SelectLabel>Hours</SelectLabel>
                   {HOURS.map((item) => (
                     <SelectItem key={item.value} value={item.value}>
                       {item.label}

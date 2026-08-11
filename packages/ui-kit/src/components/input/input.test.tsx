@@ -16,7 +16,7 @@ describe('Input', () => {
     expect(input.parentElement).toBe(container);
   });
 
-  it('type="search" no longer decorates itself', () => {
+  it('type="search" stays a bare input with the searchbox role and no icon', () => {
     const { container } = render(<Input type="search" placeholder="Find" />);
     const input = screen.getByRole('searchbox');
     // Still a bare input (the searchbox role comes from the native type);
@@ -100,6 +100,24 @@ describe('Input', () => {
   it('forwards the invalid state', () => {
     render(<Input aria-invalid={true} />);
     expect(screen.getByRole('textbox').getAttribute('aria-invalid')).toBe('true');
+  });
+
+  it('keeps a disabled input\'s end slot as its next sibling in the DOM', () => {
+    // input.module.css dims/disarms `end` via `.input:disabled ~ .end` — a
+    // sibling selector, not a class this component toggles in JS. jsdom
+    // computes no styles, so there is no opacity/pointer-events to assert
+    // here; what's verifiable is the DOM shape that selector depends on:
+    // `end` rendered as .input's next sibling while `disabled` is set.
+    render(
+      <Input
+        disabled
+        placeholder="Find"
+        end={<button type="button" aria-label="Clear" />}
+      />,
+    );
+    const input = screen.getByPlaceholderText('Find');
+    expect(input).toHaveProperty('disabled', true);
+    expect(input.nextElementSibling?.className).toContain(styles.end);
   });
 
   it('marks the input disabled', () => {

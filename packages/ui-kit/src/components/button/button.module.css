@@ -87,14 +87,17 @@
 }
 
 /*
- * Forced-colors mode drops box-shadow, so the ring above leaves the button with
- * no visible focus at all. Hand the indicator back to the UA outline, which the
- * mode does paint, and keep it off the shadow.
+ * Forced-colors mode replaces author colors with a fixed system palette, so
+ * the per-variant --button-focus-ring color (--primary-ring/
+ * --destructive-ring, or the kit-wide --ring) would be dropped anyway. Hand
+ * the ring to the system's Highlight color instead so it survives the mode.
+ * Only the color needs overriding: width/style/offset already match the
+ * base :focus-visible rule above, so redeclaring them here would just be a
+ * duplicate.
  */
 @media (forced-colors: active) {
   .button:focus-visible {
-    outline: 2px solid Highlight;
-    outline-offset: 2px;
+    outline-color: Highlight;
   }
 }
 

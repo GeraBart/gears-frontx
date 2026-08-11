@@ -56,7 +56,7 @@ Rules for generated code:
 ## Components
 
 - [Badge](dist/docs/badge.md): status label, an intent-colored caption with
-  an opt-in status dot (`dot`) or a leading `icon` render prop (icon wins
+  an opt-in status dot (`dot`) or a leading `icon` slot prop (icon wins
   when both are given; default is neither); variants
   success|warning|info|danger|muted (semantic states ONLY — pick by meaning,
   never by color; neutral/count/category = muted), shapes pill|plain (pill

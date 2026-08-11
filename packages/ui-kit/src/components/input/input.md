@@ -36,6 +36,9 @@ presentational wrapper the component adds only when a slot is present),
 `end` overlays trailing content such as a clear button. Semantics still
 come from the native `type` — a search field is `type="search"` (searchbox
 role) plus a magnifier passed to `icon`; nothing renders automatically.
+A disabled input dims and disarms its `end` slot too (0.42 opacity,
+`pointer-events: none`) — a clear button left in `end` doesn't stay live
+just because it isn't the native control.
 
 ## Examples
 

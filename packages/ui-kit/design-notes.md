@@ -223,11 +223,14 @@ Architecture's build bullet).
    "Studio / shadcn" variable collection. Landed: theme.css carries the
    palette and the new token groups (see Architecture's theme bullet), and
    the existing components follow the mockups' component specs — Badge on
-   semantic intents (pill/dot; the shadcn variant list retired), Button's
+   semantic intents (`pill`/`plain` shapes, with `dot` and `icon` both
+   opt-in; the shadcn variant list retired), Button's
    `icon` slot + auto icon-only + `loading`, Tabs on the trackless Kind=tab
    look (the spec's Kind=segment is the planned `toggle-group`'s styling,
    per the design file's own component description), the unified Field set
-   for Input/Textarea/Select with the `search` and `filter` types, Table
+   for Input/Textarea/Select with the `filter` type (Select's compact
+   toolbar chip) and `search`'s native searchbox role (no automatic icon;
+   pass one via `icon`), Table
    density + selected/stale/restricted row hooks, and component CSS on the
    metric tokens. The drawn-vs-spec control-height discrepancy was ruled
    in favor of the drawn specimens (32/36/40; buttons map sm/default/lg
@@ -361,7 +364,8 @@ Architecture's build bullet).
      than by an axis name only this component used, so every component in
      the kit is driven by `variant` (+ `size`, or the occasional real extra
      axis: Badge's `shape`, Table's `density`). `shape` rather than `size`
-     because the values are pill vs. bare dot and Badge has no size axis;
+     because the values are pill vs. plain (dot is a separate opt-in flag,
+   orthogonal to shape) and Badge has no size axis;
      not `form`, which is a real HTML attribute a styling prop would shadow
      for anyone rendering a form-associated element via `render`.
    - Four new tokens: `--link-foreground` (Button's `link` variant text),

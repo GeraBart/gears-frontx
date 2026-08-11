@@ -48,7 +48,7 @@ brand/status button is a consumer class away — no new variant needed:
 | `--button-border` | border color on every variant (transparent by default outside `outline`) |
 
 ```css
-.buy { --button-bg: var(--success); --button-bg-hover: color-mix(in oklab, var(--success) 90%, var(--foreground) 10%); --button-fg: #fff; }
+.buy { --button-bg: var(--success); --button-bg-hover: color-mix(in oklab, var(--success) 90%, var(--foreground) 10%); --button-fg: var(--primary-foreground); }
 ```
 
 ```tsx
@@ -63,6 +63,14 @@ for its own variants, and give the focus ring the same care via
 `--button-focus-ring` (see Anti-patterns) — it is drawn outside the button
 as an `outline`, so only one tone is needed; it only ever borders the page
 background, never your custom fill.
+
+These properties are inherited custom properties and `.button` never resets
+them, so where you set them matters: on the button's own class (`.buy`
+above) it recolors that one button; on a container it themes every Button
+underneath, including ones you didn't mean to touch — a clear button
+sitting in an Input's `end` slot inside that container, for instance. Use
+container-level scoping deliberately, or scope to the button itself to
+avoid the surprise.
 
 Icon-only is derived, not a size: `icon` with no children renders a square
 button of the current `size`. There is no `size="icon"`.

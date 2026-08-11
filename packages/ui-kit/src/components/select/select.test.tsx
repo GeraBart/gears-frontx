@@ -151,7 +151,7 @@ describe('Select', () => {
     expect(listbox.className).toContain(styles.list);
   });
 
-  it('renders the popup without the align-with-trigger overlay mode', () => {
+  it('always opens the popup below the trigger, with no align-with-trigger attribute', () => {
     renderSelect({ defaultOpen: true });
     const popup = screen.getByRole('listbox').closest(`.${styles.popup}`);
     // The popup exists and no longer advertises the retired overlay mode —
