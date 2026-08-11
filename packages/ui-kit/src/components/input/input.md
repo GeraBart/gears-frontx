@@ -36,9 +36,21 @@ presentational wrapper the component adds only when a slot is present),
 `end` overlays trailing content such as a clear button. Semantics still
 come from the native `type` — a search field is `type="search"` (searchbox
 role) plus a magnifier passed to `icon`; nothing renders automatically.
-A disabled input dims and disarms its `end` slot too (0.42 opacity,
-`pointer-events: none`) — a clear button left in `end` doesn't stay live
-just because it isn't the native control.
+A disabled input dims its `icon` and `end` slots too (0.42 opacity) — a
+clear button left in `end` doesn't stay visually live just because it isn't
+the native control. That dimming fires regardless of *why* the input is
+disabled (the direct `disabled` prop or a `<Field disabled>` ancestor both
+land on the real `<input>`). Removing `end`'s tab stop is a separate fix
+and only covers the direct prop: passing `disabled` straight to `Input`
+also sets `inert` on the `end` wrapper, which drops it from the tab order
+and blocks activation — the actual fix for a keyboard user, since dimming
+alone (`pointer-events: none`) only disarms the mouse. A field disabled
+through `<Field disabled>`'s context still dims `end`, but Input has no way
+to observe that context-driven disable from its own props, so it cannot set
+`inert` for that path — an interactive `end` slot under a `Field`-disabled
+input stays dim yet still tabbable and clickable via keyboard activation.
+Consumers composing `end` from a `Field` should disable their own
+interactive `end` content directly rather than relying on this.
 
 ## Examples
 

@@ -365,7 +365,7 @@ Architecture's build bullet).
      the kit is driven by `variant` (+ `size`, or the occasional real extra
      axis: Badge's `shape`, Table's `density`). `shape` rather than `size`
      because the values are pill vs. plain (dot is a separate opt-in flag,
-   orthogonal to shape) and Badge has no size axis;
+     orthogonal to shape) and Badge has no size axis;
      not `form`, which is a real HTML attribute a styling prop would shadow
      for anyone rendering a form-associated element via `render`.
    - Four new tokens: `--link-foreground` (Button's `link` variant text),
