@@ -82,7 +82,9 @@
     var(--ring);
 }
 
-/* See button.module.css: forced-colors drops box-shadow, restore UA outline. */
+/* The ring above is an inset box-shadow, and forced-colors mode doesn't
+ * render box-shadow at all — add an explicit outline or the focus
+ * indicator disappears entirely under the mode. */
 @media (forced-colors: active) {
   .input:focus-visible {
     outline: 2px solid Highlight;
@@ -148,13 +150,20 @@
 }
 
 /*
- * .end is a sibling inside .wrap, not a descendant of .input, so
- * .input:disabled above never reaches it: a disabled field's clear button
- * (or whatever else lives in `end`) would otherwise stay fully opaque and
- * clickable. Match the same 0.42 disabled dim as .input itself and make it
- * inert.
+ * .icon renders before .input in the DOM (leading slot) and .end after
+ * (trailing slot), so a plain `~` sibling combinator can reach only one of
+ * them — a prior `.input:disabled ~ .end` rule matched .end but never
+ * .icon, leaving a disabled search field's magnifier at full strength
+ * while its border, text and placeholder dimmed. `:has()` lets .wrap test
+ * the input's disabled state and dim both slots from there regardless of
+ * DOM order — and regardless of *why* .input is disabled, since the direct
+ * `disabled` prop and a `<Field disabled>` ancestor both land on the real
+ * <input>, so this selector fires either way. `pointer-events: none` still
+ * only disarms the mouse, not Tab/Enter — see input.tsx's `inert` on .end
+ * for the keyboard fix, which only the direct-prop path can apply.
  */
-.input:disabled ~ .end {
+.wrap:has(.input:disabled) .icon,
+.wrap:has(.input:disabled) .end {
   opacity: 0.42;
   pointer-events: none;
 }

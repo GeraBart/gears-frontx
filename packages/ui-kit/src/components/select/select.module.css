@@ -64,7 +64,9 @@
     var(--ring);
 }
 
-/* See button.module.css: forced-colors drops box-shadow, restore UA outline. */
+/* The ring above is an inset box-shadow, and forced-colors mode doesn't
+ * render box-shadow at all — add an explicit outline or the focus
+ * indicator disappears entirely under the mode. */
 @media (forced-colors: active) {
   .trigger:focus-visible {
     outline: 2px solid Highlight;
@@ -146,6 +148,17 @@
    */
   box-sizing: border-box;
   /*
+   * Declared once here rather than on .list/.scrollArrow individually:
+   * both are DOM children of .popup, and custom properties inherit, so an
+   * ancestor declaration plus descendant reads (`.popup .list`, `.popup
+   * .scrollArrow` below) satisfies tokens.test.ts's local-variable guard
+   * without the formula being duplicated — same shape as card.module.css's
+   * --card-spacing. The value is the scroll arrow's own geometry: one icon
+   * plus its own padding on both edges (--space-1 top AND bottom below,
+   * not a single --space-2 — the two only ever agreed numerically).
+   */
+  --select-scroll-arrow-height: calc(var(--icon-size-sm) + var(--space-1) * 2);
+  /*
    * The popup itself does NOT scroll — .list does (see below). It stays a
    * flex column that clips (`overflow: hidden`) so its child (the List,
    * bracketed by the scroll arrows) is capped at `--available-height` and
@@ -212,27 +225,27 @@
  * is required alongside `overflow-y: auto`: as a child of .popup's flex
  * column, .list would otherwise refuse to shrink below its content's
  * height and grow the popup instead of scrolling within it.
- *
+ */
+.list {
+  overflow-x: hidden;
+  overflow-y: auto;
+  min-height: 0;
+  padding: var(--space-1);
+}
+
+/*
  * `scroll-padding-block` keeps a scrolled-into-view item clear of the
  * arrows: Base UI scrolls the active item with `block: 'nearest'`, which
  * can park it flush against the scrollport edge, and the arrows are
  * `position: absolute` against .popup, overlaying that same edge — this
  * reserves exactly one arrow's box height as scroll padding so `nearest`
- * never lands an item underneath either arrow. The height is a local
- * custom property, not a shared one on .popup: the token-guard test
- * (tokens.test.ts) scopes a locally-declared `var()` to the rule's own
- * leading class, so .list and .scrollArrow below each declare the same
- * formula rather than one declaring it and the other reading it across
- * classes. Both derive it from the same two theme tokens (never a literal),
- * so the two declarations can't drift into different numbers even though
- * they're textually duplicated.
+ * never lands an item underneath either arrow. Read via `.popup .list`
+ * rather than bare `.list` — ancestor declares, children inherit (see
+ * .popup's --select-scroll-arrow-height comment above) — so this rule,
+ * not the bare-class one above, is the one tokens.test.ts's local-variable
+ * guard exempts.
  */
-.list {
-  --select-scroll-arrow-height: calc(var(--icon-size-sm) + var(--space-2));
-  overflow-x: hidden;
-  overflow-y: auto;
-  min-height: 0;
-  padding: var(--space-1);
+.popup .list {
   scroll-padding-block: var(--select-scroll-arrow-height);
 }
 
@@ -252,7 +265,7 @@
    * Substitutes for the preflight the kit lacks: without it, content-box
    * (this kit's ambient default) piles the 2.5rem of horizontal padding
    * on top of `width: 100%`, rendering each item 40px wider than the
-   * popup's content box — clipped by .popup's own overflow-x: hidden
+   * popup's content box — clipped by .popup's own `overflow: hidden`
    * above, which cuts off .itemIndicator (the checkmark, positioned
    * `right: var(--space-2)` from this box's now-invisible true right
    * edge) entirely. Found by auditing every module for this collision, not by
@@ -329,29 +342,36 @@
 }
 
 /*
- * `height` is pinned explicitly (not left to the icon + padding to imply
- * it) so it shares one formula with .list's `scroll-padding-block` above —
- * see that comment for why each declares its own copy of the custom
- * property rather than one reading the other's. `box-sizing: border-box`
- * is required for that formula to equal the box's actual rendered height:
- * without it (content-box, this kit's ambient default — see .trigger/
- * .popup/.item above for the same substitution), the padding below would
- * add on top of the 24px `height` instead of being absorbed into it,
- * rendering the arrow 8px taller than .list's reserved scroll padding and
- * leaving the selected item's edge visible underneath it again.
+ * `box-sizing: border-box` is required for the `height` below to equal
+ * this box's actual rendered size: without it (content-box, this kit's
+ * ambient default — see .trigger/.popup/.item above for the same
+ * substitution), the padding below would add on top of the 24px `height`
+ * instead of being absorbed into it, rendering the arrow 8px taller than
+ * .list's reserved scroll padding and leaving the selected item's edge
+ * visible underneath it again.
  */
 .scrollArrow {
-  --select-scroll-arrow-height: calc(var(--icon-size-sm) + var(--space-2));
   box-sizing: border-box;
   z-index: 10;
   display: flex;
   width: 100%;
-  height: var(--select-scroll-arrow-height);
   align-items: center;
   justify-content: center;
   padding: var(--space-1) 0;
   cursor: default;
   background-color: var(--popover);
+}
+
+/*
+ * `height` is pinned explicitly (not left to the icon + padding to imply
+ * it) so it shares exactly one formula with .list's `scroll-padding-block`
+ * — both read `--select-scroll-arrow-height` from .popup (declared once,
+ * above), so the two can't drift into different numbers. Read via
+ * `.popup .scrollArrow`, same ancestor-declares/children-inherit shape as
+ * `.popup .list` above.
+ */
+.popup .scrollArrow {
+  height: var(--select-scroll-arrow-height);
 }
 
 .scrollArrowUp {

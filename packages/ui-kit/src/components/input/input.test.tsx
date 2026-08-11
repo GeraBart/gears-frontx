@@ -103,8 +103,8 @@ describe('Input', () => {
   });
 
   it('keeps a disabled input\'s end slot as its next sibling in the DOM', () => {
-    // input.module.css dims/disarms `end` via `.input:disabled ~ .end` — a
-    // sibling selector, not a class this component toggles in JS. jsdom
+    // input.module.css dims .icon/.end via `.wrap:has(.input:disabled) ...`
+    // — a :has() selector, not a class this component toggles in JS. jsdom
     // computes no styles, so there is no opacity/pointer-events to assert
     // here; what's verifiable is the DOM shape that selector depends on:
     // `end` rendered as .input's next sibling while `disabled` is set.
@@ -118,6 +118,33 @@ describe('Input', () => {
     const input = screen.getByPlaceholderText('Find');
     expect(input).toHaveProperty('disabled', true);
     expect(input.nextElementSibling?.className).toContain(styles.end);
+  });
+
+  it('makes a disabled input\'s end slot inert, removing its tab stop', () => {
+    // Dimming alone (opacity/pointer-events in CSS) only disarms the mouse
+    // — a Button inside `end` keeps its tab stop and still fires on
+    // Enter/Space. `inert` is the actual fix: it drops the slot from the
+    // tab order and blocks activation. Only wired from the direct
+    // `disabled` prop (see input.tsx/input.md for why a Field-driven
+    // disable can't be observed here).
+    render(
+      <Input
+        disabled
+        placeholder="Find"
+        end={<button type="button" aria-label="Clear" />}
+      />,
+    );
+    const input = screen.getByPlaceholderText('Find');
+    // jsdom's HTMLElement doesn't reflect `.inert` as an IDL property, so
+    // assert the attribute itself rather than the property `input.module.
+    // css`'s selectors don't care about either way.
+    expect(input.nextElementSibling?.hasAttribute('inert')).toBe(true);
+  });
+
+  it('leaves an enabled input\'s end slot un-inert', () => {
+    render(<Input placeholder="Find" end={<button type="button" aria-label="Clear" />} />);
+    const input = screen.getByPlaceholderText('Find');
+    expect(input.nextElementSibling?.hasAttribute('inert')).toBe(false);
   });
 
   it('marks the input disabled', () => {

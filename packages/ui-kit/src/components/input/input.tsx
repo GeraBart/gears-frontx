@@ -31,7 +31,7 @@ export interface InputProps extends Omit<InputPrimitive.Props, 'className'> {
  * input either way, so styling targets the same element regardless. Field
  * wiring is unaffected — the primitive is still the control Field talks to.
  */
-export function Input({ className, icon, end, ...props }: InputProps) {
+export function Input({ className, icon, end, disabled, ...props }: InputProps) {
   // `icon != null`/`end != null` are true for `icon={false}`/`end={false}` —
   // a valid ReactNode that renders nothing — which is exactly what
   // `icon={cond && <Icon/>}` passes when `cond` is false. Same predicate as
@@ -47,6 +47,7 @@ export function Input({ className, icon, end, ...props }: InputProps) {
         hasEnd && styles.hasEnd,
         className,
       )}
+      disabled={disabled}
       {...props}
     />
   );
@@ -61,7 +62,20 @@ export function Input({ className, icon, end, ...props }: InputProps) {
         </span>
       )}
       {input}
-      {hasEnd && <span className={styles.end}>{end}</span>}
+      {/*
+       * `inert` removes `end` from the tab order and blocks activation —
+       * dimming alone (see input.module.css) stops nothing for a keyboard
+       * user, since a Button inside `end` keeps its tab stop and still
+       * fires on Enter/Space. Only wired from this direct `disabled` prop:
+       * a Field-driven disable (`<Field disabled>`) reaches the rendered
+       * <input> through Base UI's own FieldControl, deeper than this
+       * component's props, so it can't be observed here — see input.md.
+       */}
+      {hasEnd && (
+        <span className={styles.end} inert={disabled}>
+          {end}
+        </span>
+      )}
     </span>
   );
 }

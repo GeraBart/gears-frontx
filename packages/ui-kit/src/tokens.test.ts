@@ -373,6 +373,7 @@ describe('theme tokens', () => {
       '--control-height-sm',
       '--control-height-md',
       '--control-height-lg',
+      '--icon-size-xs',
       '--icon-size-sm',
       '--icon-size-md',
       '--icon-size-lg',

@@ -196,30 +196,14 @@ describe('Select', () => {
  * jsdom computes no layout, so the scroll-arrow fix itself (does the list
  * actually scroll and clear the selected item, do the arrows mount at the
  * right edges) can only be verified in a real browser — see the manual
- * verification in this change's PR/report, not a test here. What CAN be
- * guarded statically is the one thing that could silently regress without
- * any layout at all: .list's `scroll-padding-block` and .scrollArrow's
- * `height` each declare their OWN copy of `--select-scroll-arrow-height`
- * (tokens.test.ts's local-variable guard scopes a declared custom property
- * to its own leading class, so one rule can't read the other's declaration
- * — see select.module.css's comment on .list). Nothing enforces that the
- * two copies stay identical except this test, which parses the raw CSS
- * source directly (not the hashed `styles` import, which has no values left
- * in it) — the same technique button.test.tsx's focus-ring guard uses.
+ * verification in this change's PR/report, not a test here. `.list` and
+ * `.scrollArrow` now read a single `--select-scroll-arrow-height` declared
+ * once on `.popup` (see select.module.css), so there's no second copy left
+ * to drift — the two tests that used to police that drift are gone. What's
+ * still worth guarding statically, because nothing about it involves
+ * layout, is the one regression a browser check already caught once.
  */
 describe('Select scroll-arrow height', () => {
-  it('declares the identical --select-scroll-arrow-height formula on .list and .scrollArrow', () => {
-    const listValue = declaredValue('.list', '--select-scroll-arrow-height');
-    const scrollArrowValue = declaredValue('.scrollArrow', '--select-scroll-arrow-height');
-    expect(listValue, '.list is missing --select-scroll-arrow-height').toBeDefined();
-    expect(listValue).toBe(scrollArrowValue);
-  });
-
-  it('reads that property from .list scroll-padding-block and .scrollArrow height', () => {
-    expect(declaredValue('.list', 'scroll-padding-block')).toBe('var(--select-scroll-arrow-height)');
-    expect(declaredValue('.scrollArrow', 'height')).toBe('var(--select-scroll-arrow-height)');
-  });
-
   // Without this, the height above is a content-box size and .scrollArrow's
   // own padding would add on top of it, rendering the arrow taller than the
   // scroll padding .list reserves for it — the exact regression the browser
