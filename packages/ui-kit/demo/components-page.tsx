@@ -58,7 +58,7 @@ import {
   TooltipTrigger,
 } from '@gears-frontx/ui-kit';
 
-import { DemoIcon, Row, Section } from './shared';
+import { CloseIcon, DemoIcon, Row, Section } from './shared';
 
 const REGIONS = [
   { value: 'eu-central', label: 'Frankfurt' },
@@ -187,7 +187,7 @@ export function ComponentsPage() {
               onChange={(e) => setQuery(e.currentTarget.value)}
               placeholder="Search projects…"
               icon={<MagnifierIcon />}
-              end={<Button variant="ghost" size="sm" icon={<DemoIcon />} aria-label="Clear search" onClick={() => setQuery('')} />}
+              end={<Button variant="ghost" size="sm" icon={<CloseIcon />} aria-label="Clear search" onClick={() => setQuery('')} />}
             />
           </Field>
           <Field name="notes">

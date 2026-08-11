@@ -18,6 +18,17 @@ import styles from './select.module.css';
 
 afterEach(cleanup);
 
+// Parsed once from the raw CSS source (not the hashed `styles` import, which
+// has no values left in it) so both the padding-ownership test below and the
+// scroll-arrow describe block can read declared property values directly.
+const cssPath = join(dirname(fileURLToPath(import.meta.url)), 'select.module.css');
+const cssRules = extractRules(readFileSync(cssPath, 'utf8'));
+
+function declaredValue(leadingClass: string, prop: string): string | undefined {
+  const rule = cssRules.find((candidate) => candidate.selector.split(',')[0]?.trim() === leadingClass);
+  return rule ? declarationMap(rule.body).get(prop) : undefined;
+}
+
 const ITEMS = [
   { value: 'eu', label: 'Europe' },
   { value: 'us', label: 'Americas' },
@@ -149,15 +160,35 @@ describe('Select', () => {
     );
     const listbox = screen.getByRole('listbox');
     expect(listbox.className).toContain(styles.list);
+    // The class assertion above would still pass if `.list` lost its
+    // padding — `styles.list` is just a name. Pin the actual behaviour this
+    // test is named for: the list owns the dropdown's inset, and .group
+    // carries none of it, so a groupless list stays padded either way.
+    expect(declaredValue('.list', 'padding'), '.list should own the dropdown padding').toBe(
+      'var(--space-1)',
+    );
+    expect(
+      declaredValue('.group', 'padding'),
+      '.group should not duplicate the padding .list already owns',
+    ).toBeUndefined();
   });
 
   it('always opens the popup below the trigger, with no align-with-trigger attribute', () => {
     renderSelect({ defaultOpen: true });
     const popup = screen.getByRole('listbox').closest(`.${styles.popup}`);
-    // The popup exists and no longer advertises the retired overlay mode —
-    // the attribute is gone entirely, not set to "false".
     expect(popup).not.toBeNull();
+    // The retired overlay mode's attribute is gone entirely (not set to
+    // "false") — kept as a regression guard against the prop coming back.
     expect(popup?.hasAttribute('data-align-trigger')).toBe(false);
+    // What's actually load-bearing: this kit pins `alignItemWithTrigger=
+    // {false}` unconditionally (select.tsx), so Base UI's resolved side is
+    // never overridden to 'none' (its overlay-mode value) and always
+    // reflects the real positioning result. jsdom computes no layout, so
+    // floating-ui never has a reason to flip off the requested `side`
+    // default ('bottom') — this is the one placement outcome that's both
+    // genuinely computed by the library under jsdom and would go stale
+    // (stuck at 'none') if the kit ever went back to overlay mode.
+    expect(popup?.getAttribute('data-side')).toBe('bottom');
   });
 });
 
@@ -177,14 +208,6 @@ describe('Select', () => {
  * in it) — the same technique button.test.tsx's focus-ring guard uses.
  */
 describe('Select scroll-arrow height', () => {
-  const cssPath = join(dirname(fileURLToPath(import.meta.url)), 'select.module.css');
-  const rules = extractRules(readFileSync(cssPath, 'utf8'));
-
-  function declaredValue(leadingClass: string, prop: string): string | undefined {
-    const rule = rules.find((candidate) => candidate.selector.split(',')[0]?.trim() === leadingClass);
-    return rule ? declarationMap(rule.body).get(prop) : undefined;
-  }
-
   it('declares the identical --select-scroll-arrow-height formula on .list and .scrollArrow', () => {
     const listValue = declaredValue('.list', '--select-scroll-arrow-height');
     const scrollArrowValue = declaredValue('.scrollArrow', '--select-scroll-arrow-height');
