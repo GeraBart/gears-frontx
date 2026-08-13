@@ -1,3 +1,5 @@
+'use client';
+
 import { Menu as MenuPrimitive } from '@base-ui/react/menu';
 import { cva, cx, type VariantProps } from 'class-variance-authority';
 import { type ComponentProps, createContext, useContext } from 'react';

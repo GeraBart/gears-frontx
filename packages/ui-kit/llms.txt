@@ -19,6 +19,12 @@ Rules for generated code:
   tree-shakes unused components' JS from a root import already, but only
   drops their CSS from a subpath import — Vite and webpack drop both either
   way, so this only matters when esbuild is the actual bundler running.
+- In an RSC framework (Next.js App Router), every component EXCEPT Badge,
+  DropdownMenu, and Toast is safe to import and render directly from a
+  Server Component — no wrapping client-boundary module needed. Those three
+  ship their own `'use client'` banner (each calls a hook — `useRender`,
+  `useContext`, `useToastManager` — directly in its own render body) and so
+  always render on the client, wherever they're imported from.
 - The kit paints the page itself from its tokens and sets `color-scheme`: with
   no `data-theme` attribute anywhere, `prefers-color-scheme: dark` alone
   yields a correct, legible dark page (background, text, and UA-owned

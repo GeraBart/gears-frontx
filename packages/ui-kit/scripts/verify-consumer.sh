@@ -141,6 +141,71 @@ for probe_name in BUTTON_CLASS TABLE_CLASS DIALOG_CLASS; do
 done
 echo "==> Probes: Button=$BUTTON_CLASS Table=$TABLE_CLASS Dialog=$DIALOG_CLASS"
 
+# 'use client' regression guard (#568): asserted against the kit's OWN
+# dist/, not a consumer bundle — an RSC framework like Next.js reads the
+# directive straight off the installed package's chunks, before any of this
+# script's bundler legs run, so none of them would catch it drifting. Split
+# by hook usage, not by any other property: badge/dropdown-menu/toast call a
+# hook directly in their own render body (useRender/useContext/
+# useToastManager — see buildPlugin.ts's preserveUseClientPlugin comment);
+# everything else only composes Base UI primitives as JSX, which already
+# carry their own directive in Base UI's dist, so marking them here would
+# take server-renderability away for no reason.
+CLIENT_COMPONENTS=(badge dropdown-menu toast)
+SERVER_COMPONENTS=(button card checkbox dialog field input label radio-group select separator skeleton switch table tabs textarea tooltip)
+
+in_list() {
+  # $1: needle, $2+: haystack
+  local needle="$1" item
+  shift
+  for item in "$@"; do
+    [ "$item" = "$needle" ] && return 0
+  done
+  return 1
+}
+
+# The two lists above are hand-maintained, so a component added to (or
+# removed from) src/components/ without a matching edit here would
+# otherwise go unchecked by both loops below, silently. Diff the lists
+# against the build's own entry glob (getBuildConfig's source of truth in
+# buildPlugin.ts) instead of trusting them: every real component must be
+# classified exactly once, and every classified name must be real.
+ALL_COMPONENTS=()
+for entry in "$UIKIT_DIR"/src/components/*/public.ts; do
+  ALL_COMPONENTS+=("$(basename "$(dirname "$entry")")")
+done
+
+for name in "${ALL_COMPONENTS[@]}"; do
+  if in_list "$name" "${CLIENT_COMPONENTS[@]}" && in_list "$name" "${SERVER_COMPONENTS[@]}"; then
+    echo "FAIL: '$name' is listed in both CLIENT_COMPONENTS and SERVER_COMPONENTS in this script — fix the classification"
+    exit 1
+  fi
+  if ! in_list "$name" "${CLIENT_COMPONENTS[@]}" && ! in_list "$name" "${SERVER_COMPONENTS[@]}"; then
+    echo "FAIL: '$name' ships under src/components/ but isn't classified in CLIENT_COMPONENTS or SERVER_COMPONENTS in this script — add it to the list matching whether it calls a hook directly in its own render body"
+    exit 1
+  fi
+done
+for name in "${CLIENT_COMPONENTS[@]}" "${SERVER_COMPONENTS[@]}"; do
+  if ! in_list "$name" "${ALL_COMPONENTS[@]}"; then
+    echo "FAIL: '$name' is classified in this script but has no src/components/$name/public.ts — remove the stale entry"
+    exit 1
+  fi
+done
+
+for name in "${CLIENT_COMPONENTS[@]}"; do
+  if ! head -c 20 "$UIKIT_DIR/dist/$name.js" | grep -qF "use client"; then
+    echo "FAIL: dist/$name.js is missing its 'use client' banner"
+    exit 1
+  fi
+done
+for name in "${SERVER_COMPONENTS[@]}" index; do
+  if head -c 20 "$UIKIT_DIR/dist/$name.js" | grep -qF "use client"; then
+    echo "FAIL: dist/$name.js carries a 'use client' banner it doesn't need — this removes it from server rendering for RSC consumers"
+    exit 1
+  fi
+done
+echo "==> 'use client': present on ${CLIENT_COMPONENTS[*]}, absent elsewhere (${#ALL_COMPONENTS[@]} components accounted for)"
+
 # Present/absent assertions against a glob, with the glob's own emptiness
 # checked explicitly rather than left to grep's exit code. Without this, an
 # absence check written as `grep … && { fail; }` passes *silently* when the

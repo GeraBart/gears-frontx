@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import MagicString from 'magic-string';
 import nodeExternals from 'rollup-plugin-node-externals';
 import type { Plugin, PluginOption, UserConfig } from 'vite';
 import dts from 'vite-plugin-dts';
@@ -30,6 +31,7 @@ export function buildPlugin(): PluginOption[] {
     // possible at all.
     libInjectCss(),
     buildEntries(),
+    preserveUseClientPlugin(),
     dts({
       outDir: 'dist',
       entryRoot: 'src',
@@ -101,6 +103,66 @@ export function buildPlugin(): PluginOption[] {
         for (const file of fs.globSync('src/components/*/*.md')) {
           fs.copyFileSync(file, path.join('dist/docs', path.basename(file)));
         }
+      },
+    };
+  }
+
+  /**
+   * Rollup strips a source module's `'use client'` directive prologue when
+   * it renders that module's code into a bundled chunk — the directive
+   * survives esbuild's per-file TS transpile (see the component sources'
+   * own comments) but not Rollup's own bundling step, so it never reaches
+   * dist/ without this plugin. `rollup-plugin-preserve-directives` (the
+   * community-standard fix) only re-adds directives under
+   * `output.preserveModules: true`, which emits one file per source module
+   * and would break the one-chunk-per-component shape this build already
+   * has (getBuildConfig's `lib.entry` + `treeshake` combination — see that
+   * comment) — so this does the same job at this build's actual chunk
+   * granularity: remember which source module declared the directive, then
+   * re-add it to whichever chunk that module's code lands in.
+   *
+   * A chunk earns the banner if ANY of its modules declared it (only
+   * badge.tsx, dropdown-menu.tsx, and toast.tsx do, each calling a hook —
+   * useRender/useContext/useToastManager — directly in its own render
+   * body). A component that merely renders a Base UI primitive as JSX
+   * (Button, Dialog, Select, …) does not need the directive on its own
+   * chunk: Base UI's own dist already carries 'use client' on the modules
+   * that call hooks, so composing them is safe as a Server Component and
+   * stays server-renderable — marking it here anyway would take that away
+   * for no reason.
+   */
+  function preserveUseClientPlugin(): Plugin {
+    const USE_CLIENT = "'use client';";
+    // Matches the directive as the file's first statement, tolerating
+    // leading whitespace (which also covers a byte-order mark — `\s`
+    // matches U+FEFF), license/comment headers, and either quote
+    // style/semicolon — esbuild only preserves a directive prologue found
+    // in exactly that position.
+    const directiveRe = /^(?:\s|\/\/[^\n]*\n|\/\*[\s\S]*?\*\/)*['"]use client['"];?/;
+    const clientModuleIds = new Set<string>();
+
+    return {
+      name: 'ui-kit-preserve-use-client',
+      apply: 'build',
+      transform(code, id) {
+        if (directiveRe.test(code)) {
+          clientModuleIds.add(id);
+        }
+        return null;
+      },
+      renderChunk(code, chunk) {
+        // Rollup has always already stripped the source directive by this
+        // point (that's the whole problem this plugin exists to fix) — the
+        // `startsWith` check is a no-op today, kept only as a cheap guard
+        // against double-prepending if a future Rollup/Vite version stops
+        // stripping it.
+        if (code.startsWith(USE_CLIENT) || !chunk.moduleIds.some((id) => clientModuleIds.has(id))) {
+          return null;
+        }
+
+        const magicString = new MagicString(code);
+        magicString.prepend(`${USE_CLIENT}\n`);
+        return { code: magicString.toString(), map: magicString.generateMap({ hires: true }) };
       },
     };
   }
