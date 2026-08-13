@@ -164,6 +164,18 @@ in_list() {
   return 1
 }
 
+count_matches() {
+  # $1: needle, $2+: haystack — total occurrences, not just presence, so a
+  # name duplicated within one list (or repeated across both) is caught
+  # too, not just membership.
+  local needle="$1" item count=0
+  shift
+  for item in "$@"; do
+    [ "$item" = "$needle" ] && count=$((count + 1))
+  done
+  echo "$count"
+}
+
 # The two lists above are hand-maintained, so a component added to (or
 # removed from) src/components/ without a matching edit here would
 # otherwise go unchecked by both loops below, silently. Diff the lists
@@ -176,12 +188,13 @@ for entry in "$UIKIT_DIR"/src/components/*/public.ts; do
 done
 
 for name in "${ALL_COMPONENTS[@]}"; do
-  if in_list "$name" "${CLIENT_COMPONENTS[@]}" && in_list "$name" "${SERVER_COMPONENTS[@]}"; then
-    echo "FAIL: '$name' is listed in both CLIENT_COMPONENTS and SERVER_COMPONENTS in this script — fix the classification"
+  count="$(count_matches "$name" "${CLIENT_COMPONENTS[@]}" "${SERVER_COMPONENTS[@]}")"
+  if [ "$count" -eq 0 ]; then
+    echo "FAIL: '$name' ships under src/components/ but isn't classified in CLIENT_COMPONENTS or SERVER_COMPONENTS in this script — add it to the list matching whether it calls a hook directly in its own render body"
     exit 1
   fi
-  if ! in_list "$name" "${CLIENT_COMPONENTS[@]}" && ! in_list "$name" "${SERVER_COMPONENTS[@]}"; then
-    echo "FAIL: '$name' ships under src/components/ but isn't classified in CLIENT_COMPONENTS or SERVER_COMPONENTS in this script — add it to the list matching whether it calls a hook directly in its own render body"
+  if [ "$count" -gt 1 ]; then
+    echo "FAIL: '$name' appears $count times across CLIENT_COMPONENTS/SERVER_COMPONENTS in this script (duplicate entry, or listed in both) — it must be classified exactly once"
     exit 1
   fi
 done
