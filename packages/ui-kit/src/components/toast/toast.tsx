@@ -1,3 +1,6 @@
+// Load-bearing: ToastList calls useToastManager directly, so this can't be
+// dropped. Coupled to CLIENT_COMPONENTS in scripts/verify-consumer.sh —
+// keep both in sync if this ever changes.
 'use client';
 
 import { Toast as ToastPrimitive } from '@base-ui/react/toast';

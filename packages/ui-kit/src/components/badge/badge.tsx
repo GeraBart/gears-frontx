@@ -1,3 +1,6 @@
+// Load-bearing: Badge calls useRender directly, so this can't be dropped.
+// Coupled to CLIENT_COMPONENTS in scripts/verify-consumer.sh — keep both in
+// sync if this ever changes.
 'use client';
 
 import { mergeProps } from '@base-ui/react/merge-props';

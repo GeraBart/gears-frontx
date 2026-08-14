@@ -40,9 +40,12 @@ unused JS bindings the way it prunes JS. If your build uses esbuild directly
 import for CSS you actually want dropped.
 
 In an RSC framework (Next.js App Router being the dominant case), most kit
-components render straight from a Server Component with zero client-side
+components render straight from a Server Component with no kit-side client
 JS — they only compose Base UI primitives as JSX, and Base UI's own dist
-already carries `'use client'` on the modules that call hooks. Three
+already carries `'use client'` on the modules that call hooks (an
+interactive primitive like Select or Dialog still ships Base UI's own
+client bundle; only the kit wrapper around it needs no directive of its
+own). Three
 components call a hook directly in their own render body and ship a
 `'use client'` banner on their own chunk instead: **Badge** (`useRender`,
 for its `render` prop), **DropdownMenu** (`useContext`, for the portal

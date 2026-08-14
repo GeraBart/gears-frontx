@@ -153,10 +153,12 @@ export function buildPlugin(): PluginOption[] {
       renderChunk(code, chunk) {
         // Rollup has always already stripped the source directive by this
         // point (that's the whole problem this plugin exists to fix) — the
-        // `startsWith` check is a no-op today, kept only as a cheap guard
+        // `directiveRe` check is a no-op today, kept only as a cheap guard
         // against double-prepending if a future Rollup/Vite version stops
-        // stripping it.
-        if (code.startsWith(USE_CLIENT) || !chunk.moduleIds.some((id) => clientModuleIds.has(id))) {
+        // stripping it. Reuses `directiveRe` (rather than a plain
+        // `startsWith(USE_CLIENT)`) so this guard tolerates the same quote
+        // styles the detection above does.
+        if (directiveRe.test(code) || !chunk.moduleIds.some((id) => clientModuleIds.has(id))) {
           return null;
         }
 

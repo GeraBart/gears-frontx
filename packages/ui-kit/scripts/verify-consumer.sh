@@ -205,13 +205,42 @@ for name in "${CLIENT_COMPONENTS[@]}" "${SERVER_COMPONENTS[@]}"; do
   fi
 done
 
+# The lists are also only checked above against WHICH components exist, not
+# against what each one's source actually does — a hook added to (say)
+# select.tsx without also adding the directive would leave SERVER_COMPONENTS
+# unchanged and dist/select.js correctly bannerless, so every check above
+# stays green despite the component now being wrong. Grep each real
+# component's own source file directly, independent of the classification
+# lists and of whatever the build produced, as a second, build-independent
+# signal tying the lists to source intent.
 for name in "${CLIENT_COMPONENTS[@]}"; do
+  if ! grep -qF "'use client';" "$UIKIT_DIR/src/components/$name/$name.tsx"; then
+    echo "FAIL: src/components/$name/$name.tsx is classified as CLIENT_COMPONENTS but its source has no 'use client' directive"
+    exit 1
+  fi
+done
+for name in "${SERVER_COMPONENTS[@]}"; do
+  if grep -qF "'use client';" "$UIKIT_DIR/src/components/$name/$name.tsx"; then
+    echo "FAIL: src/components/$name/$name.tsx has a 'use client' directive but is classified as SERVER_COMPONENTS — move it to CLIENT_COMPONENTS"
+    exit 1
+  fi
+done
+
+for name in "${CLIENT_COMPONENTS[@]}"; do
+  if [ ! -f "$UIKIT_DIR/dist/$name.js" ]; then
+    echo "FAIL: dist/$name.js does not exist — did the build fail for this component?"
+    exit 1
+  fi
   if ! head -c 20 "$UIKIT_DIR/dist/$name.js" | grep -qF "use client"; then
     echo "FAIL: dist/$name.js is missing its 'use client' banner"
     exit 1
   fi
 done
 for name in "${SERVER_COMPONENTS[@]}" index; do
+  if [ ! -f "$UIKIT_DIR/dist/$name.js" ]; then
+    echo "FAIL: dist/$name.js does not exist — did the build fail for this component?"
+    exit 1
+  fi
   if head -c 20 "$UIKIT_DIR/dist/$name.js" | grep -qF "use client"; then
     echo "FAIL: dist/$name.js carries a 'use client' banner it doesn't need — this removes it from server rendering for RSC consumers"
     exit 1
