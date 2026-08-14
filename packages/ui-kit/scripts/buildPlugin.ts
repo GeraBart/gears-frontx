@@ -108,18 +108,20 @@ export function buildPlugin(): PluginOption[] {
   }
 
   /**
-   * Rollup strips a source module's `'use client'` directive prologue when
-   * it renders that module's code into a bundled chunk — the directive
-   * survives esbuild's per-file TS transpile (see the component sources'
-   * own comments) but not Rollup's own bundling step, so it never reaches
-   * dist/ without this plugin. `rollup-plugin-preserve-directives` (the
-   * community-standard fix) only re-adds directives under
-   * `output.preserveModules: true`, which emits one file per source module
-   * and would break the one-chunk-per-component shape this build already
-   * has (getBuildConfig's `lib.entry` + `treeshake` combination — see that
-   * comment) — so this does the same job at this build's actual chunk
-   * granularity: remember which source module declared the directive, then
-   * re-add it to whichever chunk that module's code lands in.
+   * Rollup strips a source module's `'use client'` directive prologue when it
+   * renders that module's code into a bundled chunk. Vite transpiles each
+   * TS/TSX module through esbuild individually (strip types, downlevel syntax)
+   * before Rollup ever bundles them, and esbuild's per-file transpile preserves
+   * a directive prologue verbatim — so the directive survives that step but not
+   * Rollup's own bundling step, which strips it when inlining the module's code
+   * into a shared chunk, so it never reaches dist/ without this plugin.
+   * `rollup-plugin-preserve-directives` (the community-standard fix) only
+   * re-adds directives under `output.preserveModules: true`, which emits one
+   * file per source module and would break the one-chunk-per-component shape
+   * this build already has (getBuildConfig's `lib.entry` + `treeshake`
+   * combination — see that comment) — so this does the same job at this build's
+   * actual chunk granularity: remember which source module declared the
+   * directive, then re-add it to whichever chunk that module's code lands in.
    *
    * A chunk earns the banner if ANY of its modules declared it (only
    * badge.tsx, dropdown-menu.tsx, and toast.tsx do, each calling a hook —

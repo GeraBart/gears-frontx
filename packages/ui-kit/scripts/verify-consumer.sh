@@ -224,21 +224,41 @@ has_client_directive() {
   ' "$1" | grep -Eq "^[[:space:]]*('use client'|\"use client\");?[[:space:]]*\$"
 }
 
-# The lists are also only checked above against WHICH components exist, not
-# against what each one's source actually does — a hook added to (say)
-# select.tsx without also adding the directive would leave SERVER_COMPONENTS
-# unchanged and dist/select.js correctly bannerless, so every check above
-# stays green despite the component now being wrong. Check each real
-# component's own source file directly, independent of the classification
-# lists and of whatever the build produced, as a second, build-independent
-# signal tying the lists to source intent.
+assert_source_exists() {
+  # $1: component name. Without this, a missing source file (renamed, split,
+  # or restructured out from under this script) reads as "no directive" to
+  # has_client_directive (awk prints nothing, grep on empty input returns 1)
+  # — which makes the SERVER_COMPONENTS loop below pass silently on a file
+  # that was never checked at all, exactly the "no file reads as clean"
+  # defect the dist loops further down already guard against with `[ -f ]`.
+  if [ ! -f "$UIKIT_DIR/src/components/$1/$1.tsx" ]; then
+    echo "FAIL: src/components/$1/$1.tsx does not exist — was it renamed, split, or restructured without updating this script?"
+    exit 1
+  fi
+}
+
+# The lists above are only checked against WHICH components exist (the
+# exhaustiveness block) — this pins them to what each one's source actually
+# declares: every CLIENT_COMPONENTS source has the directive, every
+# SERVER_COMPONENTS source doesn't. That catches the two lists and the
+# source drifting apart — e.g. the directive added to (or removed from) a
+# component's .tsx without the matching list edit. It does NOT catch a hook
+# added to (say) select.tsx with no directive added at all: that leaves
+# SERVER_COMPONENTS unchanged, source correctly directiveless by this
+# check's own definition, and dist/select.js correctly bannerless, so every
+# check in this file — this one included — stays green despite the
+# component now needing the directive. Closing that gap needs a lint rule
+# that flags hook usage with no client directive in scope; out of scope
+# here.
 for name in "${CLIENT_COMPONENTS[@]}"; do
+  assert_source_exists "$name"
   if ! has_client_directive "$UIKIT_DIR/src/components/$name/$name.tsx"; then
     echo "FAIL: src/components/$name/$name.tsx is classified as CLIENT_COMPONENTS but its source has no 'use client' directive as its first statement"
     exit 1
   fi
 done
 for name in "${SERVER_COMPONENTS[@]}"; do
+  assert_source_exists "$name"
   if has_client_directive "$UIKIT_DIR/src/components/$name/$name.tsx"; then
     echo "FAIL: src/components/$name/$name.tsx has a 'use client' directive as its first statement but is classified as SERVER_COMPONENTS — move it to CLIENT_COMPONENTS"
     exit 1
