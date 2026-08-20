@@ -12,7 +12,7 @@
 // @cpt-state:cpt-frontx-state-extension-domain-governance-admission:p1
 // @cpt-dod:cpt-frontx-dod-extension-domain-governance-default-deny:p1
 
-import type { MfeHandler, MfeMountContext, ParentMfeBridge } from '../handler/types';
+import type { ChildMfeBridge, MfeHandler, MfeMountContext, ParentMfeBridge } from '../handler/types';
 import type { TypeSystemPlugin } from '../type-substrate';
 import type { RuntimeCoordinator } from './coordination/types';
 import type { ActionHandler } from '../mediator/types';
@@ -23,6 +23,12 @@ import { MountManager } from './mount-manager';
 import type { ActionChainExecutor, LifecycleTrigger } from './mount-manager';
 import { RuntimeBridgeFactory } from './runtime-bridge-factory';
 import { createShadowRoot } from '../shadow';
+import {
+  popAmbientMountingBridge,
+  pushAmbientMountingBridge,
+  registerInboundBridgeLink,
+  type InboundBridgeLink,
+} from './inbound-bridge-link';
 
 export type HandlerResolver = (entryTypeId: string) => MfeHandler | undefined;
 
@@ -39,6 +45,23 @@ export class DefaultMountManager extends MountManager {
   private readonly registerExtensionActionHandler: (extensionId: string, actionTypeId: string, handler: ActionHandler, domainId: string) => void;
   private readonly unregisterExtensionActionHandler: (extensionId: string) => void;
   private readonly bridgeFactory: RuntimeBridgeFactory;
+  private readonly buildInboundBridgeLink: (
+    extensionId: string,
+    childBridge: ChildMfeBridge,
+    parentBridge: ParentMfeBridge
+  ) => InboundBridgeLink;
+  private readonly retractInboundBridgeLink: (childBridge: ChildMfeBridge) => void;
+
+  /**
+   * The `ChildMfeBridge` handed to each currently-mounted extension's own
+   * `lifecycle.mount(...)`, tracked internally (never exposed) so that
+   * `unmountExtension` and a mount-failure catch path can trigger
+   * parent-owned retraction (`inst-retract-advertisements`) for the exact
+   * bridge object a descendant registry may have propagated advertisements
+   * through — regardless of whether that descendant's own registry ever
+   * disposes itself.
+   */
+  private readonly childBridgesByExtension = new Map<string, ChildMfeBridge>();
 
   constructor(config: {
     extensionManager: DefaultExtensionManager;
@@ -53,6 +76,12 @@ export class DefaultMountManager extends MountManager {
     registerExtensionActionHandler: (extensionId: string, actionTypeId: string, handler: ActionHandler, domainId: string) => void;
     unregisterExtensionActionHandler: (extensionId: string) => void;
     bridgeFactory: RuntimeBridgeFactory;
+    buildInboundBridgeLink: (
+      extensionId: string,
+      childBridge: ChildMfeBridge,
+      parentBridge: ParentMfeBridge
+    ) => InboundBridgeLink;
+    retractInboundBridgeLink: (childBridge: ChildMfeBridge) => void;
   }) {
     super();
     this.extensionManager = config.extensionManager;
@@ -67,6 +96,8 @@ export class DefaultMountManager extends MountManager {
     this.registerExtensionActionHandler = config.registerExtensionActionHandler;
     this.unregisterExtensionActionHandler = config.unregisterExtensionActionHandler;
     this.bridgeFactory = config.bridgeFactory;
+    this.buildInboundBridgeLink = config.buildInboundBridgeLink;
+    this.retractInboundBridgeLink = config.retractInboundBridgeLink;
   }
 
   async loadExtension(extensionId: string): Promise<void> {
@@ -136,6 +167,10 @@ export class DefaultMountManager extends MountManager {
     extensionState.mountState = 'mounting';
     extensionState.error = undefined;
 
+    // Declared here (not inside the `try` below) so the `catch` can also see
+    // whichever bridge was actually created before the failure, if any.
+    let mountedChildBridge: ChildMfeBridge | undefined;
+
     try {
       const domainState = this.extensionManager.getDomainState(extensionState.extension.domain);
       if (!domainState) {
@@ -157,6 +192,8 @@ export class DefaultMountManager extends MountManager {
         (extId, actionTypeId, handler, domainId) => this.registerExtensionActionHandler(extId, actionTypeId, handler, domainId),
         (extId) => this.unregisterExtensionActionHandler(extId)
       );
+      mountedChildBridge = childBridge;
+      this.childBridgesByExtension.set(extensionId, childBridge);
 
       const existingConnection = this.coordinator.get(container);
       if (existingConnection) {
@@ -183,7 +220,27 @@ export class DefaultMountManager extends MountManager {
         extensionId,
         domainId: extensionState.extension.domain,
       };
-      await lifecycle.mount(shadowRoot, childBridge, mountContext);
+
+      // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-track-mounting-bridge
+      // Prepare the link a nested registry constructed synchronously inside
+      // this extension's own `mount()` body will automatically adopt, then
+      // track `childBridge` as the ambient mounting bridge for exactly the
+      // synchronous portion of the `lifecycle.mount(...)` invocation below —
+      // no configuration or method call required from the microfrontend author.
+      registerInboundBridgeLink(
+        childBridge,
+        this.buildInboundBridgeLink(extensionId, childBridge, parentBridge)
+      );
+
+      pushAmbientMountingBridge(childBridge);
+      let mountInvocation: void | Promise<void>;
+      try {
+        mountInvocation = lifecycle.mount(shadowRoot, childBridge, mountContext);
+      } finally {
+        popAmbientMountingBridge();
+      }
+      // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-track-mounting-bridge
+      await mountInvocation;
 
       extensionState.bridge = parentBridge;
       extensionState.container = container;
@@ -200,6 +257,21 @@ export class DefaultMountManager extends MountManager {
       extensionState.mountState = 'error';
       extensionState.error = error instanceof Error ? error : new Error(String(error));
       // @cpt-end:cpt-frontx-state-extension-domain-governance-admission:p1:inst-adm-t6
+
+      // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-retract-advertisements
+      // Mount-failure path: any nested registry that got as far as
+      // synchronously constructing itself and propagating advertisements
+      // upward through `childBridge` before `lifecycle.mount(...)` (or a
+      // synchronous step around it) threw must have those advertisements
+      // retracted by THIS (the parent) registry now — previously this path
+      // leaked, leaving the parent holding forwarding entries for a target
+      // whose host extension never finished mounting.
+      if (mountedChildBridge) {
+        this.retractInboundBridgeLink(mountedChildBridge);
+        this.childBridgesByExtension.delete(extensionId);
+      }
+      // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-retract-advertisements
+
       throw error;
     }
   }
@@ -221,6 +293,20 @@ export class DefaultMountManager extends MountManager {
     );
 
     try {
+      // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-retract-advertisements
+      // Parent-owned retraction on the host extension's own unmount: revoke
+      // every forwarding entry keyed to the bridge this extension received
+      // at mount time, regardless of whether the nested registry it may
+      // host ever calls its own dispose(). Done up front so a subsequent
+      // remount (this same extensionId, a fresh bridge pair) never trips
+      // the collision guard on a stale entry from this mount.
+      const mountedChildBridge = this.childBridgesByExtension.get(extensionId);
+      if (mountedChildBridge) {
+        this.retractInboundBridgeLink(mountedChildBridge);
+        this.childBridgesByExtension.delete(extensionId);
+      }
+      // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-retract-advertisements
+
       const lifecycle = extensionState.lifecycle;
       const container = extensionState.container;
       if (lifecycle && container) {

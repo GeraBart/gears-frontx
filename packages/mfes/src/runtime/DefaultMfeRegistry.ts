@@ -17,11 +17,12 @@
 import type { TypeSystemPlugin } from '../type-substrate';
 import { MfeRegistry } from '../registry/MfeRegistry';
 import type { MfeRegistryConfig } from './config';
-import type { MfeHandler, ParentMfeBridge } from '../handler/types';
+import type { ChildMfeBridge, MfeHandler, ParentMfeBridge } from '../handler/types';
 import type { ExtensionDomain, Extension, ActionsChain } from '../types';
 import type { ExtensionDomainImplementationFactory } from './ExtensionDomainImplementationFactory';
 import type { ExtensionMounter } from './ExtensionMounter';
 import { ActionsChainsMediator } from '../mediator/types';
+import type { CrossHopRoute } from '../mediator/cross-hop-route';
 import { RuntimeCoordinator } from './coordination/types';
 import { InvalidatableDomainContext } from './DomainContext';
 import { ConcurrentMountStrategy, OptionalMountStrategy, ExclusiveMountStrategy } from './mount-strategies';
@@ -40,6 +41,46 @@ import { EntryTypeNotHandledError } from '../errors';
 import { extractGtsPackage } from '../gts/extract-package';
 import { DefaultExtensionMounter } from './DefaultExtensionMounter';
 import { DefaultDomainLifecycleTrigger } from './DefaultDomainLifecycleTrigger';
+import { ParentMfeBridgeImpl } from '../bridge/ParentMfeBridge';
+import {
+  adoptAmbientInboundBridgeLink,
+  tagArrivalEdge,
+  unregisterInboundBridgeLink,
+  type InboundBridgeLink,
+} from './inbound-bridge-link';
+
+/**
+ * A downward forwarding entry recorded when a descendant registry propagates
+ * an advertisement for one of its admitted targets through registration
+ * propagation (`cpt-frontx-algo-mfe-host-communication-registration-propagation`).
+ *
+ * @internal
+ */
+interface ForwardingEntry {
+  /** The bridge the advertisement arrived on — the loop-containment identity. */
+  readonly edge: ChildMfeBridge;
+  /** Sends a chain down through that bridge to the descendant registry. */
+  readonly sendDown: (chain: ActionsChain) => Promise<void>;
+  /** In-flight reject callbacks, force-settled on retraction. */
+  readonly inFlightRejects: Set<(err: Error) => void>;
+}
+
+/** A `ChildMfeBridge` that also exposes the concrete-only `onActionsChain` hook. */
+interface ActionsChainReceivingBridge extends ChildMfeBridge {
+  onActionsChain(handler: (chain: ActionsChain) => Promise<void>): () => void;
+}
+
+/**
+ * Structural (duck-typed) check for `onActionsChain`, deliberately NOT
+ * `instanceof ChildMfeBridgeImpl`: the bridge adopted from the ambient
+ * mounting-bridge rendezvous may have been constructed by a different,
+ * independently loaded copy of this package than the one running this
+ * check (`cpt-frontx-adr-mfe-load-isolation`), so the two sides cannot rely
+ * on sharing a class definition — only on the bridge object's own shape.
+ */
+function hasOnActionsChainMethod(bridge: ChildMfeBridge): bridge is ActionsChainReceivingBridge {
+  return typeof (bridge as unknown as { onActionsChain?: unknown }).onActionsChain === 'function';
+}
 
 /**
  * Default concrete implementation of MfeRegistry.
@@ -109,9 +150,36 @@ export class DefaultMfeRegistry extends MfeRegistry {
   private readonly childBridges = new Map<string, ParentMfeBridge>();
 
   /**
-   * Parent MFE bridge (child -> parent communication).
+   * This registry's link to its immediate parent registry, through the
+   * bridge its own host extension received at mount time (the "inbound
+   * bridge") — automatically adopted in the constructor via ambient
+   * mount-context discovery (`inst-adopt-ambient-bridge`), never via a
+   * config field or method call. `null` for a root/shell registry.
+   *
+   * This is the mechanism that makes cross-nesting reachability work: a
+   * registry constructed synchronously inside an extension's own `mount()`
+   * body automatically gains a channel to propagate advertisements upward,
+   * escalate unresolved dispatches upward, and retract advertisements on
+   * disposal — all without any growth to the public surface (MFES-6).
    */
-  private parentBridge: ParentMfeBridge | null = null;
+  private inboundBridgeLink: InboundBridgeLink | null = null;
+
+  /** Unsubscribe for the automatic downward actions-chain delivery wired in the constructor. */
+  private inboundActionsChainUnsubscribe: (() => void) | null = null;
+
+  /**
+   * Downward forwarding entries this registry holds for targets advertised
+   * by a descendant registry through registration propagation, keyed by
+   * target id (`cpt-frontx-algo-mfe-host-communication-registration-propagation`).
+   */
+  private readonly forwardingEntries = new Map<string, ForwardingEntry>();
+
+  /**
+   * Target ids this registry itself has successfully propagated upward
+   * through its own inbound bridge — tracked so disposal/unregistration can
+   * retract exactly what was propagated (`inst-retract-advertisements`).
+   */
+  private readonly propagatedTargetIds = new Set<string>();
 
   /**
    * GTS package to extension ID mappings.
@@ -140,6 +208,9 @@ export class DefaultMfeRegistry extends MfeRegistry {
       getDomainState: (domainId) => this.extensionManager.getDomainState(domainId),
       getExtensionEntry: (extensionId) =>
         this.extensionManager.getExtensionState(extensionId)?.entry,
+      resolveForwardingEntry: (targetId, arrivalEdge) =>
+        this.resolveForwardingEntryRoute(targetId, arrivalEdge),
+      resolveEscalation: (targetId) => this.resolveEscalationRoute(targetId),
     });
 
     this.extensionManager = new DefaultExtensionManager({
@@ -181,7 +252,40 @@ export class DefaultMfeRegistry extends MfeRegistry {
       unregisterExtensionActionHandler: (extensionId) =>
         this.mediator.unregisterAllHandlers(extensionId),
       bridgeFactory: this.bridgeFactory,
+      buildInboundBridgeLink: (extensionId, childBridge, parentBridge) =>
+        this.buildInboundBridgeLinkFor(extensionId, childBridge, parentBridge),
+      retractInboundBridgeLink: (childBridge) =>
+        this.retractInboundBridgeLinkFor(childBridge),
     });
+
+    // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-adopt-ambient-bridge
+    // Automatic ambient adoption: if a mount is synchronously in progress and
+    // the extension being mounted is itself constructing this registry, adopt
+    // that extension's bridge as this registry's inbound bridge — no config
+    // field, no method call, no author action (`inst-inbound-bridge-auto-adopt`).
+    // If no mount's ambient bridge is tracked, this registry has none and
+    // behaves as a root/shell registry (`inst-no-ambient-bridge` / `inst-registry-is-root`).
+    const adoptedLink = adoptAmbientInboundBridgeLink();
+    if (adoptedLink) {
+      this.inboundBridgeLink = adoptedLink;
+      const bridge = adoptedLink.edge;
+      // Duck-typed, NOT `instanceof ChildMfeBridgeImpl`: this bridge may have
+      // been constructed by a different, independently loaded copy of this
+      // package than the one currently executing (the extension that is
+      // mounting this registry may be a nested MFE, itself evaluating its
+      // own copy) — the two sides need not, and generally will not, share a
+      // class definition, so identity can only be established structurally.
+      if (hasOnActionsChainMethod(bridge)) {
+        // Automatic downward delivery: a chain forwarded or escalated down to
+        // this registry through its inbound bridge lands directly on this
+        // registry's own dispatch entry point, with no explicit registration
+        // call required from the microfrontend author.
+        this.inboundActionsChainUnsubscribe = bridge.onActionsChain((chain) =>
+          this.executeActionsChain(chain)
+        );
+      }
+    }
+    // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-adopt-ambient-bridge
 
     if (config.mfeHandlers) {
       for (const handler of config.mfeHandlers) {
@@ -199,6 +303,235 @@ export class DefaultMfeRegistry extends MfeRegistry {
       // @cpt-end:cpt-frontx-algo-mfe-registry-handler-resolution:p1:inst-algo-hr-01
     }
   }
+
+  // ─── Cross-nesting reachability: propagation, escalation, retraction ──────
+  // @cpt-algo:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2
+
+  /**
+   * Build the `InboundBridgeLink` a nested registry — one constructed
+   * synchronously inside this extension's own `mount()` body — will
+   * automatically adopt as its inbound bridge. Called by `DefaultMountManager`
+   * right before invoking `lifecycle.mount(...)`.
+   *
+   * @cpt inst-inbound-bridge-internal
+   */
+  private buildInboundBridgeLinkFor(
+    extensionId: string,
+    childBridge: ChildMfeBridge,
+    parentBridge: ParentMfeBridge
+  ): InboundBridgeLink {
+    const sendDown = (chain: ActionsChain): Promise<void> => {
+      if (!(parentBridge instanceof ParentMfeBridgeImpl)) {
+        return Promise.reject(
+          new Error(`Internal: expected a ParentMfeBridgeImpl for extension '${extensionId}'`)
+        );
+      }
+      return parentBridge.sendActionsChain(chain);
+    };
+
+    return {
+      edge: childBridge,
+      // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-propagate-upward
+      propagateAdvertisement: (targetId, actionTypeIds) =>
+        this.admitAdvertisement(targetId, actionTypeIds, childBridge, sendDown),
+      // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-propagate-upward
+      retractAdvertisement: (targetId) => this.retractForwardingEntry(targetId, childBridge),
+      // @cpt-begin:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-tag-arrival-edge
+      // Minted and executed entirely on THIS (the parent) registry's own
+      // side, using this copy's own `tagArrivalEdge`/`getArrivalEdge` pair —
+      // never the child's — so the tag is visible to this same registry's
+      // own `resolveHandler` regardless of whether the child that escalated
+      // through this link is evaluating a different, independently loaded
+      // copy of this package (`inst-mint-escalation-on-link`).
+      escalate: (chain) => {
+        tagArrivalEdge(chain.action, childBridge);
+        return this.executeActionsChain(chain);
+      },
+      // @cpt-end:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-tag-arrival-edge
+    };
+  }
+
+  /**
+   * Receiving-ancestor side of propagation: admit (or reject) an advertisement
+   * from a descendant registry.
+   *
+   * @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-collision-check
+   */
+  private admitAdvertisement(
+    targetId: string,
+    actionTypeIds: readonly string[],
+    edge: ChildMfeBridge,
+    sendDown: (chain: ActionsChain) => Promise<void>
+  ): boolean {
+    void actionTypeIds; // opaque — carried only for future consultation, never interpreted here
+    const hasLocalTarget =
+      !!this.extensionManager.getDomainState(targetId) ||
+      !!this.extensionManager.getExtensionState(targetId);
+    if (hasLocalTarget || this.forwardingEntries.has(targetId)) {
+      // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-collision-reject
+      console.error(
+        `[DefaultMfeRegistry] Advertisement collision for target '${targetId}': ` +
+        'an ancestor already holds a local registration or a forwarding entry ' +
+        'for this identifier. Rejecting the advertisement — it will not be reachable ' +
+        'through this path.'
+      );
+      return false;
+      // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-collision-reject
+    }
+    // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-collision-check
+
+    // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-no-collision
+    // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-record-forwarding-entry
+    this.forwardingEntries.set(targetId, { edge, sendDown, inFlightRejects: new Set() });
+    // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-record-forwarding-entry
+
+    // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-repropagate-upward
+    this.propagateAdvertisementUpward(targetId, actionTypeIds);
+    // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-repropagate-upward
+    // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-no-collision
+    return true;
+  }
+
+  /**
+   * Compose and propagate an advertisement for a locally-admitted target
+   * upward through this registry's inbound bridge, if it has one.
+   *
+   * @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-compose-advertisement
+   */
+  private propagateAdvertisementUpward(targetId: string, actionTypeIds: readonly string[]): void {
+    // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-compose-advertisement
+    // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-has-inbound-bridge
+    // Same check, shared by two call sites: step 6's own-advertisement
+    // propagation and step 8.2's re-propagation of an admitted descendant
+    // advertisement — both ask the identical question ("does THIS registry
+    // itself have an inbound bridge to propagate through?"), so both
+    // instructions map onto this one guard.
+    // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-ancestor-has-inbound-bridge
+    if (!this.inboundBridgeLink) {
+      return; // Root/shell registry — nothing further to propagate to.
+    }
+    // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-ancestor-has-inbound-bridge
+    // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-has-inbound-bridge
+    const accepted = this.inboundBridgeLink.propagateAdvertisement(targetId, actionTypeIds);
+    if (accepted) {
+      this.propagatedTargetIds.add(targetId);
+    }
+  }
+
+  /**
+   * Retract a target this registry itself previously propagated upward
+   * (called from `unregisterDomain`/`unregisterExtension`/`dispose`).
+   *
+   * @cpt inst-retract-advertisements
+   */
+  private retractPropagatedTarget(targetId: string): void {
+    if (this.propagatedTargetIds.delete(targetId) && this.inboundBridgeLink) {
+      this.inboundBridgeLink.retractAdvertisement(targetId);
+    }
+  }
+
+  /**
+   * Receiving-ancestor side of retraction: drop a forwarding entry this
+   * registry holds for a descendant's target, rejecting any dispatch this
+   * registry has in flight for it, then re-propagate the retraction further
+   * up if this registry itself has an inbound bridge.
+   *
+   * @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-reject-inflight-retracted
+   */
+  private retractForwardingEntry(targetId: string, edge: ChildMfeBridge): void {
+    const entry = this.forwardingEntries.get(targetId);
+    if (!entry || entry.edge !== edge) {
+      return; // Not ours (already retracted, or belongs to a different edge).
+    }
+    this.forwardingEntries.delete(targetId);
+    for (const reject of entry.inFlightRejects) {
+      reject(new Error(`Target '${targetId}' was retracted while an action was in flight.`));
+    }
+    entry.inFlightRejects.clear();
+    // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-reject-inflight-retracted
+    if (this.inboundBridgeLink) {
+      this.inboundBridgeLink.retractAdvertisement(targetId);
+    }
+  }
+
+  /**
+   * Parent-triggered retraction (`inst-retract-advertisements`): revoke every
+   * forwarding entry this registry holds that was propagated through a
+   * SPECIFIC descendant's inbound bridge — called by `DefaultMountManager`
+   * on that descendant's host extension's unmount or mount failure,
+   * regardless of whether the nested registry that extension hosts ever
+   * disposes itself. This is what fixes both (i) a fresh-registry-per-mount
+   * pattern getting its readvertisement rejected by a stale collision-guard
+   * entry from a prior mount, and (ii) a persistent-registry pattern left
+   * pointing at a bridge this registry has already torn down: after this
+   * runs, the parent's own forwarding-entry state for that bridge is fully
+   * clean, so a subsequent remount re-advertises without collision, and a
+   * reused (not rebuilt) child registry's own further attempts to propagate
+   * or retract through its now-revoked link simply fail to find an entry to
+   * touch here — never crash, never resurrect stale routing.
+   *
+   * @cpt inst-retract-advertisements / inst-reject-inflight-retracted
+   */
+  private retractInboundBridgeLinkFor(childBridge: ChildMfeBridge): void {
+    for (const [targetId, entry] of Array.from(this.forwardingEntries.entries())) {
+      if (entry.edge === childBridge) {
+        this.retractForwardingEntry(targetId, childBridge);
+      }
+    }
+    // Once retraction of any entries keyed to this bridge is complete, drop
+    // the Symbol-keyed `InboundBridgeLink` attached to the bridge object
+    // itself — otherwise the bridge keeps a strong reference back into this
+    // registry's closures (`escalate`/`propagateAdvertisement` capture
+    // `this`) even after the link has been fully retracted.
+    unregisterInboundBridgeLink(childBridge);
+  }
+
+  /**
+   * Mediator-injected tier-4 resolution: a downward forwarding entry for
+   * `targetId`, excluding one whose bridge equals the chain's tagged arrival
+   * edge (loop containment).
+   *
+   * @cpt inst-forwarding-entry-lookup
+   */
+  private resolveForwardingEntryRoute(targetId: string, arrivalEdge: unknown): CrossHopRoute | undefined {
+    const entry = this.forwardingEntries.get(targetId);
+    if (!entry) {
+      return undefined;
+    }
+    if (arrivalEdge !== undefined && entry.edge === arrivalEdge) {
+      return undefined;
+    }
+    return {
+      send: entry.sendDown,
+      registerInFlight: (reject) => {
+        entry.inFlightRejects.add(reject);
+        return () => entry.inFlightRejects.delete(reject);
+      },
+    };
+  }
+
+  /**
+   * Mediator-injected tier-5 resolution: the escalation route bound to this
+   * registry's inbound bridge. `undefined` when this registry holds no
+   * inbound bridge (it is the shell). Arrival-edge tagging is NOT done here
+   * — it happens inside `link.escalate` itself, minted by the PARENT
+   * registry at link time (`buildInboundBridgeLinkFor`), so that the tag is
+   * written and later read by the same (parent) copy of this package
+   * regardless of which copy this (child) registry belongs to.
+   *
+   * @cpt-begin:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-escalation-lookup
+   */
+  private resolveEscalationRoute(_targetId: string): CrossHopRoute | undefined {
+    const link = this.inboundBridgeLink;
+    if (!link) {
+      return undefined;
+    }
+    return {
+      send: (chain) => link.escalate(chain),
+      registerInFlight: () => () => { /* no persistent record to force-reject */ },
+    };
+  }
+  // @cpt-end:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-escalation-lookup
 
   // ─── Private lifecycle trigger helpers (replaces old public methods) ──────
 
@@ -363,6 +696,12 @@ export class DefaultMfeRegistry extends MfeRegistry {
       lifecycleTrigger,
       implementation
     );
+
+    // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-compose-advertisement
+    // Admission complete: propagate this domain's advertisement upward, if
+    // this registry has an inbound bridge to propagate through.
+    this.propagateAdvertisementUpward(declaration.id, declaration.actions);
+    // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-compose-advertisement
 
     // Step 8: Fire-and-forget 'init' lifecycle stage (errors logged to console.error).
     // The stage ID comes from the injected plugin: MFES-1 forbids this package
@@ -617,6 +956,15 @@ export class DefaultMfeRegistry extends MfeRegistry {
       await this.extensionManager.registerExtension(extension);
       // @cpt-end:cpt-frontx-flow-mfe-registry-register-validate-mount:p1:inst-flow-rvm-05
 
+      // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-compose-advertisement
+      // Admission complete: propagate this extension's advertisement upward,
+      // using its declared receivable-action set as the opaque action-type id set.
+      const admittedEntry = this.extensionManager.getExtensionState(extension.id)?.entry;
+      if (admittedEntry) {
+        this.propagateAdvertisementUpward(extension.id, admittedEntry.actions);
+      }
+      // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-compose-advertisement
+
       try {
         // @cpt-begin:cpt-frontx-algo-mfe-registry-register-extension:p2:inst-algo-re-05
         // Store the admitted extension in the registry's internal map keyed by id.
@@ -640,6 +988,8 @@ export class DefaultMfeRegistry extends MfeRegistry {
       await this.extensionManager.unregisterExtension(extensionId);
       // @cpt-end:cpt-frontx-state-mfe-registry-entry-lifecycle:p2:inst-state-el-09
 
+      this.retractPropagatedTarget(extensionId);
+
       try {
         const packageId = extractGtsPackage(extensionId);
         const extensionSet = this.packages.get(packageId);
@@ -657,12 +1007,35 @@ export class DefaultMfeRegistry extends MfeRegistry {
 
   async unregisterDomain(domainId: string): Promise<void> {
     return this.operationSerializer.serializeOperation(domainId, async () => {
+      // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-retract-advertisements
+      // Extensions each propagate their own advertisement on admission
+      // (`registerExtension`'s `inst-compose-advertisement`), independent of
+      // mount state — so every extension currently registered under this
+      // domain (not just the mounted ones) holds a stale advertisement in
+      // every ancestor once the domain is gone. Capture the full registered
+      // set before the manager's cascade below removes them, since
+      // `DefaultExtensionManager.unregisterDomain` cascades through its own
+      // internal `unregisterExtension` (not `DefaultMfeRegistry.unregisterExtension`,
+      // the method that normally calls `retractPropagatedTarget`), so those
+      // cascaded removals never retract the propagated advertisement on their own.
+      const extensionIdsToRetract = this.extensionManager
+        .getExtensionStatesForDomain(domainId)
+        .map((state) => state.extension.id);
+      // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-retract-advertisements
+
       // Invariant: teardown hooks must still be able to dispatch. The manager
       // unmounts the extensions and fires the domain's `destroyed` stage, whose
       // chains target this domain — so the handlers stay attached until it
       // returns. Detaching after also drops anything a teardown hook registered.
       await this.extensionManager.unregisterDomain(domainId);
       this.mediator.unregisterAllHandlers(domainId);
+
+      // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-retract-advertisements
+      for (const extensionId of extensionIdsToRetract) {
+        this.retractPropagatedTarget(extensionId);
+      }
+      this.retractPropagatedTarget(domainId);
+      // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-retract-advertisements
     });
   }
 
@@ -711,11 +1084,30 @@ export class DefaultMfeRegistry extends MfeRegistry {
     this.mountManager.setTheme(cssVars);
   }
 
+  // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-retract-advertisements
   dispose(): void {
-    if (this.parentBridge) {
-      this.parentBridge.dispose();
-      this.parentBridge = null;
+    // Retract every advertisement this registry (and, transitively, its own
+    // descendants — already re-propagated through it) previously propagated
+    // upward through its inbound bridge, for the whole disposing subtree.
+    for (const targetId of Array.from(this.propagatedTargetIds)) {
+      this.retractPropagatedTarget(targetId);
     }
+
+    // Reject any dispatch this registry itself has in flight toward a
+    // forwarding entry it holds, then drop the entries — this registry is
+    // going away regardless of whether its own inbound bridge link exists.
+    for (const [targetId, entry] of Array.from(this.forwardingEntries.entries())) {
+      for (const reject of entry.inFlightRejects) {
+        reject(new Error(`Target '${targetId}' was retracted because its host registry disposed.`));
+      }
+      entry.inFlightRejects.clear();
+    }
+    this.forwardingEntries.clear();
+
+    this.inboundActionsChainUnsubscribe?.();
+    this.inboundActionsChainUnsubscribe = null;
+    this.inboundBridgeLink = null;
+    // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-retract-advertisements
 
     for (const bridge of this.childBridges.values()) {
       bridge.dispose();

@@ -14,12 +14,19 @@
 import { isInfrastructureLifecycleAction, type TypeSystemPlugin } from '../type-substrate';
 import type { ActionsChain, ExtensionDomain, MfeEntry } from '../types';
 import type { ExtensionDomainState } from '../runtime/extension-manager';
+import { getArrivalEdge } from '../runtime/inbound-bridge-link';
+import type { CrossHopRoute } from './cross-hop-route';
 import {
   ActionsChainsMediator,
   ActionHandler,
   type ChainResult,
   type ChainExecutionOptions,
 } from './types';
+
+/** Narrows a resolved handler to the cross-hop (forwarding-entry/escalation) shape. */
+function isCrossHopRoute(resolved: ActionHandler | CrossHopRoute): resolved is CrossHopRoute {
+  return typeof (resolved as CrossHopRoute).send === 'function';
+}
 
 
 /**
@@ -85,6 +92,30 @@ export class DefaultActionsChainsMediator extends ActionsChainsMediator {
   private readonly getExtensionEntry: (extensionId: string) => MfeEntry | undefined;
 
   /**
+   * Injected callback resolving a downward forwarding entry for a target
+   * previously advertised by a descendant registry through registration
+   * propagation, excluding any entry whose bridge equals the chain's tagged
+   * arrival edge (loop containment). Returns `undefined` if no forwarding
+   * entry exists for the target, or `undefined` when a registry has no such
+   * entries at all (root registries with nothing propagated to them).
+   *
+   * @cpt inst-forwarding-entry-lookup
+   */
+  private readonly resolveForwardingEntry?: (
+    targetId: string,
+    arrivalEdge: unknown
+  ) => CrossHopRoute | undefined;
+
+  /**
+   * Injected callback resolving the escalation route bound to this
+   * registry's inbound bridge. Returns `undefined` when the registry holds
+   * no inbound bridge (i.e. it is the shell/root).
+   *
+   * @cpt inst-escalation-lookup
+   */
+  private readonly resolveEscalation?: (targetId: string) => CrossHopRoute | undefined;
+
+  /**
    * Unified handler map: targetId → (actionTypeId → handler).
    * Used for both domain-side and extension-side handlers.
    */
@@ -116,11 +147,15 @@ export class DefaultActionsChainsMediator extends ActionsChainsMediator {
     typeSystem: TypeSystemPlugin;
     getDomainState: (domainId: string) => ExtensionDomainState | undefined;
     getExtensionEntry: (extensionId: string) => MfeEntry | undefined;
+    resolveForwardingEntry?: (targetId: string, arrivalEdge: unknown) => CrossHopRoute | undefined;
+    resolveEscalation?: (targetId: string) => CrossHopRoute | undefined;
   }) {
     super();
     this.typeSystem = config.typeSystem;
     this.getDomainState = config.getDomainState;
     this.getExtensionEntry = config.getExtensionEntry;
+    this.resolveForwardingEntry = config.resolveForwardingEntry;
+    this.resolveEscalation = config.resolveEscalation;
   }
 
   /**
@@ -228,7 +263,7 @@ export class DefaultActionsChainsMediator extends ActionsChainsMediator {
     try {
       // @cpt-begin:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-invoke-within-timeout
       // @cpt-begin:cpt-frontx-flow-extension-domain-governance-admission:p1:inst-admitted-mount
-      await this.executeAction(action);
+      await this.executeAction(action, startTime, chainTimeout);
       // @cpt-end:cpt-frontx-flow-extension-domain-governance-admission:p1:inst-admitted-mount
       // @cpt-end:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-invoke-within-timeout
 
@@ -296,15 +331,22 @@ export class DefaultActionsChainsMediator extends ActionsChainsMediator {
    * mediator never throws to the public caller.
    *
    * @param action - The action to execute
+   * @param startTime - Start time of the whole chain, for cross-hop budget carry-over
+   * @param chainTimeout - Whole-chain timeout, for cross-hop budget carry-over
    * @returns Promise that resolves when action completes
    */
   private async executeAction(
-    action: ActionsChain['action']
+    action: ActionsChain['action'],
+    startTime: number,
+    chainTimeout: number
   ): Promise<void> {
-    const handler = this.resolveHandler(action.target, action.type);
+    // @cpt-begin:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-forwarding-entry-lookup
+    const arrivalEdge = getArrivalEdge(action);
+    // @cpt-end:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-forwarding-entry-lookup
+    const resolved = this.resolveHandler(action.target, action.type, arrivalEdge);
 
     // @cpt-begin:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-no-handler
-    if (!handler) {
+    if (!resolved) {
       console.debug(
         '[ActionsChainsMediator] No handler registered for action target',
         { target: action.target, actionType: action.type }
@@ -315,15 +357,60 @@ export class DefaultActionsChainsMediator extends ActionsChainsMediator {
     }
     // @cpt-end:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-no-handler
 
-    // @cpt-begin:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-resolve-timeout
-    const timeout = await this.resolveTimeout(action);
-    // @cpt-end:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-resolve-timeout
+    let timeout: number;
+    let invoke: () => Promise<void>;
+
+    // @cpt-begin:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-cross-hop-timeout
+    if (isCrossHopRoute(resolved)) {
+      // Forwarding-entry or escalation tier: carry the caller's remaining
+      // chain-time budget across this hop, decremented by elapsed hop time,
+      // rather than resolving the domain's default action timeout.
+      //
+      // A forwarded/escalated chain is delivered to the next registry as a
+      // brand-new top-level `executeActionsChain` call (via `CrossHopRoute.send`),
+      // so the next hop's own `startTime`/`chainTimeout` are reset to fresh
+      // defaults. If the incoming action already carries a hop-provided
+      // remaining budget (`action.timeout` set by an upstream hop), that value
+      // is the true authoritative remaining budget across the whole multi-hop
+      // journey and must be decremented by THIS hop's own elapsed time, rather
+      // than recomputed from this hop's local (fresh) `chainTimeout - elapsed`.
+      // Only fall back to the local computation when this is the first hop for
+      // this dispatch (`action.timeout` is undefined).
+      const elapsed = Date.now() - startTime;
+      const incomingBudget = action.timeout;
+      timeout =
+        incomingBudget !== undefined
+          ? Math.max(0, incomingBudget - elapsed)
+          : Math.max(0, chainTimeout - elapsed);
+      const route = resolved;
+      invoke = () =>
+        new Promise<void>((resolve, reject) => {
+          const chain: ActionsChain = {
+            action: { ...action, timeout },
+          };
+          const unregister = route.registerInFlight(reject);
+          route.send(chain).then(
+            (value) => {
+              unregister();
+              resolve(value);
+            },
+            (error) => {
+              unregister();
+              reject(error);
+            }
+          );
+        });
+    } else {
+      // @cpt-end:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-cross-hop-timeout
+      const handler = resolved;
+      // @cpt-begin:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-resolve-timeout
+      timeout = await this.resolveTimeout(action);
+      // @cpt-end:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-resolve-timeout
+      invoke = async () => await handler.handleAction(action.type, action.payload);
+    }
 
     // @cpt-begin:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-add-inflight
-    const actionPromise = this.executeWithTimeout(
-      async () => await handler.handleAction(action.type, action.payload),
-      timeout
-    );
+    const actionPromise = this.executeWithTimeout(invoke, timeout);
     this.trackPendingAction(action.target, actionPromise);
     // @cpt-end:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-add-inflight
 
@@ -383,12 +470,23 @@ export class DefaultActionsChainsMediator extends ActionsChainsMediator {
    * `typeSystem.isTypeOf`, so dispatch must resolve them the same way or the
    * registered handler would be unreachable.
    *
+   * 4. Downward forwarding entry, recorded through registration propagation
+   *    from a descendant registry — excluding an entry whose bridge equals
+   *    the chain's tagged arrival edge, if it carries one (loop containment)
+   * 5. Escalation: if this registry holds an inbound bridge (it is not the
+   *    shell), a synthesized route bound to it
+   *
    * @param targetId - The target type ID (domain or extension)
    * @param actionTypeId - The action type ID
-   * @returns The action handler function, or undefined if not found
+   * @param arrivalEdge - The bridge this dispatch most recently arrived on, if any
+   * @returns The action handler or cross-hop route, or undefined if neither resolves
    */
   // @cpt-begin:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-keyed-lookup
-  private resolveHandler(targetId: string, actionTypeId: string): ActionHandler | undefined {
+  private resolveHandler(
+    targetId: string,
+    actionTypeId: string,
+    arrivalEdge?: unknown
+  ): ActionHandler | CrossHopRoute | undefined {
     // Check per-(target, actionType) handler first
     const targetHandlers = this.actionHandlers.get(targetId);
     if (targetHandlers) {
@@ -413,8 +511,31 @@ export class DefaultActionsChainsMediator extends ActionsChainsMediator {
 
     // @cpt-begin:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-catchall-lookup
     // Fall back to catch-all handler (used for child domain forwarding via bridge transport)
-    return this.catchAllHandlers.get(targetId);
+    const catchAll = this.catchAllHandlers.get(targetId);
+    if (catchAll) {
+      return catchAll;
+    }
     // @cpt-end:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-catchall-lookup
+
+    // @cpt-begin:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-forwarding-entry-lookup
+    if (this.resolveForwardingEntry) {
+      const forwardingRoute = this.resolveForwardingEntry(targetId, arrivalEdge);
+      if (forwardingRoute) {
+        return forwardingRoute;
+      }
+    }
+    // @cpt-end:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-forwarding-entry-lookup
+
+    // @cpt-begin:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-escalation-lookup
+    if (this.resolveEscalation) {
+      const escalationRoute = this.resolveEscalation(targetId);
+      if (escalationRoute) {
+        return escalationRoute;
+      }
+    }
+    // @cpt-end:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-escalation-lookup
+
+    return undefined;
   }
   // @cpt-end:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-keyed-lookup
 
