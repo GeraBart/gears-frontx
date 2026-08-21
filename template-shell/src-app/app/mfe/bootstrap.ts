@@ -281,6 +281,18 @@ async function registerMfePackage(
     // skip-and-defer rule moves into L2 and the host bootstrap becomes a pure
     // GTS-runtime-store registrar.
     if (!hostOwnsDomain(registry, extension.domain)) {
+      // This host doesn't own the target domain, so it must not admit/mount
+      // this extension — but it still needs the declaration present on its
+      // own type system: each `GtsPlugin` instance owns an independent
+      // GtsStore (plugin.ts), and `x-gts-ref` admission validation for an
+      // action originating here (e.g. Hello World's ping dispatched at the
+      // shell's own registry, escalating down to widget-a two hops away)
+      // checks referenced entities against THIS store, before the action
+      // ever reaches cross-hop routing. Registering opaquely here (no
+      // `registerExtension`/mounting) mirrors the widgets-host's own
+      // registration of foreign-domain entities in
+      // `bootstrapWidgetsRuntime`.
+      registry.typeSystem.register(extension);
       continue;
     }
     await registry.registerExtension(extension);

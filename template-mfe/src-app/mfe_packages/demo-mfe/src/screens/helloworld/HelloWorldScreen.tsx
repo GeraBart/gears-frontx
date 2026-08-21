@@ -5,7 +5,15 @@ import { Card, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Skeleton } from '../../components/ui/skeleton';
 import { useScreenTranslations } from '../../shared/useScreenTranslations';
-import { THEME_EXTENSION_ID, PROFILE_EXTENSION_ID, DEMO_ACTION_REFRESH_PROFILE } from '../../shared/extension-ids';
+import {
+  THEME_EXTENSION_ID,
+  PROFILE_EXTENSION_ID,
+  DEMO_ACTION_REFRESH_PROFILE,
+  WIDGETS_HOST_EXTENSION_ID,
+  WIDGETS_DOMAIN_ID,
+  WIDGET_ALPHA_EXTENSION_ID,
+  WIDGET_PING_ACTION_TYPE,
+} from '../../shared/extension-ids';
 import { ButtonVariant } from '../../components/types';
 
 /**
@@ -131,6 +139,40 @@ export const HelloWorldScreen: React.FC<HelloWorldScreenProps> = ({ bridge }) =>
   }, [bridge]);
   // @cpt-end:child-bridge-action-handler:p3:inst-3
 
+  // Mount Widgets Host into the shell's screen domain, then — on success —
+  // mount widget-a's alpha instance into the widgets domain Widgets Host owns,
+  // then — on success — ping that alpha instance. A single action chain, fully
+  // defined at creation time via `next` continuations, dispatched in one
+  // `executeActionsChain` call. Mounting Widgets Host evicts Hello World itself
+  // from the shell's screen domain (`ExclusiveMountStrategy`), but the chain
+  // keeps executing on the mediator's own promise chain regardless of what
+  // happens to the sender afterward — this exercises cross-nesting delivery
+  // two hops away from the shell (shell -> Widgets Host -> widgets domain ->
+  // widget-a).
+  const handlePingWidgetA = useCallback(async () => {
+    await bridge.executeActionsChain({
+      action: {
+        type: FRONTX_ACTION_MOUNT_EXT,
+        target: FRONTX_SCREEN_DOMAIN,
+        payload: { subject: WIDGETS_HOST_EXTENSION_ID },
+      },
+      next: {
+        action: {
+          type: FRONTX_ACTION_MOUNT_EXT,
+          target: WIDGETS_DOMAIN_ID,
+          payload: { subject: WIDGET_ALPHA_EXTENSION_ID },
+        },
+        next: {
+          action: {
+            type: WIDGET_PING_ACTION_TYPE,
+            target: WIDGET_ALPHA_EXTENSION_ID,
+            payload: {},
+          },
+        },
+      },
+    });
+  }, [bridge]);
+
   // Show skeleton while translations are loading
   if (loading) {
     return (
@@ -208,6 +250,9 @@ export const HelloWorldScreen: React.FC<HelloWorldScreenProps> = ({ bridge }) =>
             </Button>
             <Button onClick={handleOpenProfileAndRefresh} variant={ButtonVariant.Outline}>
               {t('open_profile_refresh')}
+            </Button>
+            <Button onClick={handlePingWidgetA} variant={ButtonVariant.Outline}>
+              {t('mount_widgets_host_and_ping')}
             </Button>
           </div>
         </CardContent>
