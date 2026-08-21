@@ -16,7 +16,7 @@
  * Domain/action ids here are a mock notation, never the real GTS strings --
  * MFES-1 forbids `@gears-frontx/mfes` from carrying a type-format literal.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { DefaultMfeRegistry } from '../../src/runtime/DefaultMfeRegistry';
 import type { TypeSystemPlugin } from '../../src/type-substrate';
 import type { Extension, ExtensionDomain, MfeEntry } from '../../src/types';
