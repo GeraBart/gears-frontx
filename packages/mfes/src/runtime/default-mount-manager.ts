@@ -76,6 +76,16 @@ export class DefaultMountManager extends MountManager {
    */
   private readonly inboundAdoptersByExtension = new Map<string, readonly InboundBridgeRelink[]>();
 
+  /**
+   * The in-flight `loadExtension` promise for an extension currently in
+   * `loadState === 'loading'`, keyed by extension id. A second concurrent
+   * `loadExtension` call for the same extension awaits this promise instead
+   * of returning immediately, so it observes the same completion (or
+   * failure) as the original caller rather than resolving before the load
+   * has actually finished.
+   */
+  private readonly inFlightLoadsByExtension = new Map<string, Promise<void>>();
+
   constructor(config: {
     extensionManager: DefaultExtensionManager;
     resolveHandler: HandlerResolver;
@@ -126,30 +136,43 @@ export class DefaultMountManager extends MountManager {
       return;
     }
     if (extensionState.loadState === 'loading') {
-      return;
+      const inFlight = this.inFlightLoadsByExtension.get(extensionId);
+      if (inFlight) {
+        return inFlight;
+      }
+      // Defensive fallback: `loadState` is 'loading' but no in-flight promise
+      // is tracked (should not happen via this class's own code paths). Fall
+      // through and start a fresh load rather than returning prematurely.
     }
 
     extensionState.loadState = 'loading';
     extensionState.error = undefined;
 
-    try {
-      const entry = extensionState.entry;
-      const handler = this.resolveHandler(entry.id);
-      if (!handler) {
-        throw new Error(
-          `No MFE handler registered that can handle entry type '${entry.id}'. ` +
-          `Provide handlers via 'mfeHandlers' in MfeRegistryConfig.`
-        );
-      }
+    const loadPromise = (async (): Promise<void> => {
+      try {
+        const entry = extensionState.entry;
+        const handler = this.resolveHandler(entry.id);
+        if (!handler) {
+          throw new Error(
+            `No MFE handler registered that can handle entry type '${entry.id}'. ` +
+            `Provide handlers via 'mfeHandlers' in MfeRegistryConfig.`
+          );
+        }
 
-      const lifecycle = await handler.load(entry, extensionState.extension.id);
-      extensionState.lifecycle = lifecycle;
-      extensionState.loadState = 'loaded';
-    } catch (error) {
-      extensionState.loadState = 'error';
-      extensionState.error = error instanceof Error ? error : new Error(String(error));
-      throw error;
-    }
+        const lifecycle = await handler.load(entry, extensionState.extension.id);
+        extensionState.lifecycle = lifecycle;
+        extensionState.loadState = 'loaded';
+      } catch (error) {
+        extensionState.loadState = 'error';
+        extensionState.error = error instanceof Error ? error : new Error(String(error));
+        throw error;
+      } finally {
+        this.inFlightLoadsByExtension.delete(extensionId);
+      }
+    })();
+
+    this.inFlightLoadsByExtension.set(extensionId, loadPromise);
+    return loadPromise;
   }
 
   async preloadExtension(extensionId: string): Promise<void> {

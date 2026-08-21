@@ -14,6 +14,10 @@ import {
   DEMO_ACTION_REFRESH_PROFILE,
   PROFILE_EXTENSION_ID,
   THEME_EXTENSION_ID,
+  WIDGETS_HOST_EXTENSION_ID,
+  WIDGETS_DOMAIN_ID,
+  WIDGET_ALPHA_EXTENSION_ID,
+  WIDGET_PING_ACTION_TYPE,
 } from '../../shared/extension-ids';
 
 const { useScreenTranslationsMock } = vi.hoisted(() => ({
@@ -136,6 +140,39 @@ describe('HelloWorldScreen', () => {
           action: {
             type: DEMO_ACTION_REFRESH_PROFILE,
             target: PROFILE_EXTENSION_ID,
+          },
+        },
+      });
+    });
+  });
+
+  it('dispatches the nested Widgets Host mount, widget-a mount, and ping action chain', async () => {
+    const { executeActionsChain } = await setupHelloWorldScreen();
+    const user = userEvent.setup();
+    const mountWidgetsHostButton = screen.getByRole('button', { name: 'mount_widgets_host_and_ping' });
+
+    await user.click(mountWidgetsHostButton);
+
+    await waitFor(() => {
+      expect(executeActionsChain).toHaveBeenCalledTimes(1);
+      expect(executeActionsChain).toHaveBeenCalledWith({
+        action: {
+          type: FRONTX_ACTION_MOUNT_EXT,
+          target: FRONTX_SCREEN_DOMAIN,
+          payload: { subject: WIDGETS_HOST_EXTENSION_ID },
+        },
+        next: {
+          action: {
+            type: FRONTX_ACTION_MOUNT_EXT,
+            target: WIDGETS_DOMAIN_ID,
+            payload: { subject: WIDGET_ALPHA_EXTENSION_ID },
+          },
+          next: {
+            action: {
+              type: WIDGET_PING_ACTION_TYPE,
+              target: WIDGET_ALPHA_EXTENSION_ID,
+              payload: {},
+            },
           },
         },
       });
