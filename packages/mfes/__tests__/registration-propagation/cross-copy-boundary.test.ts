@@ -495,4 +495,67 @@ describe('Cross-copy boundary: registration propagation, escalation, retraction 
     );
     expect(failureLogged).toBe(true);
   });
+
+  it('(7) a copy-B registry reused (not rebuilt) across a remount of its copy-A host extension is re-linked by the copy-A shell and re-advertises successfully', async () => {
+    vi.resetModules();
+    const copyA = await loadCopy();
+    vi.resetModules();
+    const copyB = await loadCopy();
+
+    const REUSE_ENTRY = 'entry.reuse-cross-copy.v1';
+    const REUSE_EXT = 'ext.reuse-cross-copy.v1';
+    const D_REUSE = 'domain.reuse-cross-copy.v1';
+    const ACTION_REUSE = 'mock.action.v1~action_reuse_cross_copy.v1~';
+
+    const entries = new Map<string, MfeEntry>([[REUSE_ENTRY, makeEntry(REUSE_ENTRY)]]);
+    const plugin = createMockPlugin(entries);
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => { /* silence expected diagnostics */ });
+    const reuseCounter = { count: 0 };
+
+    // Constructed exactly once, from copy B, the very first time `mount()`
+    // runs — never rebuilt on a later remount of its copy-A host extension.
+    let reusedNested: InstanceType<Copy['DefaultMfeRegistry']> | undefined;
+
+    const reuseHandler = makeInjectableMountHandler(copyA, REUSE_ENTRY, () => {
+      if (!reusedNested) {
+        reusedNested = new copyB.DefaultMfeRegistry({ typeSystem: plugin });
+        reusedNested.registerDomain(
+          makeDomain(D_REUSE, [ACTION_REUSE]),
+          makeDomainFactory(copyB, [
+            [ACTION_REUSE, copyB.ActionHandler.fromFunction(async () => { reuseCounter.count += 1; })],
+          ])
+        );
+      }
+      // Remount: reused as-is — no new copy-B `DefaultMfeRegistry` is
+      // constructed here, so reachability depends entirely on copy A's
+      // mount manager re-offering the fresh link across the copy boundary.
+    });
+
+    const shell = new copyA.DefaultMfeRegistry({
+      typeSystem: plugin,
+      mfeHandlers: [reuseHandler],
+    });
+    shell.registerDomain(makeDomain(D0), makeDomainFactory(copyA));
+
+    await shell.registerExtension(makeExtension(REUSE_EXT, D0, REUSE_ENTRY));
+    const mounter0 = shell.getMounter(D0);
+    mounter0.attach(document.createElement('div'));
+
+    await mounter0.mount(REUSE_EXT, document.createElement('div'));
+    await shell.executeActionsChain(actionChain(ACTION_REUSE, D_REUSE));
+    expect(reuseCounter.count).toBe(1);
+
+    await mounter0.unmount(REUSE_EXT);
+    await mounter0.mount(REUSE_EXT, document.createElement('div'));
+
+    errorSpy.mockClear();
+    await shell.executeActionsChain(actionChain(ACTION_REUSE, D_REUSE));
+    const failureLogged = errorSpy.mock.calls.some((call: unknown[]) =>
+      call.some((arg: unknown) => String(arg).includes('Actions chain failed') || String(arg).includes('No handler found'))
+    );
+    expect(failureLogged).toBe(false);
+    expect(reuseCounter.count).toBe(2);
+
+    vi.restoreAllMocks();
+  });
 });
