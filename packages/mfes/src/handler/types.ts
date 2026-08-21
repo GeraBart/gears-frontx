@@ -103,6 +103,18 @@ export interface MfeEntryLifecycle<TBridge = ChildMfeBridge> {
    * a `ShadowRoot` created by `DefaultMountManager`. With custom handlers, it may
    * be a plain `Element`. React's `createRoot()` accepts both types.
    *
+   * The runtime treats this call's completion — synchronous return, or
+   * resolution of a returned promise — as the extension's readiness signal:
+   * `DefaultMountManager` awaits it before marking the extension mounted and
+   * before a chain's `next` continuation may target it. A `mount()` that
+   * returns before its own `registerActionHandler` calls have run (for
+   * example a UI-framework binding that defers registration to an
+   * asynchronous render/effect pass) makes those handlers unreachable to any
+   * action dispatched immediately after — the mediator resolves a handler
+   * once and does not retry. An implementation MUST NOT resolve until every
+   * `registerActionHandler` call it intends to make synchronously as part of
+   * this mount has completed.
+   *
    * @param container - DOM element or shadow root to mount into
    * @param bridge - Bridge instance for communication with host
    * @param mountContext - Host-provided runtime context for this mount

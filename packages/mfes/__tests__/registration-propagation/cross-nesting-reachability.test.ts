@@ -639,7 +639,7 @@ describe('Cross-nesting reachability: registration propagation, escalation, retr
     vi.restoreAllMocks();
   });
 
-  it('(j) a nested registry an author reuses (not rebuilds) across a remount stays degraded to root-registry behavior — no automatic re-link (`inst-nested-registry-lifetime-scope`)', async () => {
+  it('(j) a nested registry an author reuses (not rebuilds) across a remount is automatically re-linked to the fresh bridge and re-advertises every target it still holds', async () => {
     const REUSE_ENTRY = 'entry.reuse-child.v1';
     const REUSE_EXT = 'ext.reuse-child.v1';
     const D_REUSE = 'domain.reuse-child.v1';
@@ -651,10 +651,10 @@ describe('Cross-nesting reachability: registration propagation, escalation, retr
     const reuseCounter = { count: 0 };
 
     // Constructed exactly once, the very first time `mount()` runs — never
-    // rebuilt on a later remount. This is the documented limitation under
-    // test: an author who holds on to a nested registry across an
-    // unmount/remount cycle, rather than constructing a fresh one inside
-    // each `mount()` call, does not get it automatically re-linked.
+    // rebuilt on a later remount. Per the fixed root cause, the parent now
+    // re-offers a fresh link to this exact registry instance on every
+    // subsequent mount of its host extension, so it stays reachable from the
+    // shell across any number of remount cycles.
     let reusedRegistry: DefaultMfeRegistry | undefined;
 
     const reuseHandler = new InjectableMountHandler(REUSE_ENTRY, () => {
@@ -671,7 +671,8 @@ describe('Cross-nesting reachability: registration propagation, escalation, retr
       }
       // Remount: the author reuses the SAME registry instance instead of
       // rebuilding it — no new `DefaultMfeRegistry` is constructed here, so
-      // no further ambient-bridge adoption ever happens for it.
+      // no further ambient-bridge ADOPTION ever happens for it; reachability
+      // now instead comes from the parent's re-OFFER (`inst-relink-on-remount`).
     });
 
     const registry0 = new DefaultMfeRegistry({
@@ -694,33 +695,239 @@ describe('Cross-nesting reachability: registration propagation, escalation, retr
 
     // ── Unmount: the parent (registry0) revokes the stale link and deletes
     // its forwarding entry for D_REUSE — regardless of whether reusedRegistry
-    // itself ever disposes (`inst-retract-advertisements`). ──
+    // itself ever disposes (`inst-retract-advertisements` / `inst-unlink-on-retraction`). ──
     await mounter0.unmount(REUSE_EXT);
 
     // ── Remount: reuseHandler's mount() body reuses `reusedRegistry` as-is;
-    // no new registry is constructed, so no new adoption call is made and
-    // `reusedRegistry` is never re-linked to registry0. ──
+    // no new registry is constructed, so `DefaultMountManager` re-offers the
+    // fresh link to `reusedRegistry` through the re-link callback it retained
+    // from the first mount (`inst-relink-on-remount`). ──
     await mounter0.mount(REUSE_EXT, document.createElement('div'));
 
-    // The shell no longer has a route to D_REUSE: the domain was never
-    // re-advertised (nothing re-registers it, and the reused registry holds
-    // no working link back up), so dispatching from the shell fails to
-    // resolve rather than silently or incorrectly reaching the reused
-    // registry's still-live local handler.
+    // The shell reaches D_REUSE again: the reused registry automatically
+    // re-advertised it as part of the re-link (`inst-relink-repropagate`),
+    // with no action required from the microfrontend author.
     errorSpy.mockClear();
     await registry0.executeActionsChain(actionChain(ACTION_REUSE_LEAF, D_REUSE));
-    const degradedFailureLogged = errorSpy.mock.calls.some((call: unknown[]) =>
+    const failureLogged = errorSpy.mock.calls.some((call: unknown[]) =>
       call.some((arg: unknown) => String(arg).includes('Actions chain failed') || String(arg).includes('No handler found'))
     );
-    expect(degradedFailureLogged).toBe(true);
-    expect(reuseCounter.count).toBe(1); // unchanged — the shell dispatch never reached it
-
-    // The reused registry's own domain is still perfectly functional when
-    // dispatched to directly — proving it degraded to root-registry
-    // behavior (usable on its own, just unreachable from its former
-    // ancestor) rather than having silently broken outright.
-    await reusedRegistry!.executeActionsChain(actionChain(ACTION_REUSE_LEAF, D_REUSE));
+    expect(failureLogged).toBe(false);
     expect(reuseCounter.count).toBe(2);
+
+    vi.restoreAllMocks();
+  });
+
+  it('(k) after unmount + remount with a cached/reused registry, a shell-to-descendant dispatch succeeds through the fresh bridge and never through the first mount\'s disposed one', async () => {
+    const REUSE_ENTRY = 'entry.reuse-child2.v1';
+    const REUSE_EXT = 'ext.reuse-child2.v1';
+    const D_REUSE = 'domain.reuse-child2.v1';
+    const ACTION_REUSE_LEAF = 'mock.action.v1~action_reuse_leaf2.v1~';
+
+    const entries = new Map<string, MfeEntry>([[REUSE_ENTRY, makeEntry(REUSE_ENTRY)]]);
+    const plugin = createMockPlugin(entries);
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const reuseCounter = { count: 0 };
+
+    let reusedRegistry: DefaultMfeRegistry | undefined;
+    // The bridge instance handed to `mount()` on each mount cycle — a fresh
+    // pair (by reference) every time, per `DefaultMountManager.mountExtension`.
+    const bridges: ChildMfeBridge[] = [];
+
+    const reuseHandler = new InjectableMountHandler(REUSE_ENTRY, (bridge) => {
+      bridges.push(bridge);
+      if (!reusedRegistry) {
+        reusedRegistry = new DefaultMfeRegistry({ typeSystem: plugin });
+        reusedRegistry.registerDomain(
+          makeDomain(D_REUSE, [ACTION_REUSE_LEAF]),
+          new GenericDomainFactory([
+            [ACTION_REUSE_LEAF, ActionHandler.fromFunction(async () => { reuseCounter.count += 1; })],
+          ])
+        );
+      }
+    });
+
+    const registry0 = new DefaultMfeRegistry({
+      typeSystem: plugin,
+      mfeHandlers: [reuseHandler],
+    });
+    registry0.registerDomain(makeDomain(D0), new GenericDomainFactory());
+
+    await registry0.registerExtension(makeExtension(REUSE_EXT, D0, REUSE_ENTRY));
+    const mounter0 = registry0.getMounter(D0);
+    mounter0.attach(document.createElement('div'));
+
+    await mounter0.mount(REUSE_EXT, document.createElement('div'));
+    await mounter0.unmount(REUSE_EXT);
+    // The first mount's `ParentMfeBridge` is genuinely disposed by
+    // `DefaultMountManager.unmountExtension` (`bridgeFactory.disposeBridge`)
+    // at this point — if the remount below left the shell's forwarding entry
+    // for D_REUSE still bound to that first bridge pair, dispatching through
+    // it would throw `BridgeDisposedError`, surfaced here as a logged
+    // dispatch failure (`executeActionsChain` never re-throws).
+    await mounter0.mount(REUSE_EXT, document.createElement('div'));
+
+    expect(bridges).toHaveLength(2);
+    expect(bridges[0]).not.toBe(bridges[1]);
+
+    errorSpy.mockClear();
+    await registry0.executeActionsChain(actionChain(ACTION_REUSE_LEAF, D_REUSE));
+
+    expect(reuseCounter.count).toBe(1);
+    const anyFailureLogged = errorSpy.mock.calls.some((call: unknown[]) =>
+      call.some((arg: unknown) =>
+        String(arg).includes('Actions chain failed') ||
+        String(arg).includes('No handler found') ||
+        String(arg).includes('BridgeDisposedError') ||
+        String(arg).includes('disposed')
+      )
+    );
+    expect(anyFailureLogged).toBe(false);
+
+    vi.restoreAllMocks();
+  });
+
+  it('(l) a revoked link is inert: propagate/retract/escalate on a retained reference never reach ancestor state or the disposed bridge', async () => {
+    // Global symbol registry key mirrored from `inbound-bridge-link.ts`'s own
+    // `LINK_PROPERTY_KEY` — `Symbol.for(...)` guarantees this resolves to the
+    // exact same symbol, letting the test read the link the production code
+    // attached to the bridge object without any new export.
+    const LINK_PROPERTY_KEY = Symbol.for('@gears-frontx/mfes:inbound-bridge-link:1');
+
+    const REVOKE_ENTRY = 'entry.revoke-child.v1';
+    const REVOKE_EXT = 'ext.revoke-child.v1';
+    const OTHER_TARGET = 'domain.revoke-other-target.v1';
+    const ACTION_OTHER = 'mock.action.v1~action_revoke_other.v1~';
+
+    const entries = new Map<string, MfeEntry>([[REVOKE_ENTRY, makeEntry(REVOKE_ENTRY)]]);
+    const plugin = createMockPlugin(entries);
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    let capturedBridge: ChildMfeBridge | undefined;
+
+    const revokeHandler = new InjectableMountHandler(REVOKE_ENTRY, (bridge) => {
+      capturedBridge = bridge;
+    });
+
+    const registry0 = new DefaultMfeRegistry({
+      typeSystem: plugin,
+      mfeHandlers: [revokeHandler],
+    });
+    registry0.registerDomain(makeDomain(D0), new GenericDomainFactory());
+
+    await registry0.registerExtension(makeExtension(REVOKE_EXT, D0, REVOKE_ENTRY));
+    const mounter0 = registry0.getMounter(D0);
+    mounter0.attach(document.createElement('div'));
+    await mounter0.mount(REVOKE_EXT, document.createElement('div'));
+
+    expect(capturedBridge).toBeDefined();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const link = (capturedBridge as any)[LINK_PROPERTY_KEY];
+    expect(link).toBeDefined();
+
+    // Retract the link (host extension unmounts) — no registry ever adopted
+    // it in this test, so retraction here exercises pure revocation.
+    await mounter0.unmount(REVOKE_EXT);
+
+    errorSpy.mockClear();
+
+    // A retained reference to the now-revoked link must refuse to act.
+    const accepted: boolean = link.propagateAdvertisement(OTHER_TARGET, [ACTION_OTHER]);
+    expect(accepted).toBe(false);
+
+    expect(() => link.retractAdvertisement(OTHER_TARGET)).not.toThrow();
+
+    await expect(link.escalate(actionChain(ACTION_OTHER, OTHER_TARGET))).rejects.toThrow(/revoked/);
+
+    // No ancestor state was acquired by the rejected propagate call above: a
+    // dispatch to OTHER_TARGET fails to resolve rather than routing through
+    // the (never legitimately admitted, and now doubly-refused) entry.
+    errorSpy.mockClear();
+    await registry0.executeActionsChain(actionChain(ACTION_OTHER, OTHER_TARGET));
+    const failureLogged = errorSpy.mock.calls.some((call: unknown[]) =>
+      call.some((arg: unknown) => String(arg).includes('Actions chain failed') || String(arg).includes('No handler found'))
+    );
+    expect(failureLogged).toBe(true);
+
+    vi.restoreAllMocks();
+  });
+
+  it('(m) when a registry IS freshly constructed inside a remount\'s window, the PREVIOUS mount\'s registry is not re-linked', async () => {
+    const FRESH_ENTRY = 'entry.fresh-child.v1';
+    const FRESH_EXT = 'ext.fresh-child.v1';
+    const D_FRESH = 'domain.fresh-child.v1';
+    const ACTION_FRESH_LEAF = 'mock.action.v1~action_fresh_leaf.v1~';
+
+    const entries = new Map<string, MfeEntry>([[FRESH_ENTRY, makeEntry(FRESH_ENTRY)]]);
+    const plugin = createMockPlugin(entries);
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const counters = [{ count: 0 }, { count: 0 }];
+    const rootCounter = { count: 0 };
+
+    const registries: DefaultMfeRegistry[] = [];
+
+    const freshHandler = new InjectableMountHandler(FRESH_ENTRY, () => {
+      // Fresh-registry-per-mount pattern: a brand new registry every time
+      // `mount()` runs, never reused across a remount.
+      const index = registries.length;
+      const registry = new DefaultMfeRegistry({ typeSystem: plugin });
+      registry.registerDomain(
+        makeDomain(D_FRESH, [ACTION_FRESH_LEAF]),
+        new GenericDomainFactory([
+          [ACTION_FRESH_LEAF, ActionHandler.fromFunction(async () => { counters[index].count += 1; })],
+        ])
+      );
+      registries.push(registry);
+    });
+
+    const registry0 = new DefaultMfeRegistry({
+      typeSystem: plugin,
+      mfeHandlers: [freshHandler],
+    });
+    registry0.registerDomain(
+      makeDomain(D0, [ACTION_ROOT]),
+      new GenericDomainFactory([
+        [ACTION_ROOT, ActionHandler.fromFunction(async () => { rootCounter.count += 1; })],
+      ])
+    );
+
+    await registry0.registerExtension(makeExtension(FRESH_EXT, D0, FRESH_ENTRY));
+    const mounter0 = registry0.getMounter(D0);
+    mounter0.attach(document.createElement('div'));
+
+    await mounter0.mount(FRESH_EXT, document.createElement('div'));
+    await mounter0.unmount(FRESH_EXT);
+    await mounter0.mount(FRESH_EXT, document.createElement('div'));
+
+    expect(registries).toHaveLength(2);
+    const [firstRegistry, secondRegistry] = registries;
+
+    // Shell reaches the SECOND (current) registry's domain.
+    errorSpy.mockClear();
+    await registry0.executeActionsChain(actionChain(ACTION_FRESH_LEAF, D_FRESH));
+    expect(counters[1].count).toBe(1);
+    expect(counters[0].count).toBe(0);
+
+    // The SECOND registry genuinely holds the current link and can escalate
+    // up to the shell.
+    errorSpy.mockClear();
+    await secondRegistry.executeActionsChain(actionChain(ACTION_ROOT, D0));
+    expect(rootCounter.count).toBe(1);
+
+    // The FIRST registry — the previous mount's — was unlinked on unmount and
+    // is never touched by the remount's re-offer (that re-offer only reaches
+    // callbacks recorded for THIS extension's most recent adoption, which the
+    // fresh construction above overwrote). Proven here by escalating directly
+    // FROM `firstRegistry`, which has no local handler for the shell's own
+    // action: with a working link it would reach `registry0` and resolve;
+    // unlinked, it fails to resolve at all.
+    errorSpy.mockClear();
+    await firstRegistry.executeActionsChain(actionChain(ACTION_ROOT, D0));
+    const firstUnlinkedFailureLogged = errorSpy.mock.calls.some((call: unknown[]) =>
+      call.some((arg: unknown) => String(arg).includes('Actions chain failed') || String(arg).includes('No handler found'))
+    );
+    expect(firstUnlinkedFailureLogged).toBe(true);
+    expect(rootCounter.count).toBe(1); // unchanged — firstRegistry's escalation never reached it
 
     vi.restoreAllMocks();
   });

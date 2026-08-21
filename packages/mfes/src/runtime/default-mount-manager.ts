@@ -28,6 +28,7 @@ import {
   pushAmbientMountingBridge,
   registerInboundBridgeLink,
   type InboundBridgeLink,
+  type InboundBridgeRelink,
 } from './inbound-bridge-link';
 
 export type HandlerResolver = (entryTypeId: string) => MfeHandler | undefined;
@@ -62,6 +63,18 @@ export class DefaultMountManager extends MountManager {
    * disposes itself.
    */
   private readonly childBridgesByExtension = new Map<string, ChildMfeBridge>();
+
+  /**
+   * The re-link callback of whichever registry adopted the inbound-bridge
+   * link of the CURRENT (or most recent) mount of each extension, keyed by
+   * extension id — retained across unmount/remount cycles, not cleared on
+   * retraction. This is what lets a registry an author reuses (rather than
+   * rebuilds) across a remount be re-linked to the fresh bridge the next time
+   * its host extension mounts: `mountExtension` re-offers the new link to
+   * every callback recorded here whenever the ambient rendezvous window
+   * closes with no fresh adoption of its own (`inst-relink-on-remount`).
+   */
+  private readonly inboundAdoptersByExtension = new Map<string, readonly InboundBridgeRelink[]>();
 
   constructor(config: {
     extensionManager: DefaultExtensionManager;
@@ -227,19 +240,39 @@ export class DefaultMountManager extends MountManager {
       // track `childBridge` as the ambient mounting bridge for exactly the
       // synchronous portion of the `lifecycle.mount(...)` invocation below —
       // no configuration or method call required from the microfrontend author.
-      registerInboundBridgeLink(
-        childBridge,
-        this.buildInboundBridgeLink(extensionId, childBridge, parentBridge)
-      );
+      const link = this.buildInboundBridgeLink(extensionId, childBridge, parentBridge);
+      registerInboundBridgeLink(childBridge, link);
 
       pushAmbientMountingBridge(childBridge);
+      let claimed: readonly InboundBridgeRelink[];
       let mountInvocation: void | Promise<void>;
       try {
         mountInvocation = lifecycle.mount(shadowRoot, childBridge, mountContext);
       } finally {
-        popAmbientMountingBridge();
+        claimed = popAmbientMountingBridge();
       }
       // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-track-mounting-bridge
+
+      // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-relink-on-remount
+      if (claimed.length > 0) {
+        // A registry was constructed inside this window and adopted the link
+        // itself (the ordinary fresh-registry-per-mount pattern) — remember
+        // its re-link callback(s) against this extension for a future remount.
+        this.inboundAdoptersByExtension.set(extensionId, claimed);
+      } else {
+        // No construction happened during this window — re-offer the fresh
+        // link to whichever registry adopted a PREVIOUS mount of THIS SAME
+        // extension (the reused-registry case), never to a registry that
+        // adopted any other extension's bridge.
+        const previous = this.inboundAdoptersByExtension.get(extensionId);
+        if (previous) {
+          for (const relink of previous) {
+            relink(link);
+          }
+        }
+      }
+      // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-relink-on-remount
+
       await mountInvocation;
 
       extensionState.bridge = parentBridge;
@@ -269,6 +302,16 @@ export class DefaultMountManager extends MountManager {
       if (mountedChildBridge) {
         this.retractInboundBridgeLink(mountedChildBridge);
         this.childBridgesByExtension.delete(extensionId);
+        // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-unlink-on-retraction
+        const adopters = this.inboundAdoptersByExtension.get(extensionId);
+        if (adopters) {
+          for (const relink of adopters) {
+            relink(null);
+          }
+        }
+        // Deliberately NOT deleted from the map — the next mount of this
+        // extension needs it to re-offer a fresh link to the same registry.
+        // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-unlink-on-retraction
       }
       // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-retract-advertisements
 
@@ -304,6 +347,16 @@ export class DefaultMountManager extends MountManager {
       if (mountedChildBridge) {
         this.retractInboundBridgeLink(mountedChildBridge);
         this.childBridgesByExtension.delete(extensionId);
+        // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-unlink-on-retraction
+        const adopters = this.inboundAdoptersByExtension.get(extensionId);
+        if (adopters) {
+          for (const relink of adopters) {
+            relink(null);
+          }
+        }
+        // Deliberately NOT deleted from the map — the next mount of this
+        // extension needs it to re-offer a fresh link to the same registry.
+        // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-unlink-on-retraction
       }
       // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-retract-advertisements
 

@@ -340,9 +340,10 @@ export class DefaultActionsChainsMediator extends ActionsChainsMediator {
     startTime: number,
     chainTimeout: number
   ): Promise<void> {
-    // @cpt-begin:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-forwarding-entry-lookup
+    // Read the chain's tagged arrival edge, if any, so resolveHandler's
+    // forwarding-entry tier (inst-forwarding-entry-lookup, marked at its
+    // canonical location below) can exclude that edge.
     const arrivalEdge = getArrivalEdge(action);
-    // @cpt-end:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-forwarding-entry-lookup
     const resolved = this.resolveHandler(action.target, action.type, arrivalEdge);
 
     // @cpt-begin:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-no-handler
@@ -526,14 +527,16 @@ export class DefaultActionsChainsMediator extends ActionsChainsMediator {
     }
     // @cpt-end:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-forwarding-entry-lookup
 
-    // @cpt-begin:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-escalation-lookup
+    // Calls the injected escalation-tier resolver (realizes
+    // inst-escalation-lookup; canonical marker kept at
+    // DefaultMfeRegistry.resolveEscalationRoute to avoid a second code
+    // location for the same instruction ID).
     if (this.resolveEscalation) {
       const escalationRoute = this.resolveEscalation(targetId);
       if (escalationRoute) {
         return escalationRoute;
       }
     }
-    // @cpt-end:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-escalation-lookup
 
     return undefined;
   }

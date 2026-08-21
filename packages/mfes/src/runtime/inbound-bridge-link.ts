@@ -44,8 +44,23 @@ import type { Action, ActionsChain } from '../types';
 // ─── Realm-global mounting-bridge rendezvous ───────────────────────────────
 // @cpt-algo:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2
 
-/** The rendezvous protocol version this copy of the package produces and recognizes. */
-const RENDEZVOUS_PROTOCOL_VERSION = 1 as const;
+/**
+ * The rendezvous protocol version this copy of the package produces and
+ * recognizes. Bumped to `2` to extend the rendezvous into a two-way handoff
+ * within the same synchronous window: version 1 only carried the bridge
+ * downward (mounting extension -> adopting registry); version 2 additionally
+ * carries re-link callbacks back upward (adopting registry -> mount manager),
+ * collected in `adopters` and returned by `popAmbientMountingBridge` so a
+ * later mount of the SAME host extension can re-offer a fresh link to a
+ * registry that was reused, not rebuilt. A stale v1 reader still finds the
+ * entry and correctly degrades via the existing "unrecognized version"
+ * diagnostic path, since only the entry's own version field changed — the
+ * `RENDEZVOUS_KEY` is unchanged.
+ */
+const RENDEZVOUS_PROTOCOL_VERSION = 2 as const;
+
+/** A callback through which a previously adopted `InboundBridgeLink` can be replaced (or cleared, with `null`) on a later mount of the same host extension. */
+export type InboundBridgeRelink = (link: InboundBridgeLink | null) => void;
 
 /**
  * A single rendezvous entry: the bridge currently being handed to an
@@ -54,10 +69,18 @@ const RENDEZVOUS_PROTOCOL_VERSION = 1 as const;
  * which independently loaded copy of this package it belongs to — that finds
  * a version it does not recognize treats the rendezvous as empty rather than
  * guessing at an incompatible shape.
+ *
+ * `adopters` collects the re-link callback of every registry that adopts
+ * `bridge` during this window (ordinarily zero or one) — published by
+ * `adoptAmbientInboundBridgeLink` and handed back to the caller by
+ * `popAmbientMountingBridge`, which is the sole channel through which a later
+ * mount of the same host extension can reach an already-constructed registry.
+ * Nothing persists at the rendezvous itself once the entry is popped.
  */
 interface RendezvousEntry {
   readonly v: number;
   readonly bridge: ChildMfeBridge;
+  readonly adopters: InboundBridgeRelink[];
 }
 
 /**
@@ -104,15 +127,23 @@ function getRendezvousStack(): RendezvousEntry[] {
  * unlikely — cannot clobber each other's entry.
  */
 export function pushAmbientMountingBridge(bridge: ChildMfeBridge): void {
-  getRendezvousStack().push({ v: RENDEZVOUS_PROTOCOL_VERSION, bridge });
+  getRendezvousStack().push({ v: RENDEZVOUS_PROTOCOL_VERSION, bridge, adopters: [] });
 }
 
 /**
  * Called immediately after the synchronous portion of `lifecycle.mount(...)`
  * returns (a value or a pending Promise), ending the rendezvous window.
+ *
+ * Returns the popped entry's `adopters` array — the re-link callback of every
+ * registry that adopted `bridge` during this window (empty for the ordinary
+ * case where nothing adopted, e.g. no registry was constructed, or the
+ * extension is not itself a host). Nothing is retained at the rendezvous
+ * after this call; the caller (`DefaultMountManager`) is solely responsible
+ * for retaining `adopters` against the host extension for as long as it may
+ * mount again.
  */
-export function popAmbientMountingBridge(): void {
-  getRendezvousStack().pop();
+export function popAmbientMountingBridge(): readonly InboundBridgeRelink[] {
+  return getRendezvousStack().pop()?.adopters ?? [];
 }
 // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-track-mounting-bridge
 
@@ -212,8 +243,18 @@ export function unregisterInboundBridgeLink(bridge: ChildMfeBridge): void {
  * shell, are constructed with no mount synchronously in progress at all).
  * @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-adopt-ambient-bridge
  * @cpt inst-inbound-bridge-auto-adopt / inst-no-ambient-bridge / inst-registry-is-root
+ *
+ * @param relink Callback the caller (`DefaultMfeRegistry`) supplies to replace
+ * (or, with `null`, clear) whichever link it adopts here. Published onto the
+ * rendezvous entry's `adopters` array — never invoked from this function
+ * itself — so `popAmbientMountingBridge` can hand it back to the mount
+ * manager, which retains it against the host extension as the sole channel
+ * through which a later mount of that same extension can reach this
+ * already-constructed registry (`inst-publish-relink-callback`).
  */
-export function adoptAmbientInboundBridgeLink(): InboundBridgeLink | undefined {
+export function adoptAmbientInboundBridgeLink(
+  relink: InboundBridgeRelink
+): InboundBridgeLink | undefined {
   const stack = getRendezvousStack();
   const entry = stack[stack.length - 1];
   if (!entry) {
@@ -239,7 +280,11 @@ export function adoptAmbientInboundBridgeLink(): InboundBridgeLink | undefined {
       '[DefaultMfeRegistry] A mount is synchronously in progress but no inbound-bridge ' +
       'link was found on its bridge. Treating this registry as a root registry.'
     );
+    return undefined;
   }
+  // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-publish-relink-callback
+  entry.adopters.push(relink);
+  // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-publish-relink-callback
   return link;
 }
 
