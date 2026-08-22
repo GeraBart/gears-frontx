@@ -114,6 +114,11 @@ The present concrete instantiation is the abstract `ChildMfeBridge` (`packages/m
 * REL — Not applicable because it governs the capability surface, not runtime availability or fault tolerance.
 * DATA — Not applicable because no persistent data store or schema is involved.
 * OPS — Not applicable because no deployed-service operational procedure is governed by this decision.
+* MAINT — applicable: the decision deliberately trades ease of extension for stability — every capability a child may legitimately need must be added to the abstract surface as an explicit contract change rather than incidental access (noted in Consequences) — and the parent owning link revocation, rather than the microfrontend author's own disposal, keeps a registry that outlives its host's unmount from leaving stale state in an ancestor, which is a maintainability property that any future change to the bridge or link-ownership rules must not regress.
+* TEST — applicable and addressed above: the Confirmation section requires a continuous-integration import-boundary grep confirming child-facing code depends only on the abstract bridge, never on a concrete implementation or the registry directly, and that each capability method delegates rather than implements coordination inline.
+* COMPL — Not applicable because this is an internal capability-surface boundary between host and child microfrontend code with no regulated data, personal data, or external audit surface.
+* UX — Not applicable because this decision shapes a developer-facing capability contract between runtime code, not an end-user-facing interaction.
+* BIZ — Not applicable because this is an internal architecture decision about an API boundary, not a business or product decision.
 
 ## Traceability
 

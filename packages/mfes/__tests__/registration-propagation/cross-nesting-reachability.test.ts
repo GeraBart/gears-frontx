@@ -470,6 +470,47 @@ describe('Cross-nesting reachability: registration propagation, escalation, retr
     expect(registry2ExecuteSpy).toHaveBeenCalledTimes(1);
   });
 
+  it('(f2) a chain\'s fallback fires when its primary action fails purely through cross-hop escalation, not just on a local failure', async () => {
+    const { registry2, rootCounter } = await buildTopology();
+
+    // Primary action is unresolvable anywhere (same as test (f)), forcing
+    // registry2 to escalate all the way to the shell and fail there with no
+    // handler. If the escalation route's `send` (backed by
+    // `executeActionsChainOrThrow`) silently resolved instead of rejecting —
+    // the bug this test guards against — `executeAction` at registry2 would
+    // never throw, `executeChainRecursive` would never reach its `fallback`
+    // branch, and `rootCounter` would stay at 0 even though the primary
+    // action never actually ran anywhere.
+    const chain: ActionsChain = {
+      action: { type: ACTION_UNRESOLVABLE, target: D2, payload: {} },
+      fallback: actionChain(ACTION_ROOT, D0),
+    };
+
+    await registry2.executeActionsChain(chain);
+
+    expect(rootCounter.count).toBe(1);
+  });
+
+  it('(f3) a chain\'s fallback fires when its primary action fails purely through downward forwarding-entry delivery, not just on a local failure', async () => {
+    const { registry0, leafCounter, rootCounter } = await buildTopology();
+
+    // Dispatched FROM the shell, targeting D2 (registry2's own local domain)
+    // with an action type D2 does not handle — this resolves via the
+    // downward forwarding-entry tier (test (a)'s route), not escalation. If
+    // the forwarding-entry delivery path silently resolved on failure
+    // instead of rejecting, the shell's own `executeChainRecursive` would
+    // never see the failure and `fallback` would never fire.
+    const chain: ActionsChain = {
+      action: { type: ACTION_UNRESOLVABLE, target: D2, payload: {} },
+      fallback: actionChain(ACTION_ROOT, D0),
+    };
+
+    await registry0.executeActionsChain(chain);
+
+    expect(rootCounter.count).toBe(1);
+    expect(leafCounter.count).toBe(0);
+  });
+
   it('(g) an async mount() still closes the ambient window at its synchronous prefix: a registry built there before the first await still adopts the correct inbound bridge', async () => {
     const ASYNC_ENTRY = 'entry.async-child.v1';
     const ASYNC_EXT = 'ext.async-child.v1';

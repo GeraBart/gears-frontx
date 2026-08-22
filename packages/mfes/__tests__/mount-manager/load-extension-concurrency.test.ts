@@ -18,6 +18,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { DefaultMfeRegistry } from '../../src/runtime/DefaultMfeRegistry';
+import type { DefaultMountManager } from '../../src/runtime/default-mount-manager';
 import type { TypeSystemPlugin } from '../../src/type-substrate';
 import type { Extension, ExtensionDomain, MfeEntry } from '../../src/types';
 import { MfeHandler, ChildMfeBridge, type MfeEntryLifecycle } from '../../src/handler/types';
@@ -249,5 +250,250 @@ describe('DefaultMountManager.loadExtension concurrency', () => {
     await Promise.all([mountA, mountB]);
 
     expect(secondCallerObservedLoadedBeforeSettling.value).toBe(true);
+  });
+
+  it('leaves no stale entry in the in-flight-load map when the handler throws synchronously before its first await', async () => {
+    // Promise `.finally()` callbacks are always scheduled as a microtask
+    // continuation, which is strictly ordered after the synchronous code that
+    // attaches them, regardless of whether the underlying promise is already
+    // settled (e.g., from a synchronous throw). The code constructs the async
+    // IIFE's promise and chains `.finally()` to it on one line, then calls
+    // `.set()` on the very next line. Since the `.finally()` callback is
+    // guaranteed to be scheduled as a microtask strictly after this
+    // synchronous code completes, the `.set()` call always finishes before
+    // the `.delete()` inside `.finally()` ever runs -- even if the IIFE's
+    // body throws synchronously on its very first tick. This guarantees no
+    // stale entry is left in the map.
+    const entries = new Map<string, MfeEntry>([[ENTRY, makeEntry(ENTRY)]]);
+    const plugin = createMockPlugin(entries);
+
+    const failure = new Error('synchronous failure before first await');
+
+    class SyncThrowHandler extends MfeHandler {
+      readonly bridgeFactory = new MfeBridgeFactoryDefault();
+
+      constructor() {
+        super(ENTRY);
+      }
+
+      // Intentionally NOT an `async` method: this throws synchronously, so
+      // no `await` is ever reached by the caller of `load()`.
+      load(): Promise<MfeEntryLifecycle<ChildMfeBridge>> {
+        throw failure;
+      }
+    }
+
+    const registry = new DefaultMfeRegistry({
+      typeSystem: plugin,
+      mfeHandlers: [new SyncThrowHandler()],
+    });
+
+    registry.registerDomain(makeDomain(DOMAIN), new GenericDomainFactory());
+    await registry.registerExtension(makeExtension(EXT, DOMAIN, ENTRY));
+
+    const mountManager = (registry as unknown as { mountManager: DefaultMountManager }).mountManager;
+
+    await expect(mountManager.loadExtension(EXT)).rejects.toBe(failure);
+
+    const inFlight = (
+      mountManager as unknown as { inFlightLoadsByExtension: Map<string, Promise<void>> }
+    ).inFlightLoadsByExtension;
+    expect(inFlight.has(EXT)).toBe(false);
+  });
+
+  it('rejects every concurrent loadExtension caller from the same failed attempt and leaves no stale in-flight entry behind', async () => {
+    const entries = new Map<string, MfeEntry>([[ENTRY, makeEntry(ENTRY)]]);
+    const plugin = createMockPlugin(entries);
+
+    let loadCallCount = 0;
+    let resolveLoad!: () => void;
+    let rejectLoad!: (error: unknown) => void;
+
+    class FlakyThenSuccessfulHandler extends MfeHandler {
+      readonly bridgeFactory = new MfeBridgeFactoryDefault();
+
+      constructor() {
+        super(ENTRY);
+      }
+
+      async load(): Promise<MfeEntryLifecycle<ChildMfeBridge>> {
+        loadCallCount += 1;
+        const attempt = loadCallCount;
+        if (attempt === 1) {
+          return new Promise<MfeEntryLifecycle<ChildMfeBridge>>((_resolve, reject) => {
+            rejectLoad = reject;
+          });
+        }
+        return new Promise<MfeEntryLifecycle<ChildMfeBridge>>((resolve) => {
+          resolveLoad = () => resolve({ mount: () => {}, unmount: () => {} });
+        });
+      }
+    }
+
+    const registry = new DefaultMfeRegistry({
+      typeSystem: plugin,
+      mfeHandlers: [new FlakyThenSuccessfulHandler()],
+    });
+
+    registry.registerDomain(makeDomain(DOMAIN), new GenericDomainFactory());
+    await registry.registerExtension(makeExtension(EXT, DOMAIN, ENTRY));
+
+    const mounter = registry.getMounter(DOMAIN);
+    mounter.attach(document.createElement('div'));
+
+    const mountA = mounter.mount(EXT, document.createElement('div'));
+    const mountB = mounter.mount(EXT, document.createElement('div'));
+    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const failure = new Error('first load attempt failed');
+    rejectLoad(failure);
+
+    const [resultA, resultB] = await Promise.allSettled([mountA, mountB]);
+    expect(resultA.status).toBe('rejected');
+    expect(resultB.status).toBe('rejected');
+    expect(loadCallCount).toBe(1);
+
+    const raceTimeout = Symbol('timeout');
+    const mountC = mounter.mount(EXT, document.createElement('div'));
+    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(loadCallCount).toBe(2);
+
+    resolveLoad();
+    const outcome = await Promise.race([
+      mountC.then(() => 'resolved' as const),
+      new Promise((resolve) => setTimeout(() => resolve(raceTimeout), 50)),
+    ]);
+    expect(outcome).toBe('resolved');
+  });
+});
+
+describe('DefaultMountManager.mountExtension concurrency', () => {
+  it('calls the extension lifecycle mount() exactly once when two mounts race for the same never-mounted extension', async () => {
+    const entries = new Map<string, MfeEntry>([[ENTRY, makeEntry(ENTRY)]]);
+    const plugin = createMockPlugin(entries);
+
+    let mountCallCount = 0;
+
+    class CountingMountHandler extends MfeHandler {
+      readonly bridgeFactory = new MfeBridgeFactoryDefault();
+
+      constructor() {
+        super(ENTRY);
+      }
+
+      async load(): Promise<MfeEntryLifecycle<ChildMfeBridge>> {
+        return {
+          mount: () => {
+            mountCallCount += 1;
+          },
+          unmount: () => {},
+        };
+      }
+    }
+
+    const registry = new DefaultMfeRegistry({
+      typeSystem: plugin,
+      mfeHandlers: [new CountingMountHandler()],
+    });
+
+    registry.registerDomain(makeDomain(DOMAIN), new GenericDomainFactory());
+    await registry.registerExtension(makeExtension(EXT, DOMAIN, ENTRY));
+
+    const mounter = registry.getMounter(DOMAIN);
+    mounter.attach(document.createElement('div'));
+
+    const mountA = mounter.mount(EXT, document.createElement('div'));
+    const mountB = mounter.mount(EXT, document.createElement('div'));
+
+    await Promise.all([mountA, mountB]);
+
+    expect(mountCallCount).toBe(1);
+  });
+});
+
+describe('DefaultExtensionMounter.mount concurrency', () => {
+  it('appends exactly one container under the attached root when two mounts race for the same never-mounted extension', async () => {
+    // Reproduces the double-click-on-a-sidebar-item regression: the mount
+    // strategy's idempotence guard reads `registry.getMountedExtensions`,
+    // which is only updated by `addMountedExtension` AFTER a mount's `await`
+    // resolves -- so a second concurrent `mount()` call for the same
+    // extension (each with its OWN freshly-`hooks.create()`-d container, as a
+    // real strategy would supply) races in before that update lands. Before
+    // the fix, `DefaultExtensionMounter.mount()` unconditionally appended
+    // whichever container ITS OWN call was holding and overwrote the
+    // `containers` bookkeeping with it once `mountManager.mountExtension`
+    // resolved -- for the second caller that clobbers the record of the
+    // first (real, rendered) container, permanently orphaning it in the DOM.
+    const entries = new Map<string, MfeEntry>([[ENTRY, makeEntry(ENTRY)]]);
+    const plugin = createMockPlugin(entries);
+
+    let resolveMount!: () => void;
+    const mountGate = new Promise<void>((resolve) => {
+      resolveMount = resolve;
+    });
+
+    class SlowMountHandler extends MfeHandler {
+      readonly bridgeFactory = new MfeBridgeFactoryDefault();
+
+      constructor() {
+        super(ENTRY);
+      }
+
+      async load(): Promise<MfeEntryLifecycle<ChildMfeBridge>> {
+        return {
+          mount: async () => {
+            // Block long enough for both concurrent `mount()` calls to reach
+            // `DefaultExtensionMounter.mount()`'s append/bookkeeping step
+            // before either resolves.
+            await mountGate;
+          },
+          unmount: () => {},
+        };
+      }
+    }
+
+    const registry = new DefaultMfeRegistry({
+      typeSystem: plugin,
+      mfeHandlers: [new SlowMountHandler()],
+    });
+
+    registry.registerDomain(makeDomain(DOMAIN), new GenericDomainFactory());
+    await registry.registerExtension(makeExtension(EXT, DOMAIN, ENTRY));
+
+    const mounter = registry.getMounter(DOMAIN);
+    const root = document.createElement('div');
+    mounter.attach(root);
+
+    const containerA = document.createElement('div');
+    containerA.dataset.marker = 'A';
+    const containerB = document.createElement('div');
+    containerB.dataset.marker = 'B';
+
+    const mountA = mounter.mount(EXT, containerA);
+    // Give the first call a turn to reach the strategy-equivalent point
+    // (registered as `mounting` in the manager) before firing the second.
+    await Promise.resolve();
+    const mountB = mounter.mount(EXT, containerB);
+
+    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    resolveMount();
+
+    await Promise.all([mountA, mountB]);
+
+    // Exactly one container was ever appended under the root -- the other
+    // was discarded before ever reaching the DOM.
+    expect(root.children.length).toBe(1);
+    expect(root.contains(containerA)).toBe(true);
+    expect(root.contains(containerB)).toBe(false);
+
+    // The mounter's own container bookkeeping still points at the container
+    // that actually got appended, not the discarded one.
+    const containers = (
+      mounter as unknown as { containers: Map<string, Element> }
+    ).containers;
+    expect(containers.get(EXT)).toBe(containerA);
   });
 });

@@ -122,6 +122,11 @@ The present concrete instantiation is `DefaultActionsChainsMediator` (`packages/
 * REL — Not applicable because availability and fault-tolerance posture are outside this routing decision, though it does bound execution time.
 * DATA — Not applicable because no persistent data store or schema is involved.
 * OPS — Not applicable because no deployed-service operational procedure is governed by this decision.
+* MAINT — applicable: the per-registry state this decision introduces — propagated advertisements, forwarding entries, and the mount manager's per-host-extension retention of re-link callbacks (`cpt-frontx-adr-action-dispatch-and-chaining`'s own Consequences) — must stay consistent with admission and disposal indefinitely, and that retention is released only when the parent registry itself is discarded rather than when an extension unmounts, which is a maintainability trade-off future changes to the propagation or retraction logic must preserve.
+* TEST — applicable: the fallback and escalation tiering, loop containment via arrival-edge tagging, and retraction-on-disposal semantics this ADR decides are exercised by a dedicated cross-realm test suite spanning two independently loaded copies of the runtime, as the Confirmation section requires, and by the registration-propagation regression tests already in the codebase (`packages/mfes/__tests__/registration-propagation/cross-nesting-reachability.test.ts` and `cross-copy-boundary.test.ts`), which specifically cover adoption, propagation, escalation, and retraction across that boundary.
+* COMPL — Not applicable because this is an internal runtime action-routing mechanism between host and microfrontend code with no regulated data, personal data, or external audit surface.
+* UX — Not applicable because this decision governs dispatch and routing internal to the runtime between registries; it has no end-user-facing behavior of its own.
+* BIZ — Not applicable because this is an internal architecture decision about a coordination mechanism, not a business or product decision.
 
 ## Traceability
 

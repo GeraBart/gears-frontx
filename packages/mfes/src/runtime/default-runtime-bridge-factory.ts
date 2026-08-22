@@ -19,6 +19,12 @@ import { ParentMfeBridgeImpl } from '../bridge/ParentMfeBridge';
 import { ChildDomainForwardingHandler } from '../bridge/ChildDomainForwardingHandler';
 
 /**
+ * Monotonically-incrementing counter used to disambiguate bridge instance
+ * ids minted within the same millisecond. Module-private -- not exported.
+ */
+let instanceSequence = 0;
+
+/**
  * Default runtime bridge factory implementation.
  *
  * Handles all internal bridge wiring: creates bridge pairs, connects
@@ -56,8 +62,11 @@ export class DefaultRuntimeBridgeFactory extends RuntimeBridgeFactory {
     _unregisterExtensionActionHandler: (extensionId: string) => void
   ): { parentBridge: ParentMfeBridge; childBridge: ChildMfeBridge } {
 
-    // Generate unique instance ID
-    const instanceId = `${extensionId}:${Date.now()}`;
+    // Generate a unique instance ID. The counter guarantees uniqueness per
+    // call regardless of how many mounts of the same `extensionId` occur
+    // within the same clock tick, without depending on `crypto.randomUUID()`
+    // (a secure-context-gated Web API unavailable in plain-HTTP dev setups).
+    const instanceId = `${extensionId}:${Date.now()}:${++instanceSequence}`;
 
     // Create child bridge
     const childBridge = new ChildMfeBridgeImpl(domainState.domain.id, instanceId);

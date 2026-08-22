@@ -53,14 +53,22 @@ function generateRandomHex(): string {
 // instances backed by the same entry path get distinct module evaluations.
 const randomHex = generateRandomHex();
 
-// Per-mount last-ping value. The handler always writes here, independent of
+// Last-ping value and subscriber, keyed by `bridge.instanceId` rather than a
+// single module-scoped value. The handler always writes here, independent of
 // whether a subscriber is wired yet, so registering the handler synchronously
 // in `mount()` (required so a chained `next` step can reach it as soon as
 // `mount()` resolves) can never race the DOM's observation of a ping: a ping
 // that lands before `WidgetA` subscribes is still visible the moment it does,
 // via the initial-state read below, instead of depending on ordering.
-let lastPingValue: string | null = null;
-let lastPingSubscriber: ((value: string) => void) | null = null;
+//
+// Keying by instance id (rather than one shared module-level value) matters
+// because a remount of an extension `DefaultMountManager` has already loaded
+// once reuses the SAME module evaluation (`loadState === 'loaded'` skips
+// re-loading) -- so a single shared value would leak the previous mount's
+// last ping into a fresh mount's first render, and one mount's cleanup could
+// clear a still-live sibling mount's subscriber.
+const lastPingValues = new Map<string, string>();
+const lastPingSubscribers = new Map<string, (value: string) => void>();
 
 class PingHandler extends ActionHandler {
   constructor(private readonly instanceId: string) {
@@ -74,10 +82,8 @@ class PingHandler extends ActionHandler {
     console.log(
       `[widget-a ${this.instanceId}] ping ${actionTypeId} randomHex=${randomHex}`,
     );
-    lastPingValue = randomHex;
-    if (lastPingSubscriber) {
-      lastPingSubscriber(randomHex);
-    }
+    lastPingValues.set(this.instanceId, randomHex);
+    lastPingSubscribers.get(this.instanceId)?.(randomHex);
     return Promise.resolve();
   }
 }
@@ -87,28 +93,36 @@ interface WidgetAProps {
 }
 
 function WidgetA({ bridge }: Readonly<WidgetAProps>): React.ReactElement {
-  // Seed from the module-scoped value (not `null`) so a ping that already
+  const instanceId = bridge.instanceId;
+  // Seed from this instance's own value (not `null`) so a ping that already
   // landed -- e.g. one dispatched by a chain step immediately after `mount()`
   // resolved, before this component's own first render -- is reflected on
   // that very first render rather than silently missed.
-  const [lastPing, setLastPing] = React.useState<string | null>(lastPingValue);
-  const instanceId = bridge.instanceId;
+  const [lastPing, setLastPing] = React.useState<string | null>(
+    () => lastPingValues.get(instanceId) ?? null,
+  );
 
   React.useEffect(() => {
-    // Re-sync against the module-scoped value the moment this effect
+    // Re-sync against this instance's own value the moment this effect
     // commits, THEN subscribe for pings that arrive after that. A ping
     // dispatched between the initial render (which seeded `lastPing` above)
-    // and this effect running writes `lastPingValue` while no subscriber is
+    // and this effect running writes `lastPingValues` while no subscriber is
     // installed yet -- without this re-sync, that write would update the
-    // module value but never reach this component's own state, leaving the
+    // stored value but never reach this component's own state, leaving the
     // indicator stuck even though the handler fired correctly. The handler
     // itself is registered synchronously in `mount()` (below), independent
     // of this effect, so it is never what races here -- only the view's
     // observation of a value that was already delivered correctly.
-    setLastPing(lastPingValue);
-    lastPingSubscriber = setLastPing;
+    setLastPing(lastPingValues.get(instanceId) ?? null);
+    lastPingSubscribers.set(instanceId, setLastPing);
     return () => {
-      lastPingSubscriber = null;
+      // Only remove this instance's own subscriber -- guard against a stale
+      // closure clearing a different, still-live mount's subscriber for the
+      // same instanceId (e.g. React re-invoking effects in development).
+      if (lastPingSubscribers.get(instanceId) === setLastPing) {
+        lastPingSubscribers.delete(instanceId);
+      }
+      lastPingValues.delete(instanceId);
     };
   }, [bridge, instanceId]);
 
