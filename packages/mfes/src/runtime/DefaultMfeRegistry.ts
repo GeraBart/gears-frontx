@@ -365,7 +365,7 @@ export class DefaultMfeRegistry extends MfeRegistry {
       // every re-link, discarding whatever the previous link had accepted
       // (`propagatedTargetIds` was already cleared above).
       this.inboundActionsChainUnsubscribe = link.edge.onActionsChain((chain) =>
-        this.executeActionsChain(chain)
+        this.executeActionsChainOrThrow(chain)
       );
     }
     // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-relink-downward-delivery
@@ -450,7 +450,7 @@ export class DefaultMfeRegistry extends MfeRegistry {
           );
         }
         tagArrivalEdge(chain.action, childBridge);
-        return this.executeActionsChain(chain);
+        return this.executeActionsChainOrThrow(chain);
       },
     };
     // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-revoked-link-inert
@@ -1035,6 +1035,33 @@ export class DefaultMfeRegistry extends MfeRegistry {
     // @cpt-end:cpt-frontx-flow-extension-domain-governance-admission:p1:inst-mount-success
   }
   // @cpt-end:cpt-frontx-flow-extension-domain-governance-admission:p1:inst-mount-action
+
+  /**
+   * Delivers a chain into this registry's own mediator the same way
+   * `executeActionsChain` does, but REJECTS instead of logging and resolving
+   * when the chain does not complete — used exclusively by the two cross-hop
+   * delivery paths (downward forwarding-entry delivery and upward
+   * escalation) so a failure at THIS (receiving) hop propagates back through
+   * `CrossHopRoute.send`'s own promise to the awaiting hop above, letting
+   * that hop's `executeChainRecursive` catch it and run ITS OWN `fallback`
+   * continuation (`inst-has-fallback` / `inst-recurse-fallback-algo`).
+   *
+   * The PUBLIC `executeActionsChain` above intentionally never throws — it
+   * is the top-level entry point for a caller with no `fallback` of its own
+   * to run (e.g. a mounted extension's own bridge dispatch, or the
+   * lifecycle-stage action runner). Cross-hop delivery is different: the
+   * SENDER already has a `fallback` (or lack of one) it needs to observe the
+   * real outcome to act on, so swallowing the failure here would silently
+   * turn a failed cross-hop dispatch into an apparent success at the sender.
+   */
+  private async executeActionsChainOrThrow(chain: ActionsChain): Promise<void> {
+    const result = await this.mediator.executeActionsChain(chain);
+    if (!result.completed) {
+      throw new Error(
+        result.error ?? `Actions chain failed | path: [${result.path.join(' -> ')}]`
+      );
+    }
+  }
 
   // ─── Shared property ──────────────────────────────────────────────────────
 

@@ -27,6 +27,14 @@ export class DefaultExtensionMounter extends ExtensionMounter {
   // Tracks the per-extension containers so detach can remove them from root.
   private readonly containers = new Map<string, Element>();
 
+  /**
+   * The in-flight `mount()` promise for an extension currently being mounted,
+   * keyed by extension id. A second concurrent `mount()` call for the same
+   * extension id awaits the first's promise instead of running the mount
+   * pipeline (and appending a second, duplicate container) a second time.
+   */
+  private readonly inFlightMountsByExtension = new Map<string, Promise<void>>();
+
   constructor(
     private readonly domainId: string,
     private readonly mountManager: MountManager,
@@ -63,13 +71,38 @@ export class DefaultExtensionMounter extends ExtensionMounter {
       );
     }
 
-    await this.mountManager.mountExtension(extensionId, container);
+    const inFlight = this.inFlightMountsByExtension.get(extensionId);
+    if (inFlight) {
+      return inFlight;
+    }
 
-    // Append the container under the attached root and record it.
-    this.attachedRoot.appendChild(container);
-    this.containers.set(extensionId, container);
+    const mountWork = (async (): Promise<void> => {
+      await this.mountManager.mountExtension(extensionId, container);
 
-    this.addMountedExtension(this.domainId, extensionId);
+      // Append the container under the attached root and record it.
+      // Capture the root after the await completes and check it explicitly,
+      // since a concurrent detach() call could have cleared it during the await.
+      const root = this.attachedRoot;
+      if (!root) {
+        throw new Error(
+          `ExtensionMounter.mount: domain '${this.domainId}' root was detached ` +
+          `during mounting of extension '${extensionId}'. The domain's root element ` +
+          'must remain attached for the entire duration of the mount operation.'
+        );
+      }
+
+      root.appendChild(container);
+      this.containers.set(extensionId, container);
+
+      this.addMountedExtension(this.domainId, extensionId);
+    })();
+
+    this.inFlightMountsByExtension.set(extensionId, mountWork);
+    try {
+      await mountWork;
+    } finally {
+      this.inFlightMountsByExtension.delete(extensionId);
+    }
   }
 
   async unmount(extensionId: string): Promise<void> {

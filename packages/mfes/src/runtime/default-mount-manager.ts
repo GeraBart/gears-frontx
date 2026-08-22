@@ -86,6 +86,16 @@ export class DefaultMountManager extends MountManager {
    */
   private readonly inFlightLoadsByExtension = new Map<string, Promise<void>>();
 
+  /**
+   * The in-flight `mountExtension` promise for an extension currently in
+   * `mountState === 'mounting'`, keyed by extension id. A second concurrent
+   * `mountExtension` call for the same extension awaits this promise instead
+   * of starting a second mount, so both callers observe the same mounted
+   * bridge (or the same failure) rather than one racing past the other's
+   * still-in-progress mount work.
+   */
+  private readonly inFlightMountsByExtension = new Map<string, Promise<ParentMfeBridge>>();
+
   constructor(config: {
     extensionManager: DefaultExtensionManager;
     resolveHandler: HandlerResolver;
@@ -148,6 +158,11 @@ export class DefaultMountManager extends MountManager {
     extensionState.loadState = 'loading';
     extensionState.error = undefined;
 
+    // `.finally()`'s callback is always scheduled as a microtask
+    // continuation of the async IIFE's own promise, which cannot run before
+    // the synchronous `.set()` call below executes -- so there is no window
+    // where a concurrent caller observing `loadState === 'loading'` would
+    // fail to find a corresponding map entry.
     const loadPromise = (async (): Promise<void> => {
       try {
         const entry = extensionState.entry;
@@ -166,12 +181,12 @@ export class DefaultMountManager extends MountManager {
         extensionState.loadState = 'error';
         extensionState.error = error instanceof Error ? error : new Error(String(error));
         throw error;
-      } finally {
-        this.inFlightLoadsByExtension.delete(extensionId);
       }
-    })();
-
+    })().finally(() => {
+      this.inFlightLoadsByExtension.delete(extensionId);
+    });
     this.inFlightLoadsByExtension.set(extensionId, loadPromise);
+
     return loadPromise;
   }
 
@@ -196,150 +211,174 @@ export class DefaultMountManager extends MountManager {
       return extensionState.bridge!;
     }
 
-    if (extensionState.loadState !== 'loaded') {
-      await this.loadExtension(extensionId);
+    if (extensionState.mountState === 'mounting') {
+      const inFlight = this.inFlightMountsByExtension.get(extensionId);
+      if (inFlight) {
+        return inFlight;
+      }
+      // Defensive fallback: `mountState` is 'mounting' but no in-flight
+      // promise is tracked (should not happen via this class's own code
+      // paths). Fall through and start a fresh mount rather than returning
+      // prematurely.
     }
 
     extensionState.mountState = 'mounting';
     extensionState.error = undefined;
 
-    // Declared here (not inside the `try` below) so the `catch` can also see
-    // whichever bridge was actually created before the failure, if any.
-    let mountedChildBridge: ChildMfeBridge | undefined;
+    // `.finally()`'s callback is always scheduled as a microtask
+    // continuation of the async IIFE's own promise, which cannot run before
+    // the synchronous `.set()` call below executes -- so there is no window
+    // where a concurrent caller observing `mountState === 'mounting'` would
+    // fail to find a corresponding map entry.
+    const mountPromise = (async (): Promise<ParentMfeBridge> => {
+      // Declared here (not inside the `try` below) so the `catch` can also
+      // see whichever bridge was actually created before the failure, if
+      // any.
+      let mountedChildBridge: ChildMfeBridge | undefined;
 
-    try {
-      const domainState = this.extensionManager.getDomainState(extensionState.extension.domain);
-      if (!domainState) {
-        throw new Error(
-          `Cannot mount extension '${extensionId}': ` +
-          `domain '${extensionState.extension.domain}' is not registered.`
-        );
-      }
-
-      const entryDomainActions = extensionState.entry.domainActions;
-      const { parentBridge, childBridge } = this.bridgeFactory.createBridge(
-        domainState,
-        extensionId,
-        extensionState.entry.id,
-        entryDomainActions,
-        (chain: ActionsChain) => this.executeActionsChain(chain),
-        (domainId, handler) => this.registerCatchAllActionHandler(domainId, handler),
-        (domainId) => this.unregisterCatchAllActionHandler(domainId),
-        (extId, actionTypeId, handler, domainId) => this.registerExtensionActionHandler(extId, actionTypeId, handler, domainId),
-        (extId) => this.unregisterExtensionActionHandler(extId)
-      );
-      mountedChildBridge = childBridge;
-      this.childBridgesByExtension.set(extensionId, childBridge);
-
-      const existingConnection = this.coordinator.get(container);
-      if (existingConnection) {
-        existingConnection.bridges.set(extensionId, parentBridge);
-      } else {
-        this.coordinator.register(container, {
-          hostRuntime: this.hostRuntime,
-          bridges: new Map([[extensionId, parentBridge]]),
-        });
-      }
-
-      const hostElement = container as HTMLElement;
-      const shadowRoot = createShadowRoot(hostElement);
-      extensionState.shadowRoot = shadowRoot;
-
-      const lifecycle = extensionState.lifecycle;
-      if (!lifecycle) {
-        throw new Error(
-          `Cannot mount extension '${extensionId}': lifecycle not loaded. ` +
-          `This should not happen - loadExtension should have cached the lifecycle.`
-        );
-      }
-      const mountContext: MfeMountContext = {
-        extensionId,
-        domainId: extensionState.extension.domain,
-      };
-
-      // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-track-mounting-bridge
-      // Prepare the link a nested registry constructed synchronously inside
-      // this extension's own `mount()` body will automatically adopt, then
-      // track `childBridge` as the ambient mounting bridge for exactly the
-      // synchronous portion of the `lifecycle.mount(...)` invocation below —
-      // no configuration or method call required from the microfrontend author.
-      const link = this.buildInboundBridgeLink(extensionId, childBridge, parentBridge);
-      registerInboundBridgeLink(childBridge, link);
-
-      pushAmbientMountingBridge(childBridge);
-      let claimed: readonly InboundBridgeRelink[];
-      let mountInvocation: void | Promise<void>;
       try {
-        mountInvocation = lifecycle.mount(shadowRoot, childBridge, mountContext);
-      } finally {
-        claimed = popAmbientMountingBridge();
-      }
-      // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-track-mounting-bridge
+        if (extensionState.loadState !== 'loaded') {
+          await this.loadExtension(extensionId);
+        }
 
-      // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-relink-on-remount
-      if (claimed.length > 0) {
-        // A registry was constructed inside this window and adopted the link
-        // itself (the ordinary fresh-registry-per-mount pattern) — remember
-        // its re-link callback(s) against this extension for a future remount.
-        this.inboundAdoptersByExtension.set(extensionId, claimed);
-      } else {
-        // No construction happened during this window — re-offer the fresh
-        // link to whichever registry adopted a PREVIOUS mount of THIS SAME
-        // extension (the reused-registry case), never to a registry that
-        // adopted any other extension's bridge.
-        const previous = this.inboundAdoptersByExtension.get(extensionId);
-        if (previous) {
-          for (const relink of previous) {
-            relink(link);
+        const domainState = this.extensionManager.getDomainState(extensionState.extension.domain);
+        if (!domainState) {
+          throw new Error(
+            `Cannot mount extension '${extensionId}': ` +
+            `domain '${extensionState.extension.domain}' is not registered.`
+          );
+        }
+
+        const entryDomainActions = extensionState.entry.domainActions;
+        const { parentBridge, childBridge } = this.bridgeFactory.createBridge(
+          domainState,
+          extensionId,
+          extensionState.entry.id,
+          entryDomainActions,
+          (chain: ActionsChain) => this.executeActionsChain(chain),
+          (domainId, handler) => this.registerCatchAllActionHandler(domainId, handler),
+          (domainId) => this.unregisterCatchAllActionHandler(domainId),
+          (extId, actionTypeId, handler, domainId) => this.registerExtensionActionHandler(extId, actionTypeId, handler, domainId),
+          (extId) => this.unregisterExtensionActionHandler(extId)
+        );
+        mountedChildBridge = childBridge;
+        this.childBridgesByExtension.set(extensionId, childBridge);
+
+        const existingConnection = this.coordinator.get(container);
+        if (existingConnection) {
+          existingConnection.bridges.set(extensionId, parentBridge);
+        } else {
+          this.coordinator.register(container, {
+            hostRuntime: this.hostRuntime,
+            bridges: new Map([[extensionId, parentBridge]]),
+          });
+        }
+
+        const hostElement = container as HTMLElement;
+        const shadowRoot = createShadowRoot(hostElement);
+        extensionState.shadowRoot = shadowRoot;
+
+        const lifecycle = extensionState.lifecycle;
+        if (!lifecycle) {
+          throw new Error(
+            `Cannot mount extension '${extensionId}': lifecycle not loaded. ` +
+            `This should not happen - loadExtension should have cached the lifecycle.`
+          );
+        }
+        const mountContext: MfeMountContext = {
+          extensionId,
+          domainId: extensionState.extension.domain,
+        };
+
+        // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-track-mounting-bridge
+        // Prepare the link a nested registry constructed synchronously inside
+        // this extension's own `mount()` body will automatically adopt, then
+        // track `childBridge` as the ambient mounting bridge for exactly the
+        // synchronous portion of the `lifecycle.mount(...)` invocation below —
+        // no configuration or method call required from the microfrontend author.
+        const link = this.buildInboundBridgeLink(extensionId, childBridge, parentBridge);
+        registerInboundBridgeLink(childBridge, link);
+
+        pushAmbientMountingBridge(childBridge);
+        let claimed: readonly InboundBridgeRelink[];
+        let mountInvocation: void | Promise<void>;
+        try {
+          mountInvocation = lifecycle.mount(shadowRoot, childBridge, mountContext);
+        } finally {
+          claimed = popAmbientMountingBridge();
+        }
+        // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-track-mounting-bridge
+
+        // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-relink-on-remount
+        if (claimed.length > 0) {
+          // A registry was constructed inside this window and adopted the link
+          // itself (the ordinary fresh-registry-per-mount pattern) — remember
+          // its re-link callback(s) against this extension for a future remount.
+          this.inboundAdoptersByExtension.set(extensionId, claimed);
+        } else {
+          // No construction happened during this window — re-offer the fresh
+          // link to whichever registry adopted a PREVIOUS mount of THIS SAME
+          // extension (the reused-registry case), never to a registry that
+          // adopted any other extension's bridge.
+          const previous = this.inboundAdoptersByExtension.get(extensionId);
+          if (previous) {
+            for (const relink of previous) {
+              relink(link);
+            }
           }
         }
-      }
-      // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-relink-on-remount
+        // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-relink-on-remount
 
-      await mountInvocation;
+        await mountInvocation;
 
-      extensionState.bridge = parentBridge;
-      extensionState.container = container;
-      extensionState.mountState = 'mounted';
+        extensionState.bridge = parentBridge;
+        extensionState.container = container;
+        extensionState.mountState = 'mounted';
 
-      await this.triggerLifecycle(
-        extensionId,
-        this.typeSystem.resolveLifecycleStageActivatedId()
-      );
+        await this.triggerLifecycle(
+          extensionId,
+          this.typeSystem.resolveLifecycleStageActivatedId()
+        );
 
-      return parentBridge;
-    } catch (error) {
-      // @cpt-begin:cpt-frontx-state-extension-domain-governance-admission:p1:inst-adm-t6
-      extensionState.mountState = 'error';
-      extensionState.error = error instanceof Error ? error : new Error(String(error));
-      // @cpt-end:cpt-frontx-state-extension-domain-governance-admission:p1:inst-adm-t6
+        return parentBridge;
+      } catch (error) {
+        // @cpt-begin:cpt-frontx-state-extension-domain-governance-admission:p1:inst-adm-t6
+        extensionState.mountState = 'error';
+        extensionState.error = error instanceof Error ? error : new Error(String(error));
+        // @cpt-end:cpt-frontx-state-extension-domain-governance-admission:p1:inst-adm-t6
 
-      // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-retract-advertisements
-      // Mount-failure path: any nested registry that got as far as
-      // synchronously constructing itself and propagating advertisements
-      // upward through `childBridge` before `lifecycle.mount(...)` (or a
-      // synchronous step around it) threw must have those advertisements
-      // retracted by THIS (the parent) registry now — previously this path
-      // leaked, leaving the parent holding forwarding entries for a target
-      // whose host extension never finished mounting.
-      if (mountedChildBridge) {
-        this.retractInboundBridgeLink(mountedChildBridge);
-        this.childBridgesByExtension.delete(extensionId);
-        // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-unlink-on-retraction
-        const adopters = this.inboundAdoptersByExtension.get(extensionId);
-        if (adopters) {
-          for (const relink of adopters) {
-            relink(null);
+        // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-retract-advertisements
+        // Mount-failure path: any nested registry that got as far as
+        // synchronously constructing itself and propagating advertisements
+        // upward through `childBridge` before `lifecycle.mount(...)` (or a
+        // synchronous step around it) threw must have those advertisements
+        // retracted by THIS (the parent) registry now — previously this path
+        // leaked, leaving the parent holding forwarding entries for a target
+        // whose host extension never finished mounting.
+        if (mountedChildBridge) {
+          this.retractInboundBridgeLink(mountedChildBridge);
+          this.childBridgesByExtension.delete(extensionId);
+          // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-unlink-on-retraction
+          const adopters = this.inboundAdoptersByExtension.get(extensionId);
+          if (adopters) {
+            for (const relink of adopters) {
+              relink(null);
+            }
           }
+          // Deliberately NOT deleted from the map — the next mount of this
+          // extension needs it to re-offer a fresh link to the same registry.
+          // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-unlink-on-retraction
         }
-        // Deliberately NOT deleted from the map — the next mount of this
-        // extension needs it to re-offer a fresh link to the same registry.
-        // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-unlink-on-retraction
-      }
-      // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-retract-advertisements
+        // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-retract-advertisements
 
-      throw error;
-    }
+        throw error;
+      }
+    })().finally(() => {
+      this.inFlightMountsByExtension.delete(extensionId);
+    });
+    this.inFlightMountsByExtension.set(extensionId, mountPromise);
+
+    return mountPromise;
   }
   // @cpt-end:cpt-frontx-state-extension-domain-governance-admission:p1:inst-adm-t5
 
