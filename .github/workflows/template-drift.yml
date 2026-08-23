@@ -80,11 +80,70 @@ jobs:
     - name: Build workspace packages
       run: npm run build:packages
 
-    # `dev:template:link` replaces installed directories inside the template's
-    # node_modules — the pinned tree has to exist before it can be repointed.
-    - name: Install template from its lockfile
+    # `npm ci` here cannot install a pin whose tarball is not published yet, and
+    # on a feature branch that is the normal state, not an accident:
+    # policy:version-bump-on-change requires the bump the moment a package's
+    # src/ changes substantively, and publish-packages.yml only publishes from
+    # main/develop/release/*. So the template's pins name a version the registry
+    # will not carry until this branch merges, `npm ci` exits ETARGET, and the
+    # relink step that makes those pins irrelevant to this job never runs
+    # (CONTRIBUTING.md records the same standoff at alpha.0 -> alpha.1, which
+    # "took two merges to clear").
+    #
+    # The pins are therefore repointed at packages/* BEFORE npm sees them, in
+    # the runner's checkout only. That is the same substitution
+    # `dev:template:link` performs after the fact, moved ahead of the install so
+    # a tree can exist at all; WHICH packages get substituted is derived from
+    # the template's own pins by the helper the linker itself uses
+    # (template-ecosystem-packages.mjs), so the two sets cannot drift apart, and
+    # no version string is written down anywhere.
+    #
+    # What this deliberately does NOT do is relax a pin onto some other registry
+    # version. Nothing below resolves an @gears-frontx ecosystem name from the
+    # registry, so every other way an install can fail - an unresolvable
+    # third-party dependency, a peer conflict, a corrupt lockfile edge - still
+    # fails this step exactly as it did before. Whether the PUBLISHED pins
+    # install is Template Validate's question (main.yml), which still runs
+    # `npm ci` against them and still has to go red while they do not resolve.
+    - name: Point template ecosystem pins at the working tree
+      run: node scripts/pin-template-ecosystem-to-local.mjs
+
+    # `npm install`, not `npm ci`: the rewrite above desyncs the lockfile by
+    # construction and `npm ci` refuses a desynced one.
+    #
+    # `--no-package-lock` is load-bearing, not tidiness. template-shell pins its
+    # own root package to itself via a `file:.` override, materialized as an
+    # npm-managed symlink that packages/framework's re-exports resolve through.
+    # Reconciling a desynced lockfile is exactly the operation npm <= 11.13.0
+    # gets wrong for a self-referential `file:.` entry (npm/cli#524, already
+    # referenced by scripts/template-lockfile-selflink-check.mjs): it drops the
+    # link from the *installed tree*, not just from the lockfile, so
+    # packages/framework's import of its own template root resolves to nothing
+    # and the build fails. This runner's node 25.x ships npm 11.12.1, squarely
+    # in the broken range; skipping lockfile reconciliation here sidesteps the
+    # bug entirely. The upstream fix lands in 11.14.0, at which point the flag
+    # stops being strictly necessary - but it stays correct either way, so
+    # there is nothing to remember to remove later.
+    #
+    # The tradeoff: without the lockfile guiding resolution, transitive
+    # dependencies float to their latest in-range version instead of the
+    # exact one the lockfile pinned (verified: 41 of 546 packages resolved
+    # differently on a test run, all patch-level bumps within their declared
+    # ranges). That is acceptable for this job specifically - its purpose is
+    # detecting drift between packages/* and template-shell, not verifying
+    # that the exact pinned dependency tree installs cleanly. The latter is
+    # Template Validate's job (main.yml), which is unaffected by this change
+    # and still runs a real `npm ci`.
+    - name: Install template with the working tree's ecosystem packages
       working-directory: template-shell
-      run: npm ci
+      run: npm install --no-audit --no-fund --no-package-lock
+
+    # The rewrite is an install-time device and nothing more: the committed
+    # manifests come back before anything is built, so build and type-check read
+    # exactly the files a seeded project ships. Only tracked files are restored -
+    # the node_modules the install just produced is untracked and survives.
+    - name: Restore the committed template manifests
+      run: git checkout -- template-shell
 
     - name: Relink template at the working tree
       run: npm run dev:template:link

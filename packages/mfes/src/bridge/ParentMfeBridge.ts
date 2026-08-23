@@ -37,6 +37,7 @@ export class ParentMfeBridgeImpl extends ParentMfeBridge {
    * source of truth for both active/inactive and destroyed state
    * (`inst-bridge-lifetime`).
    */
+  // @cpt-begin:cpt-frontx-algo-mfe-host-communication-bridge-delegation:p1:inst-bridge-lifetime
   private get destroyed(): boolean {
     return this.childBridge.isDestroyed();
   }
@@ -44,6 +45,7 @@ export class ParentMfeBridgeImpl extends ParentMfeBridge {
   private get active(): boolean {
     return this.childBridge.isActive();
   }
+  // @cpt-end:cpt-frontx-algo-mfe-host-communication-bridge-delegation:p1:inst-bridge-lifetime
 
   /**
    * Property update subscribers - tracks callbacks registered in domain.propertySubscribers.

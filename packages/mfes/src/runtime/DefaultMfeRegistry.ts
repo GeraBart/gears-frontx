@@ -108,10 +108,12 @@ function hasOnActionsChainMethod(bridge: ChildMfeBridge): bridge is ActionsChain
  * independently loaded copy of this package than the one running this
  * check.
  */
+// @cpt-begin:cpt-frontx-algo-mfe-host-communication-bridge-delegation:p1:inst-bridge-deactivation
 function isActiveBridge(bridge: ChildMfeBridge): boolean {
   const candidate = bridge as unknown as { isActive?: () => boolean };
   return typeof candidate.isActive === 'function' ? candidate.isActive() : true;
 }
+// @cpt-end:cpt-frontx-algo-mfe-host-communication-bridge-delegation:p1:inst-bridge-deactivation
 
 /**
  * Default concrete implementation of MfeRegistry.
