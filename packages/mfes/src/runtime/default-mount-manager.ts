@@ -410,9 +410,11 @@ export class DefaultMountManager extends MountManager {
       // now rejects explicitly until the next mount reactivates it
       // (`inst-bridge-deactivation`). Handler registrations and property
       // subscriptions made through the bridge are untouched.
+      // @cpt-begin:cpt-frontx-algo-mfe-host-communication-bridge-delegation:p1:inst-bridge-deactivation
       if (extensionState.bridge) {
         this.bridgeFactory.deactivateBridge(extensionState.bridge);
       }
+      // @cpt-end:cpt-frontx-algo-mfe-host-communication-bridge-delegation:p1:inst-bridge-deactivation
 
       if (container) {
         const connection = this.coordinator.get(container);

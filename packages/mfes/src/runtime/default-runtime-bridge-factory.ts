@@ -92,6 +92,7 @@ export class DefaultRuntimeBridgeFactory extends RuntimeBridgeFactory {
     registerExtensionActionHandler: (extensionId: string, actionTypeId: string, handler: ActionHandler, domainId: string) => void,
     _unregisterExtensionActionHandler: (extensionId: string) => void
   ): { parentBridge: ParentMfeBridge; childBridge: ChildMfeBridge } {
+    // @cpt-begin:cpt-frontx-algo-mfe-host-communication-bridge-delegation:p1:inst-bridge-lifetime
     if (existing) {
       const { parentBridge, childBridge } = existing;
       if (!(parentBridge instanceof ParentMfeBridgeImpl) || !(childBridge instanceof ChildMfeBridgeImpl)) {
@@ -122,14 +123,17 @@ export class DefaultRuntimeBridgeFactory extends RuntimeBridgeFactory {
         );
       });
 
+      // @cpt-begin:cpt-frontx-algo-mfe-host-communication-bridge-delegation:p1:inst-registration-survives-remount
       // Do NOT re-subscribe to domainState.propertySubscribers, do NOT
       // replay domainState.properties, and do NOT touch
       // properties/propertySubscribers/actionsChainHandler/childDomainIds —
       // all survive deactivation untouched (`inst-registration-survives-remount`).
       childBridge.activate();
+      // @cpt-end:cpt-frontx-algo-mfe-host-communication-bridge-delegation:p1:inst-registration-survives-remount
 
       return existing;
     }
+    // @cpt-end:cpt-frontx-algo-mfe-host-communication-bridge-delegation:p1:inst-bridge-lifetime
 
     // Create child bridge
     const childBridge = new ChildMfeBridgeImpl(domainState.domain.id, extensionId);
@@ -212,10 +216,12 @@ export class DefaultRuntimeBridgeFactory extends RuntimeBridgeFactory {
    * @param parentBridge - Parent bridge to deactivate
    */
   deactivateBridge(parentBridge: ParentMfeBridge): void {
+    // @cpt-begin:cpt-frontx-algo-mfe-host-communication-bridge-delegation:p1:inst-bridge-deactivation
     if (!(parentBridge instanceof ParentMfeBridgeImpl)) {
       throw new Error('deactivateBridge requires a ParentMfeBridgeImpl instance');
     }
     parentBridge.getChildBridge().deactivate();
+    // @cpt-end:cpt-frontx-algo-mfe-host-communication-bridge-delegation:p1:inst-bridge-deactivation
   }
 
   /**
