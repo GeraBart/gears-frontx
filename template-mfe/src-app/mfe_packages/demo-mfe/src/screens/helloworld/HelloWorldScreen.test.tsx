@@ -34,8 +34,8 @@ async function setupHelloWorldScreen() {
   const expectedTheme = 'custom-theme';
   const expectedLanguage = 'pl';
   const bridgeFixture = createMfeBridgeFixture({
-    domainId: 'demo-domain',
-    instanceId: 'hello-world',
+    extDomainId: 'demo-domain',
+    extensionId: 'hello-world',
     executeActionsChain,
     initialProperties: {
       [FRONTX_SHARED_PROPERTY_THEME]: expectedTheme,

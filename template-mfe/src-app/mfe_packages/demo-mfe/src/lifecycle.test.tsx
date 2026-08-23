@@ -35,20 +35,20 @@ vi.mock('./actions/profileActions', () => ({
 }));
 
 vi.mock('./screens/helloworld/HelloWorldScreen', () => ({
-  HelloWorldScreen: ({ bridge }: { bridge: { instanceId: string } }) => (
-    <div data-testid="hello-screen">{bridge.instanceId}</div>
+  HelloWorldScreen: ({ bridge }: { bridge: { extensionId: string } }) => (
+    <div data-testid="hello-screen">{bridge.extensionId}</div>
   ),
 }));
 
 vi.mock('./screens/profile/ProfileScreen', () => ({
-  ProfileScreen: ({ bridge }: { bridge: { domainId: string } }) => (
-    <div data-testid="profile-screen">{bridge.domainId}</div>
+  ProfileScreen: ({ bridge }: { bridge: { extDomainId: string } }) => (
+    <div data-testid="profile-screen">{bridge.extDomainId}</div>
   ),
 }));
 
 vi.mock('./screens/theme/CurrentThemeScreen', () => ({
-  CurrentThemeScreen: ({ bridge }: { bridge: { instanceId: string } }) => (
-    <div data-testid="theme-screen">{bridge.instanceId}</div>
+  CurrentThemeScreen: ({ bridge }: { bridge: { extensionId: string } }) => (
+    <div data-testid="theme-screen">{bridge.extensionId}</div>
   ),
 }));
 
@@ -60,8 +60,8 @@ describe('demo-mfe lifecycles', () => {
       bridge: TestBridge,
     ) => React.ReactNode;
     const { bridge } = createMfeBridgeFixture({
-      domainId: 'demo-domain',
-      instanceId: 'hello-instance',
+      extDomainId: 'demo-domain',
+      extensionId: 'hello-instance',
     });
 
     expect(Reflect.get(lifecycle, 'app')).toEqual({ id: 'demo-mfe-app' } satisfies TestApp);
@@ -77,8 +77,8 @@ describe('demo-mfe lifecycles', () => {
       bridge: TestBridge,
     ) => React.ReactNode;
     const { bridge } = createMfeBridgeFixture({
-      domainId: 'demo-domain',
-      instanceId: 'theme-instance',
+      extDomainId: 'demo-domain',
+      extensionId: 'theme-instance',
     });
 
     expect(Reflect.get(lifecycle, 'app')).toEqual({ id: 'demo-mfe-app' } satisfies TestApp);
@@ -96,8 +96,8 @@ describe('demo-mfe lifecycles', () => {
       bridge: TestBridge,
     ) => React.ReactNode;
     const fixture = createMfeBridgeFixture({
-      domainId: 'profile-domain',
-      instanceId: 'profile-instance',
+      extDomainId: 'profile-domain',
+      extensionId: 'profile-instance',
     });
     const container = document.createElement('div');
 

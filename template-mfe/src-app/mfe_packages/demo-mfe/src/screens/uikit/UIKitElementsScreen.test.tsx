@@ -40,8 +40,8 @@ vi.mock('./components/DisclosureElements', () => ({ DisclosureElements: () => nu
 async function setupUIKitElementsScreen() {
   const { UIKitElementsScreen } = await import('./UIKitElementsScreen');
   const bridgeFixture = createMfeBridgeFixture({
-    domainId: 'uikit-domain',
-    instanceId: 'uikit-screen',
+    extDomainId: 'uikit-domain',
+    extensionId: 'uikit-screen',
     initialProperties: {
       [FRONTX_SHARED_PROPERTY_THEME]: 'ocean',
       [FRONTX_SHARED_PROPERTY_LANGUAGE]: 'de',

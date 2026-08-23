@@ -478,25 +478,26 @@ describe('Cross-copy boundary: registration propagation, escalation, retraction 
     expect(failureLogged).toBe(true);
   });
 
-  it('(6) unmounting the child extension retracts the copy-B nested registry\'s advertisements from the copy-A shell, even though the nested registry never disposes itself', async () => {
+  it('(6) unmounting the child extension deactivates the copy-B nested registry\'s bridge across the copy boundary: dispatch rejects as inactive, not as missing a handler', async () => {
     const { shell, errorSpy } = await buildCrossCopyTopology();
 
     // Unmount child-ext directly through the shell's own mount manager,
-    // WITHOUT ever calling `nested.dispose()` — proving retraction is
-    // triggered by the PARENT (copy A) on the host extension's own unmount,
-    // not by the disposing side, per `inst-retract-advertisements`.
+    // WITHOUT ever calling `nested.dispose()` — an ordinary unmount only
+    // deactivates the bridge (`inst-bridge-deactivation`), across the copy
+    // boundary the same as within one module graph; the forwarding entry
+    // for D1 stays recorded at the shell.
     const mounter0 = shell.getMounter(D0);
     await mounter0.unmount(CHILD_EXT);
 
     errorSpy.mockClear();
     await shell.executeActionsChain(actionChain(ACTION_LEAF, D1));
-    const failureLogged = errorSpy.mock.calls.some((call: unknown[]) =>
-      call.some((arg: unknown) => String(arg).includes('Actions chain failed') || String(arg).includes('No handler found'))
+    const inactiveLogged = errorSpy.mock.calls.some((call: unknown[]) =>
+      call.some((arg: unknown) => String(arg).includes('BRIDGE_INACTIVE') || String(arg).includes('inactive'))
     );
-    expect(failureLogged).toBe(true);
+    expect(inactiveLogged).toBe(true);
   });
 
-  it('(7) a copy-B registry reused (not rebuilt) across a remount of its copy-A host extension is re-linked by the copy-A shell and re-advertises successfully', async () => {
+  it('(7) a copy-B registry reused (not rebuilt) across a remount of its copy-A host extension keeps its already-adopted live link across the copy boundary and continues to advertise successfully', async () => {
     vi.resetModules();
     const copyA = await loadCopy();
     vi.resetModules();

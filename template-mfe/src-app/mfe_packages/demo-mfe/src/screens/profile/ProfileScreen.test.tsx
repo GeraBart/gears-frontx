@@ -104,8 +104,8 @@ async function setupProfileScreen(options?: {
 
   const { ProfileScreen } = await import('./ProfileScreen');
   const bridgeFixture = createMfeBridgeFixture({
-    domainId: 'profile-domain',
-    instanceId: 'profile-screen',
+    extDomainId: 'profile-domain',
+    extensionId: 'profile-screen',
     initialProperties: {
       [FRONTX_SHARED_PROPERTY_THEME]: 'corporate',
       [FRONTX_SHARED_PROPERTY_LANGUAGE]: 'sv',

@@ -53,7 +53,7 @@ function generateRandomHex(): string {
 // instances backed by the same entry path get distinct module evaluations.
 const randomHex = generateRandomHex();
 
-// Last-ping value and subscriber, keyed by `bridge.instanceId` rather than a
+// Last-ping value and subscriber, keyed by `bridge.extensionId` rather than a
 // single module-scoped value. The handler always writes here, independent of
 // whether a subscriber is wired yet, so registering the handler synchronously
 // in `mount()` (required so a chained `next` step can reach it as soon as
@@ -61,12 +61,17 @@ const randomHex = generateRandomHex();
 // that lands before `WidgetA` subscribes is still visible the moment it does,
 // via the initial-state read below, instead of depending on ordering.
 //
-// Keying by instance id (rather than one shared module-level value) matters
-// because a remount of an extension `DefaultMountManager` has already loaded
-// once reuses the SAME module evaluation (`loadState === 'loaded'` skips
-// re-loading) -- so a single shared value would leak the previous mount's
-// last ping into a fresh mount's first render, and one mount's cleanup could
-// clear a still-live sibling mount's subscriber.
+// Keying by the extension's own (stable, per-extension) id, rather than one
+// shared module-level value, matters for two reasons: a remount of an
+// extension `DefaultMountManager` has already loaded once reuses the SAME
+// module evaluation (`loadState === 'loaded'` skips re-loading) -- so a
+// single shared value would leak a DIFFERENT extension's last ping into this
+// one's first render, and one extension's cleanup could clear a still-live
+// sibling's subscriber. Since `bridge.extensionId` is now the SAME value
+// across every mount of a given extension (the bridge pair is minted once and
+// reactivated, not recreated, per mount), the last-ping value keyed on it
+// actually SURVIVES an unmount/remount cycle of this widget, unless the
+// widget's own `unmount()` clears its map entry.
 const lastPingValues = new Map<string, string>();
 const lastPingSubscribers = new Map<string, (value: string) => void>();
 
@@ -93,7 +98,7 @@ interface WidgetAProps {
 }
 
 function WidgetA({ bridge }: Readonly<WidgetAProps>): React.ReactElement {
-  const instanceId = bridge.instanceId;
+  const instanceId = bridge.extensionId;
   // Seed from this instance's own value (not `null`) so a ping that already
   // landed -- e.g. one dispatched by a chain step immediately after `mount()`
   // resolved, before this component's own first render -- is reflected on
@@ -176,7 +181,7 @@ class WidgetsFixtureALifecycle extends ThemeAwareReactLifecycle {
 
   override mount(container: Element | ShadowRoot, bridge: ChildMfeBridge): void {
     console.log(
-      `[widget-a ${bridge.instanceId}] mount randomHex=${randomHex}`,
+      `[widget-a ${bridge.extensionId}] mount randomHex=${randomHex}`,
     );
     super.mount(container, bridge);
     // Register synchronously, before `mount()` returns: `DefaultMountManager`
@@ -188,7 +193,7 @@ class WidgetsFixtureALifecycle extends ThemeAwareReactLifecycle {
     // ping step. See `lifecycle-profile.tsx` for the same pattern.
     bridge.registerActionHandler(
       PING_ACTION_TYPE,
-      new PingHandler(bridge.instanceId),
+      new PingHandler(bridge.extensionId),
     );
   }
 }

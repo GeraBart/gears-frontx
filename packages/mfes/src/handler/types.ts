@@ -20,12 +20,15 @@ import { ActionHandler } from '../mediator/types';
  */
 export abstract class ParentMfeBridge {
   /**
-   * Unique instance ID for the child MFE.
+   * The GTS id of the extension this bridge belongs to; stable across every
+   * mount of that extension.
    */
   abstract readonly instanceId: string;
 
   /**
-   * Dispose the bridge and clean up resources.
+   * Dispose the bridge and clean up resources. Permanent teardown, performed
+   * only when the extension this bridge belongs to is unregistered — not on
+   * an ordinary unmount.
    */
   abstract dispose(): void;
 }
@@ -35,8 +38,10 @@ export abstract class ParentMfeBridge {
  * Provided to child MFEs for communication with the host.
  */
 export abstract class ChildMfeBridge {
-  abstract readonly domainId: string;
-  abstract readonly instanceId: string;
+  /** The GTS id of the domain the extension is mounted into. */
+  abstract readonly extDomainId: string;
+  /** The extension's own GTS id. */
+  abstract readonly extensionId: string;
 
   /**
    * Execute an actions chain via the registry.
@@ -132,6 +137,15 @@ export interface MfeEntryLifecycle<TBridge = ChildMfeBridge> {
    * a `ShadowRoot`. With custom handlers, it may be a plain `Element`.
    *
    * @param container - DOM element or shadow root to unmount from
+   *
+   * Action-handler registrations and property subscriptions made through the
+   * bridge survive this call and are re-presented to the next `mount()` on
+   * the same bridge instance; the runtime never clears them. An
+   * implementation that binds subscribers or handlers to a UI-framework tree
+   * torn down here MUST invoke the unsubscribe/unregister functions it
+   * captured before returning. Failing to do so does not drop delivery — it
+   * produces duplicate delivery, one copy into each detached tree, once the
+   * next `mount()` subscribes again.
    */
   unmount(container: Element | ShadowRoot): void | Promise<void>;
 }

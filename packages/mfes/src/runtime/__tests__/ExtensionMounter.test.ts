@@ -23,6 +23,8 @@ class FakeMountManager extends MountManager {
     this.unmountCalls.push(extensionId);
   }
 
+  releaseExtension(_extensionId: string): void {}
+
   setTheme(_cssVars: Record<string, string>): void {}
 }
 
