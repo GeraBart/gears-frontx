@@ -679,15 +679,14 @@ describe('Cross-nesting reachability: registration propagation, escalation, retr
     // so the handler this test guards is never actually invoked.
     errorSpy.mockClear();
     await registry0.executeActionsChain(actionChain(ACTION_FAIL_LEAF, D_FAIL));
-    const failureLogged = errorSpy.mock.calls.some((call: unknown[]) =>
-      call.some((arg: unknown) =>
-        String(arg).includes('Actions chain failed') ||
-        String(arg).includes('No handler found') ||
-        String(arg).includes('BRIDGE_INACTIVE') ||
-        String(arg).includes('inactive')
-      )
+    const inactiveLogged = errorSpy.mock.calls.some((call: unknown[]) =>
+      call.some((arg: unknown) => String(arg).includes('BRIDGE_INACTIVE') || String(arg).includes('inactive'))
     );
-    expect(failureLogged).toBe(true);
+    expect(inactiveLogged).toBe(true);
+    const noHandlerLogged = errorSpy.mock.calls.some((call: unknown[]) =>
+      call.some((arg: unknown) => String(arg).includes('No handler found'))
+    );
+    expect(noHandlerLogged).toBe(false);
     expect(leafCounter.count).toBe(0);
 
     vi.restoreAllMocks();

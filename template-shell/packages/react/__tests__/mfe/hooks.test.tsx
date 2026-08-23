@@ -24,8 +24,8 @@ import type { ChildMfeBridge } from '@gears-frontx/framework';
 // ============================================================================
 
 const mockBridge: ChildMfeBridge = {
-  domainId: 'gts.frontx.mfes.ext.domain.v1~frontx.screensets.layout.sidebar.v1',
-  instanceId: 'test-instance-123',
+  extDomainId: 'gts.frontx.mfes.ext.domain.v1~frontx.screensets.layout.sidebar.v1',
+  extensionId: 'test-instance-123',
   executeActionsChain: vi.fn().mockResolvedValue(undefined),
   subscribeToProperty: vi.fn().mockReturnValue(() => {}),
   getProperty: vi.fn().mockReturnValue(undefined),
@@ -35,7 +35,7 @@ const mockBridge: ChildMfeBridge = {
 const mockMfeContextValue: MfeContextValue = {
   bridge: mockBridge,
   extensionId: 'test-extension-1',
-  domainId: mockBridge.domainId,
+  domainId: mockBridge.extDomainId,
 };
 
 // ============================================================================
@@ -104,8 +104,8 @@ describe('MfeContext', () => {
       const { result } = renderHook(() => useMfeBridge(), { wrapper });
 
       expect(result.current).toBe(mockBridge);
-      expect(result.current.domainId).toBe(mockBridge.domainId);
-      expect(result.current.instanceId).toBe(mockBridge.instanceId);
+      expect(result.current.extDomainId).toBe(mockBridge.extDomainId);
+      expect(result.current.extensionId).toBe(mockBridge.extensionId);
     });
 
     it('should throw error when used outside MFE context', () => {
@@ -169,7 +169,7 @@ describe('MfeContext', () => {
       expect(mockBridge.executeActionsChain).toHaveBeenCalledWith({
         action: {
           type: 'gts.frontx.mfes.comm.action.v1~test.navigate.v1',
-          target: mockBridge.domainId,
+          target: mockBridge.extDomainId,
           payload: { path: '/dashboard' },
         },
       });

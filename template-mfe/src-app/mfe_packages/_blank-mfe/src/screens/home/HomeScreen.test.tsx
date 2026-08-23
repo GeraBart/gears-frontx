@@ -67,8 +67,8 @@ describe('HomeScreen', () => {
 
   it('renders bridge-provided values and API status data', async () => {
     const { bridge } = createMfeBridgeFixture({
-      domainId: TEST_DOMAIN_ID,
-      instanceId: TEST_INSTANCE_ID,
+      extDomainId: TEST_DOMAIN_ID,
+      extensionId: TEST_INSTANCE_ID,
       initialProperties: {
         [FRONTX_SHARED_PROPERTY_THEME]: TEST_THEME,
         [FRONTX_SHARED_PROPERTY_LANGUAGE]: TEST_LANGUAGE,
@@ -77,7 +77,7 @@ describe('HomeScreen', () => {
 
     render(<HomeScreen bridge={bridge} />);
 
-    // Bridge domainId, instanceId, theme, and language all flow through to the DOM.
+    // Bridge extDomainId, extensionId, theme, and language all flow through to the DOM.
     expect(await screen.findByText(TEST_DOMAIN_ID)).toBeTruthy();
     expect(screen.getByText(TEST_INSTANCE_ID)).toBeTruthy();
     expect(screen.getByText(TEST_THEME)).toBeTruthy();
@@ -96,8 +96,8 @@ describe('HomeScreen', () => {
     });
 
     const { bridge } = createMfeBridgeFixture({
-      domainId: TEST_DOMAIN_ID,
-      instanceId: TEST_INSTANCE_ID,
+      extDomainId: TEST_DOMAIN_ID,
+      extensionId: TEST_INSTANCE_ID,
       initialProperties: {
         [FRONTX_SHARED_PROPERTY_THEME]: TEST_THEME,
         [FRONTX_SHARED_PROPERTY_LANGUAGE]: TEST_LANGUAGE,
@@ -113,8 +113,8 @@ describe('HomeScreen', () => {
     useScreenTranslationsMock.mockReturnValue({ t: (key: string) => key, loading: true });
 
     const { bridge } = createMfeBridgeFixture({
-      domainId: TEST_DOMAIN_ID,
-      instanceId: TEST_INSTANCE_ID,
+      extDomainId: TEST_DOMAIN_ID,
+      extensionId: TEST_INSTANCE_ID,
       initialProperties: {
         [FRONTX_SHARED_PROPERTY_THEME]: TEST_THEME,
         [FRONTX_SHARED_PROPERTY_LANGUAGE]: TEST_LANGUAGE,
@@ -136,8 +136,8 @@ describe('HomeScreen', () => {
     });
 
     const { bridge } = createMfeBridgeFixture({
-      domainId: TEST_DOMAIN_ID,
-      instanceId: TEST_INSTANCE_ID,
+      extDomainId: TEST_DOMAIN_ID,
+      extensionId: TEST_INSTANCE_ID,
       initialProperties: {
         [FRONTX_SHARED_PROPERTY_THEME]: TEST_THEME,
         [FRONTX_SHARED_PROPERTY_LANGUAGE]: TEST_LANGUAGE,
@@ -152,16 +152,16 @@ describe('HomeScreen', () => {
 
   it('re-reads current properties when the host swaps the bridge instance', async () => {
     const first = createMfeBridgeFixture({
-      domainId: TEST_DOMAIN_ID,
-      instanceId: TEST_INSTANCE_ID,
+      extDomainId: TEST_DOMAIN_ID,
+      extensionId: TEST_INSTANCE_ID,
       initialProperties: {
         [FRONTX_SHARED_PROPERTY_THEME]: TEST_THEME,
         [FRONTX_SHARED_PROPERTY_LANGUAGE]: 'en',
       },
     });
     const second = createMfeBridgeFixture({
-      domainId: TEST_DOMAIN_ID,
-      instanceId: TEST_INSTANCE_ID,
+      extDomainId: TEST_DOMAIN_ID,
+      extensionId: TEST_INSTANCE_ID,
       initialProperties: {
         [FRONTX_SHARED_PROPERTY_THEME]: 'swapped-theme',
         [FRONTX_SHARED_PROPERTY_LANGUAGE]: 'ar',
@@ -202,8 +202,8 @@ describe('HomeScreen', () => {
 
   it('reacts to bridge property updates and unsubscribes on unmount', async () => {
     const bridgeFixture = createMfeBridgeFixture({
-      domainId: TEST_DOMAIN_ID,
-      instanceId: TEST_INSTANCE_ID,
+      extDomainId: TEST_DOMAIN_ID,
+      extensionId: TEST_INSTANCE_ID,
       initialProperties: {
         [FRONTX_SHARED_PROPERTY_THEME]: TEST_THEME,
         [FRONTX_SHARED_PROPERTY_LANGUAGE]: TEST_LANGUAGE,
