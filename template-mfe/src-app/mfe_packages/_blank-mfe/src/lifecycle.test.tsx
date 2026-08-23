@@ -88,8 +88,8 @@ describe('blank-mfe lifecycle', () => {
     const lifecycle = module.default;
     const renderContent = Reflect.get(lifecycle, 'renderContent');
     const { bridge } = createMfeBridgeFixture({
-      domainId: 'blank-domain',
-      instanceId: 'blank-instance',
+      extDomainId: 'blank-domain',
+      extensionId: 'blank-instance',
       initialProperties: {
         [FRONTX_SHARED_PROPERTY_THEME]: 'blank-theme',
         [FRONTX_SHARED_PROPERTY_LANGUAGE]: 'en',
@@ -114,8 +114,8 @@ describe('blank-mfe lifecycle', () => {
     };
     const container = document.createElement('div');
     const { bridge } = createMfeBridgeFixture({
-      domainId: 'blank-domain',
-      instanceId: 'blank-instance',
+      extDomainId: 'blank-domain',
+      extensionId: 'blank-instance',
     });
 
     lifecycle.mount(container, bridge);

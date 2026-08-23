@@ -15,8 +15,8 @@ vi.mock('../../shared/useScreenTranslations', () => ({
 async function setupCurrentThemeScreen() {
   const { CurrentThemeScreen } = await import('./CurrentThemeScreen');
   const bridgeFixture = createMfeBridgeFixture({
-    domainId: 'theme-domain',
-    instanceId: 'theme-screen',
+    extDomainId: 'theme-domain',
+    extensionId: 'theme-screen',
     initialProperties: {
       [FRONTX_SHARED_PROPERTY_THEME]: 'solarized',
       [FRONTX_SHARED_PROPERTY_LANGUAGE]: 'fr',

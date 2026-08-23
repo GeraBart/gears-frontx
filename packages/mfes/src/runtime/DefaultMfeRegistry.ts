@@ -42,6 +42,7 @@ import { extractGtsPackage } from '../gts/extract-package';
 import { DefaultExtensionMounter } from './DefaultExtensionMounter';
 import { DefaultDomainLifecycleTrigger } from './DefaultDomainLifecycleTrigger';
 import { ParentMfeBridgeImpl } from '../bridge/ParentMfeBridge';
+import { BridgeInactiveError } from '../bridge/errors';
 import {
   adoptAmbientInboundBridgeLink,
   tagArrivalEdge,
@@ -98,6 +99,18 @@ interface ActionsChainReceivingBridge extends ChildMfeBridge {
  */
 function hasOnActionsChainMethod(bridge: ChildMfeBridge): bridge is ActionsChainReceivingBridge {
   return typeof (bridge as unknown as { onActionsChain?: unknown }).onActionsChain === 'function';
+}
+
+/**
+ * Structural (duck-typed) check for the bridge's own internal `isActive()`,
+ * for the same cross-copy reason as `hasOnActionsChainMethod` above: the
+ * bridge escalating through this link may belong to a different,
+ * independently loaded copy of this package than the one running this
+ * check.
+ */
+function isActiveBridge(bridge: ChildMfeBridge): boolean {
+  const candidate = bridge as unknown as { isActive?: () => boolean };
+  return typeof candidate.isActive === 'function' ? candidate.isActive() : true;
 }
 
 /**
@@ -161,11 +174,6 @@ export class DefaultMfeRegistry extends MfeRegistry {
    * Registered MFE handlers.
    */
   private readonly handlers: MfeHandler[] = [];
-
-  /**
-   * Child MFE bridges (parent -> child communication).
-   */
-  private readonly childBridges = new Map<string, ParentMfeBridge>();
 
   /**
    * This registry's link to its immediate parent registry, through the
@@ -265,6 +273,7 @@ export class DefaultMfeRegistry extends MfeRegistry {
       // DefaultExtensionMounter keeps mount-set bookkeeping (removeMountedExtension)
       // and DOM container teardown centralized while still avoiding the lock.
       unmountExtension: (extensionId) => this.bypassUnmountExtension(extensionId),
+      releaseExtension: (extensionId) => this.mountManager.releaseExtension(extensionId),
       validateEntryType: (entryTypeId) => this.validateEntryType(entryTypeId),
     });
 
@@ -334,10 +343,10 @@ export class DefaultMfeRegistry extends MfeRegistry {
 
   /**
    * The ONE place this registry's inbound-bridge link state changes — used
-   * both by the constructor's initial ambient adoption and by a later
-   * re-link offered through the same `relink` callback when this registry's
-   * host extension mounts again (`inst-relink-on-remount`). Idempotent: a
-   * no-op if `link` is already this registry's current link.
+   * both by the constructor's initial ambient adoption and by a fresh
+   * adoption's supersession of a previous adopter when a registry is rebuilt
+   * inside a later mount of the same host extension. Idempotent: a no-op if
+   * `link` is already this registry's current link.
    *
    * @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-relink-repropagate
    */
@@ -448,6 +457,9 @@ export class DefaultMfeRegistry extends MfeRegistry {
           return Promise.reject(
             new Error(`Inbound bridge link for '${extensionId}' has been revoked.`)
           );
+        }
+        if (!isActiveBridge(childBridge)) {
+          return Promise.reject(new BridgeInactiveError(extensionId));
         }
         tagArrivalEdge(chain.action, childBridge);
         return this.executeActionsChainOrThrow(chain);
@@ -1272,11 +1284,8 @@ export class DefaultMfeRegistry extends MfeRegistry {
     this.relinkInboundBridge(null);
     // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-retract-advertisements
 
-    for (const bridge of this.childBridges.values()) {
-      bridge.dispose();
-    }
-    this.childBridges.clear();
-
+    // Releases every registered extension's retained bridge pair and
+    // inbound link (`releaseExtensionBridge` -> `MountManager.releaseExtension`).
     this.extensionManager.clear();
     this.operationSerializer.clear();
     this.packages.clear();
