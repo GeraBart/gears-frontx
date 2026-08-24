@@ -10,7 +10,7 @@
 
 import { ParentMfeBridge } from '../handler/types';
 import type { ActionsChain, SharedProperty } from '../types';
-import { ChildMfeBridgeImpl } from './ChildMfeBridge';
+import type { ChildMfeBridgeImpl } from './ChildMfeBridge';
 import { BridgeDisposedError, BridgeInactiveError } from './errors';
 
 type PropertySubscriber = (propertyTypeId: string, value: unknown) => void;

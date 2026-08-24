@@ -37,6 +37,7 @@ export abstract class ParentMfeBridge {
  * Child MFE Bridge abstract class.
  * Provided to child MFEs for communication with the host.
  */
+// @cpt-begin:cpt-frontx-algo-mfe-host-communication-bridge-delegation:p1:inst-inbound-bridge-internal
 export abstract class ChildMfeBridge {
   /** The GTS id of the domain the extension is mounted into. */
   abstract readonly extDomainId: string;
@@ -84,6 +85,7 @@ export abstract class ChildMfeBridge {
    */
   abstract registerActionHandler(actionTypeId: string, handler: ActionHandler): void;
 }
+// @cpt-end:cpt-frontx-algo-mfe-host-communication-bridge-delegation:p1:inst-inbound-bridge-internal
 
 /**
  * Runtime values supplied by the host at mount time.
@@ -160,7 +162,9 @@ export abstract class MfeBridgeFactory<TBridge extends ChildMfeBridge = ChildMfe
    *
    * @param domainId - ID of the domain the MFE is mounted in
    * @param entryTypeId - Type ID of the MFE entry
-   * @param instanceId - Unique instance ID for this MFE
+   * @param instanceId - The extension's own GTS identifier (per
+   *   `ChildMfeBridgeImpl`'s `(extDomainId, extensionId)` constructor), not a
+   *   separately-minted instance id
    * @returns Bridge instance
    */
   abstract create(

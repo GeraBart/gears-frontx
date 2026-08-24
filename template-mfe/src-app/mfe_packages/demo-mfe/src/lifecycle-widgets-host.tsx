@@ -118,7 +118,7 @@ class WidgetsDomainFactory extends ExtensionDomainImplementationFactory {
 function createWidgetsHostApp(): ReturnType<ReturnType<typeof createFrontX>['build']> {
   return createFrontX()
     .use(effects())
-        .use(microfrontends({
+    .use(microfrontends({
       typeSystem: gtsPlugin,
       mfeHandlers: [new MfeHandlerMF(FRONTX_MFE_ENTRY_MF)],
     }))
@@ -342,18 +342,17 @@ interface WidgetsHostScreenProps {
    * This component deliberately delays calling it until AFTER its own
    * auto-mount-on-attach pass (below) has settled for every extension
    * currently registered on this domain — not the instant `attach()`
-   * returns. `DefaultMountManager.loadExtension` does not correctly await a
-   * caller that arrives while another caller's load for the SAME extension
-   * is still in flight (it returns immediately once `loadState === 'loading'`
-   * rather than awaiting the in-flight load), so two real, concurrent
-   * `mount_ext` dispatches for the same extension — one from this pass, one
-   * from a chain's own `next` continuation racing in right after `mount()`
-   * resolves — can trip "lifecycle not loaded" in `mountExtension`. Waiting
-   * for this pass to finish before unblocking `mount()` means any later
-   * `mount_ext` for an extension this pass already mounted lands on the
-   * cheap, safe `mountState === 'mounted'` early-return in `mountExtension`
-   * instead of racing a second real load/mount — without requiring any
-   * change to shared framework mount-concurrency handling.
+   * returns. `ExtensionDomainSlot` only renders once this component's own
+   * `ready` state flips true, and its root-attach effect runs on a LATER
+   * React commit than the microtask that resolves `mount()`'s own promise
+   * and immediately drives a chain's `next` continuation. If that
+   * continuation dispatched a `mount_ext` for this domain before
+   * `DefaultExtensionMounter` had a root attached, it would throw "no root
+   * attached for domain ...". Deferring this signal until after the
+   * auto-mount pass settles means any later `mount_ext` for an extension
+   * this pass already mounted lands on the cheap, safe
+   * `mountState === 'mounted'` early-return in `mountExtension` instead of
+   * racing the root-attach timing a second time.
    */
   readonly onDomainAttached: () => void;
 }

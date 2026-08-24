@@ -142,6 +142,8 @@ async function loadCopy() {
     domainImplFactoryModule,
     mountStrategiesModule,
     mediatorTypesModule,
+    parentBridgeModule,
+    bridgeErrorsModule,
   ] = await Promise.all([
     import('../../src/runtime/DefaultMfeRegistry'),
     import('../../src/handler/types'),
@@ -150,6 +152,8 @@ async function loadCopy() {
     import('../../src/runtime/ExtensionDomainImplementationFactory'),
     import('../../src/runtime/mount-strategies'),
     import('../../src/mediator/types'),
+    import('../../src/bridge/ParentMfeBridge'),
+    import('../../src/bridge/errors'),
   ]);
 
   return {
@@ -160,6 +164,13 @@ async function loadCopy() {
     ExtensionDomainImplementationFactory: domainImplFactoryModule.ExtensionDomainImplementationFactory,
     ConcurrentMountStrategy: mountStrategiesModule.ConcurrentMountStrategy,
     ActionHandler: mediatorTypesModule.ActionHandler,
+    // Same-generation imports (see the doc comment above): resolves to the
+    // exact `ParentMfeBridgeImpl`/`BridgeInactiveError` this copy's own
+    // `DefaultMfeRegistry` uses internally, so tests can spy on/assert
+    // against the actual mechanism instead of the (deliberately
+    // failure-reason-scrubbed, per D) console.error diagnostic text.
+    ParentMfeBridgeImpl: parentBridgeModule.ParentMfeBridgeImpl,
+    BridgeInactiveError: bridgeErrorsModule.BridgeInactiveError,
   };
 }
 
@@ -417,14 +428,12 @@ describe('Cross-copy boundary: registration propagation, escalation, retraction 
 
     await nested.executeActionsChain(actionChain(ACTION_UNRESOLVABLE, D1));
 
-    const failureLogged = errorSpy.mock.calls.some((call: unknown[]) =>
-      call.some((arg: unknown) =>
-        String(arg).includes(
-          `No handler found for target '${D1}' and action type '${ACTION_UNRESOLVABLE}'`
-        )
-      )
-    );
-    expect(failureLogged).toBe(true);
+    // Asserted on OUTCOME (the chain failed at all), not on the specific
+    // missing-handler wording: the `[MfeRegistry] Actions chain failed`
+    // diagnostic deliberately no longer carries failure-reason text (see D:
+    // `ChainResult.error` was removed as a matter of policy, uniformly
+    // across every failure path).
+    expect(errorSpy).toHaveBeenCalled();
 
     // Exactly one invocation — this test's own call. A ping-pong back down
     // through the excluded forwarding entry would have re-invoked it a
@@ -461,25 +470,25 @@ describe('Cross-copy boundary: registration propagation, escalation, retraction 
     const dispatchPromise = shell.executeActionsChain(actionChain(ACTION_HANG, D1));
     nested.dispose();
 
+    // The fact this `await` settles at all (rather than timing out the
+    // test) is the proof the forced rejection fired — `ACTION_HANG`'s
+    // handler never resolves on its own.
     await dispatchPromise;
 
-    const retractionLogged = errorSpy.mock.calls.some((call: unknown[]) =>
-      call.some((arg: unknown) => String(arg).includes('was retracted while an action was in flight'))
-    );
-    expect(retractionLogged).toBe(true);
+    // Asserted on OUTCOME, not on the specific "was retracted while an
+    // action was in flight" wording: the `[MfeRegistry] Actions chain
+    // failed` diagnostic no longer carries the rejection's message (see D).
+    expect(errorSpy).toHaveBeenCalled();
 
     // The shell's forwarding entry for D1 is gone entirely — a further
     // dispatch now fails with a missing-handler error.
     errorSpy.mockClear();
     await shell.executeActionsChain(actionChain(ACTION_LEAF, D1));
-    const failureLogged = errorSpy.mock.calls.some((call: unknown[]) =>
-      call.some((arg: unknown) => String(arg).includes('Actions chain failed') || String(arg).includes('No handler found'))
-    );
-    expect(failureLogged).toBe(true);
+    expect(errorSpy).toHaveBeenCalled();
   });
 
   it('(6) unmounting the child extension deactivates the copy-B nested registry\'s bridge across the copy boundary: dispatch rejects as inactive, not as missing a handler', async () => {
-    const { shell, errorSpy } = await buildCrossCopyTopology();
+    const { shell, errorSpy, copyA } = await buildCrossCopyTopology();
 
     // Unmount child-ext directly through the shell's own mount manager,
     // WITHOUT ever calling `nested.dispose()` — an ordinary unmount only
@@ -489,12 +498,27 @@ describe('Cross-copy boundary: registration propagation, escalation, retraction 
     const mounter0 = shell.getMounter(D0);
     await mounter0.unmount(CHILD_EXT);
 
+    // The `[MfeRegistry] Actions chain failed` diagnostic no longer carries
+    // failure-reason text by design (see D), so the inactive-vs-missing-
+    // handler distinction is verified at the mechanism instead of the log —
+    // spying on copy A's own `ParentMfeBridgeImpl.sendActionsChain` (the
+    // exact class `shell`'s internal `sendDown` closure calls), same-copy
+    // generation as `shell` itself so `instanceof` holds.
+    const sendSpy = vi.spyOn(copyA.ParentMfeBridgeImpl.prototype, 'sendActionsChain');
     errorSpy.mockClear();
     await shell.executeActionsChain(actionChain(ACTION_LEAF, D1));
-    const inactiveLogged = errorSpy.mock.calls.some((call: unknown[]) =>
-      call.some((arg: unknown) => String(arg).includes('BRIDGE_INACTIVE') || String(arg).includes('inactive'))
-    );
-    expect(inactiveLogged).toBe(true);
+
+    // Outcome-level check: the dispatch failed at all.
+    expect(errorSpy).toHaveBeenCalled();
+
+    // Mechanism-level check: the forwarding entry for D1 WAS resolved and
+    // reached the bridge (not a missing-handler/no-route failure), and the
+    // bridge rejected specifically because it is inactive.
+    expect(sendSpy).toHaveBeenCalled();
+    const lastCall = sendSpy.mock.results[sendSpy.mock.results.length - 1];
+    await expect(lastCall.value).rejects.toBeInstanceOf(copyA.BridgeInactiveError);
+
+    sendSpy.mockRestore();
   });
 
   it('(7) a copy-B registry reused (not rebuilt) across a remount of its copy-A host extension keeps its already-adopted live link across the copy boundary and continues to advertise successfully', async () => {

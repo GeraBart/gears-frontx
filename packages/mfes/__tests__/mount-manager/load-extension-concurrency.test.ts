@@ -13,6 +13,20 @@
  * actually cached a lifecycle, which could throw "loadExtension should have
  * cached the lifecycle" or otherwise observe a half-loaded extension.
  *
+ * All races below drive both concurrent `mounter.mount()` calls with the
+ * SAME container object. `DefaultExtensionMounter.mount()` hard-throws when
+ * a second concurrent call for the same extension id arrives with a
+ * DIFFERENT container -- that is a caller-side bug (a real mount strategy
+ * always supplies one `hooks.create()`-d container per logical mount, so two
+ * different containers racing for the same never-mounted extension can only
+ * mean the strategy's own bookkeeping is broken), not a scenario this layer
+ * coalesces. See `DefaultExtensionMounter.ts`'s `inFlightMountsByExtension`
+ * and `packages/mfes/src/runtime/__tests__/ExtensionMounter.test.ts`'s
+ * "different containers: the second overlapping mount() call throws a hard
+ * invariant error" for that dedicated coverage. What these tests are after
+ * is the `loadExtension` load-dedup/load-race behavior underneath, which is
+ * orthogonal to the container identity used to reach it.
+ *
  * Domain/action ids here are a mock notation, never the real GTS strings --
  * MFES-1 forbids `@gears-frontx/mfes` from carrying a type-format literal.
  */
@@ -174,11 +188,14 @@ describe('DefaultMountManager.loadExtension concurrency', () => {
     const mounter = registry.getMounter(DOMAIN);
     mounter.attach(document.createElement('div'));
 
-    // Fire two concurrent mounts of the SAME extension before releasing the
-    // load gate -- both must see the extension as not-yet-loaded and call
-    // into `loadExtension`.
-    const mountA = mounter.mount(EXT, document.createElement('div'));
-    const mountB = mounter.mount(EXT, document.createElement('div'));
+    // Fire two concurrent mounts of the SAME extension, with the SAME
+    // container (see the file-level note on why: a different container per
+    // call is now a hard-throw invariant violation, orthogonal to what this
+    // test verifies), before releasing the load gate -- both must see the
+    // extension as not-yet-loaded and call into `loadExtension`.
+    const container = document.createElement('div');
+    const mountA = mounter.mount(EXT, container);
+    const mountB = mounter.mount(EXT, container);
 
     // Give both calls a microtask/macrotask turn to reach `loadExtension`
     // and observe `loadState` before the handler's `load()` settles.
@@ -230,11 +247,12 @@ describe('DefaultMountManager.loadExtension concurrency', () => {
     const mounter = registry.getMounter(DOMAIN);
     mounter.attach(document.createElement('div'));
 
-    const mountA = mounter.mount(EXT, document.createElement('div'));
+    const container = document.createElement('div');
+    const mountA = mounter.mount(EXT, container);
     await Promise.resolve();
 
     const secondCallerObservedLoadedBeforeSettling = { value: false };
-    const mountB = mounter.mount(EXT, document.createElement('div')).then(() => {
+    const mountB = mounter.mount(EXT, container).then(() => {
       secondCallerObservedLoadedBeforeSettling.value = loaded;
     });
 
@@ -341,8 +359,9 @@ describe('DefaultMountManager.loadExtension concurrency', () => {
     const mounter = registry.getMounter(DOMAIN);
     mounter.attach(document.createElement('div'));
 
-    const mountA = mounter.mount(EXT, document.createElement('div'));
-    const mountB = mounter.mount(EXT, document.createElement('div'));
+    const raceContainer = document.createElement('div');
+    const mountA = mounter.mount(EXT, raceContainer);
+    const mountB = mounter.mount(EXT, raceContainer);
     await Promise.resolve();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -404,8 +423,9 @@ describe('DefaultMountManager.mountExtension concurrency', () => {
     const mounter = registry.getMounter(DOMAIN);
     mounter.attach(document.createElement('div'));
 
-    const mountA = mounter.mount(EXT, document.createElement('div'));
-    const mountB = mounter.mount(EXT, document.createElement('div'));
+    const container = document.createElement('div');
+    const mountA = mounter.mount(EXT, container);
+    const mountB = mounter.mount(EXT, container);
 
     await Promise.all([mountA, mountB]);
 
@@ -413,87 +433,14 @@ describe('DefaultMountManager.mountExtension concurrency', () => {
   });
 });
 
-describe('DefaultExtensionMounter.mount concurrency', () => {
-  it('appends exactly one container under the attached root when two mounts race for the same never-mounted extension', async () => {
-    // Reproduces the double-click-on-a-sidebar-item regression: the mount
-    // strategy's idempotence guard reads `registry.getMountedExtensions`,
-    // which is only updated by `addMountedExtension` AFTER a mount's `await`
-    // resolves -- so a second concurrent `mount()` call for the same
-    // extension (each with its OWN freshly-`hooks.create()`-d container, as a
-    // real strategy would supply) races in before that update lands. Before
-    // the fix, `DefaultExtensionMounter.mount()` unconditionally appended
-    // whichever container ITS OWN call was holding and overwrote the
-    // `containers` bookkeeping with it once `mountManager.mountExtension`
-    // resolved -- for the second caller that clobbers the record of the
-    // first (real, rendered) container, permanently orphaning it in the DOM.
-    const entries = new Map<string, MfeEntry>([[ENTRY, makeEntry(ENTRY)]]);
-    const plugin = createMockPlugin(entries);
-
-    let resolveMount!: () => void;
-    const mountGate = new Promise<void>((resolve) => {
-      resolveMount = resolve;
-    });
-
-    class SlowMountHandler extends MfeHandler {
-      readonly bridgeFactory = new MfeBridgeFactoryDefault();
-
-      constructor() {
-        super(ENTRY);
-      }
-
-      async load(): Promise<MfeEntryLifecycle<ChildMfeBridge>> {
-        return {
-          mount: async () => {
-            // Block long enough for both concurrent `mount()` calls to reach
-            // `DefaultExtensionMounter.mount()`'s append/bookkeeping step
-            // before either resolves.
-            await mountGate;
-          },
-          unmount: () => {},
-        };
-      }
-    }
-
-    const registry = new DefaultMfeRegistry({
-      typeSystem: plugin,
-      mfeHandlers: [new SlowMountHandler()],
-    });
-
-    registry.registerDomain(makeDomain(DOMAIN), new GenericDomainFactory());
-    await registry.registerExtension(makeExtension(EXT, DOMAIN, ENTRY));
-
-    const mounter = registry.getMounter(DOMAIN);
-    const root = document.createElement('div');
-    mounter.attach(root);
-
-    const containerA = document.createElement('div');
-    containerA.dataset.marker = 'A';
-    const containerB = document.createElement('div');
-    containerB.dataset.marker = 'B';
-
-    const mountA = mounter.mount(EXT, containerA);
-    // Give the first call a turn to reach the strategy-equivalent point
-    // (registered as `mounting` in the manager) before firing the second.
-    await Promise.resolve();
-    const mountB = mounter.mount(EXT, containerB);
-
-    await Promise.resolve();
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    resolveMount();
-
-    await Promise.all([mountA, mountB]);
-
-    // Exactly one container was ever appended under the root -- the other
-    // was discarded before ever reaching the DOM.
-    expect(root.children.length).toBe(1);
-    expect(root.contains(containerA)).toBe(true);
-    expect(root.contains(containerB)).toBe(false);
-
-    // The mounter's own container bookkeeping still points at the container
-    // that actually got appended, not the discarded one.
-    const containers = (
-      mounter as unknown as { containers: Map<string, Element> }
-    ).containers;
-    expect(containers.get(EXT)).toBe(containerA);
-  });
-});
+// The former "appends exactly one container ... when two mounts race" test
+// here modeled two DIFFERENT containers racing for the same never-mounted
+// extension and asserted the second was silently discarded in favor of the
+// first. That premise is now itself the bug B fixes: a second concurrent
+// `mount()` call for the same extension id with a different container is a
+// hard invariant violation (see `DefaultExtensionMounter.mount`), not a
+// coalescing race. The equivalent throw-behavior coverage lives in
+// `packages/mfes/src/runtime/__tests__/ExtensionMounter.test.ts` under
+// "different containers: the second overlapping mount() call throws a hard
+// invariant error" -- no replacement test is added here to avoid duplicating
+// it.

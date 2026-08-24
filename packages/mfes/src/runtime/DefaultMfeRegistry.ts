@@ -22,7 +22,7 @@ import type { ExtensionDomain, Extension, ActionsChain } from '../types';
 import type { ExtensionDomainImplementationFactory } from './ExtensionDomainImplementationFactory';
 import type { ExtensionMounter } from './ExtensionMounter';
 import { ActionsChainsMediator } from '../mediator/types';
-import type { CrossHopRoute } from '../mediator/cross-hop-route';
+import { CrossHopRoute } from '../mediator/cross-hop-route';
 import { RuntimeCoordinator } from './coordination/types';
 import { InvalidatableDomainContext } from './DomainContext';
 import { ConcurrentMountStrategy, OptionalMountStrategy, ExclusiveMountStrategy } from './mount-strategies';
@@ -129,6 +129,16 @@ function isActiveBridge(bridge: ChildMfeBridge): boolean {
  *
  * @internal
  */
+
+/**
+ * Shared sentinel thrown by `executeActionsChainOrThrow` on any chain
+ * failure. Every consumer of that throw only branches on resolve-vs-reject —
+ * none reads `.message` or any other property — so a single reused instance
+ * carries all the information any caller needs (none). Reused rather than
+ * constructed per call to make that "no payload, ever" contract explicit.
+ */
+const CHAIN_FAILED = new Error('Actions chain failed');
+
 export class DefaultMfeRegistry extends MfeRegistry {
   /**
    * Type System plugin instance.
@@ -259,7 +269,7 @@ export class DefaultMfeRegistry extends MfeRegistry {
         this.extensionManager.getExtensionState(extensionId)?.entry,
       resolveForwardingEntry: (targetId, arrivalEdge) =>
         this.resolveForwardingEntryRoute(targetId, arrivalEdge),
-      resolveEscalation: (targetId) => this.resolveEscalationRoute(targetId),
+      resolveEscalation: () => this.resolveEscalationRoute(),
     });
 
     this.extensionManager = new DefaultExtensionManager({
@@ -409,7 +419,9 @@ export class DefaultMfeRegistry extends MfeRegistry {
    * automatically adopt as its inbound bridge. Called by `DefaultMountManager`
    * right before invoking `lifecycle.mount(...)`.
    *
-   * @cpt inst-inbound-bridge-internal
+   * `inst-inbound-bridge-internal` is a surface-shape claim about the
+   * abstract `ChildMfeBridge` contract, marked at its declaration in
+   * `handler/types.ts` rather than here.
    */
   private buildInboundBridgeLinkFor(
     extensionId: string,
@@ -524,11 +536,8 @@ export class DefaultMfeRegistry extends MfeRegistry {
   /**
    * Compose and propagate an advertisement for a locally-admitted target
    * upward through this registry's inbound bridge, if it has one.
-   *
-   * @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-compose-advertisement
    */
   private propagateAdvertisementUpward(targetId: string, actionTypeIds: readonly string[]): void {
-    // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-compose-advertisement
     // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-has-inbound-bridge
     // Same check, shared by two call sites: step 6's own-advertisement
     // propagation and step 8.2's re-propagation of an admitted descendant
@@ -555,14 +564,14 @@ export class DefaultMfeRegistry extends MfeRegistry {
   /**
    * Retract a target this registry itself previously propagated upward
    * (called from `unregisterDomain`/`unregisterExtension`/`dispose`).
-   *
-   * @cpt inst-retract-advertisements
    */
+  // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-retract-advertisements
   private retractPropagatedTarget(targetId: string): void {
     if (this.propagatedTargetIds.delete(targetId) && this.inboundBridgeLink) {
       this.inboundBridgeLink.retractAdvertisement(targetId);
     }
   }
+  // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-retract-advertisements
 
   /**
    * Receiving-ancestor side of retraction: drop a forwarding entry this
@@ -604,8 +613,10 @@ export class DefaultMfeRegistry extends MfeRegistry {
    * or retract through its now-revoked link simply fail to find an entry to
    * touch here — never crash, never resurrect stale routing.
    *
-   * @cpt inst-retract-advertisements / inst-reject-inflight-retracted
+   * Realizes `inst-reject-inflight-retracted` (via `retractForwardingEntry`,
+   * called below).
    */
+  // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-retract-advertisements
   private retractInboundBridgeLinkFor(childBridge: ChildMfeBridge): void {
     // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-revoked-link-inert
     // Flip this bridge's revoker FIRST — before any of the retraction below —
@@ -626,14 +637,14 @@ export class DefaultMfeRegistry extends MfeRegistry {
     // `this`) even after the link has been fully retracted.
     unregisterInboundBridgeLink(childBridge);
   }
+  // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-retract-advertisements
 
   /**
    * Mediator-injected tier-4 resolution: a downward forwarding entry for
    * `targetId`, excluding one whose bridge equals the chain's tagged arrival
    * edge (loop containment).
-   *
-   * @cpt inst-forwarding-entry-lookup
    */
+  // @cpt-begin:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-forwarding-entry-lookup
   private resolveForwardingEntryRoute(targetId: string, arrivalEdge: unknown): CrossHopRoute | undefined {
     const entry = this.forwardingEntries.get(targetId);
     if (!entry) {
@@ -642,14 +653,15 @@ export class DefaultMfeRegistry extends MfeRegistry {
     if (arrivalEdge !== undefined && entry.edge === arrivalEdge) {
       return undefined;
     }
-    return {
-      send: entry.sendDown,
-      registerInFlight: (reject) => {
+    return new CrossHopRoute(
+      entry.sendDown,
+      (reject) => {
         entry.inFlightRejects.add(reject);
         return () => entry.inFlightRejects.delete(reject);
-      },
-    };
+      }
+    );
   }
+  // @cpt-end:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-forwarding-entry-lookup
 
   /**
    * Mediator-injected tier-5 resolution: the escalation route bound to this
@@ -660,17 +672,24 @@ export class DefaultMfeRegistry extends MfeRegistry {
    * written and later read by the same (parent) copy of this package
    * regardless of which copy this (child) registry belongs to.
    *
+   * Deliberately target-blind by design: by the time the mediator's
+   * escalation tier runs, tiers 1-4 have already exhausted every way THIS
+   * registry could resolve the target locally. A nested registry structurally
+   * cannot know what an ancestor registry holds — so escalation always tries
+   * upward regardless of which target failed to resolve here. Not needing
+   * `targetId` is not an oversight; it reflects that structural blindness.
+   *
    * @cpt-begin:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-escalation-lookup
    */
-  private resolveEscalationRoute(_targetId: string): CrossHopRoute | undefined {
+  private resolveEscalationRoute(): CrossHopRoute | undefined {
     const link = this.inboundBridgeLink;
     if (!link) {
       return undefined;
     }
-    return {
-      send: (chain) => link.escalate(chain),
-      registerInFlight: () => () => { /* no persistent record to force-reject */ },
-    };
+    return new CrossHopRoute(
+      (chain) => link.escalate(chain),
+      () => () => { /* no persistent record to force-reject */ }
+    );
   }
   // @cpt-end:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-escalation-lookup
 
@@ -1036,9 +1055,9 @@ export class DefaultMfeRegistry extends MfeRegistry {
     const result = await this.mediator.executeActionsChain(chain);
     if (!result.completed) {
       console.error(
-        `[MfeRegistry] Actions chain failed:`,
-        result.error ?? 'unknown error',
-        `| path: [${result.path.join(' -> ')}]`
+        `[MfeRegistry] Actions chain failed`,
+        `| path: [${result.path.join(' -> ')}]`,
+        result.timedOut ? '| timed out' : ''
       );
     }
     // @cpt-begin:cpt-frontx-flow-extension-domain-governance-admission:p1:inst-admitted-mount
@@ -1071,9 +1090,7 @@ export class DefaultMfeRegistry extends MfeRegistry {
   private async executeActionsChainOrThrow(chain: ActionsChain): Promise<void> {
     const result = await this.mediator.executeActionsChain(chain);
     if (!result.completed) {
-      throw new Error(
-        result.error ?? `Actions chain failed | path: [${result.path.join(' -> ')}]`
-      );
+      throw CHAIN_FAILED;
     }
   }
 

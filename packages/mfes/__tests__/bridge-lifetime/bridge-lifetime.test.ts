@@ -330,7 +330,7 @@ describe('Bridge lifetime: one pair per extension, reactivated (not recreated) a
 
     expect(pingCounter.count).toBe(0);
     expect(result.completed).toBe(false);
-    expect(String(result.error)).toMatch(/inactive/);
+    expect(result.timedOut).toBeFalsy();
   });
 
   it('(7) a forwarding entry into an unmounted host\'s nested subtree is rejected as inactive, so the fallback fires', async () => {
