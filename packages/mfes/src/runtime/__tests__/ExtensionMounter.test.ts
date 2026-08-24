@@ -157,6 +157,65 @@ describe('DefaultExtensionMounter', () => {
     });
   });
 
+  describe('in-flight mount dedup keyed on (extensionId, container)', () => {
+    /** Mount manager whose `mountExtension` doesn't resolve until `release()` is called. */
+    class DeferredMountManager extends MountManager {
+      mountCallCount = 0;
+      private release: (() => void) | undefined;
+      private readonly gate = new Promise<void>((resolve) => {
+        this.release = resolve;
+      });
+
+      async loadExtension(_extensionId: string): Promise<void> {}
+      async preloadExtension(_extensionId: string): Promise<void> {}
+
+      async mountExtension(extensionId: string, _container: Element): Promise<ParentMfeBridge> {
+        this.mountCallCount += 1;
+        await this.gate;
+        return { instanceId: extensionId, dispose: () => {} };
+      }
+
+      async unmountExtension(_extensionId: string): Promise<void> {}
+      releaseExtension(_extensionId: string): void {}
+      setTheme(_cssVars: Record<string, string>): void {}
+
+      settle(): void {
+        this.release?.();
+      }
+    }
+
+    it('same container: two overlapping mount() calls share the one in-flight mount', async () => {
+      const mountManager = new DeferredMountManager();
+      const { mounter, root } = makeFixture({ mountManager });
+      mounter.attach(root);
+
+      const container = document.createElement('div');
+      const first = mounter.mount('ext-1', container);
+      const second = mounter.mount('ext-1', container);
+
+      mountManager.settle();
+      await expect(first).resolves.not.toThrow();
+      await expect(second).resolves.not.toThrow();
+
+      expect(mountManager.mountCallCount).toBe(1);
+    });
+
+    it('different containers: the second overlapping mount() call throws a hard invariant error', async () => {
+      const mountManager = new DeferredMountManager();
+      const { mounter, root } = makeFixture({ mountManager });
+      mounter.attach(root);
+
+      const containerA = document.createElement('div');
+      const containerB = document.createElement('div');
+      const first = mounter.mount('ext-1', containerA);
+
+      await expect(mounter.mount('ext-1', containerB)).rejects.toThrow(/ext-1/);
+
+      mountManager.settle();
+      await expect(first).resolves.not.toThrow();
+    });
+  });
+
   describe('abstract contract', () => {
     it('getMounted is not exposed on the ExtensionMounter abstract class', () => {
       const { mounter } = makeFixture();

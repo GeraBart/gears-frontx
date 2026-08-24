@@ -34,6 +34,20 @@ import type { DomainContext } from '../../src/runtime/DomainContext';
 import { ConcurrentMountStrategy } from '../../src/runtime/mount-strategies';
 import type { ContainerHooks, ActionPayload } from '../../src/runtime/mount-strategy';
 import { ActionHandler } from '../../src/mediator/types';
+import type { InboundBridgeLink } from '../../src/runtime/inbound-bridge-link';
+import { ParentMfeBridgeImpl } from '../../src/bridge/ParentMfeBridge';
+import { BridgeInactiveError } from '../../src/bridge/errors';
+
+// Global symbol registry key mirrored from `inbound-bridge-link.ts`'s own
+// `LINK_PROPERTY_KEY` — `Symbol.for(...)` guarantees this resolves to the
+// exact same symbol, letting tests below read the link the production code
+// attached to the bridge object without any new export. Test-file-local:
+// production's own internal `LinkCarryingBridge` type stays unexported.
+const LINK_PROPERTY_KEY = Symbol.for('@gears-frontx/mfes:inbound-bridge-link:1');
+
+interface LinkCarryingBridge {
+  [LINK_PROPERTY_KEY]?: InboundBridgeLink;
+}
 
 // ─── Mock-notation well-known action ids ───────────────────────────────────
 
@@ -364,15 +378,17 @@ describe('Cross-nesting reachability: registration propagation, escalation, retr
 
     // Forced rejection on retraction is what lets this resolve at all —
     // the handler itself never settles, so without `inst-reject-inflight-retracted`
-    // this `await` would hang until the test framework's own timeout.
+    // this `await` would hang until the test framework's own timeout. The
+    // fact this `await` settles at all (rather than timing out the test) IS
+    // the proof the forced rejection fired.
     await dispatchPromise;
 
-    // The forced rejection is what settled it, not a coincidental
-    // "no handler" failure racing ahead of the real dispatch.
-    const retractionLogged = errorSpy.mock.calls.some((call: unknown[]) =>
-      call.some((arg: unknown) => String(arg).includes('was retracted while an action was in flight'))
-    );
-    expect(retractionLogged).toBe(true);
+    // Asserted on OUTCOME, not on the specific "was retracted while an
+    // action was in flight" wording: the `[MfeRegistry] Actions chain
+    // failed` diagnostic no longer carries the rejection's message (see D:
+    // `ChainResult.error` was removed by design, and that removal applies to
+    // every failure path uniformly, not just this one).
+    expect(errorSpy).toHaveBeenCalled();
 
     // Retraction removed the shell's forwarding entry for D2 entirely — a
     // further dispatch now fails with a missing-handler error, proving the
@@ -453,15 +469,12 @@ describe('Cross-nesting reachability: registration propagation, escalation, retr
 
     // The chain must have continued escalating past registry1 instead —
     // there is no handler for ACTION_UNRESOLVABLE anywhere up to the shell,
-    // so it ends non-completed with a missing-handler error.
-    const failureLogged = errorSpy.mock.calls.some((call: unknown[]) =>
-      call.some((arg: unknown) =>
-        String(arg).includes(
-          `No handler found for target '${D2}' and action type '${ACTION_UNRESOLVABLE}'`
-        )
-      )
-    );
-    expect(failureLogged).toBe(true);
+    // so it ends non-completed. Asserted on OUTCOME (the chain failed at
+    // all), not on the specific missing-handler wording: the `[MfeRegistry]
+    // Actions chain failed` diagnostic deliberately no longer carries
+    // failure-reason text (see D: `ChainResult.error` was removed as a
+    // matter of policy, not just for this one message).
+    expect(errorSpy).toHaveBeenCalled();
 
     // registry2's own dispatch entry point was invoked exactly once — this
     // test's own call. If registry1 had ping-ponged the chain back down
@@ -608,16 +621,30 @@ describe('Cross-nesting reachability: registration propagation, escalation, retr
     // The dispatch still resolves the forwarding entry for D2, but delivery
     // through the now-inactive bridge is explicitly rejected — a
     // target-inactive failure, distinct from a missing-handler failure.
+    //
+    // The `[MfeRegistry] Actions chain failed` diagnostic deliberately no
+    // longer carries failure-reason text (see D: `ChainResult.error` was
+    // removed by design, uniformly across every failure path, not just this
+    // one) -- so the inactive-vs-missing-handler distinction can't be read
+    // off the log anymore. Instead, spy on `ParentMfeBridgeImpl.sendActionsChain`
+    // itself -- the exact call `sendDown` makes to deliver through the
+    // forwarding entry's bridge -- and inspect what it actually rejected
+    // with, which is unaffected by log scrubbing.
+    const sendSpy = vi.spyOn(ParentMfeBridgeImpl.prototype, 'sendActionsChain');
     errorSpy.mockClear();
     await registry0.executeActionsChain(actionChain(ACTION_LEAF, D2));
-    const d2InactiveLogged = errorSpy.mock.calls.some((call: unknown[]) =>
-      call.some((arg: unknown) => String(arg).includes('BRIDGE_INACTIVE') || String(arg).includes('inactive'))
-    );
-    expect(d2InactiveLogged).toBe(true);
-    const noHandlerLogged = errorSpy.mock.calls.some((call: unknown[]) =>
-      call.some((arg: unknown) => String(arg).includes('No handler found'))
-    );
-    expect(noHandlerLogged).toBe(false);
+
+    // Outcome-level check: the dispatch failed at all.
+    expect(errorSpy).toHaveBeenCalled();
+
+    // Mechanism-level check: the forwarding entry for D2 WAS resolved and
+    // reached the bridge (proving this isn't a missing-handler/no-route
+    // failure), and the bridge rejected specifically because it is inactive.
+    expect(sendSpy).toHaveBeenCalled();
+    const lastCall = sendSpy.mock.results[sendSpy.mock.results.length - 1];
+    await expect(lastCall.value).rejects.toBeInstanceOf(BridgeInactiveError);
+
+    sendSpy.mockRestore();
   });
 
   it('(i) a mount failure deactivates the acquired bridge rather than retracting what a nested registry advertised before the failure', async () => {
@@ -677,16 +704,25 @@ describe('Cross-nesting reachability: registration propagation, escalation, retr
     // registry advertised before the failure stays recorded at the shell,
     // but dispatch through the now-inactive bridge is explicitly rejected,
     // so the handler this test guards is never actually invoked.
+    //
+    // As in test (h): the console.error diagnostic no longer carries
+    // failure-reason text by design (see D), so the inactive-vs-missing-
+    // handler distinction is verified at the mechanism instead of the log —
+    // spying on `ParentMfeBridgeImpl.sendActionsChain`, the call `sendDown`
+    // makes to deliver through the forwarding entry's bridge.
+    const sendSpy = vi.spyOn(ParentMfeBridgeImpl.prototype, 'sendActionsChain');
     errorSpy.mockClear();
     await registry0.executeActionsChain(actionChain(ACTION_FAIL_LEAF, D_FAIL));
-    const inactiveLogged = errorSpy.mock.calls.some((call: unknown[]) =>
-      call.some((arg: unknown) => String(arg).includes('BRIDGE_INACTIVE') || String(arg).includes('inactive'))
-    );
-    expect(inactiveLogged).toBe(true);
-    const noHandlerLogged = errorSpy.mock.calls.some((call: unknown[]) =>
-      call.some((arg: unknown) => String(arg).includes('No handler found'))
-    );
-    expect(noHandlerLogged).toBe(false);
+
+    // Outcome-level check: the dispatch failed at all.
+    expect(errorSpy).toHaveBeenCalled();
+
+    // Mechanism-level check: the forwarding entry for D_FAIL WAS resolved
+    // and reached the bridge (not a missing-handler/no-route failure), and
+    // the bridge rejected specifically because it is inactive.
+    expect(sendSpy).toHaveBeenCalled();
+    const lastCall = sendSpy.mock.results[sendSpy.mock.results.length - 1];
+    await expect(lastCall.value).rejects.toBeInstanceOf(BridgeInactiveError);
     expect(leafCounter.count).toBe(0);
 
     vi.restoreAllMocks();
@@ -846,12 +882,6 @@ describe('Cross-nesting reachability: registration propagation, escalation, retr
   });
 
   it('(l) permanent unregistration revokes the link: propagate/retract/escalate on a retained reference never reach ancestor state or the disposed bridge', async () => {
-    // Global symbol registry key mirrored from `inbound-bridge-link.ts`'s own
-    // `LINK_PROPERTY_KEY` — `Symbol.for(...)` guarantees this resolves to the
-    // exact same symbol, letting the test read the link the production code
-    // attached to the bridge object without any new export.
-    const LINK_PROPERTY_KEY = Symbol.for('@gears-frontx/mfes:inbound-bridge-link:1');
-
     const REVOKE_ENTRY = 'entry.revoke-child.v1';
     const REVOKE_EXT = 'ext.revoke-child.v1';
     const OTHER_TARGET = 'domain.revoke-other-target.v1';
@@ -879,8 +909,7 @@ describe('Cross-nesting reachability: registration propagation, escalation, retr
     await mounter0.mount(REVOKE_EXT, document.createElement('div'));
 
     expect(capturedBridge).toBeDefined();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const link = (capturedBridge as any)[LINK_PROPERTY_KEY];
+    const link = (capturedBridge as unknown as LinkCarryingBridge)[LINK_PROPERTY_KEY]!;
     expect(link).toBeDefined();
 
     // Revoke the link via the host extension's PERMANENT unregistration —
@@ -915,7 +944,6 @@ describe('Cross-nesting reachability: registration propagation, escalation, retr
   it('(l2) ordinary unmount does NOT revoke the link: advertisements stay propagated and dispatch rejects as inactive, not revoked', async () => {
     const UNMOUNT_ONLY_ENTRY = 'entry.unmount-only-child.v1';
     const UNMOUNT_ONLY_EXT = 'ext.unmount-only-child.v1';
-    const LINK_PROPERTY_KEY = Symbol.for('@gears-frontx/mfes:inbound-bridge-link:1');
 
     const entries = new Map<string, MfeEntry>([[UNMOUNT_ONLY_ENTRY, makeEntry(UNMOUNT_ONLY_ENTRY)]]);
     const plugin = createMockPlugin(entries);
@@ -939,8 +967,7 @@ describe('Cross-nesting reachability: registration propagation, escalation, retr
     await mounter0.mount(UNMOUNT_ONLY_EXT, document.createElement('div'));
 
     expect(capturedBridge).toBeDefined();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const link = (capturedBridge as any)[LINK_PROPERTY_KEY];
+    const link = (capturedBridge as unknown as LinkCarryingBridge)[LINK_PROPERTY_KEY]!;
     expect(link).toBeDefined();
 
     // Ordinary unmount — NOT permanent unregistration.

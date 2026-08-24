@@ -19,9 +19,6 @@ public/shared
 .__mf__temp
 .mf
 
-# QA browser-verification screenshots (session evidence, not product content)
-.qa-evidence/
-
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

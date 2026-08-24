@@ -71,7 +71,7 @@ export class DefaultMountManager extends MountManager {
    * extension id — retained across unmount/remount cycles, not cleared on
    * retraction, and deleted only by `releaseExtension`. Since the link is
    * minted once at first mount and lives for the extension's whole
-   * registration lifetime (framing correction, §0), this map is populated
+   * registration lifetime, this map is populated
    * once and never re-triggered on remount: only a FRESH adoption inside a
    * later mount's own window (a registry the author rebuilds rather than
    * reuses) ever supersedes it.
@@ -308,7 +308,7 @@ export class DefaultMountManager extends MountManager {
         // no configuration or method call required from the microfrontend
         // author. Minted once, at first mount only: the link (and the bridge
         // it is attached to) lives for the extension's whole registration
-        // lifetime (framing correction, §0).
+        // lifetime.
         if (!this.childBridgesByExtension.has(extensionId)) {
           const link = this.buildInboundBridgeLink(extensionId, childBridge, parentBridge);
           registerInboundBridgeLink(childBridge, link);
@@ -342,7 +342,7 @@ export class DefaultMountManager extends MountManager {
         // else: no fresh adoption during this window — the previously
         // adopting registry (if any) still holds the SAME live link, since
         // the link is minted once at first mount and outlives every
-        // individual mount/unmount cycle (§0). Nothing to re-offer, nothing
+        // individual mount/unmount cycle. Nothing to re-offer, nothing
         // to unlink.
         // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-relink-repropagate
 

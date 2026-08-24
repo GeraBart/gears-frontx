@@ -15,7 +15,7 @@ import { isInfrastructureLifecycleAction, type TypeSystemPlugin } from '../type-
 import type { ActionsChain, ExtensionDomain, MfeEntry } from '../types';
 import type { ExtensionDomainState } from '../runtime/extension-manager';
 import { getArrivalEdge } from '../runtime/inbound-bridge-link';
-import type { CrossHopRoute } from './cross-hop-route';
+import { CrossHopRoute } from './cross-hop-route';
 import {
   ActionsChainsMediator,
   ActionHandler,
@@ -24,9 +24,11 @@ import {
 } from './types';
 
 /** Narrows a resolved handler to the cross-hop (forwarding-entry/escalation) shape. */
+// @cpt-begin:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-cross-hop-timeout
 function isCrossHopRoute(resolved: ActionHandler | CrossHopRoute): resolved is CrossHopRoute {
-  return typeof (resolved as CrossHopRoute).send === 'function';
+  return resolved instanceof CrossHopRoute;
 }
+// @cpt-end:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-cross-hop-timeout
 
 
 /**
@@ -99,7 +101,7 @@ export class DefaultActionsChainsMediator extends ActionsChainsMediator {
    * entry exists for the target, or `undefined` when a registry has no such
    * entries at all (root registries with nothing propagated to them).
    *
-   * @cpt inst-forwarding-entry-lookup
+   * Realizes `inst-forwarding-entry-lookup`.
    */
   private readonly resolveForwardingEntry?: (
     targetId: string,
@@ -111,9 +113,9 @@ export class DefaultActionsChainsMediator extends ActionsChainsMediator {
    * registry's inbound bridge. Returns `undefined` when the registry holds
    * no inbound bridge (i.e. it is the shell/root).
    *
-   * @cpt inst-escalation-lookup
+   * Realizes `inst-escalation-lookup`.
    */
-  private readonly resolveEscalation?: (targetId: string) => CrossHopRoute | undefined;
+  private readonly resolveEscalation?: () => CrossHopRoute | undefined;
 
   /**
    * Unified handler map: targetId → (actionTypeId → handler).
@@ -148,7 +150,7 @@ export class DefaultActionsChainsMediator extends ActionsChainsMediator {
     getDomainState: (domainId: string) => ExtensionDomainState | undefined;
     getExtensionEntry: (extensionId: string) => MfeEntry | undefined;
     resolveForwardingEntry?: (targetId: string, arrivalEdge: unknown) => CrossHopRoute | undefined;
-    resolveEscalation?: (targetId: string) => CrossHopRoute | undefined;
+    resolveEscalation?: () => CrossHopRoute | undefined;
   }) {
     super();
     this.typeSystem = config.typeSystem;
@@ -194,7 +196,6 @@ export class DefaultActionsChainsMediator extends ActionsChainsMediator {
       return {
         completed: false,
         path,
-        error: error instanceof Error ? error.message : String(error),
         timedOut: isTimeout,
         executionTime: Date.now() - startTime,
       };
@@ -532,7 +533,7 @@ export class DefaultActionsChainsMediator extends ActionsChainsMediator {
     // DefaultMfeRegistry.resolveEscalationRoute to avoid a second code
     // location for the same instruction ID).
     if (this.resolveEscalation) {
-      const escalationRoute = this.resolveEscalation(targetId);
+      const escalationRoute = this.resolveEscalation();
       if (escalationRoute) {
         return escalationRoute;
       }

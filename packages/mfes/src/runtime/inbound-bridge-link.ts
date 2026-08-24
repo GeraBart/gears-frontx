@@ -168,28 +168,29 @@ export interface InboundBridgeLink {
   readonly edge: ChildMfeBridge;
 
   /**
-   * @cpt inst-propagate-upward / inst-collision-check / inst-collision-reject / inst-record-forwarding-entry / inst-repropagate-upward
    * Propagate a forwarding advertisement to the immediate parent registry.
    * Returns `true` if the parent accepted (recorded) it, `false` if the
-   * parent's collision guard rejected it.
+   * parent's collision guard rejected it. Realizes `inst-propagate-upward`,
+   * `inst-collision-check`, `inst-collision-reject`,
+   * `inst-record-forwarding-entry`, and `inst-repropagate-upward`.
    */
   propagateAdvertisement(targetId: string, actionTypeIds: readonly string[]): boolean;
 
   /**
-   * @cpt inst-retract-advertisements / inst-reject-inflight-retracted
    * Retract a previously propagated advertisement from the immediate parent
    * registry, rejecting any in-flight action the parent had forwarded down
-   * to this target.
+   * to this target. Realizes `inst-retract-advertisements` and
+   * `inst-reject-inflight-retracted`.
    */
   retractAdvertisement(targetId: string): void;
 
   /**
-   * @cpt inst-escalation-lookup / inst-tag-arrival-edge
    * Forward an unresolved chain to the immediate parent registry's mediator
    * for resolution. Minted by the parent at link time (`inst-mint-escalation-on-link`);
    * the parent's own implementation tags the chain with this link's `edge`
    * as its arrival edge before forwarding, so the parent's own
    * forwarding-entry resolution never re-selects it as the chain's next hop.
+   * Realizes `inst-escalation-lookup` and `inst-tag-arrival-edge`.
    */
   escalate(chain: ActionsChain): Promise<void>;
 }
@@ -199,7 +200,6 @@ interface LinkCarryingBridge {
 }
 
 /**
- * @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-adopt-ambient-bridge
  * Called by the parent registry (via `DefaultMountManager.mountExtension`)
  * right before invoking `lifecycle.mount(...)`, attaching the link a nested
  * registry constructed during that call should adopt directly onto the
@@ -209,7 +209,9 @@ interface LinkCarryingBridge {
  * find it, since only the bridge object crosses that boundary reliably.
  */
 export function registerInboundBridgeLink(bridge: ChildMfeBridge, link: InboundBridgeLink): void {
+  // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-mint-escalation-on-link
   (bridge as unknown as LinkCarryingBridge)[LINK_PROPERTY_KEY] = link;
+  // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-mint-escalation-on-link
 }
 
 /**
@@ -227,7 +229,9 @@ export function registerInboundBridgeLink(bridge: ChildMfeBridge, link: InboundB
  * registry ever adopted it).
  */
 export function unregisterInboundBridgeLink(bridge: ChildMfeBridge): void {
+  // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-retract-advertisements
   delete (bridge as unknown as LinkCarryingBridge)[LINK_PROPERTY_KEY];
+  // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-retract-advertisements
 }
 
 /**
@@ -241,8 +245,6 @@ export function unregisterInboundBridgeLink(bridge: ChildMfeBridge): void {
  * use (unrecognized version, or a bridge with no link attached) — not on the
  * ordinary case of an empty rendezvous (most registries, including the
  * shell, are constructed with no mount synchronously in progress at all).
- * @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-adopt-ambient-bridge
- * @cpt inst-inbound-bridge-auto-adopt / inst-no-ambient-bridge / inst-registry-is-root
  *
  * @param relink Callback the caller (`DefaultMfeRegistry`) supplies to replace
  * (or, with `null`, clear) whichever link it adopts here. Published onto the
@@ -255,8 +257,10 @@ export function unregisterInboundBridgeLink(bridge: ChildMfeBridge): void {
 export function adoptAmbientInboundBridgeLink(
   relink: InboundBridgeRelink
 ): InboundBridgeLink | undefined {
+  // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-adopt-ambient-bridge
   const stack = getRendezvousStack();
   const entry = stack[stack.length - 1];
+  // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-no-ambient-bridge
   if (!entry) {
     // Ordinary root/shell case: no mount synchronously in progress. Not
     // worth a diagnostic — this is the common path for every top-level
@@ -273,8 +277,10 @@ export function adoptAmbientInboundBridgeLink(
     );
     return undefined;
   }
+  // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-no-ambient-bridge
 
   const link = (entry.bridge as unknown as LinkCarryingBridge)[LINK_PROPERTY_KEY];
+  // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-registry-is-root
   if (!link) {
     console.debug(
       '[DefaultMfeRegistry] A mount is synchronously in progress but no inbound-bridge ' +
@@ -282,10 +288,14 @@ export function adoptAmbientInboundBridgeLink(
     );
     return undefined;
   }
+  // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-registry-is-root
   // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-publish-relink-callback
   entry.adopters.push(relink);
   // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-publish-relink-callback
+  // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-inbound-bridge-auto-adopt
   return link;
+  // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-inbound-bridge-auto-adopt
+  // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-adopt-ambient-bridge
 }
 
 // ─── Arrival-edge tagging (loop containment) ───────────────────────────────
