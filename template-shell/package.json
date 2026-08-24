@@ -2,6 +2,7 @@
   "name": "@gears-frontx/frontx-template-shell",
   "version": "0.1.0-alpha.3",
   "description": "Standard FrontX application template \u2014 target scaffold for template-side code relocation",
+  "private": true,
   "type": "module",
   "main": "./dist-lib/index.cjs",
   "module": "./dist-lib/index.js",
