@@ -127,6 +127,14 @@ plain colour syntax and neither rule is noticeable. If you render
 normalized id on your own `data-chart` attribute or the selector will not
 match it.
 
+`ChartStyle` renders its per-instance CSS as the `<style>` element's JSX
+children (`<style>{css}</style>`) rather than through
+`dangerouslySetInnerHTML`, which is what upstream and most React chart
+implementations use. Children get React's own server-side `</style`
+escaping (so the string can't break out of the tag in SSR output) and are
+rendered client-side as an inert Text node — a stronger guarantee than
+`dangerouslySetInnerHTML` offers, for the same runtime-built string.
+
 ## Examples
 
 ```tsx

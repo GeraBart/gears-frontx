@@ -92,17 +92,17 @@ export type ChartContainerProps = Omit<ComponentProps<'div'>, 'className' | 'chi
 /*
  * Everything ChartStyle interpolates into its <style> tag is
  * consumer-supplied — the chart's `id`, every `ChartConfig` key, every
- * colour string — and none of it is escaped by React, which treats
- * `dangerouslySetInnerHTML` as opaque text. An id of `x] { } body {
- * display: none` would end the selector and start a rule of its own; a
- * colour of `red; } body { … }` does the same one line down; either could
- * carry a literal `</style>` and leave CSS altogether. So the two shapes
- * that reach the stylesheet are constrained rather than trusted:
- * identifiers are reduced to a character set that cannot express any of
- * those, and colour VALUES (which have no such small alphabet — they run
- * from `red` to `color-mix(in oklab, …)`) are checked for the characters
- * that would let one escape its own declaration, and dropped whole if
- * they carry any.
+ * colour string — and React does not parse or validate CSS syntax within
+ * it, whether the string reaches the tag as JSX children or via
+ * `dangerouslySetInnerHTML`. An id of `x] { } body { display: none` would
+ * end the selector and start a rule of its own; a colour of `red; } body {
+ * … }` does the same one line down; either could carry a literal
+ * `</style>` and try to leave CSS altogether. So the two shapes that reach
+ * the stylesheet are constrained rather than trusted: identifiers are
+ * reduced to a character set that cannot express any of those, and colour
+ * VALUES (which have no such small alphabet — they run from `red` to
+ * `color-mix(in oklab, …)`) are checked for the characters that would let
+ * one escape its own declaration, and dropped whole if they carry any.
  */
 const CSS_IDENT_UNSAFE = /[^a-zA-Z0-9_-]/g;
 
@@ -204,9 +204,18 @@ ${darkDeclarations}
 
   // Per-instance, consumer-supplied colors have no other way to reach a
   // scoped CSS custom property — there is no static class this kit's build
-  // could hash for an arbitrary runtime string. Same trade-off upstream
-  // makes with its own dangerouslySetInnerHTML.
-  return <style dangerouslySetInnerHTML={{ __html: css }} />;
+  // could hash for an arbitrary runtime string. Passing `css` as the
+  // `<style>` element's JSX children — rather than through
+  // `dangerouslySetInnerHTML` — gets it React 19's own `</style`-escaping on
+  // the server (so a value containing a literal `</style><script>…` cannot
+  // break out of the tag in SSR output) and, on the client, lands it as a
+  // single inert Text node that is never parsed as markup. Either way it
+  // cannot execute as script. `isSafeCssValue`/`cssIdentifier` above still
+  // matter here even though they're no longer the primary XSS defense: they
+  // keep `<`/`>` out of the string entirely, which is what keeps server and
+  // client output identical (a raw `</style` would escape only on the
+  // server, producing a hydration mismatch).
+  return <style>{css}</style>;
 }
 
 export const ChartTooltip = RechartsPrimitive.Tooltip;
