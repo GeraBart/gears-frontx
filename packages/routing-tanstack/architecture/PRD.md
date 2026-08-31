@@ -79,7 +79,7 @@ This PRD uses the ecosystem's shared vocabulary: *application* means what the ro
 
 A microfrontend declares this package as its engine-provider dependency. At mount, the package adapts the navigation substrate's shared `NavigationHistory` into TanStack Router's own history contract, constructs the router with the microfrontend's route tree and its assigned `basepath`, and mounts it into the microfrontend's own component tree. The microfrontend's own routing table matches only the remainder of the URL beneath that `basepath`; navigating outside it happens through the navigation substrate's imperative surface, never through this package's own routing table.
 
-The same microfrontend runs under two deployment modes without a change to its routing code. **Composed**: the enclosing level assigns this microfrontend its `basepath` the moment it mounts it — the host is that enclosing level for a microfrontend mounted at the outermost domain, and another extension's own zone is that enclosing level for one mounted at any level nested deeper. **Standalone**: the microfrontend is served on its own, and the `basepath` comes from the deployment's own configuration — empty when served at a root, or the sub-path it is published under. This package runs the same construction path in both modes; only where `basepath` comes from, and whether the substrate's route ownership signal has an observer, differs.
+The same microfrontend runs under two deployment modes without a change to its routing code. **Composed**: the application that composes the microfrontend supplies its `basepath` ([routing PRD §1.4](../../routing/architecture/PRD.md#14-glossary), *basepath*: "supplied directly by the application or by the deployment that owns the pathname"). **Standalone**: the microfrontend is served on its own, and the deployment supplies the `basepath` — empty when served at a root, or the sub-path it is published under. Either way it is the "assigned or deployment-supplied `basepath`" the engine-provider port names as a provider input (`cpt-frontx-routing-fr-engine-provider-port`); a `basepath` is never derived from a domain key, a nesting level, or route-owner resolution, because the navigation substrate's own Domain Occupancy Addressing Granularity decision record retires the pathname from occupancy resolution entirely — no domain key and no resolution outcome yields a pathname prefix for anyone to derive one from ([routing DESIGN §1.1](../../routing/architecture/DESIGN.md#11-architectural-vision)). This package runs the same construction path in both modes; only where `basepath` comes from, and whether the substrate's route ownership signal has an observer, differs.
 
 ### 3.1 Module-Specific Environment Constraints
 
@@ -95,13 +95,14 @@ The same microfrontend runs under two deployment modes without a change to its r
 
 - Adapting the navigation substrate's `NavigationHistory` contract into TanStack Router's own history contract.
 - Constructing TanStack Router's router, scoped to a microfrontend's assigned or deployment-supplied `basepath`, and mounting it into that microfrontend's own component tree.
+- Containing this package's own navigation surface to the compound query-string key of the occupant that issued a navigation, applying every search change as a delta against the live shared search.
 - Reusable, location-preserving navigation helpers that carry the current location's search and hash onto a target path.
 - Deployment-mode parity: the same provider code running a microfrontend composed under a host and standalone under its own deployment.
 - Unsubscribing a constructed router from the shared navigation history when the microfrontend that owns it unmounts.
 
 ### 4.2 Out of Scope
 
-- The navigation substrate itself, the `basepath` contract's own definition, and the route ownership signal — all owned by the navigation substrate ([routing PRD](../../routing/architecture/PRD.md)); this package consumes them, it does not define them.
+- The navigation substrate itself, the `basepath` contract's own definition, the route ownership signal, and the URL back-projection helper through which an occupancy reaches the URL — all owned by the navigation substrate ([routing PRD](../../routing/architecture/PRD.md)); this package consumes them, it does not define them, and it never substitutes its own navigation surface for the back-projection helper (`cpt-frontx-routing-tanstack-fr-query-namespace-containment`).
 - Microfrontend loading, admission, placement, and isolation — owned by the runtime ([mfes PRD](../../mfes/architecture/PRD.md)).
 - Any router-engine implementation other than TanStack Router; a microfrontend needing a different engine supplies its own provider satisfying the same engine-provider port.
 
@@ -133,19 +134,29 @@ The system **MUST** scope a microfrontend's own router to the `basepath` it is a
 
 - [ ] `p1` - **ID**: `cpt-frontx-routing-tanstack-fr-standalone-deployment`
 
-The system **MUST** run a microfrontend's router unchanged whether the microfrontend is composed within an application or served as a standalone deployment, taking its `basepath` from the enclosing level in the first case — the host, when the microfrontend sits at the outermost domain, or another extension's own zone, at any level nested deeper — and from the deployment's own configuration in the second. A navigation to a path the microfrontend's own route tree does not declare **MUST** resolve to the engine's own not-found route in both modes rather than failing.
+The system **MUST** run a microfrontend's router unchanged whether the microfrontend is composed within an application or served as a standalone deployment, taking its `basepath` from the application that composes the microfrontend in the first case and from the deployment's own configuration in the second — the "assigned or deployment-supplied `basepath`" the engine-provider port names as a provider input (`cpt-frontx-routing-fr-engine-provider-port`), never a value this package derives from a domain key, from a nesting level, or from route-owner resolution, none of which yields a pathname prefix under the navigation substrate's own Domain Occupancy Addressing Granularity decision record. A navigation to a path the microfrontend's own route tree does not declare **MUST** resolve to the engine's own not-found route in both modes rather than failing.
 
 **Rationale**: A microfrontend is developed, previewed, and sometimes shipped on its own, and composed into an application later; one construction path that only varies in where `basepath` comes from is what keeps the two modes from silently diverging.
 
 **Actors**: `cpt-frontx-routing-tanstack-actor-microfrontend-developer`
 
+#### Query-namespace containment
+
+- [ ] `p1` - **ID**: `cpt-frontx-routing-tanstack-fr-query-namespace-containment`
+
+This package's own navigation surface — its `Link` component, its `useNavigate` hook, its `redirect` helper, and the constructed router's own writes to the shared navigation history — **MUST NOT** add, remove, or replace any query-string key other than the compound key naming the occupant that issued the navigation. Every such navigation **MUST** apply its search change as a delta against the live search read from the shared `NavigationHistory` at write time, and **MUST NOT** apply it as a wholesale search string synthesized from the issuing router's own validated search schema. Originating or ending an occupancy — adding or removing a compound key — **MUST NOT** happen through this navigation surface at all: an occupancy is originated through the runtime's actions-chains channel and reflected into the URL afterward by the navigation substrate's own URL back-projection helper.
+
+**Rationale**: The shared query string is now the whole address of a composed application's occupancy — one compound query-string key per occupant of every domain, at every depth — and an occupant "owns exactly one addressable slot in the address this library governs: its own compound key, and nothing else" ([routing DESIGN §1.1](../../routing/architecture/DESIGN.md#11-architectural-vision), *Visibility and zone boundaries*). A router that writes a whole search string therefore erases every sibling and ancestor occupant's own address with a single in-microfrontend navigation, and a router that adds or removes a compound key makes navigation a second occupancy-decision channel alongside actions-chains, which the navigation substrate's own Mount Trigger Ownership decision record reserves as the sole post-boot origination channel. Both follow from that substrate's own Domain Occupancy Addressing Granularity decision record retiring the pathname from occupancy addressing: the search string this package's engine treats as its own is shared territory. (Both records are named here rather than cited by ID, which a PRD may not carry; the citations live in this package's [DESIGN](./DESIGN.md) §2.2 and §5.)
+
+**Actors**: `cpt-frontx-routing-tanstack-actor-microfrontend-developer`
+
 #### Location-preserving navigation helpers
 
-- [ ] `p2` - **ID**: `cpt-frontx-routing-tanstack-fr-location-preserving-helpers`
+- [ ] `p1` - **ID**: `cpt-frontx-routing-tanstack-fr-location-preserving-helpers`
 
 The system **MUST** provide reusable navigation helpers that carry the current location's search and hash forward onto a target path, so a consumer building a redirect or an imperative navigation does not have to assemble that carry-forward by hand.
 
-**Rationale**: Dropping search and hash on a redirect is an easy, repeatable mistake — the naive form, building a target from the path alone, looks correct until a query parameter or a hash fragment disappears; a shared helper makes the correct behavior the path of least resistance for every consumer that redirects.
+**Rationale**: Dropping the search on a redirect no longer drops only this occupant's own query parameters. The shared query string carries one compound key per occupant of every domain in the composed application, so a target assembled from the path alone drops every sibling and ancestor occupant's own address along with this one's ([routing DESIGN §1.1](../../routing/architecture/DESIGN.md#11-architectural-vision), *Visibility and zone boundaries*). A shared helper is what makes carrying the live search and hash forward the path of least resistance, and so what keeps `cpt-frontx-routing-tanstack-fr-query-namespace-containment` reachable for every consumer that redirects rather than a rule each one has to remember.
 
 **Actors**: `cpt-frontx-routing-tanstack-actor-microfrontend-developer`
 
@@ -171,11 +182,11 @@ The root PRD's §6.2 exclusions (safety, privacy, accessibility, internationaliz
 
 ### 7.1 Public API Surface
 
-The package's public surface is specified by this package's [DESIGN](./DESIGN.md) §3.3 and by its `engine-provider` FEATURE.
+The package's public surface is specified by this package's [DESIGN](./DESIGN.md) §3.3.
 
 ### 7.2 External Integration Contracts
 
-None owned here. The package is distributed under the root PRD's package-registry distribution contract (`cpt-frontx-contract-package-registry-distribution`). The engine-provider port this package implements is owned by the navigation substrate's own PRD, DESIGN, and navigation-substrate FEATURE, not by this package.
+None owned here. The package is distributed under the root PRD's package-registry distribution contract (`cpt-frontx-contract-package-registry-distribution`). The engine-provider port this package implements is owned by the navigation substrate's own PRD and DESIGN, not by this package.
 
 ## 8. Use Cases
 
@@ -203,8 +214,10 @@ None owned here. The package is distributed under the root PRD's package-registr
 
 - [ ] The navigation substrate's shared `NavigationHistory` is adapted into TanStack Router's own history contract, and a router constructed from it is mounted into the microfrontend's own component tree — verifiable via `cpt-frontx-routing-tanstack-fr-engine-adaptation`.
 - [ ] A microfrontend's own router matches only the remainder of the URL beneath the `basepath` it is assigned — verifiable via `cpt-frontx-routing-tanstack-fr-scoped-navigation-zone`.
-- [ ] The same microfrontend routing code runs composed within an application, at any domain level, and standalone under its own deployment, differing only in where the `basepath` comes from — verifiable via `cpt-frontx-routing-tanstack-fr-standalone-deployment`.
-- [ ] A redirect or an imperative navigation built with this package's location-preserving helper carries the current location's search and hash onto the target path — verifiable via `cpt-frontx-routing-tanstack-fr-location-preserving-helpers`.
+- [ ] The same microfrontend routing code runs composed within an application, at any domain level, and standalone under its own deployment, differing only in whether the application or the deployment supplied the `basepath`, with no `basepath` value derived from a domain key, a nesting level, or route-owner resolution — verifiable via `cpt-frontx-routing-tanstack-fr-standalone-deployment`.
+- [ ] A navigation issued through this package's own `Link`, `useNavigate`, `redirect`, or constructed router leaves every query-string key other than the issuing occupant's own compound key exactly as the live search held it at write time, including keys the issuing router's own search schema does not declare — verifiable via `cpt-frontx-routing-tanstack-fr-query-namespace-containment`.
+- [ ] No navigation issued through this package's own navigation surface adds or removes a compound key, so no occupancy is originated or ended through it; an occupancy reaches the URL only through the navigation substrate's own back-projection helper after an actions-chains-originated mount — verifiable via `cpt-frontx-routing-tanstack-fr-query-namespace-containment`.
+- [ ] A redirect or an imperative navigation built with this package's location-preserving helper carries the live search and hash onto the target path, leaving every other occupant's compound key intact — verifiable via `cpt-frontx-routing-tanstack-fr-location-preserving-helpers`.
 - [ ] The package imports exactly one ecosystem package — the navigation substrate — and no other — verifiable via the boundary guards.
 - [ ] Replacing this package with a different engine-provider port implementation changes no file outside that one microfrontend's own code — its route tree, its search-parameter handling, and every one of its own imports of this package — and changes no file belonging to the navigation substrate, the host, or a sibling microfrontend — verifiable via `cpt-frontx-routing-tanstack-usecase-swap-router-engine`.
 
