@@ -37,7 +37,7 @@
     "test:unit:watch": "vitest --watch"
   },
   "dependencies": {
-    "path-to-regexp": "^8.2.0"
+    "path-to-regexp": "8.4.2"
   },
   "devDependencies": {
     "@gears-frontx/auth": "*",
@@ -45,7 +45,7 @@
     "@gears-frontx/mfes": "0.3.0-alpha.3",
     "@gears-frontx/gts-plugin": "0.3.0-alpha.3",
     "@vitest/coverage-v8": "4.1.4",
-    "@tanstack/query-core": "^5.0.0",
+    "@tanstack/query-core": "5.101.4",
     "tsup": "8.0.0",
     "typescript": "5.4.2",
     "vitest": "4.1.4"
@@ -57,7 +57,7 @@
     "@gears-frontx/gts-plugin": "*",
     "@gears-frontx/api": "*",
     "@gears-frontx/i18n": "*",
-    "@tanstack/query-core": "^5.0.0",
+    "@tanstack/query-core": "5.101.4",
     "vitest": "4.1.4"
   },
   "peerDependenciesMeta": {
