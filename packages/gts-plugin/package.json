@@ -1,6 +1,6 @@
 {
   "name": "@gears-frontx/gts-plugin",
-  "version": "0.3.0-alpha.4",
+  "version": "0.3.0-alpha.5",
   "description": "GTS default type-system provider plugin for the FrontX MFE runtime",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -25,10 +25,11 @@
     "test:unit:watch": "vitest --watch"
   },
   "dependencies": {
-    "@gears-frontx/mfes": "0.3.0-alpha.4",
+    "@gears-frontx/mfes": "0.3.0-alpha.5",
     "@globaltypesystem/gts-ts": "0.3.0"
   },
   "devDependencies": {
+    "@types/node": "^24.0.0",
     "@vitest/coverage-v8": "4.1.4",
     "tsup": "8.5.1",
     "typescript": "5.9.3",
