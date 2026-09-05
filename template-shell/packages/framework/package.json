@@ -42,14 +42,14 @@
   "devDependencies": {
     "@gears-frontx/auth": "*",
     "@gears-frontx/frontx-template-shell": "file:../..",
-    "@gears-frontx/mfes": "0.3.0-alpha.5",
-    "@gears-frontx/gts-plugin": "0.3.0-alpha.5",
+    "@gears-frontx/mfes": "0.3.0-alpha.4",
+    "@gears-frontx/gts-plugin": "0.3.0-alpha.4",
     "@reduxjs/toolkit": "2.12.0",
     "@types/node": "^24.0.0",
     "@vitest/coverage-v8": "4.1.4",
     "@tanstack/query-core": "5.101.4",
-    "tsup": "8.0.0",
-    "typescript": "5.4.2",
+    "tsup": "8.5.1",
+    "typescript": "5.9.3",
     "vitest": "4.1.4"
   },
   "peerDependencies": {
