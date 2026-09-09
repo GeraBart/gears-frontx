@@ -202,14 +202,48 @@ interface LoadBlobState {
    * URL is owned by the same load and shares its never-revoke invariant).
    */
   lazyLoaderUrl?: string;
-  /**
-   * Set once any branch of this load's concurrent blob URL chain fan-out
-   * (see {@link createBlobUrlChainInternal}) rejects. In-flight sibling
-   * continuations check this before minting their own blob URL and skip
-   * doing so once it is set — a load that has already failed must not keep
-   * creating page-lifetime blob URLs (the never-revoke invariant) for work
-   * it will never use. Mutable for the same reason `lazyLoaderUrl` is.
-   */
+}
+
+/**
+ * Per-chain-build failure signal.
+ *
+ * A single call into {@link MfeHandlerMF.createBlobUrlChain} — the initial
+ * expose-chunk build for a load, or one later {@link
+ * MfeHandlerMF.resolveLazyChunk} call reached through the lazy-import ABI —
+ * is one "chain build". Every recursive fan-out inside that one build
+ * shares one `ChainBuildFailure` instance, created fresh by whichever
+ * method starts the build.
+ *
+ * This is deliberately NOT part of {@link LoadBlobState}: `LoadBlobState`
+ * lives for the whole load (page lifetime, per the never-revoke invariant)
+ * and is shared by every lazy chunk resolved through it, but "a fetch
+ * failed somewhere in this build" must not survive past the build it
+ * happened in. A `LoadBlobState`-scoped flag would latch permanently after
+ * the first failed lazy import — poisoning every later, otherwise
+ * independent, lazy import on the same already-mounted MFE, with no retry
+ * path short of a full page reload. Scoping the flag to one build instead
+ * means a failed lazy import fails only its own `resolveLazyChunk` call;
+ * the next lazy import starts its own fresh `ChainBuildFailure` and is
+ * unaffected.
+ *
+ * Resetting a single load-wide flag inside `resolveLazyChunk` instead would
+ * NOT fix this safely: multiple `resolveLazyChunk` calls for the same load
+ * can be in flight concurrently and all share one `LoadBlobState`:
+ * `inFlight`, `blobUrlMap`, `sharedDepBlobUrls`. A reset by one call could
+ * race a still-running sibling build's own failure check, either clearing
+ * a failure that build is actively relying on to stop fetching, or being
+ * clobbered right back to `true` by a stale write from the sibling. A
+ * fresh instance per build has no such cross-build interaction.
+ *
+ * Sibling continuations belonging to the SAME build still check `inFlight`
+ * (on `LoadBlobState`) to join or await one another's construction as
+ * before — this token governs only "stop starting new work because a
+ * sibling in my own build already failed", never cross-build promise
+ * rejection, which continues to propagate through the shared `inFlight`
+ * promise itself (a build awaiting a promise another build created still
+ * sees that promise reject on its own terms).
+ */
+interface ChainBuildFailure {
   failed: boolean;
 }
 
@@ -479,19 +513,33 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
    * This does not cancel the underlying fetch/blob-URL work still in
    * flight when the timer wins the race — there is no `AbortController`
    * plumbed through this file (see the sibling {@link boundedMap} fan-out,
-   * which relies on the `loadState.failed` flag rather than cancellation
+   * which relies on a `ChainBuildFailure` token rather than cancellation
    * for the same reason) — so a timed-out attempt's background work keeps
    * running to completion and its results are simply never observed by
-   * this call. `this.config.timeout` is nullish only if a caller explicitly
-   * passes `0`/`undefined`... the constructor always fills a default, so in
-   * practice this is always set.
+   * this call.
+   *
+   * `this.config.timeout` is never `undefined` in practice — the
+   * constructor fills `config.timeout ?? 30000`, and `??` only substitutes
+   * `null`/`undefined`, so an explicit `0` (or any other falsy number)
+   * passed by a caller survives the constructor unchanged. A timeout of
+   * `0` is the conventional "disable the timeout" idiom, so it — and any
+   * other non-positive value — is treated as "no timeout" below rather
+   * than as a zero-delay timer that would fail every attempt immediately.
+   *
+   * This method races ONE attempt, not one `load()` call. `RetryHandler`
+   * (see {@link RetryHandler.retry}) wraps every retry of a failed attempt
+   * in its own call to this method, so with the defaults (`timeout: 30000`,
+   * `retries: 2`) a single `load()` call's worst-case wall clock is roughly
+   * `timeout × (retries + 1)` plus `RetryHandler`'s exponential backoff
+   * between attempts — on the order of 90+ seconds, not the 30 seconds the
+   * `timeout` field name alone would suggest.
    */
   private withLoadTimeout<T>(
     attempt: Promise<T>,
     entryId: string
   ): Promise<T> {
     const timeoutMs = this.config.timeout;
-    if (timeoutMs === undefined) {
+    if (timeoutMs === undefined || timeoutMs <= 0) {
       return attempt;
     }
 
@@ -601,9 +649,13 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
       entryId,
       sharedDepBlobUrls,
       entryChunkFilename: exposeChunkFilename,
-      failed: false,
     };
     // @cpt-end:cpt-frontx-state-mfe-isolation-load-blob-state:p1:inst-blob-building
+
+    // Fresh per-build failure token for this chain build (see
+    // `ChainBuildFailure`) — scoped to this one expose-chunk build, not to
+    // `loadState`, which lives for the whole page-lifetime load.
+    const buildFailure: ChainBuildFailure = { failed: false };
 
     // @cpt-begin:cpt-frontx-algo-mfe-loading-manifest-discovery:p1:inst-md-read-css
     // Collect CSS paths from exposeAssets (sync injected at mount; async lazy).
@@ -615,7 +667,7 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
 
     // Build blob URL chain for the expose chunk and all its static deps.
     // Bare specifiers within those chunks are rewritten to shared dep blob URLs.
-    await this.createBlobUrlChain(loadState, exposeChunkFilename);
+    await this.createBlobUrlChain(loadState, exposeChunkFilename, buildFailure);
 
     const exposeBlobUrl = loadState.blobUrlMap.get(exposeChunkFilename);
     if (!exposeBlobUrl) {
@@ -1110,6 +1162,7 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
   private createBlobUrlChain(
     loadState: LoadBlobState,
     filename: string,
+    buildFailure: ChainBuildFailure,
     ancestors: ReadonlySet<string> = new Set()
   ): Promise<void> {
     // @cpt-begin:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-check-map
@@ -1172,7 +1225,12 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
     // comment for why that liveness is what makes cross-branch cycles
     // detectable).
     const lineage = new Set(ancestors);
-    const promise = this.createBlobUrlChainInternal(loadState, filename, lineage);
+    const promise = this.createBlobUrlChainInternal(
+      loadState,
+      filename,
+      buildFailure,
+      lineage
+    );
     loadState.inFlight.set(filename, { promise, lineage });
     return promise;
   }
@@ -1180,11 +1238,14 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
   private async createBlobUrlChainInternal(
     loadState: LoadBlobState,
     filename: string,
+    buildFailure: ChainBuildFailure,
     ancestors: ReadonlySet<string>
   ): Promise<void> {
-    // A sibling elsewhere in this load already failed — stop before issuing
-    // further fetches for work this load will never use.
-    if (loadState.failed) {
+    // A sibling elsewhere in THIS build already failed — stop before issuing
+    // further fetches for work this build will never use. Scoped to
+    // `buildFailure` (this one chain-build), not `loadState` (the whole
+    // load) — see `ChainBuildFailure`.
+    if (buildFailure.failed) {
       return;
     }
 
@@ -1197,9 +1258,9 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
     const source = await this.fetchSourceText(chunkUrl);
     // @cpt-end:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-fetch-source
 
-    if (loadState.failed) {
-      // Re-check after the `await` above: another branch may have failed
-      // while this fetch was in flight.
+    if (buildFailure.failed) {
+      // Re-check after the `await` above: another branch of THIS build may
+      // have failed while this fetch was in flight.
       return;
     }
 
@@ -1228,7 +1289,7 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
     const childAncestors = new Set(ancestors);
     childAncestors.add(filename);
     const settled = await boundedMap(deps, (dep) =>
-      this.createBlobUrlChain(loadState, dep, childAncestors)
+      this.createBlobUrlChain(loadState, dep, buildFailure, childAncestors)
     );
     // @cpt-end:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-recurse-dep
     // @cpt-end:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-for-each-dep
@@ -1239,12 +1300,13 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
     // wall-clock time.
     const failure = firstRejection(settled);
     if (failure.found) {
-      loadState.failed = true;
+      buildFailure.failed = true;
       throw failure.reason;
     }
-    if (loadState.failed) {
-      // A sibling outside this call's own subtree already failed: stop here
-      // rather than minting a blob URL this load will never use.
+    if (buildFailure.failed) {
+      // A sibling outside this call's own subtree, but within THIS build,
+      // already failed: stop here rather than minting a blob URL this
+      // build will never use.
       return;
     }
 
@@ -1388,10 +1450,19 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
     );
     // @cpt-end:cpt-frontx-algo-mfe-loading-lazy-import-abi:p1:inst-lai-resolve-relative-path
 
+    // Fresh per-build failure token (see `ChainBuildFailure`) for THIS
+    // `resolveLazyChunk` call, scoped to `loadState`. A network blip on one
+    // lazy import must not latch a load-wide flag that then blocks every
+    // later, otherwise-independent, lazy import on the same already-mounted
+    // MFE — each call here gets its own token instead of sharing one on
+    // `loadState`.
+    const buildFailure: ChainBuildFailure = { failed: false };
+
     // @cpt-begin:cpt-frontx-algo-mfe-loading-lazy-import-abi:p1:inst-lai-fetch-lazy-chunk
     await this.createBlobUrlChain(
       loadState,
       filename,
+      buildFailure,
       new Set([loadState.entryChunkFilename])
     );
     // @cpt-end:cpt-frontx-algo-mfe-loading-lazy-import-abi:p1:inst-lai-fetch-lazy-chunk

@@ -472,6 +472,89 @@ describe('MfeHandlerMF — concurrent dependency fetch', () => {
   });
 });
 
+/**
+ * Regression coverage for the per-build failure token that replaced a
+ * single load-wide `failed` flag on `LoadBlobState`. A shared, never-reset
+ * flag latched permanently after the first failed lazy import, causing
+ * every subsequent — otherwise entirely independent — lazy import on the
+ * same already-mounted MFE to fail with
+ * "failed to mint blob URL for lazy chunk" even though it never touched the
+ * chunk that actually failed. These tests drive `resolveLazyChunk` directly
+ * against a hand-built `LoadBlobState` (the private per-load state
+ * `loadExposedModuleIsolated` would otherwise construct), since dynamic
+ * `import()` of a `blob:` URL is not supported under Node/vitest's module
+ * loader and would otherwise mask the failure downstream of the assertions
+ * here.
+ */
+describe('MfeHandlerMF — lazy-import failure isolation', () => {
+  it('does not let one failed lazy import block a later, independent lazy import on the same load', async () => {
+    // `broken.js` itself fetches fine but statically imports `missing-dep.js`,
+    // which does not. This is deliberate, not incidental: the failure must
+    // surface through the sibling-fan-out rejection path in
+    // `createBlobUrlChainInternal` (parse deps → fan out via `boundedMap` →
+    // `firstRejection` → set the failure signal → throw) — the exact path
+    // that used to set the shared, never-reset `loadState.failed` flag. A
+    // fetch failure on the top-level lazy chunk's OWN source text rejects
+    // before that code ever runs, so it would not exercise the bug this
+    // test guards against.
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(((input: string | URL | Request) => {
+        const url = String(input);
+        if (url.endsWith('broken.js')) {
+          return Promise.resolve(
+            jsResponse("import './missing-dep.js';\nexport const broken = 1;")
+          );
+        }
+        if (url.endsWith('missing-dep.js')) {
+          return Promise.reject(new TypeError('network error for test'));
+        }
+        if (url.endsWith('ok.js')) {
+          return Promise.resolve(jsResponse('export const ok = 1;'));
+        }
+        return Promise.reject(new TypeError(`unmocked fetch: ${url}`));
+      }) as typeof fetch);
+
+    const handler = new MfeHandlerMF(ENTRY_BASE_ID, { retries: 0 });
+
+    // Hand-built per-load state, mirroring what `loadExposedModuleIsolated`
+    // builds internally — no `failed` field: that shared flag is exactly
+    // what this test proves must be gone.
+    const loadState = {
+      blobUrlMap: new Map<string, string>(),
+      inFlight: new Map(),
+      baseUrl: PUBLIC_PATH,
+      entryId: ENTRY_ID,
+      sharedDepBlobUrls: new Map<string, string>(),
+      entryChunkFilename: 'assets/lifecycle.js',
+    };
+
+    // First lazy import fails (its target chunk 404s / network-errors).
+    await expect(
+      (handler as unknown as {
+        resolveLazyChunk: (relPath: string, loadState: unknown) => Promise<string>;
+      }).resolveLazyChunk('./broken.js', loadState)
+    ).rejects.toThrow(MfeLoadError);
+
+    // A second, wholly independent lazy import on the SAME load must still
+    // succeed — it never depends on './broken.js' in any way. Before the
+    // fix, the first failure latched `loadState.failed = true` for the rest
+    // of the load's lifetime, so this second call would exit
+    // `createBlobUrlChainInternal` immediately without fetching, mint no
+    // `blobUrlMap` entry, and `resolveLazyChunk` would reject with:
+    //   "__frontx_lazy: failed to mint blob URL for lazy chunk './ok.js'"
+    // — observed directly against the pre-fix implementation.
+    const blobUrl = await (
+      handler as unknown as {
+        resolveLazyChunk: (relPath: string, loadState: unknown) => Promise<string>;
+      }
+    ).resolveLazyChunk('./ok.js', loadState);
+    expect(blobUrl).toMatch(/^blob:/);
+
+    fetchSpy.mockRestore();
+  });
+});
+
 describe('LruCache — capacity eviction and MRU re-insertion', () => {
   it('evicts the oldest entry once capacity is exceeded', () => {
     const cache = new LruCache<string, number>(2);
