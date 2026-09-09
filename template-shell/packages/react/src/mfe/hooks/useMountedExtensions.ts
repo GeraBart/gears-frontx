@@ -10,7 +10,7 @@
 
 import { useSyncExternalStore, useCallback, useRef } from 'react';
 import { useFrontX } from '../../FrontXContext';
-import { useMfeRegistry } from './useMfeRegistry';
+import { resolveMfeRegistry } from './useMfeRegistry';
 import type { Extension } from '@gears-frontx/framework';
 
 // ============================================================================
@@ -52,7 +52,7 @@ import type { Extension } from '@gears-frontx/framework';
  */
 export function useMountedExtensions(domainId: string): Extension[] {
   const app = useFrontX();
-  const registry = useMfeRegistry('useMountedExtensions');
+  const registry = resolveMfeRegistry(app, 'useMountedExtensions');
 
   // Subscribe to store changes. Any dispatch (including mount state updates) triggers
   // a snapshot check. The cache key comparison ensures only actual mount-set changes

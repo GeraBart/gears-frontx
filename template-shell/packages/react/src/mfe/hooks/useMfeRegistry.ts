@@ -10,7 +10,7 @@
  */
 
 import { useFrontX } from '../../FrontXContext';
-import type { MfeRegistry } from '@gears-frontx/framework';
+import type { FrontXApp, MfeRegistry } from '@gears-frontx/framework';
 
 // ============================================================================
 // Hook Implementation
@@ -20,22 +20,33 @@ import type { MfeRegistry } from '@gears-frontx/framework';
  * Hook for accessing the MFE-enabled registry off the current FrontX app.
  *
  * Throws if the app was built without the `microfrontends()` plugin. The
- * `callerName` argument is included in the thrown message so a developer
- * still learns which hook failed, even though the guard itself is shared.
+ * optional `callerName` argument is included in the thrown message so a
+ * developer still learns which hook failed, even though the guard itself is
+ * shared. It defaults to this hook's own name for direct consumers.
  *
  * @param callerName - Name of the calling hook, used in the error message
  * @returns The MFE-enabled registry
  *
  * @example
  * ```ts
- * export function useDomainExtensions(domainId: string): Extension[] {
- *   const registry = useMfeRegistry('useDomainExtensions');
- *   // ...
- * }
+ * const registry = useMfeRegistry();
  * ```
  */
-export function useMfeRegistry(callerName: string): MfeRegistry {
+export function useMfeRegistry(callerName: string = 'useMfeRegistry'): MfeRegistry {
   const app = useFrontX();
+
+  return resolveMfeRegistry(app, callerName);
+}
+
+/**
+ * Non-hook form of the guard, for callers that already hold the app instance
+ * (e.g. hooks that need `app.store` as well) and must not read the context twice.
+ *
+ * @param app - The FrontX app instance to resolve the registry from
+ * @param callerName - Name of the calling hook, used in the error message
+ * @returns The MFE-enabled registry
+ */
+export function resolveMfeRegistry(app: FrontXApp, callerName: string): MfeRegistry {
   const registry = app.mfeRegistry;
 
   if (!registry) {

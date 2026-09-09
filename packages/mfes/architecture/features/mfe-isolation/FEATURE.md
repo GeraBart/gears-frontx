@@ -104,34 +104,60 @@ Internal system functions that implement the isolation mechanism.
 
 ### Blob URL Chain Construction
 
-- [x] `p1` - **ID**: `cpt-frontx-algo-mfe-isolation-blob-url-chain`
+- [ ] `p1` - **ID**: `cpt-frontx-algo-mfe-isolation-blob-url-chain`
 
-**Input**: Expose chunk filename, per-load state (base URL, entry ID, shared-dep blob URL map, in-flight map, blob URL map)
+**Input**: Expose chunk filename, the requesting lineage (ancestor filenames whose construction transitively awaits this one), a build-scoped failure signal, and per-load state (base URL, entry ID, shared-dep blob URL map, in-flight construction registry, blob URL map)
 
-**Output**: Per-load blob URL map updated with the expose chunk and all transitive static-dependency blob URLs
+**Output**: Per-load blob URL map updated with the expose chunk and all transitive static-dependency blob URLs, except for chunks whose construction deliberately short-circuited on a cycle
+
+**Note**: Two distinct records exist per load. The blob URL map is the durable record of a *completed* construction; the in-flight registry is a transient join point that lets concurrent requesters for the same filename share one construction. Only the first is authoritative — a construction that settles without contributing to the blob URL map leaves nothing joinable behind (`inst-settle-drop-inflight`).
 
 **Steps**:
-1. [x] - `p1` - Check whether the chunk filename is already present in the per-load blob URL map - `inst-check-map`
-2. [x] - `p1` - **IF** chunk already mapped - `inst-if-mapped`
+1. [ ] - `p1` - Operate under a failure signal created fresh for each chain build — the initial expose-chunk build, or one lazy-chunk resolution — and shared only by the recursive constructions of that same build, so a failed build never suppresses or fails a later independent build within the same load - `inst-build-failure-scope`
+2. [x] - `p1` - Check whether the chunk filename is already present in the per-load blob URL map - `inst-check-map`
+3. [x] - `p1` - **IF** chunk already mapped - `inst-if-mapped`
    1. [x] - `p1` - **RETURN** immediately (already computed for this load) - `inst-return-mapped`
-3. [x] - `p1` - Check whether a construction promise for this filename is already in-flight in the per-load in-flight map - `inst-check-inflight`
-4. [x] - `p1` - **IF** an in-flight promise exists - `inst-if-inflight`
-   1. [x] - `p1` - **RETURN** the existing in-flight promise (concurrent callers share one construction) - `inst-return-inflight`
-5. [x] - `p1` - Fetch the chunk source text from the absolute chunk URL using the LRU source-text cache for URL-level deduplication - `inst-fetch-source`
-6. [x] - `p1` - Parse all relative static import filenames from the chunk source - `inst-parse-static-imports`
-7. [x] - `p1` - **FOR EACH** dependency filename in the parsed static imports - `inst-for-each-dep`
-   1. [x] - `p1` - Recursively build the blob URL chain for the dependency - `inst-recurse-dep`
-8. [x] - `p1` - Rewrite all relative static import specifiers to their resolved blob URLs from the per-load blob URL map - `inst-rewrite-static`
-9. [x] - `p1` - Rewrite all bare shared-dependency specifiers to their pre-built shared-dep blob URLs - `inst-rewrite-shared`
-10. [x] - `p1` - Replace `import.meta.url` occurrences with the chunk's real HTTP base URL to preserve relative URL resolution under blob evaluation - `inst-rewrite-meta-url`
-11. [x] - `p1` - **IF** the rewritten source references the lazy-import ABI function - `inst-if-lazy-ref`
+4. [ ] - `p1` - Check whether the requested filename already appears in the lineage carried by this request - `inst-check-ancestor-cycle`
+5. [ ] - `p1` - **IF** the filename is present in its own lineage - `inst-if-ancestor-cycle`
+   1. [ ] - `p1` - **RETURN** without constructing and without awaiting — the cycle short-circuit; the specifier that closes the cycle takes the partial-rewrite fallback and the branch that detected the cycle mints its own blob once its remaining dependencies settle - `inst-return-ancestor-cycle`
+6. [x] - `p1` - Check whether a construction promise for this filename is already in-flight in the per-load in-flight map - `inst-check-inflight`
+7. [x] - `p1` - **IF** an in-flight promise exists - `inst-if-inflight`
+   1. [ ] - `p1` - Form the union of this request's own lineage and the lineage recorded on the in-flight entry - `inst-join-lineage-union`
+   2. [ ] - `p1` - **IF** that union already names the requested filename — awaiting it would close a cycle across two branches that fanned out independently, which is the cross-branch circular wait this check exists to prevent - `inst-if-join-cycle`
+      1. [ ] - `p1` - **RETURN** without awaiting, taking the same cycle short-circuit as `inst-return-ancestor-cycle` - `inst-return-join-cycle`
+   3. [ ] - `p1` - **ELSE** contribute this request's own lineage into the in-flight entry's lineage before awaiting it, so that a later request issued by the joined construction back into this branch is detectable as the cycle it is - `inst-contribute-lineage`
+   4. [x] - `p1` - **RETURN** the existing in-flight promise (concurrent callers share one construction) - `inst-return-inflight`
+8. [ ] - `p1` - Register an in-flight entry for this filename carrying a lineage seeded from the requesting lineage, and thread that lineage — live, not a snapshot — through this construction and into every dependency it recurses into - `inst-register-inflight`
+9. [ ] - `p1` - **IF** the build's failure signal is already raised when this construction begins - `inst-if-failed-at-entry`
+   1. [ ] - `p1` - **RETURN** without fetching, abandoning work this build will never use - `inst-return-failed-at-entry`
+10. [x] - `p1` - Fetch the chunk source text from the absolute chunk URL using the LRU source-text cache for URL-level deduplication - `inst-fetch-source`
+11. [ ] - `p1` - **IF** the build's failure signal was raised by another branch while this fetch was in flight - `inst-if-failed-after-fetch`
+    1. [ ] - `p1` - **RETURN** without minting a blob URL - `inst-return-failed-after-fetch`
+12. [x] - `p1` - Parse all relative static import filenames from the chunk source - `inst-parse-static-imports`
+13. [x] - `p1` - Fan the sibling dependency recursions out concurrently rather than awaiting each sibling's entire subtree before starting the next, admitting them through a single concurrency budget shared by the whole chain build so that the number of source fetches in flight for that build never exceeds the configured width regardless of graph depth or the number of sibling groups; the bound keeps added concurrency shortening wall-clock time instead of queuing behind the transport's own connection limit, and keeps a build from minting page-lifetime blob URLs for work a failing build will never use - `inst-fanout-bounded`
+14. [x] - `p1` - **FOR EACH** dependency filename in the parsed static imports - `inst-for-each-dep`
+    1. [x] - `p1` - Recursively build the blob URL chain for the dependency, passing a lineage extended with this chunk's own filename - `inst-recurse-dep`
+15. [x] - `p1` - Await every sibling recursion and scan the outcomes in declaration order — not completion order — for the first failure, so the reported error is deterministic regardless of which sibling lost the wall-clock race - `inst-first-failure-declaration-order`
+16. [ ] - `p1` - **IF** a sibling recursion failed - `inst-if-sibling-failed`
+    1. [ ] - `p1` - Raise this build's failure signal and propagate that first failure to the caller - `inst-raise-build-failure`
+17. [ ] - `p1` - **IF** the build's failure signal was raised by a branch outside this construction's own subtree - `inst-if-failed-elsewhere`
+    1. [ ] - `p1` - **RETURN** without minting a blob URL - `inst-return-failed-elsewhere`
+18. [x] - `p1` - Rewrite all relative static import specifiers to their resolved blob URLs from the per-load blob URL map - `inst-rewrite-static`
+19. [x] - `p1` - **IF** a static dependency has no entry in the per-load blob URL map because its construction deliberately short-circuited on a cycle - `inst-if-dep-cycle-absent`
+    1. [x] - `p1` - Leave that one specifier resolved to the dependency's origin chunk URL — the partial-rewrite fallback, which is the only sanctioned reason a consumer may read an absent entry as "resolve from origin" - `inst-rewrite-cycle-fallback`
+20. [x] - `p1` - **ELSE** the dependency was never built - `inst-else-dep-never-built`
+    1. [x] - `p1` - Raise an MFE load error naming the referring chunk and the unbuilt dependency, rather than silently emitting an origin URL for a module that would then evaluate outside the isolated graph with its bare specifiers unrewritten - `inst-raise-unbuilt-dep`
+21. [x] - `p1` - Rewrite all bare shared-dependency specifiers to their pre-built shared-dep blob URLs - `inst-rewrite-shared`
+22. [x] - `p1` - Replace `import.meta.url` occurrences with the chunk's real HTTP base URL to preserve relative URL resolution under blob evaluation - `inst-rewrite-meta-url`
+23. [x] - `p1` - **IF** the rewritten source references the lazy-import ABI function - `inst-if-lazy-ref`
     1. [x] - `p1` - Mint or reuse the per-load lazy-loader stub blob URL and inject its import at the top of the source - `inst-inject-lazy-stub`
-12. [x] - `p1` - Wrap the fully rewritten source in a blob, create a blob URL, and record it in the per-load blob URL map - `inst-create-blob`
-13. [x] - `p1` - **RETURN** with the blob URL present in the per-load map - `inst-return-complete`
+24. [x] - `p1` - Wrap the fully rewritten source in a blob, create a blob URL, and record it in the per-load blob URL map - `inst-create-blob`
+25. [x] - `p1` - **RETURN** with the blob URL present in the per-load map, which is the durable record of this construction - `inst-return-complete`
+26. [x] - `p1` - **WHEN** a construction settles — fulfilled or rejected — without a blob URL recorded for its filename (cycle short-circuit, abandonment because another branch of the same build failed, or its own failure), remove its in-flight registry entry, so a later request re-attempts construction instead of joining a settled promise that produced nothing - `inst-settle-drop-inflight`
 
 ### Shared-Dependency Blob URL Construction
 
-- [x] `p1` - **ID**: `cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls`
+- [ ] `p1` - **ID**: `cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls`
 
 **Input**: MFE manifest containing the shared-dependency list (name, version, chunk path) in dependency order (leaves first)
 
@@ -140,18 +166,21 @@ Internal system functions that implement the isolation mechanism.
 **Note**: "In declaration order" in `inst-for-each-dep` governs enumeration and cache-key precedence only — the order in which declarations are visited and, when two declarations collide on the same `name@version` key, which one claims the cross-MFE cache entry. It imposes no ordering on when fetches are issued or when they complete, so the enumeration may issue its fetches concurrently. What keeps that deduplication race-free however the fetches are scheduled is that the entry `inst-fetch-and-cache` stores is the in-flight fetch promise, recorded under the key before it is awaited. Dependency-order correctness for blob construction comes solely from `inst-resolve-order`, which orders the already-fetched sources leaves-first and falls back to partial rewrites on cycles.
 
 **Steps**:
-1. [x] - `p1` - **FOR EACH** shared dependency declared in the manifest, in declaration order - `inst-for-each-dep`
+1. [ ] - `p1` - Verify that every shared-dependency package name declared in the manifest is unique within that manifest, before any network access - `inst-assert-unique-names`
+2. [ ] - `p1` - **IF** the same package name is declared more than once, regardless of version - `inst-if-duplicate-name`
+   1. [ ] - `p1` - **RETURN** error — fail the load with a diagnostic naming the duplicated package and the manifest, because sources and rewrite maps are keyed by bare package name and a duplicate would silently displace the earlier declaration - `inst-raise-duplicate-name`
+3. [x] - `p1` - **FOR EACH** shared dependency declared in the manifest, in declaration order - `inst-for-each-dep`
    1. [x] - `p1` - Compute the deduplication cache key as `name@version` - `inst-compute-key`
    2. [x] - `p1` - **IF** the cross-MFE shared-dep text cache already holds a promise for this key - `inst-if-cache-hit`
       1. [x] - `p1` - Retrieve the cached source text promise - `inst-retrieve-cached`
    3. [x] - `p1` - **ELSE** - `inst-else-fetch`
       1. [x] - `p1` - Derive the absolute chunk URL from the manifest's `publicPath` and the dependency's `chunkPath` - `inst-derive-url`
       2. [x] - `p1` - Fetch the source text and store the promise in the cross-MFE cache; on rejection, evict the entry to permit retry - `inst-fetch-and-cache`
-2. [x] - `p1` - Resolve the collected sources in dependency order, processing each dependency only after all dependencies it imports have been resolved; fall back to partial rewrites on circular dependencies - `inst-resolve-order`
-3. [x] - `p1` - **FOR EACH** dependency in resolved order - `inst-for-each-resolved`
+4. [x] - `p1` - Resolve the collected sources in dependency order, processing each dependency only after all dependencies it imports have been resolved; fall back to partial rewrites on circular dependencies - `inst-resolve-order`
+5. [x] - `p1` - **FOR EACH** dependency in resolved order - `inst-for-each-resolved`
    1. [x] - `p1` - Rewrite bare shared-dep specifiers in the source to the already-resolved blob URLs - `inst-rewrite-specifiers`
    2. [x] - `p1` - Wrap the rewritten source in a blob, create a fresh blob URL, and add it to the shared-dep blob URL map - `inst-create-dep-blob`
-4. [x] - `p1` - **RETURN** the complete shared-dep blob URL map - `inst-return-map`
+6. [x] - `p1` - **RETURN** the complete shared-dep blob URL map - `inst-return-map`
 
 ### Trust-Kernel Guarded Import
 
@@ -254,5 +283,10 @@ The system **MUST** accept an entry's manifest either as the document itself or 
 - [x] All blob URLs in the instance-keyed load cache are retained for the page lifetime and are never revoked after the import resolves
 - [x] Shared-dependency source text is deduplicated across MFE loads using a cross-MFE LRU cache keyed by `name@version`; cache entries for failed fetches are evicted to permit retry
 - [x] On load failure, the cache entry for the failed extension instance is evicted so a subsequent call can attempt a fresh load
+- [x] A chunk whose static-dependency graph closes a cycle — including one that closes across two branches that fanned out independently — settles without a circular wait; the cycle-closing specifier falls back to the dependency's origin chunk URL and every other chunk on the cycle still receives a blob URL.
+- [x] A dependency absent from the per-load blob URL map for any reason other than the deliberate cycle fallback fails the load with a diagnostic naming the referring chunk and the unbuilt dependency, rather than silently emitting an origin URL.
+- [x] A chain build that fails does not affect any later independent chain build of the same load: a lazy import that follows a failed one re-attempts construction of every chunk the failed build abandoned, including chunks the two builds share.
+- [x] Sibling static-import dependencies are fetched concurrently, and the number of chunk-source fetches in flight for one chain build never exceeds the configured width no matter how deep or how wide the dependency graph is; the failure reported for a group of siblings is still the first in declaration order regardless of completion order.
+- [ ] A manifest declaring the same shared-dependency package name more than once fails the load with a diagnostic naming that package, before any shared-dependency source is fetched.
 - [ ] An entry whose manifest is named by id loads when the manifest is registered with the type system of the registry the handler was registered into, without the id ever being cached by an earlier load
 - [ ] An entry whose manifest id no source resolves fails the load with a diagnostic naming that reference, both when a type system was supplied and when the handler belongs to no registry

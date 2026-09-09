@@ -9,7 +9,7 @@
 
 import { useSyncExternalStore, useCallback, useRef } from 'react';
 import { useFrontX } from '../../FrontXContext';
-import { useMfeRegistry } from './useMfeRegistry';
+import { resolveMfeRegistry } from './useMfeRegistry';
 import type { Extension } from '@gears-frontx/framework';
 
 // ============================================================================
@@ -42,7 +42,7 @@ import type { Extension } from '@gears-frontx/framework';
  */
 export function useDomainExtensions(domainId: string): Extension[] {
   const app = useFrontX();
-  const registry = useMfeRegistry('useDomainExtensions');
+  const registry = resolveMfeRegistry(app, 'useDomainExtensions');
 
   // Subscribe to store changes.
   // Any dispatch (including registration state updates) triggers a snapshot check.

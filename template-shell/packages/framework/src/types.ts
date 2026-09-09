@@ -401,9 +401,11 @@ export interface FrontXAppRuntimeExtensions {
  * FrontX App Guarantees
  *
  * Empty by default. An application that always builds with the `microfrontends()`
- * plugin can declare that `mfeRegistry` is guaranteed present, dropping the optional
- * modifier for every consumer of `FrontXApp` (including through `useFrontX()`) without
- * changing anything for applications that don't opt in.
+ * plugin can declare `mfeRegistry: true` to state that the registry is guaranteed
+ * present, dropping the optional modifier for every consumer of `FrontXApp`
+ * (including through `useFrontX()`) without changing anything for applications that
+ * don't opt in. Declaring `mfeRegistry: false` keeps the slot optional, exactly as
+ * if the interface had not been augmented at all.
  *
  * Augment it via declaration merging in an app-level `frontx.d.ts`:
  *
@@ -422,7 +424,7 @@ export interface FrontXAppRuntimeExtensions {
  */
 export interface FrontXAppGuarantees {}
 
-type MfeRegistrySlot = 'mfeRegistry' extends keyof FrontXAppGuarantees
+type MfeRegistrySlot = FrontXAppGuarantees extends { mfeRegistry: true }
   ? { mfeRegistry: MfeRegistry }
   : { mfeRegistry?: MfeRegistry };
 

@@ -9,7 +9,7 @@
 
 import { useSyncExternalStore, useCallback, useRef } from 'react';
 import { useFrontX } from '../../FrontXContext';
-import { useMfeRegistry } from './useMfeRegistry';
+import { resolveMfeRegistry } from './useMfeRegistry';
 
 // ============================================================================
 // Hook Implementation
@@ -53,7 +53,7 @@ import { useMfeRegistry } from './useMfeRegistry';
  */
 export function useRegisteredPackages(): string[] {
   const app = useFrontX();
-  const registry = useMfeRegistry('useRegisteredPackages');
+  const registry = resolveMfeRegistry(app, 'useRegisteredPackages');
 
   // Subscribe to store changes.
   // Any dispatch (including registration state updates) triggers a snapshot check.

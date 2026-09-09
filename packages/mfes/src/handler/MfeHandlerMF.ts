@@ -48,21 +48,72 @@ import {
 const RUNTIME_STYLE_ID_PREFIX = '__frontx-mfe-runtime-style-';
 
 /**
- * Maximum number of concurrent in-flight invocations within a single
- * {@link boundedMap} call — i.e. within one fan-out batch (one call's
- * shared-dep source fetches, or one chunk's sibling static-import
- * dependencies). This is a per-batch limit, not a global one: a bushy
- * dependency graph opens a new batch at each recursion level and for each
- * sibling group, so several batches can be in flight concurrently across
- * the whole load, each independently bounded to this width. The width
- * itself is chosen to stay well short of the browser's per-origin
- * connection pool, so that within any one batch, added concurrency still
- * shortens wall-clock time instead of just queuing behind that pool, while
- * an unbounded fan-out risks minting page-lifetime blob URLs (see the
- * never-revoke invariant on {@link createBlobUrlChainInternal}) for work a
- * failed load will never use.
+ * Width of every bounded fan-out in this file: the number of chunk-source
+ * fetches one chain build may have in flight at once (see
+ * {@link FetchBudget}), and the number of concurrent invocations within one
+ * {@link boundedMap} batch (the shared-dep source fetches of a single
+ * manifest).
+ *
+ * The width is chosen to stay well short of the browser's per-origin
+ * connection pool, so that added concurrency still shortens wall-clock time
+ * instead of just queuing behind that pool, while an unbounded fan-out
+ * risks minting page-lifetime blob URLs (see the never-revoke invariant on
+ * {@link createBlobUrlChainInternal}) for work a failed load will never
+ * use.
  */
 const MAX_CONCURRENT_FETCHES = 6;
+
+/**
+ * Single concurrency budget shared by every fetch of one chain build.
+ *
+ * A per-batch limit is not enough for the recursive chunk graph: a batch
+ * opened at each recursion level and for each sibling group multiplies the
+ * width by the graph's bushiness, so a deep, wide graph can put an
+ * arbitrary number of fetches in flight even though every individual batch
+ * is "bounded". One budget instance lives on the {@link ChainBuildState} of
+ * a build and is acquired around the chunk-source fetch itself, so the
+ * bound holds for the whole build regardless of depth or sibling-group
+ * count.
+ *
+ * A slot is held ONLY across the source fetch, never across a recursion
+ * into a dependency: a parent holding a slot while waiting for its
+ * children's fetches would deadlock as soon as the graph is deeper than
+ * the width. Waiters are released strictly first-in-first-out, so siblings
+ * admitted from one fan-out enter in declaration order.
+ */
+class FetchBudget {
+  private available: number;
+  private readonly waiters: Array<() => void> = [];
+
+  constructor(width: number) {
+    this.available = width;
+  }
+
+  acquire(): Promise<void> {
+    if (this.available > 0) {
+      this.available -= 1;
+      return Promise.resolve();
+    }
+    return new Promise<void>((resolve) => {
+      this.waiters.push(resolve);
+    });
+  }
+
+  /**
+   * Hand the slot directly to the longest-waiting acquirer when there is
+   * one (rather than incrementing and letting an arbitrary waiter win the
+   * next turn of the event loop), which is what keeps the in-flight count
+   * exactly at the width under saturation.
+   */
+  release(): void {
+    const next = this.waiters.shift();
+    if (next !== undefined) {
+      next();
+      return;
+    }
+    this.available += 1;
+  }
+}
 
 /**
  * Run `task` over `items` with at most {@link MAX_CONCURRENT_FETCHES}
@@ -71,6 +122,11 @@ const MAX_CONCURRENT_FETCHES = 6;
  * deterministic, declaration-order error reporting (rather than
  * first-to-reject-in-wall-clock-time) can scan the returned array in order
  * for the first `rejected` entry.
+ *
+ * Used for the flat shared-dep batch only. The recursive chunk graph fans
+ * its siblings out unbounded and throttles the fetches themselves through
+ * the build-scoped {@link FetchBudget} instead, because a per-batch pool
+ * cannot bound a recursion (see that class).
  *
  * Each `task` invocation runs synchronously up to its first `await` before
  * the pool moves on to start the next one, so any synchronous check-then-set
@@ -148,6 +204,19 @@ function firstRejection<R>(
  * that only becomes visible once two independently-fanned-out branches
  * meet can still be detected from either side (see the doc comment on
  * {@link MfeHandlerMF.createBlobUrlChain}).
+ *
+ * The lineage only ever grows: a branch that short-circuits on a cycle
+ * (and therefore stops awaiting this entry) leaves its contribution
+ * behind, so the set is an OVER-approximation of "who is currently waiting
+ * on this construction". That is deliberate and is the safe direction to
+ * err in — an over-approximation can only make a later request take the
+ * cycle short-circuit on a graph that no longer has that cycle, costing
+ * one specifier its blob URL, whereas pruning contributions would risk
+ * missing a real cycle and reinstating the circular wait the lineage
+ * exists to prevent. Because the short-circuit is no longer silent (see
+ * {@link MfeHandlerMF.recordCycleShortCircuit}), a stale relation shows up
+ * as a diagnostic naming the chunk pair rather than as an unexplained
+ * origin-URL import.
  */
 interface InFlightChainEntry {
   readonly promise: Promise<void>;
@@ -205,13 +274,15 @@ interface LoadBlobState {
 }
 
 /**
- * Per-chain-build failure signal.
+ * Per-chain-build state: the build's failure signal, its fetch-concurrency
+ * budget, and the set of dependencies it deliberately short-circuited on a
+ * cycle.
  *
  * A single call into {@link MfeHandlerMF.createBlobUrlChain} — the initial
  * expose-chunk build for a load, or one later {@link
  * MfeHandlerMF.resolveLazyChunk} call reached through the lazy-import ABI —
  * is one "chain build". Every recursive fan-out inside that one build
- * shares one `ChainBuildFailure` instance, created fresh by whichever
+ * shares one `ChainBuildState` instance, created fresh by whichever
  * method starts the build.
  *
  * This is deliberately NOT part of {@link LoadBlobState}: `LoadBlobState`
@@ -223,7 +294,7 @@ interface LoadBlobState {
  * independent, lazy import on the same already-mounted MFE, with no retry
  * path short of a full page reload. Scoping the flag to one build instead
  * means a failed lazy import fails only its own `resolveLazyChunk` call;
- * the next lazy import starts its own fresh `ChainBuildFailure` and is
+ * the next lazy import starts its own fresh `ChainBuildState` and is
  * unaffected.
  *
  * Resetting a single load-wide flag inside `resolveLazyChunk` instead would
@@ -243,8 +314,37 @@ interface LoadBlobState {
  * promise itself (a build awaiting a promise another build created still
  * sees that promise reject on its own terms).
  */
-interface ChainBuildFailure {
+interface ChainBuildState {
   failed: boolean;
+  /**
+   * Single concurrency budget for every chunk-source fetch this build
+   * issues — see {@link FetchBudget} for why the bound has to be build-wide
+   * rather than per fan-out batch.
+   */
+  readonly fetchBudget: FetchBudget;
+  /**
+   * Filenames this build deliberately returned from without constructing,
+   * because awaiting them would have closed a dependency cycle.
+   *
+   * This is what separates the two reasons a dependency can be missing from
+   * `LoadBlobState.blobUrlMap` at rewrite time: a filename recorded here
+   * takes the sanctioned partial-rewrite fallback to its origin chunk URL,
+   * while any other absent dependency is a chunk that was never built and
+   * fails the load (see {@link MfeHandlerMF.rewriteModuleImports}).
+   *
+   * Build-scoped for the same reason `failed` is: a cycle short-circuit is
+   * a fact about one build's traversal order, not about the load.
+   */
+  readonly cycleShortCircuits: Set<string>;
+}
+
+/** Start a fresh chain build (see {@link ChainBuildState}). */
+function createChainBuildState(): ChainBuildState {
+  return {
+    failed: false,
+    fetchBudget: new FetchBudget(MAX_CONCURRENT_FETCHES),
+    cycleShortCircuits: new Set<string>(),
+  };
 }
 
 /**
@@ -460,11 +560,17 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
       // @cpt-end:cpt-frontx-flow-mfe-isolation-load:p1:inst-if-cached
     }
     // @cpt-begin:cpt-frontx-flow-mfe-isolation-load:p1:inst-else-new-load
+    // @cpt-begin:cpt-frontx-algo-mfe-loading-attempt-timeout:p1:inst-lto-per-attempt-budget
+    // The timeout wraps the ATTEMPT, inside the retry loop — every retry of
+    // a failed attempt is raced against its own fresh budget rather than
+    // sharing the first attempt's, so a load's worst-case wall clock is the
+    // budget times the attempt count plus `RetryHandler`'s backoff.
     const promise = this.retryHandler.retry(
       () => this.withLoadTimeout(this.loadInternal(entry), entry.id),
       this.config.retries ?? 0,
       1000
     );
+    // @cpt-end:cpt-frontx-algo-mfe-loading-attempt-timeout:p1:inst-lto-per-attempt-budget
     // @cpt-begin:cpt-frontx-state-mfe-isolation-module-lifecycle:p1:inst-to-isolated
     MfeHandlerMF.loadCache.set(extensionId, promise);
     // @cpt-end:cpt-frontx-state-mfe-isolation-module-lifecycle:p1:inst-to-isolated
@@ -513,7 +619,7 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
    * This does not cancel the underlying fetch/blob-URL work still in
    * flight when the timer wins the race — there is no `AbortController`
    * plumbed through this file (see the sibling {@link boundedMap} fan-out,
-   * which relies on a `ChainBuildFailure` token rather than cancellation
+   * which relies on a `ChainBuildState` token rather than cancellation
    * for the same reason) — so a timed-out attempt's background work keeps
    * running to completion and its results are simply never observed by
    * this call.
@@ -534,28 +640,50 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
    * between attempts — on the order of 90+ seconds, not the 30 seconds the
    * `timeout` field name alone would suggest.
    */
+  // @cpt-algo:cpt-frontx-algo-mfe-loading-attempt-timeout:p1
+  // @cpt-dod:cpt-frontx-dod-mfe-loading-attempt-timeout:p1
   private withLoadTimeout<T>(
     attempt: Promise<T>,
     entryId: string
   ): Promise<T> {
+    // @cpt-begin:cpt-frontx-algo-mfe-loading-attempt-timeout:p1:inst-lto-read-budget
     const timeoutMs = this.config.timeout;
+    // @cpt-end:cpt-frontx-algo-mfe-loading-attempt-timeout:p1:inst-lto-read-budget
+    // @cpt-begin:cpt-frontx-algo-mfe-loading-attempt-timeout:p1:inst-lto-if-disabled
     if (timeoutMs === undefined || timeoutMs <= 0) {
+      // @cpt-begin:cpt-frontx-algo-mfe-loading-attempt-timeout:p1:inst-lto-return-unraced
       return attempt;
+      // @cpt-end:cpt-frontx-algo-mfe-loading-attempt-timeout:p1:inst-lto-return-unraced
     }
+    // @cpt-end:cpt-frontx-algo-mfe-loading-attempt-timeout:p1:inst-lto-if-disabled
 
     let timer: ReturnType<typeof setTimeout>;
+    // @cpt-begin:cpt-frontx-algo-mfe-loading-attempt-timeout:p1:inst-lto-if-elapsed
     const timeout = new Promise<never>((_resolve, reject) => {
       timer = setTimeout(() => {
+        // @cpt-begin:cpt-frontx-algo-mfe-loading-attempt-timeout:p1:inst-lto-raise-timeout
         reject(
           new MfeLoadError(
             `MFE load for '${entryId}' timed out after ${timeoutMs}ms`,
             entryId
           )
         );
+        // @cpt-end:cpt-frontx-algo-mfe-loading-attempt-timeout:p1:inst-lto-raise-timeout
+        // @cpt-begin:cpt-frontx-algo-mfe-loading-attempt-timeout:p1:inst-lto-no-cancel
+        // Nothing is aborted here: the losing attempt's fetches and blob
+        // URL construction keep running to completion, their results
+        // simply never observed by this call (see this method's doc
+        // comment and the retention invariant of ADR-0004).
+        // @cpt-end:cpt-frontx-algo-mfe-loading-attempt-timeout:p1:inst-lto-no-cancel
       }, timeoutMs);
     });
+    // @cpt-end:cpt-frontx-algo-mfe-loading-attempt-timeout:p1:inst-lto-if-elapsed
 
+    // @cpt-begin:cpt-frontx-algo-mfe-loading-attempt-timeout:p1:inst-lto-race-attempt
+    // @cpt-begin:cpt-frontx-algo-mfe-loading-attempt-timeout:p1:inst-lto-return-attempt
     return Promise.race([attempt, timeout]).finally(() => clearTimeout(timer));
+    // @cpt-end:cpt-frontx-algo-mfe-loading-attempt-timeout:p1:inst-lto-return-attempt
+    // @cpt-end:cpt-frontx-algo-mfe-loading-attempt-timeout:p1:inst-lto-race-attempt
   }
 
   private async loadInternal(entry: MfeEntryMF): Promise<MfeEntryLifecycle<ChildMfeBridge>> {
@@ -653,9 +781,9 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
     // @cpt-end:cpt-frontx-state-mfe-isolation-load-blob-state:p1:inst-blob-building
 
     // Fresh per-build failure token for this chain build (see
-    // `ChainBuildFailure`) — scoped to this one expose-chunk build, not to
+    // `ChainBuildState`) — scoped to this one expose-chunk build, not to
     // `loadState`, which lives for the whole page-lifetime load.
-    const buildFailure: ChainBuildFailure = { failed: false };
+    const build = createChainBuildState();
 
     // @cpt-begin:cpt-frontx-algo-mfe-loading-manifest-discovery:p1:inst-md-read-css
     // Collect CSS paths from exposeAssets (sync injected at mount; async lazy).
@@ -667,7 +795,7 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
 
     // Build blob URL chain for the expose chunk and all its static deps.
     // Bare specifiers within those chunks are rewritten to shared dep blob URLs.
-    await this.createBlobUrlChain(loadState, exposeChunkFilename, buildFailure);
+    await this.createBlobUrlChain(loadState, exposeChunkFilename, build);
 
     const exposeBlobUrl = loadState.blobUrlMap.get(exposeChunkFilename);
     if (!exposeBlobUrl) {
@@ -948,6 +1076,20 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
    * sharedDepTextCache deduplicates by name@version across ALL MFEs — the
    * first MFE to load react@19.2.4 fetches it from its server; subsequent MFEs
    * get a cache hit regardless of their server URL.
+   *
+   * Deliberate trade-off versus the sequential loop this replaced: a
+   * rejected shared-dep fetch surfaces only once every sibling in the batch
+   * has settled, where the loop threw on the first failure. Nothing is
+   * gained by aborting sooner. The batch is already dispatched concurrently,
+   * so the fetches a short-circuit could skip are only those still queued
+   * behind the concurrency width, while the ones already issued cannot be
+   * cancelled (no `AbortController` is plumbed through this file — same
+   * reason the chain build uses a failure token rather than cancellation),
+   * and the shared-dep list is short by construction (the packages an MFE
+   * declares external). What the batch must NOT lose is the loop's
+   * deterministic error: the failure reported is still the first in the
+   * manifest's declaration order, not whichever fetch lost the wall-clock
+   * race.
    */
   private async fetchSharedDepSources(
     manifest: MfManifest
@@ -1162,7 +1304,7 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
   private createBlobUrlChain(
     loadState: LoadBlobState,
     filename: string,
-    buildFailure: ChainBuildFailure,
+    build: ChainBuildState,
     ancestors: ReadonlySet<string> = new Set()
   ): Promise<void> {
     // @cpt-begin:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-check-map
@@ -1183,6 +1325,7 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
     // branch below (see the class-level doc comment) covers a cycle that
     // closes across two branches that fanned out independently.
     if (ancestors.has(filename)) {
+      this.recordCycleShortCircuit(build, filename, ancestors, 'own lineage');
       return Promise.resolve();
     }
 
@@ -1201,6 +1344,7 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
       const union = new Set(ancestors);
       for (const inherited of existing.lineage) union.add(inherited);
       if (union.has(filename)) {
+        this.recordCycleShortCircuit(build, filename, union, 'joined lineage');
         // @cpt-begin:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-return-inflight
         return Promise.resolve();
         // @cpt-end:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-return-inflight
@@ -1225,27 +1369,90 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
     // comment for why that liveness is what makes cross-branch cycles
     // detectable).
     const lineage = new Set(ancestors);
+
+    // @cpt-begin:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-settle-drop-inflight
+    // The `inFlight` entry is a join point for a construction still in
+    // progress, not a record that one happened — `blobUrlMap` is the only
+    // durable record. Three paths inside `createBlobUrlChainInternal`
+    // resolve WITHOUT minting a blob URL (the build already failed on
+    // entry, it failed while this fetch was in flight, or it failed in a
+    // sibling subtree), and a rejection leaves nothing behind either. An
+    // entry left in `inFlight` after any of those settles is a settled
+    // promise that produced nothing: every later request for the filename
+    // joins it, resolves immediately, never re-fetches, and then finds no
+    // `blobUrlMap` entry. Dropping the entry on settle-without-a-blob-URL
+    // is what lets a later build re-attempt the construction.
+    // Identity-checked against the wrapped promise below, so a construction
+    // that settles late cannot delete an entry a NEWER request already
+    // registered for the same filename.
+    const dropIfUnproductive = (): void => {
+      if (loadState.blobUrlMap.has(filename)) return;
+      if (loadState.inFlight.get(filename)?.promise === promise) {
+        loadState.inFlight.delete(filename);
+      }
+    };
+    // The wrapped promise — not the raw construction — is what goes into
+    // `inFlight`, so a joining caller cannot observe the construction as
+    // settled before the entry has been pruned.
     const promise = this.createBlobUrlChainInternal(
       loadState,
       filename,
-      buildFailure,
+      build,
       lineage
+    ).then(
+      () => {
+        dropIfUnproductive();
+      },
+      (error: unknown) => {
+        dropIfUnproductive();
+        throw error;
+      }
     );
     loadState.inFlight.set(filename, { promise, lineage });
+    // @cpt-end:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-settle-drop-inflight
     return promise;
+  }
+
+  /**
+   * Record — and surface — a deliberate cycle short-circuit.
+   *
+   * The short-circuit is the only sanctioned reason for a dependency to be
+   * missing from `blobUrlMap` when its referrer is rewritten
+   * ({@link rewriteModuleImports}), so it is recorded on the build. It is
+   * also a genuine degradation of isolation for that one specifier — the
+   * cycle-closing import resolves from origin instead of from a blob — so
+   * it is reported rather than applied silently: a chunk pair that cycles
+   * is almost always a bundler-output surprise the MFE author wants to know
+   * about.
+   */
+  private recordCycleShortCircuit(
+    build: ChainBuildState,
+    filename: string,
+    lineage: ReadonlySet<string>,
+    detectedVia: string
+  ): void {
+    if (build.cycleShortCircuits.has(filename)) return;
+    build.cycleShortCircuits.add(filename);
+    console.warn(
+      `[MfeHandlerMF] dependency cycle: chunk '${filename}' is already in the ` +
+        `${detectedVia} of the branch requesting it (${[...lineage].join(' → ')}). ` +
+        'The import that closes the cycle resolves from its origin URL ' +
+        'instead of a blob URL, so that one module evaluates outside the ' +
+        "load's isolated graph."
+    );
   }
 
   private async createBlobUrlChainInternal(
     loadState: LoadBlobState,
     filename: string,
-    buildFailure: ChainBuildFailure,
+    build: ChainBuildState,
     ancestors: ReadonlySet<string>
   ): Promise<void> {
     // A sibling elsewhere in THIS build already failed — stop before issuing
     // further fetches for work this build will never use. Scoped to
-    // `buildFailure` (this one chain-build), not `loadState` (the whole
-    // load) — see `ChainBuildFailure`.
-    if (buildFailure.failed) {
+    // `build` (this one chain-build), not `loadState` (the whole
+    // load) — see `ChainBuildState`.
+    if (build.failed) {
       return;
     }
 
@@ -1254,11 +1461,28 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
     const chunkUrl = filename.startsWith('http://') || filename.startsWith('https://')
       ? filename
       : loadState.baseUrl + filename;
-    // @cpt-begin:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-fetch-source
-    const source = await this.fetchSourceText(chunkUrl);
-    // @cpt-end:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-fetch-source
+    // @cpt-begin:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-fanout-bounded
+    // Admission to the build's single fetch budget. The slot is held across
+    // this one fetch and released the moment it settles — never across the
+    // dependency recursion below, which would deadlock any graph deeper
+    // than the budget's width.
+    await build.fetchBudget.acquire();
+    let source: string;
+    try {
+      if (build.failed) {
+        // Another branch failed while this call waited for a slot: give the
+        // slot back without spending it on work this build will never use.
+        return;
+      }
+      // @cpt-begin:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-fetch-source
+      source = await this.fetchSourceText(chunkUrl);
+      // @cpt-end:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-fetch-source
+    } finally {
+      build.fetchBudget.release();
+    }
+    // @cpt-end:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-fanout-bounded
 
-    if (buildFailure.failed) {
+    if (build.failed) {
       // Re-check after the `await` above: another branch of THIS build may
       // have failed while this fetch was in flight.
       return;
@@ -1270,15 +1494,20 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
 
     // @cpt-begin:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-for-each-dep
     // @cpt-begin:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-recurse-dep
-    // Siblings are fanned out concurrently, bounded by
-    // MAX_CONCURRENT_FETCHES, instead of being awaited serially one at a
-    // time — a sibling's entire recursive subtree no longer blocks the next
-    // sibling from starting. Cross-sibling / cross-load dedup for a shared
+    // Siblings are fanned out concurrently instead of being awaited
+    // serially one at a time — a sibling's entire recursive subtree no
+    // longer blocks the next sibling from starting. The fan-out itself is
+    // deliberately unbounded: what must be bounded is the number of
+    // FETCHES in flight for this build, and that bound now lives on the
+    // build's own `fetchBudget` (see {@link FetchBudget}) rather than on a
+    // pool opened per sibling group, which multiplied the width by the
+    // graph's bushiness. Cross-sibling / cross-load dedup for a shared
     // filename still holds because `createBlobUrlChain`'s check-then-set
     // against `blobUrlMap`/`inFlight` is synchronous (the method itself is
     // not `async`, so no other call can interleave between the check and
     // the `inFlight.set`); two siblings requesting the same filename settle
-    // on one underlying fetch/chain.
+    // on one underlying fetch/chain. Dispatching with `map` keeps those
+    // check-then-sets in declaration order.
     //
     // `ancestors` here is `loadState.inFlight.get(filename)!.lineage` — the
     // same mutable object passed down from `createBlobUrlChain` — so any
@@ -1288,22 +1517,27 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
     // that cycles back here is detected by the plain ancestor check.
     const childAncestors = new Set(ancestors);
     childAncestors.add(filename);
-    const settled = await boundedMap(deps, (dep) =>
-      this.createBlobUrlChain(loadState, dep, buildFailure, childAncestors)
+    const settled = await Promise.allSettled(
+      deps.map((dep) =>
+        this.createBlobUrlChain(loadState, dep, build, childAncestors)
+      )
     );
     // @cpt-end:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-recurse-dep
     // @cpt-end:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-for-each-dep
 
+    // @cpt-begin:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-first-failure-declaration-order
     // Deterministic error surfacing: report the first failing dependency in
     // its declaration order, matching the pre-concurrency sequential loop's
     // error semantics rather than whichever sibling lost the race in
-    // wall-clock time.
+    // wall-clock time. `Promise.allSettled` preserves input order, so this
+    // scan is unaffected by which sibling settled first.
     const failure = firstRejection(settled);
+    // @cpt-end:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-first-failure-declaration-order
     if (failure.found) {
-      buildFailure.failed = true;
+      build.failed = true;
       throw failure.reason;
     }
-    if (buildFailure.failed) {
+    if (build.failed) {
       // A sibling outside this call's own subtree, but within THIS build,
       // already failed: stop here rather than minting a blob URL this
       // build will never use.
@@ -1313,9 +1547,9 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
     // @cpt-begin:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-rewrite-static
     let rewritten = this.rewriteModuleImports(
       source,
-      loadState.baseUrl,
-      loadState.blobUrlMap,
-      filename
+      loadState,
+      filename,
+      build
     );
     // @cpt-end:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-rewrite-static
 
@@ -1450,19 +1684,19 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
     );
     // @cpt-end:cpt-frontx-algo-mfe-loading-lazy-import-abi:p1:inst-lai-resolve-relative-path
 
-    // Fresh per-build failure token (see `ChainBuildFailure`) for THIS
+    // Fresh per-build failure token (see `ChainBuildState`) for THIS
     // `resolveLazyChunk` call, scoped to `loadState`. A network blip on one
     // lazy import must not latch a load-wide flag that then blocks every
     // later, otherwise-independent, lazy import on the same already-mounted
     // MFE — each call here gets its own token instead of sharing one on
     // `loadState`.
-    const buildFailure: ChainBuildFailure = { failed: false };
+    const build = createChainBuildState();
 
     // @cpt-begin:cpt-frontx-algo-mfe-loading-lazy-import-abi:p1:inst-lai-fetch-lazy-chunk
     await this.createBlobUrlChain(
       loadState,
       filename,
-      buildFailure,
+      build,
       new Set([loadState.entryChunkFilename])
     );
     // @cpt-end:cpt-frontx-algo-mfe-loading-lazy-import-abi:p1:inst-lai-fetch-lazy-chunk
@@ -1698,24 +1932,56 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
    *
    * Handles both './' and '../' relative imports. Each relative specifier
    * is resolved against the chunk's own path to produce a normalized key
-   * for the blobUrlMap lookup. Unmatched imports fall back to absolute URLs.
+   * for the blobUrlMap lookup.
+   *
+   * A dependency missing from `blobUrlMap` has exactly one sanctioned
+   * reading: this build deliberately short-circuited its construction to
+   * break a dependency cycle, in which case that one specifier falls back
+   * to the dependency's origin chunk URL (the partial-rewrite fallback,
+   * mirroring what `createBlobUrlsInDependencyOrder` does for circular
+   * shared deps). Any other absent dependency is a chunk that was never
+   * built, and emitting an origin URL for it would silently hand back a
+   * module that evaluates outside the load's isolated graph with its own
+   * bare specifiers unrewritten — a far worse outcome than a diagnostic, so
+   * it fails the load instead.
    */
   private rewriteModuleImports(
     source: string,
-    baseUrl: string,
-    blobUrlMap: Map<string, string>,
-    chunkFilename: string
+    loadState: LoadBlobState,
+    chunkFilename: string,
+    build: ChainBuildState
   ): string {
-    const resolve = (relPath: string): string => {
-      const resolved = this.resolveRelativePath(chunkFilename, relPath);
-      const blobUrl = blobUrlMap.get(resolved);
-      if (blobUrl) return blobUrl;
+    const originUrl = (resolved: string): string =>
       // If resolved is already absolute (dep of a cross-origin portable chunk),
       // use the URL as-is instead of prepending baseUrl.
-      if (resolved.startsWith('http://') || resolved.startsWith('https://')) {
-        return resolved;
+      resolved.startsWith('http://') || resolved.startsWith('https://')
+        ? resolved
+        : `${loadState.baseUrl}${resolved}`;
+
+    const resolve = (relPath: string): string => {
+      const resolved = this.resolveRelativePath(chunkFilename, relPath);
+      const blobUrl = loadState.blobUrlMap.get(resolved);
+      if (blobUrl) return blobUrl;
+      // @cpt-begin:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-if-dep-cycle-absent
+      if (build.cycleShortCircuits.has(resolved)) {
+        // @cpt-begin:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-rewrite-cycle-fallback
+        return originUrl(resolved);
+        // @cpt-end:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-rewrite-cycle-fallback
       }
-      return `${baseUrl}${resolved}`;
+      // @cpt-end:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-if-dep-cycle-absent
+      // @cpt-begin:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-else-dep-never-built
+      // @cpt-begin:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-raise-unbuilt-dep
+      throw new MfeLoadError(
+        `Chunk '${chunkFilename}' imports '${relPath}' (resolved to ` +
+          `'${resolved}'), which has no blob URL in this load and was not ` +
+          'short-circuited as a dependency cycle — its construction never ' +
+          'completed. Refusing to rewrite the import to its origin URL, ' +
+          "which would evaluate that module outside the load's isolated " +
+          'module graph.',
+        loadState.entryId
+      );
+      // @cpt-end:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-raise-unbuilt-dep
+      // @cpt-end:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-else-dep-never-built
     };
 
     // Static imports: from './...' or from '../..'
