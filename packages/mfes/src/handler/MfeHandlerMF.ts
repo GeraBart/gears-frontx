@@ -48,6 +48,78 @@ import {
 const RUNTIME_STYLE_ID_PREFIX = '__frontx-mfe-runtime-style-';
 
 /**
+ * Maximum number of chunk/dependency fetches issued concurrently within a
+ * single fan-out batch (shared-dep source fetches and sibling static-import
+ * chains). Chosen to match the HTTP/1.1 six-connections-per-origin ceiling
+ * that motivated issue #618 ("MFE loader serializes independent dependency
+ * fetches") — beyond this width, added concurrency just queues behind the
+ * browser's own per-origin connection pool instead of shortening wall-clock
+ * time, while an unbounded fan-out risks minting page-lifetime blob URLs
+ * (see the never-revoke invariant on {@link createBlobUrlChainInternal})
+ * for work a failed load will never use.
+ */
+const MAX_CONCURRENT_FETCHES = 6;
+
+/**
+ * Run `task` over `items` with at most {@link MAX_CONCURRENT_FETCHES}
+ * concurrent in-flight invocations. Returns one settled result per item, in
+ * the SAME order as `items` (not completion order) — callers that need
+ * deterministic, declaration-order error reporting (rather than
+ * first-to-reject-in-wall-clock-time) can scan the returned array in order
+ * for the first `rejected` entry.
+ *
+ * Each `task` invocation runs synchronously up to its first `await` before
+ * the pool moves on to start the next one, so any synchronous check-then-set
+ * a caller performs before its own first `await` (e.g. a cache lookup
+ * followed by issuing a fetch) is preserved relative to that item's own
+ * fetch — only the *waiting* is made concurrent, not the dispatch ordering
+ * guarantees a caller already relies on.
+ */
+async function boundedMap<T, R>(
+  items: readonly T[],
+  task: (item: T, index: number) => Promise<R>
+): Promise<PromiseSettledResult<R>[]> {
+  const results: PromiseSettledResult<R>[] = new Array(items.length);
+  let cursor = 0;
+
+  const worker = async (): Promise<void> => {
+    while (cursor < items.length) {
+      const index = cursor;
+      cursor += 1;
+      try {
+        const value = await task(items[index], index);
+        results[index] = { status: 'fulfilled', value };
+      } catch (error) {
+        results[index] = { status: 'rejected', reason: error };
+      }
+    }
+  };
+
+  const workerCount = Math.min(MAX_CONCURRENT_FETCHES, items.length);
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+  return results;
+}
+
+/**
+ * Scan settled results in array order (declaration order, not completion
+ * order) and return the first rejection, if any. Used to preserve the
+ * pre-concurrency loops' "first-in-declaration-order error" semantics after
+ * fanning work out with {@link boundedMap} (design constraint from the
+ * issue #618 review: a naive `Promise.all` would surface whichever fetch
+ * lost the race, non-deterministically across runs).
+ */
+function firstRejection<R>(
+  settled: readonly PromiseSettledResult<R>[]
+): unknown | undefined {
+  for (const result of settled) {
+    if (result.status === 'rejected') {
+      return result.reason;
+    }
+  }
+  return undefined;
+}
+
+/**
  * Per-load shared state for blob URL chain creation.
  *
  * Shared across all blob URL chains within a single load() call so that
@@ -87,6 +159,15 @@ interface LoadBlobState {
    * URL is owned by the same load and shares its never-revoke invariant).
    */
   lazyLoaderUrl?: string;
+  /**
+   * Set once any branch of this load's concurrent blob URL chain fan-out
+   * (see {@link createBlobUrlChainInternal}) rejects. In-flight sibling
+   * continuations check this before minting their own blob URL and skip
+   * doing so once it is set — a load that has already failed must not keep
+   * creating page-lifetime blob URLs (the never-revoke invariant) for work
+   * it will never use. Mutable for the same reason `lazyLoaderUrl` is.
+   */
+  failed: boolean;
 }
 
 /**
@@ -154,9 +235,33 @@ export class LruCache<K, V> {
   }
 }
 
-/** Max source-text entries retained. Expose-chunk entries evict oldest-first. */
+/**
+ * Max source-text entries retained. Expose-chunk entries evict oldest-first.
+ *
+ * F-010 (issue #618 review): concurrent fan-out (see {@link boundedMap})
+ * can insert up to {@link MAX_CONCURRENT_FETCHES} entries from a single
+ * burst instead of one at a time, which raises eviction odds under this
+ * capacity versus the old strictly-sequential insertion pattern. This is
+ * not a correctness break — `LruCache.delete` only removes the map entry;
+ * a caller already holding the evicted entry's promise still resolves it
+ * (see {@link LruCache}) — but a too-small capacity can reduce the
+ * cross-MFE cache hit rate for large expose chains. 256 comfortably covers
+ * realistic per-load chunk counts (an expose chain rarely exceeds a few
+ * dozen static-import chunks) with headroom for several concurrent loads'
+ * worth of burst insertions; re-evaluate upward if a real MFE's static
+ * import graph approaches this width.
+ */
 const SOURCE_TEXT_CACHE_CAPACITY = 256;
-/** Max shared-dep text entries retained (keyed by name@version, cross-MFE). */
+/**
+ * Max shared-dep text entries retained (keyed by name@version, cross-MFE).
+ *
+ * Same F-010 burst-eviction trade-off as {@link SOURCE_TEXT_CACHE_CAPACITY}
+ * applies here, scaled down: shared deps are bounded by the distinct
+ * npm-published packages declared across all MFEs' `rollupOptions.external`
+ * (typically far fewer than the number of chunks any one MFE emits), so 128
+ * keeps ample headroom even with concurrent fan-out bursts of up to
+ * {@link MAX_CONCURRENT_FETCHES} per load.
+ */
 const SHARED_DEP_TEXT_CACHE_CAPACITY = 128;
 
 /**
@@ -279,7 +384,7 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
     }
     // @cpt-begin:cpt-frontx-flow-mfe-isolation-load:p1:inst-else-new-load
     const promise = this.retryHandler.retry(
-      () => this.loadInternal(entry),
+      () => this.withLoadTimeout(this.loadInternal(entry), entry.id),
       this.config.retries ?? 0,
       1000
     );
@@ -317,6 +422,51 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
    * Internal load implementation.
    * Each call creates a fully isolated module evaluation chain via blob URLs.
    */
+  /**
+   * Race a single load attempt against `this.config.timeout`.
+   *
+   * F-006 (issue #618 review): `config.timeout` was accepted and defaulted
+   * but never consulted anywhere — `RetryHandler.retry` only retries on a
+   * thrown error, so a load that hangs (network never resolves, a
+   * dependency cycle, etc.) had zero recovery path short of the caller
+   * abandoning the returned promise. Racing the whole attempt against a
+   * timer gives every attempt (including each retry) a bounded wall-clock
+   * budget and a diagnostic `MfeLoadError` instead of an indefinite hang.
+   *
+   * This does not cancel the underlying fetch/blob-URL work still in
+   * flight when the timer wins the race — there is no `AbortController`
+   * plumbed through this file (see the sibling {@link boundedMap} fan-out,
+   * which relies on the `loadState.failed` flag rather than cancellation
+   * for the same reason) — so a timed-out attempt's background work keeps
+   * running to completion and its results are simply never observed by
+   * this call. `this.config.timeout` is nullish only if a caller explicitly
+   * passes `0`/`undefined`... the constructor always fills a default, so in
+   * practice this is always set.
+   */
+  private withLoadTimeout<T>(
+    attempt: Promise<T>,
+    entryId: string
+  ): Promise<T> {
+    const timeoutMs = this.config.timeout;
+    if (timeoutMs === undefined) {
+      return attempt;
+    }
+
+    let timer: ReturnType<typeof setTimeout>;
+    const timeout = new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(() => {
+        reject(
+          new MfeLoadError(
+            `MFE load for '${entryId}' timed out after ${timeoutMs}ms`,
+            entryId
+          )
+        );
+      }, timeoutMs);
+    });
+
+    return Promise.race([attempt, timeout]).finally(() => clearTimeout(timer));
+  }
+
   private async loadInternal(entry: MfeEntryMF): Promise<MfeEntryLifecycle<ChildMfeBridge>> {
     // @cpt-begin:cpt-frontx-flow-mfe-loading-on-demand-load:p1:inst-register-entry
     const manifest = await this.resolveManifest(entry.manifest);
@@ -408,6 +558,7 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
       entryId,
       sharedDepBlobUrls,
       entryChunkFilename: exposeChunkFilename,
+      failed: false,
     };
     // @cpt-end:cpt-frontx-state-mfe-isolation-load-blob-state:p1:inst-blob-building
 
@@ -659,9 +810,43 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
   private async buildSharedDepBlobUrls(
     manifest: MfManifest
   ): Promise<Map<string, string>> {
+    // F-011 (issue #618 review): `sources`/`sharedDepBlobUrls` are keyed by
+    // bare `dep.name`, while `sharedDepTextCache` is keyed by the more
+    // precise `name@version`. Two shared entries with the same name but
+    // different versions would silently overwrite one another in the
+    // name-keyed maps. Re-keying every map end-to-end to `name@version`
+    // would ripple through `rewriteBareSpecifiers` (which rewrites bare
+    // specifiers like `from "react"` — it needs the bare name, not a
+    // versioned key) and the static-import chain's shared-dep lookups, for
+    // a manifest this handler already documents ({@link resolveManifest})
+    // that it trusts. Failing fast on a same-name collision is the smaller,
+    // targeted fix.
+    this.assertUniqueSharedDepNames(manifest);
     const sources = await this.fetchSharedDepSources(manifest);
     const sharedNames = new Set(manifest.shared.map((d) => d.name));
     return this.createBlobUrlsInDependencyOrder(sources, sharedNames);
+  }
+
+  /**
+   * F-011: fail fast with a diagnostic when `manifest.shared` declares the
+   * same package name more than once (regardless of version) — see the
+   * comment on {@link buildSharedDepBlobUrls} for why this is preferred
+   * over re-keying `sources`/`sharedDepBlobUrls` to `name@version`.
+   */
+  private assertUniqueSharedDepNames(manifest: MfManifest): void {
+    const seen = new Set<string>();
+    for (const dep of manifest.shared) {
+      if (seen.has(dep.name)) {
+        throw new MfeLoadError(
+          `manifest.shared declares '${dep.name}' more than once. Shared ` +
+            'dependency names must be unique within a manifest — blob URL ' +
+            'construction keys sources and rewrite maps by bare package ' +
+            'name, so a duplicate silently overwrites the earlier entry.',
+          manifest.id
+        );
+      }
+      seen.add(dep.name);
+    }
   }
 
   /**
@@ -673,10 +858,20 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
   private async fetchSharedDepSources(
     manifest: MfManifest
   ): Promise<Map<string, string>> {
-    const sources = new Map<string, string>();
     // @cpt-begin:cpt-frontx-algo-mfe-loading-manifest-discovery:p1:inst-md-for-each-shared
     // @cpt-begin:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-for-each-dep
-    for (const dep of manifest.shared) {
+    // F-007 (issue #618 — the reported bug): fetches for each declared dep
+    // are dispatched concurrently, bounded by MAX_CONCURRENT_FETCHES, via
+    // `boundedMap` rather than a `for...of` loop with a trailing `await`
+    // that serialized every dep behind the previous one's full round trip.
+    // Per the FEATURE Note on `inst-for-each-dep`: enumeration order governs
+    // cache-key precedence only (which declaration claims a `name@version`
+    // cross-MFE cache slot), not fetch issuance/completion order. Each dep's
+    // cache-get → derive-URL → fetch → catch-eviction → cache-set sequence
+    // still runs synchronously relative to that dep's own fetch (no `await`
+    // separates them), which is what keeps the cross-MFE dedup race-free
+    // regardless of how the fetches are interleaved.
+    const settled = await boundedMap(manifest.shared, async (dep) => {
       const cacheKey = `${dep.name}@${dep.version}`;
       // @cpt-begin:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-compute-key
       let textPromise = this.sharedDepTextCache.get(cacheKey);
@@ -708,12 +903,29 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
       // @cpt-end:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-else-fetch
       // @cpt-begin:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-if-cache-hit
       // @cpt-begin:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-retrieve-cached
-      sources.set(dep.name, await textPromise);
+      const text = await textPromise;
       // @cpt-end:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-retrieve-cached
       // @cpt-end:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-if-cache-hit
-    }
+      return { name: dep.name, text };
+    });
     // @cpt-end:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-for-each-dep
     // @cpt-end:cpt-frontx-algo-mfe-loading-manifest-discovery:p1:inst-md-for-each-shared
+
+    // Deterministic error surfacing: report the first failure in the
+    // manifest's declaration order rather than whichever fetch happened to
+    // lose the race in wall-clock time (issue #618 review, F-013).
+    const failure = firstRejection(settled);
+    if (failure !== undefined) {
+      throw failure;
+    }
+
+    const sources = new Map<string, string>();
+    for (const result of settled) {
+      if (result.status === 'fulfilled') {
+        sources.set(result.value.name, result.value.text);
+      }
+    }
+    return sources;
     return sources;
   }
 
@@ -810,12 +1022,36 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
    * Concurrent calls for the same filename are deduplicated via the inFlight
    * map — callers await the same promise rather than returning early with no
    * result. This prevents a race where sibling ESM modules with top-level
-   * await trigger overlapping importShared() calls for the same dependency.
+   * await, and the newly-parallelized sibling fan-out in
+   * {@link createBlobUrlChainInternal} (F-008, issue #618), trigger
+   * overlapping resolution for the same dependency; {@link resolveLazyChunk}
+   * is the current beneficiary that actually calls back into this method
+   * from outside the static-import recursion (a prior doc comment here
+   * named a `importShared()` function that does not exist anywhere in this
+   * package — stale residue from an earlier Module-Federation-runtime
+   * implementation).
+   *
+   * `ancestors` carries the set of filenames currently being resolved on
+   * this call's recursion path (F-004, issue #618 review). Before this
+   * guard existed, a static-import cycle (chunk A imports B, B imports A)
+   * deadlocked unrecoverably: A registers itself in `inFlight` and starts
+   * resolving B; B sees A's still-pending `inFlight` promise and awaits it;
+   * A's own resolution cannot complete until B's does — an unbreakable
+   * circular wait with no rejection, no timeout, and no retry path (the
+   * `loadCache` entry never settles). `ancestors` lets a call detect it is
+   * about to re-enter a filename already being resolved further up its own
+   * stack and short-circuit instead of joining that filename's `inFlight`
+   * promise, mirroring the partial-rewrite fallback
+   * {@link createBlobUrlsInDependencyOrder} already applies to circular
+   * shared deps: the ancestor mints its own blob once the rest of its
+   * dependents settle, and the specifier back to it inside the cycle-closing
+   * chunk falls back to a plain chunk URL instead of a blob URL.
    */
   // @cpt-algo:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1
   private createBlobUrlChain(
     loadState: LoadBlobState,
-    filename: string
+    filename: string,
+    ancestors: ReadonlySet<string> = new Set()
   ): Promise<void> {
     // @cpt-begin:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-check-map
     if (loadState.blobUrlMap.has(filename)) {
@@ -826,6 +1062,14 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
       // @cpt-end:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-if-mapped
     }
     // @cpt-end:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-check-map
+
+    // F-004: check for a cycle BEFORE consulting `inFlight` — `filename`
+    // being an ancestor on this call's own recursion path means its
+    // `inFlight` entry (if any) is the very promise this call would
+    // otherwise block on, which is the deadlock this guard exists to avoid.
+    if (ancestors.has(filename)) {
+      return Promise.resolve();
+    }
 
     // @cpt-begin:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-check-inflight
     const existing = loadState.inFlight.get(filename);
@@ -838,15 +1082,22 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
     }
     // @cpt-end:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-check-inflight
 
-    const promise = this.createBlobUrlChainInternal(loadState, filename);
+    const promise = this.createBlobUrlChainInternal(loadState, filename, ancestors);
     loadState.inFlight.set(filename, promise);
     return promise;
   }
 
   private async createBlobUrlChainInternal(
     loadState: LoadBlobState,
-    filename: string
+    filename: string,
+    ancestors: ReadonlySet<string>
   ): Promise<void> {
+    // F-013: a sibling elsewhere in this load already failed — stop before
+    // issuing further fetches for work this load will never use.
+    if (loadState.failed) {
+      return;
+    }
+
     // Portable shared dep chunks use absolute URLs (resolved at generation time
     // to a canonical shared base). Use as-is to ensure sourceTextCache dedup.
     const chunkUrl = filename.startsWith('http://') || filename.startsWith('https://')
@@ -855,14 +1106,49 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
     // @cpt-begin:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-fetch-source
     const source = await this.fetchSourceText(chunkUrl);
     // @cpt-end:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-fetch-source
+
+    if (loadState.failed) {
+      // Re-check after the `await` above: another branch may have failed
+      // while this fetch was in flight (F-013).
+      return;
+    }
+
     // @cpt-begin:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-parse-static-imports
     const deps = this.parseStaticImportFilenames(source, filename);
     // @cpt-end:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-parse-static-imports
 
     // @cpt-begin:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-for-each-dep
     // @cpt-begin:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-recurse-dep
-    for (const dep of deps) {
-      await this.createBlobUrlChain(loadState, dep);
+    // F-008 (issue #618 — the reported bug): siblings are fanned out
+    // concurrently, bounded by MAX_CONCURRENT_FETCHES, instead of being
+    // awaited serially one at a time — a sibling's entire recursive subtree
+    // no longer blocks the next sibling from starting. Cross-sibling /
+    // cross-load dedup for a shared filename still holds because
+    // `createBlobUrlChain`'s check-then-set against `blobUrlMap`/`inFlight`
+    // is synchronous (the method itself is not `async`, so no other call can
+    // interleave between the check and the `inFlight.set`); two siblings
+    // requesting the same filename settle on one underlying fetch/chain.
+    // `childAncestors` extends this call's own ancestor set with `filename`
+    // itself so a dependency that cycles back here (F-004) is detected.
+    const childAncestors = new Set(ancestors);
+    childAncestors.add(filename);
+    const settled = await boundedMap(deps, (dep) =>
+      this.createBlobUrlChain(loadState, dep, childAncestors)
+    );
+
+    // Deterministic error surfacing: report the first failing dependency in
+    // its declaration order, matching the pre-concurrency sequential loop's
+    // error semantics rather than whichever sibling lost the race in
+    // wall-clock time (issue #618 review, F-013).
+    const failure = firstRejection(settled);
+    if (failure !== undefined) {
+      loadState.failed = true;
+      throw failure;
+    }
+    if (loadState.failed) {
+      // A sibling outside this call's own subtree already failed (F-013):
+      // stop here rather than minting a blob URL this load will never use.
+      return;
     }
     // @cpt-end:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-recurse-dep
     // @cpt-end:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-for-each-dep
