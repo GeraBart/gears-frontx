@@ -4,9 +4,6 @@
  * Core types for FrontX framework with plugin architecture.
  * Integrates all SDK packages into a cohesive framework.
  */
-// @cpt-dod:cpt-frontx-dod-framework-composition-builder:p1
-// @cpt-dod:cpt-frontx-dod-framework-composition-app-config:p1
-// @cpt-dod:cpt-frontx-dod-framework-composition-mfe-plugin:p1
 
 // ============================================================================
 // Type Imports from SDK Packages
@@ -25,6 +22,9 @@ import type { ApiRegistry } from '@gears-frontx/api';
 
 // From @gears-frontx/i18n
 import type { I18nRegistry } from '@gears-frontx/i18n';
+
+// From @gears-frontx/mfes
+import type { MfeRegistry } from '@gears-frontx/mfes';
 
 // Re-export FrontXStore from @gears-frontx/store for framework consumers
 export type FrontXStore = StoreType;
@@ -397,7 +397,36 @@ export interface FrontXAppRuntimeExtensions {
  * }
  * ```
  */
-export interface FrontXApp extends FrontXAppRuntimeExtensions {
+/**
+ * FrontX App Guarantees
+ *
+ * Empty by default. An application that always builds with the `microfrontends()`
+ * plugin can declare that `mfeRegistry` is guaranteed present, dropping the optional
+ * modifier for every consumer of `FrontXApp` (including through `useFrontX()`) without
+ * changing anything for applications that don't opt in.
+ *
+ * Augment it via declaration merging in an app-level `frontx.d.ts`:
+ *
+ * ```typescript
+ * // frontx.d.ts
+ * declare module '@gears-frontx/framework' {
+ *   interface FrontXAppGuarantees {
+ *     mfeRegistry: true;
+ *   }
+ * }
+ * ```
+ *
+ * With that declaration in scope, `app.mfeRegistry` is typed as `MfeRegistry`
+ * (no longer `MfeRegistry | undefined`), so call sites no longer need an
+ * `if (!app.mfeRegistry)` guard or a `app.mfeRegistry!` assertion.
+ */
+export interface FrontXAppGuarantees {}
+
+type MfeRegistrySlot = 'mfeRegistry' extends keyof FrontXAppGuarantees
+  ? { mfeRegistry: MfeRegistry }
+  : { mfeRegistry?: MfeRegistry };
+
+export interface FrontXApp extends FrontXAppRuntimeExtensions, MfeRegistrySlot {
   /** Application configuration */
   config: FrontXConfig;
 
@@ -412,9 +441,6 @@ export interface FrontXApp extends FrontXAppRuntimeExtensions {
 
   /** I18n registry */
   i18nRegistry: I18nRegistry;
-
-  /** MFE-enabled MfeRegistry (optional, provided by microfrontends plugin) */
-  mfeRegistry?: import('@gears-frontx/mfes').MfeRegistry;
 
   /** All registered actions (type-safe via FrontXActions interface) */
   actions: FrontXActions;
