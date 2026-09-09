@@ -137,6 +137,8 @@ Internal system functions that implement the isolation mechanism.
 
 **Output**: Map of shared-dependency package name to blob URL, covering all shared dependencies declared in the manifest
 
+**Note**: "In declaration order" in `inst-for-each-dep` governs enumeration and cache-key precedence only — the order in which declarations are visited and, when two declarations collide on the same `name@version` key, which one claims the cross-MFE cache entry. It imposes no ordering on when fetches are issued or when they complete, so the enumeration may issue its fetches concurrently. What keeps that deduplication race-free however the fetches are scheduled is that the entry `inst-fetch-and-cache` stores is the in-flight fetch promise, recorded under the key before it is awaited. Dependency-order correctness for blob construction comes solely from `inst-resolve-order`, which orders the already-fetched sources leaves-first and falls back to partial rewrites on cycles.
+
 **Steps**:
 1. [x] - `p1` - **FOR EACH** shared dependency declared in the manifest, in declaration order - `inst-for-each-dep`
    1. [x] - `p1` - Compute the deduplication cache key as `name@version` - `inst-compute-key`
