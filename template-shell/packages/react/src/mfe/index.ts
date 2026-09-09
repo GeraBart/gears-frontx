@@ -11,6 +11,7 @@ export {
   useSharedProperty,
   type UseSharedPropertyOptions,
   useHostAction,
+  useMfeRegistry,
   useDomainExtensions,
   useMountedExtensions,
   useRegisteredPackages,

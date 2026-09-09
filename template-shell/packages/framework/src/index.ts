@@ -214,6 +214,7 @@ export type {
   FrontXPlugin,
   FrontXAppBuilder,
   FrontXApp,
+  FrontXAppGuarantees,
   PluginFactory,
   PluginProvides,
   PluginLifecycle,
