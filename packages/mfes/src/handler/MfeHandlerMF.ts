@@ -48,15 +48,19 @@ import {
 const RUNTIME_STYLE_ID_PREFIX = '__frontx-mfe-runtime-style-';
 
 /**
- * Maximum number of chunk/dependency fetches issued concurrently within a
- * single fan-out batch (shared-dep source fetches and sibling static-import
- * chains). Chosen to match the HTTP/1.1 six-connections-per-origin ceiling
- * that motivated issue #618 ("MFE loader serializes independent dependency
- * fetches") — beyond this width, added concurrency just queues behind the
- * browser's own per-origin connection pool instead of shortening wall-clock
- * time, while an unbounded fan-out risks minting page-lifetime blob URLs
- * (see the never-revoke invariant on {@link createBlobUrlChainInternal})
- * for work a failed load will never use.
+ * Maximum number of concurrent in-flight invocations within a single
+ * {@link boundedMap} call — i.e. within one fan-out batch (one call's
+ * shared-dep source fetches, or one chunk's sibling static-import
+ * dependencies). This is a per-batch limit, not a global one: a bushy
+ * dependency graph opens a new batch at each recursion level and for each
+ * sibling group, so several batches can be in flight concurrently across
+ * the whole load, each independently bounded to this width. The width
+ * itself is chosen to stay well short of the browser's per-origin
+ * connection pool, so that within any one batch, added concurrency still
+ * shortens wall-clock time instead of just queuing behind that pool, while
+ * an unbounded fan-out risks minting page-lifetime blob URLs (see the
+ * never-revoke invariant on {@link createBlobUrlChainInternal}) for work a
+ * failed load will never use.
  */
 const MAX_CONCURRENT_FETCHES = 6;
 
@@ -101,22 +105,53 @@ async function boundedMap<T, R>(
 }
 
 /**
+ * Result of scanning a batch of settled results for the first rejection.
+ *
+ * A plain `reason | undefined` return value cannot distinguish "no
+ * rejection found" from "the first rejection found was itself the value
+ * `undefined`" (a task can reject with no reason at all). Both call sites
+ * need that distinction to decide whether to propagate a failure, so this
+ * returns an explicit `found` flag alongside the reason instead of relying
+ * on `reason`'s own value to carry that signal.
+ */
+interface FirstRejectionResult {
+  readonly found: boolean;
+  readonly reason?: unknown;
+}
+
+/**
  * Scan settled results in array order (declaration order, not completion
  * order) and return the first rejection, if any. Used to preserve the
  * pre-concurrency loops' "first-in-declaration-order error" semantics after
- * fanning work out with {@link boundedMap} (design constraint from the
- * issue #618 review: a naive `Promise.all` would surface whichever fetch
- * lost the race, non-deterministically across runs).
+ * fanning work out with {@link boundedMap}: reporting whichever fetch lost
+ * the wall-clock race would make failures non-deterministic across runs for
+ * the exact same underlying set of failures.
  */
 function firstRejection<R>(
   settled: readonly PromiseSettledResult<R>[]
-): unknown | undefined {
+): FirstRejectionResult {
   for (const result of settled) {
     if (result.status === 'rejected') {
-      return result.reason;
+      return { found: true, reason: result.reason };
     }
   }
-  return undefined;
+  return { found: false };
+}
+
+/**
+ * An in-progress {@link MfeHandlerMF.createBlobUrlChain} construction.
+ *
+ * `lineage` is the set of ancestor filenames whose construction this entry
+ * is nested under. It starts as a copy of the constructing call's own
+ * ancestor set and grows afterward: any other branch that joins this entry
+ * instead of constructing it contributes its own lineage in, so a cycle
+ * that only becomes visible once two independently-fanned-out branches
+ * meet can still be detected from either side (see the doc comment on
+ * {@link MfeHandlerMF.createBlobUrlChain}).
+ */
+interface InFlightChainEntry {
+  readonly promise: Promise<void>;
+  readonly lineage: Set<string>;
 }
 
 /**
@@ -129,7 +164,15 @@ function firstRejection<R>(
 // @cpt-state:cpt-frontx-state-mfe-isolation-load-blob-state:p1
 interface LoadBlobState {
   readonly blobUrlMap: Map<string, string>;
-  readonly inFlight: Map<string, Promise<void>>;
+  /**
+   * Stores the in-flight promise for each filename currently being
+   * constructed, rather than its resolved value, precisely so that
+   * concurrent callers for the same filename can share one construction
+   * instead of each starting (and blob-URL'ing) their own — the value only
+   * ever settles to a resolved blob URL through `blobUrlMap`, checked
+   * before this map, once the construction completes.
+   */
+  readonly inFlight: Map<string, InFlightChainEntry>;
   readonly baseUrl: string;
   /** MFE entry ID for this load; used in error messages. */
   readonly entryId: string;
@@ -238,11 +281,11 @@ export class LruCache<K, V> {
 /**
  * Max source-text entries retained. Expose-chunk entries evict oldest-first.
  *
- * F-010 (issue #618 review): concurrent fan-out (see {@link boundedMap})
- * can insert up to {@link MAX_CONCURRENT_FETCHES} entries from a single
- * burst instead of one at a time, which raises eviction odds under this
- * capacity versus the old strictly-sequential insertion pattern. This is
- * not a correctness break — `LruCache.delete` only removes the map entry;
+ * Concurrent fan-out (see {@link boundedMap}) can insert up to
+ * {@link MAX_CONCURRENT_FETCHES} entries from a single burst instead of one
+ * at a time, which raises eviction odds under this capacity versus a
+ * strictly-sequential insertion pattern. This is not a correctness break —
+ * `LruCache.delete` only removes the map entry;
  * a caller already holding the evicted entry's promise still resolves it
  * (see {@link LruCache}) — but a too-small capacity can reduce the
  * cross-MFE cache hit rate for large expose chains. 256 comfortably covers
@@ -255,7 +298,7 @@ const SOURCE_TEXT_CACHE_CAPACITY = 256;
 /**
  * Max shared-dep text entries retained (keyed by name@version, cross-MFE).
  *
- * Same F-010 burst-eviction trade-off as {@link SOURCE_TEXT_CACHE_CAPACITY}
+ * Same burst-eviction trade-off as {@link SOURCE_TEXT_CACHE_CAPACITY}
  * applies here, scaled down: shared deps are bounded by the distinct
  * npm-published packages declared across all MFEs' `rollupOptions.external`
  * (typically far fewer than the number of chunks any one MFE emits), so 128
@@ -425,9 +468,9 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
   /**
    * Race a single load attempt against `this.config.timeout`.
    *
-   * F-006 (issue #618 review): `config.timeout` was accepted and defaulted
-   * but never consulted anywhere — `RetryHandler.retry` only retries on a
-   * thrown error, so a load that hangs (network never resolves, a
+   * `config.timeout` is consulted here rather than left unused: without a
+   * race against a timer, `RetryHandler.retry` only retries on a thrown
+   * error, so a load that hangs (network never resolves, a
    * dependency cycle, etc.) had zero recovery path short of the caller
    * abandoning the returned promise. Racing the whole attempt against a
    * timer gives every attempt (including each retry) a bounded wall-clock
@@ -810,17 +853,16 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
   private async buildSharedDepBlobUrls(
     manifest: MfManifest
   ): Promise<Map<string, string>> {
-    // F-011 (issue #618 review): `sources`/`sharedDepBlobUrls` are keyed by
-    // bare `dep.name`, while `sharedDepTextCache` is keyed by the more
-    // precise `name@version`. Two shared entries with the same name but
-    // different versions would silently overwrite one another in the
-    // name-keyed maps. Re-keying every map end-to-end to `name@version`
-    // would ripple through `rewriteBareSpecifiers` (which rewrites bare
-    // specifiers like `from "react"` — it needs the bare name, not a
-    // versioned key) and the static-import chain's shared-dep lookups, for
-    // a manifest this handler already documents ({@link resolveManifest})
-    // that it trusts. Failing fast on a same-name collision is the smaller,
-    // targeted fix.
+    // `sources`/`sharedDepBlobUrls` are keyed by bare `dep.name`, while
+    // `sharedDepTextCache` is keyed by the more precise `name@version`. Two
+    // shared entries with the same name but different versions would
+    // silently overwrite one another in the name-keyed maps. Re-keying
+    // every map end-to-end to `name@version` would ripple through
+    // `rewriteBareSpecifiers` (which rewrites bare specifiers like
+    // `from "react"` — it needs the bare name, not a versioned key) and the
+    // static-import chain's shared-dep lookups, for a manifest this handler
+    // already documents ({@link resolveManifest}) that it trusts. Failing
+    // fast on a same-name collision is the smaller, targeted fix.
     this.assertUniqueSharedDepNames(manifest);
     const sources = await this.fetchSharedDepSources(manifest);
     const sharedNames = new Set(manifest.shared.map((d) => d.name));
@@ -828,10 +870,10 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
   }
 
   /**
-   * F-011: fail fast with a diagnostic when `manifest.shared` declares the
-   * same package name more than once (regardless of version) — see the
-   * comment on {@link buildSharedDepBlobUrls} for why this is preferred
-   * over re-keying `sources`/`sharedDepBlobUrls` to `name@version`.
+   * Fail fast with a diagnostic when `manifest.shared` declares the same
+   * package name more than once (regardless of version) — see the comment
+   * on {@link buildSharedDepBlobUrls} for why this is preferred over
+   * re-keying `sources`/`sharedDepBlobUrls` to `name@version`.
    */
   private assertUniqueSharedDepNames(manifest: MfManifest): void {
     const seen = new Set<string>();
@@ -860,10 +902,10 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
   ): Promise<Map<string, string>> {
     // @cpt-begin:cpt-frontx-algo-mfe-loading-manifest-discovery:p1:inst-md-for-each-shared
     // @cpt-begin:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-for-each-dep
-    // F-007 (issue #618 — the reported bug): fetches for each declared dep
-    // are dispatched concurrently, bounded by MAX_CONCURRENT_FETCHES, via
-    // `boundedMap` rather than a `for...of` loop with a trailing `await`
-    // that serialized every dep behind the previous one's full round trip.
+    // Fetches for each declared dep are dispatched concurrently, bounded by
+    // MAX_CONCURRENT_FETCHES, via `boundedMap` rather than a `for...of` loop
+    // with a trailing `await` that would serialize every dep behind the
+    // previous one's full round trip.
     // Per the FEATURE Note on `inst-for-each-dep`: enumeration order governs
     // cache-key precedence only (which declaration claims a `name@version`
     // cross-MFE cache slot), not fetch issuance/completion order. Each dep's
@@ -913,10 +955,10 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
 
     // Deterministic error surfacing: report the first failure in the
     // manifest's declaration order rather than whichever fetch happened to
-    // lose the race in wall-clock time (issue #618 review, F-013).
+    // lose the race in wall-clock time.
     const failure = firstRejection(settled);
-    if (failure !== undefined) {
-      throw failure;
+    if (failure.found) {
+      throw failure.reason;
     }
 
     const sources = new Map<string, string>();
@@ -925,7 +967,6 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
         sources.set(result.value.name, result.value.text);
       }
     }
-    return sources;
     return sources;
   }
 
@@ -1022,30 +1063,48 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
    * Concurrent calls for the same filename are deduplicated via the inFlight
    * map — callers await the same promise rather than returning early with no
    * result. This prevents a race where sibling ESM modules with top-level
-   * await, and the newly-parallelized sibling fan-out in
-   * {@link createBlobUrlChainInternal} (F-008, issue #618), trigger
-   * overlapping resolution for the same dependency; {@link resolveLazyChunk}
-   * is the current beneficiary that actually calls back into this method
-   * from outside the static-import recursion (a prior doc comment here
-   * named a `importShared()` function that does not exist anywhere in this
-   * package — stale residue from an earlier Module-Federation-runtime
-   * implementation).
+   * await, and the sibling fan-out in {@link createBlobUrlChainInternal},
+   * trigger overlapping resolution for the same dependency;
+   * {@link resolveLazyChunk} is the current beneficiary that actually calls
+   * back into this method from outside the static-import recursion.
    *
-   * `ancestors` carries the set of filenames currently being resolved on
-   * this call's recursion path (F-004, issue #618 review). Before this
-   * guard existed, a static-import cycle (chunk A imports B, B imports A)
-   * deadlocked unrecoverably: A registers itself in `inFlight` and starts
-   * resolving B; B sees A's still-pending `inFlight` promise and awaits it;
-   * A's own resolution cannot complete until B's does — an unbreakable
-   * circular wait with no rejection, no timeout, and no retry path (the
-   * `loadCache` entry never settles). `ancestors` lets a call detect it is
-   * about to re-enter a filename already being resolved further up its own
-   * stack and short-circuit instead of joining that filename's `inFlight`
-   * promise, mirroring the partial-rewrite fallback
-   * {@link createBlobUrlsInDependencyOrder} already applies to circular
-   * shared deps: the ancestor mints its own blob once the rest of its
-   * dependents settle, and the specifier back to it inside the cycle-closing
-   * chunk falls back to a plain chunk URL instead of a blob URL.
+   * Cycle detection is tracked on the shared `inFlight` entry rather than on
+   * any single call's recursion path, because the path a cycle is *detected*
+   * on is not necessarily the path it was *created* on. A linear cycle
+   * (chunk A imports B, B imports A) is visible on one call stack and a
+   * simple "have I already seen this filename on my own way down" check
+   * catches it. A cycle that closes across two independent branches does
+   * not stay on one call stack: if a diamond (E imports A and B; A imports
+   * C; B imports C; C imports back to B) fans A and B out concurrently, C is
+   * reached only via A's path, so a plain per-call ancestor set never
+   * contains "B" when C statically imports it — B was never on that
+   * particular branch. Meanwhile B is independently blocked joining C's
+   * `inFlight` promise (ordinary, legitimate dedup, not yet a cycle), so B
+   * and C now await each other with no rejection, no timeout, and no retry
+   * path (the `loadCache` entry never settles).
+   *
+   * `ancestors` is therefore not a per-call snapshot: it *is* the mutable
+   * lineage stored on the filename's own `inFlight` entry (see
+   * `LoadBlobState.inFlight`), threaded live through the recursion that
+   * builds that filename's dependencies. When a second branch joins an
+   * already in-flight filename instead of constructing it, that branch
+   * contributes its own lineage into the joined entry's lineage before
+   * awaiting it (synchronously, with no `await` between the check and the
+   * contribution — the same discipline the `blobUrlMap`/`inFlight`
+   * check-then-set already relies on, which is also why this method stays
+   * non-`async`). Because the lineage object is shared by reference, that
+   * contribution is visible the moment the joined filename's own
+   * construction next reads it — including when it later closes the cycle
+   * by requesting a dependency that is now present in its own (grown)
+   * lineage. In the diamond above: B joining C's promise contributes B's
+   * lineage into C's entry; when C's construction goes on to request B, its
+   * own lineage now contains "B", the ordinary ancestor check fires, and C
+   * short-circuits instead of joining B's promise — mirroring the
+   * partial-rewrite fallback {@link createBlobUrlsInDependencyOrder}
+   * already applies to circular shared deps: the specifier back into the
+   * cycle-closing chunk falls back to a plain chunk URL instead of a blob
+   * URL, and the branch that detected the cycle mints its own blob once its
+   * other dependents settle.
    */
   // @cpt-algo:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1
   private createBlobUrlChain(
@@ -1063,10 +1122,13 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
     }
     // @cpt-end:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-check-map
 
-    // F-004: check for a cycle BEFORE consulting `inFlight` — `filename`
-    // being an ancestor on this call's own recursion path means its
-    // `inFlight` entry (if any) is the very promise this call would
-    // otherwise block on, which is the deadlock this guard exists to avoid.
+    // Check for a cycle on this call's own recursion path BEFORE consulting
+    // `inFlight` — `filename` being an ancestor here means its `inFlight`
+    // entry (if any) is the very promise this call would otherwise block
+    // on, which is the deadlock this guard exists to avoid. This alone only
+    // catches a cycle that stays on one call stack; the `inFlight`-join
+    // branch below (see the class-level doc comment) covers a cycle that
+    // closes across two branches that fanned out independently.
     if (ancestors.has(filename)) {
       return Promise.resolve();
     }
@@ -1075,15 +1137,43 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
     const existing = loadState.inFlight.get(filename);
     if (existing) {
       // @cpt-begin:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-if-inflight
+      // A join, not a fresh construction: `filename` is already being built
+      // by another branch. Check membership against the union of our own
+      // lineage and the entry's recorded lineage before committing to await
+      // it — if either already names `filename`, awaiting it would close a
+      // cycle back onto ourselves. This is a defensive companion to the
+      // ancestor check above, which only sees `filename` if it was
+      // literally on the caller's own path; here `filename` could instead
+      // have arrived via a contribution from some third branch.
+      const union = new Set(ancestors);
+      for (const inherited of existing.lineage) union.add(inherited);
+      if (union.has(filename)) {
+        // @cpt-begin:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-return-inflight
+        return Promise.resolve();
+        // @cpt-end:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-return-inflight
+      }
+      // Contribute our own lineage into the joined entry before awaiting it
+      // (synchronously — no `await` between the check above and this), so
+      // that if the joined filename's own construction later requests
+      // something in our lineage, it can detect that as the cycle it is.
+      for (const inherited of ancestors) existing.lineage.add(inherited);
       // @cpt-begin:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-return-inflight
-      return existing;
+      return existing.promise;
       // @cpt-end:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-return-inflight
       // @cpt-end:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-if-inflight
     }
     // @cpt-end:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-check-inflight
 
-    const promise = this.createBlobUrlChainInternal(loadState, filename, ancestors);
-    loadState.inFlight.set(filename, promise);
+    // This filename's own lineage starts as a copy of the caller's — it is
+    // then threaded (by reference, mutably) through the construction below
+    // and into every dependency it recurses into, so a later join can
+    // contribute into it and this construction will see that contribution
+    // the next time it reads its own lineage (see the class-level doc
+    // comment for why that liveness is what makes cross-branch cycles
+    // detectable).
+    const lineage = new Set(ancestors);
+    const promise = this.createBlobUrlChainInternal(loadState, filename, lineage);
+    loadState.inFlight.set(filename, { promise, lineage });
     return promise;
   }
 
@@ -1092,8 +1182,8 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
     filename: string,
     ancestors: ReadonlySet<string>
   ): Promise<void> {
-    // F-013: a sibling elsewhere in this load already failed — stop before
-    // issuing further fetches for work this load will never use.
+    // A sibling elsewhere in this load already failed — stop before issuing
+    // further fetches for work this load will never use.
     if (loadState.failed) {
       return;
     }
@@ -1109,7 +1199,7 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
 
     if (loadState.failed) {
       // Re-check after the `await` above: another branch may have failed
-      // while this fetch was in flight (F-013).
+      // while this fetch was in flight.
       return;
     }
 
@@ -1119,39 +1209,44 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
 
     // @cpt-begin:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-for-each-dep
     // @cpt-begin:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-recurse-dep
-    // F-008 (issue #618 — the reported bug): siblings are fanned out
-    // concurrently, bounded by MAX_CONCURRENT_FETCHES, instead of being
-    // awaited serially one at a time — a sibling's entire recursive subtree
-    // no longer blocks the next sibling from starting. Cross-sibling /
-    // cross-load dedup for a shared filename still holds because
-    // `createBlobUrlChain`'s check-then-set against `blobUrlMap`/`inFlight`
-    // is synchronous (the method itself is not `async`, so no other call can
-    // interleave between the check and the `inFlight.set`); two siblings
-    // requesting the same filename settle on one underlying fetch/chain.
-    // `childAncestors` extends this call's own ancestor set with `filename`
-    // itself so a dependency that cycles back here (F-004) is detected.
+    // Siblings are fanned out concurrently, bounded by
+    // MAX_CONCURRENT_FETCHES, instead of being awaited serially one at a
+    // time — a sibling's entire recursive subtree no longer blocks the next
+    // sibling from starting. Cross-sibling / cross-load dedup for a shared
+    // filename still holds because `createBlobUrlChain`'s check-then-set
+    // against `blobUrlMap`/`inFlight` is synchronous (the method itself is
+    // not `async`, so no other call can interleave between the check and
+    // the `inFlight.set`); two siblings requesting the same filename settle
+    // on one underlying fetch/chain.
+    //
+    // `ancestors` here is `loadState.inFlight.get(filename)!.lineage` — the
+    // same mutable object passed down from `createBlobUrlChain` — so any
+    // contribution another branch made into it while this fetch was
+    // in-flight (see that method's join branch) is already visible.
+    // `childAncestors` copies it and adds `filename` itself so a dependency
+    // that cycles back here is detected by the plain ancestor check.
     const childAncestors = new Set(ancestors);
     childAncestors.add(filename);
     const settled = await boundedMap(deps, (dep) =>
       this.createBlobUrlChain(loadState, dep, childAncestors)
     );
+    // @cpt-end:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-recurse-dep
+    // @cpt-end:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-for-each-dep
 
     // Deterministic error surfacing: report the first failing dependency in
     // its declaration order, matching the pre-concurrency sequential loop's
     // error semantics rather than whichever sibling lost the race in
-    // wall-clock time (issue #618 review, F-013).
+    // wall-clock time.
     const failure = firstRejection(settled);
-    if (failure !== undefined) {
+    if (failure.found) {
       loadState.failed = true;
-      throw failure;
+      throw failure.reason;
     }
     if (loadState.failed) {
-      // A sibling outside this call's own subtree already failed (F-013):
-      // stop here rather than minting a blob URL this load will never use.
+      // A sibling outside this call's own subtree already failed: stop here
+      // rather than minting a blob URL this load will never use.
       return;
     }
-    // @cpt-end:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-recurse-dep
-    // @cpt-end:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-for-each-dep
 
     // @cpt-begin:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-rewrite-static
     let rewritten = this.rewriteModuleImports(
@@ -1259,6 +1354,21 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
    * chain path takes care of both), mints a blob URL in this load's
    * `blobUrlMap`, and returns. Subsequent `__frontx_lazy(...)` calls for the
    * same path within the same load reuse the cached blob URL.
+   *
+   * This call site runs after `load()` has already resolved (the caller is
+   * runtime code inside an already-mounted MFE, not the initial load
+   * chain), so it has no static-import ancestor path to seed
+   * `createBlobUrlChain`'s lineage with — the host-side registry this stub
+   * calls through (see {@link ensureLazyLoaderUrl}) does not thread the
+   * calling chunk's own filename back to us, so it genuinely cannot be
+   * determined here. Seeding with the entry chunk instead still gives
+   * `createBlobUrlChain` a non-empty starting lineage to grow from, which is
+   * what the cross-branch join/contribute mechanism it implements needs to
+   * detect a cycle between two lazy chunks triggered concurrently and
+   * cross-referencing each other — the same shape of deadlock the
+   * class-level doc comment on {@link createBlobUrlChain} describes for the
+   * static-import case, reachable here too because this no longer starts a
+   * disconnected, empty lineage against the load's shared `inFlight` map.
    */
   private async resolveLazyChunk(
     relPath: string,
@@ -1279,7 +1389,11 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
     // @cpt-end:cpt-frontx-algo-mfe-loading-lazy-import-abi:p1:inst-lai-resolve-relative-path
 
     // @cpt-begin:cpt-frontx-algo-mfe-loading-lazy-import-abi:p1:inst-lai-fetch-lazy-chunk
-    await this.createBlobUrlChain(loadState, filename);
+    await this.createBlobUrlChain(
+      loadState,
+      filename,
+      new Set([loadState.entryChunkFilename])
+    );
     // @cpt-end:cpt-frontx-algo-mfe-loading-lazy-import-abi:p1:inst-lai-fetch-lazy-chunk
 
     // @cpt-begin:cpt-frontx-algo-mfe-loading-lazy-import-abi:p1:inst-lai-return-lazy-blob

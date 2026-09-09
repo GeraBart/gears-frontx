@@ -165,25 +165,25 @@ function sharedDep(name: string, chunkPath: string): MfManifestShared {
 }
 
 /**
- * Issue #618 concurrency fix — regression coverage.
- *
- * The two loops these findings target (`fetchSharedDepSources`'s shared-dep
- * loop and `createBlobUrlChainInternal`'s sibling loop) were previously
- * exercised only by tests that mock `fetch` to reject immediately (F-009),
- * so the concurrent-dispatch path, the cross-caller `inFlight`/`blobUrlMap`
- * dedup path, and the cycle-detection fallback were never actually run.
+ * Concurrent-fetch behaviour of the two dependency-fanout loops
+ * (`fetchSharedDepSources`'s shared-dep loop and
+ * `createBlobUrlChainInternal`'s sibling loop) and the cycle-detection
+ * fallback that keeps them from deadlocking on circular dependencies. Prior
+ * coverage of these loops only mocked `fetch` to reject immediately, so the
+ * concurrent-dispatch path, the cross-caller `inFlight`/`blobUrlMap` dedup
+ * path, and the cycle-detection fallback were never actually exercised.
  */
-describe('MfeHandlerMF — concurrent dependency fetch (issue #618 / F-007, F-008, F-009)', () => {
+describe('MfeHandlerMF — concurrent dependency fetch', () => {
   it('dispatches all shared-dependency fetches concurrently rather than one at a time', async () => {
     // Each dep is deliberately slow (40ms) and there are three of them.
-    // Serial dispatch (await inside the loop, the pre-fix bug) would issue
-    // dep-2's fetch only after dep-1's 40ms response arrived, and dep-3's
-    // only after dep-2's — so the SECOND and THIRD fetch calls would be
-    // dispatched ~40ms and ~80ms after the first. Concurrent dispatch issues
-    // all three within a few ms of each other, regardless of when each
-    // later resolves. Asserting on dispatch time (not total elapsed load()
-    // time) isolates exactly the defect F-007 reports and is robust to the
-    // expose-chunk fetch that runs afterward.
+    // A serial loop (await inside the loop before issuing the next fetch)
+    // would issue dep-2's fetch only after dep-1's 40ms response arrived,
+    // and dep-3's only after dep-2's — so the SECOND and THIRD fetch calls
+    // would be dispatched ~40ms and ~80ms after the first. Concurrent
+    // dispatch issues all three within a few ms of each other, regardless of
+    // when each later resolves. Asserting on dispatch time (not total
+    // elapsed load() time) isolates the dispatch-ordering behaviour and is
+    // robust to the expose-chunk fetch that runs afterward.
     const manifest = buildManifest(PUBLIC_PATH, [
       sharedDep('dep-a', 'shared/dep-a.js'),
       sharedDep('dep-b', 'shared/dep-b.js'),
@@ -229,10 +229,12 @@ describe('MfeHandlerMF — concurrent dependency fetch (issue #618 / F-007, F-00
     // The expose chunk imports two siblings, both of which statically
     // import a common chunk. Serial (depth-first, fully-awaited) sibling
     // processing would still de-dup this correctly; what this test isolates
-    // is that FANNING OUT the two siblings concurrently (F-008) doesn't
-    // regress the `inFlight` dedup for the chunk they share — a race the
-    // synchronous check-then-set in `createBlobUrlChain` is documented to
-    // prevent, but which no prior test exercised.
+    // is that fanning the two siblings out concurrently doesn't regress the
+    // `inFlight` dedup for the chunk they share — a race the synchronous
+    // check-then-set in `createBlobUrlChain` is documented to prevent, but
+    // which this test alone (dedup count only) would still pass against a
+    // fully serial implementation. See the next test for an assertion that
+    // actually requires concurrent dispatch to pass.
     const manifest = buildManifest(PUBLIC_PATH, []);
     const entry = buildEntry(manifest);
 
@@ -270,11 +272,117 @@ describe('MfeHandlerMF — concurrent dependency fetch (issue #618 / F-007, F-00
     fetchSpy.mockRestore();
   });
 
-  it('settles mutually-importing chunks within bounded time instead of deadlocking (F-004 regression)', async () => {
-    // x.js and y.js statically import each other. Before F-004's cycle
-    // detection, this hung forever: x registers itself in `inFlight` and
-    // starts resolving y; y sees x's still-pending `inFlight` promise and
-    // awaits it; x cannot finish until y does. No rejection, no timeout.
+  it('dispatches two independent sibling static-import chains before either one resolves', async () => {
+    // Unlike the dedup test above, this asserts on dispatch ORDER (a
+    // deterministic in-process log), not dedup count or a wall-clock
+    // threshold: sibling-a.js and sibling-b.js share no dependency here, so
+    // a fully serial sibling loop (await sibling-a's entire recursive
+    // subtree before even starting sibling-b) would still pass every
+    // assertion in the test above, but would dispatch sibling-b.js's fetch
+    // only AFTER sibling-a.js's fetch has already resolved. Concurrent
+    // fan-out dispatches both before either resolves.
+    const manifest = buildManifest(PUBLIC_PATH, []);
+    const entry = buildEntry(manifest);
+    const events: string[] = [];
+
+    const fetchImpl = (input: string | URL | Request): Promise<Response> => {
+      const url = String(input);
+      if (url.endsWith('lifecycle.js')) {
+        events.push('dispatch:lifecycle.js');
+        return Promise.resolve(
+          jsResponse(
+            "import './sibling-a.js';\nimport './sibling-b.js';\nexport default { mount(){}, unmount(){} };"
+          )
+        );
+      }
+      const match = ['sibling-a.js', 'sibling-b.js'].find((key) => url.endsWith(key));
+      if (!match) {
+        return Promise.reject(new TypeError(`unmocked fetch: ${url}`));
+      }
+      events.push(`dispatch:${match}`);
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          events.push(`resolve:${match}`);
+          resolve(jsResponse(`export const v = '${match}';`));
+        }, 15);
+      });
+    };
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(fetchImpl as typeof fetch);
+
+    const handler = new MfeHandlerMF(ENTRY_BASE_ID, { retries: 0 });
+    await handler.load(entry, 'ext-sibling-dispatch-order').catch(() => {});
+
+    const dispatchB = events.indexOf('dispatch:sibling-b.js');
+    const resolveA = events.indexOf('resolve:sibling-a.js');
+    expect(dispatchB, `dispatch log: ${events.join(', ')}`).toBeGreaterThan(-1);
+    expect(resolveA, `dispatch log: ${events.join(', ')}`).toBeGreaterThan(-1);
+    expect(dispatchB).toBeLessThan(resolveA);
+
+    fetchSpy.mockRestore();
+  });
+
+  it('settles a diamond-shaped cross-branch cycle within bounded time instead of deadlocking', async () => {
+    // a.js and b.js are independent siblings (both reached directly from
+    // lifecycle.js) that both statically import c.js, and c.js statically
+    // imports back to b.js — the cycle only closes once a's branch and b's
+    // branch meet at c, not on either branch's own recursion path. A cycle
+    // guard that only tracks each call's own ancestor chain (rather than
+    // the shared in-flight entry) misses this shape entirely: c is reached
+    // via a's path, which never has b.js as an ancestor, so it falls
+    // through to joining b's already in-flight promise while b, elsewhere,
+    // is joining c's — a genuine circular wait. The delay on c.js's fetch
+    // ensures a's and b's branches are both genuinely mid-flight when they
+    // each request c.js, reproducing the race rather than relying on
+    // incidental ordering.
+    const manifest = buildManifest(PUBLIC_PATH, []);
+    const entry = buildEntry(manifest);
+
+    const { fetchImpl } = createFetchRouter({
+      'lifecycle.js': {
+        body: "import './a.js';\nimport './b.js';\nexport default { mount(){}, unmount(){} };",
+      },
+      'a.js': { body: "import './c.js';\nexport const a = 1;" },
+      'b.js': { body: "import './c.js';\nexport const b = 1;" },
+      'c.js': { body: "import './b.js';\nexport const c = 1;", delayMs: 20 },
+    });
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(fetchImpl as typeof fetch);
+
+    const handler = new MfeHandlerMF(ENTRY_BASE_ID, { retries: 0 });
+
+    const deadlockGuard = new Promise<never>((_resolve, reject) => {
+      setTimeout(
+        () => reject(new Error('deadlocked: diamond-shaped cycle never settled')),
+        2000
+      );
+    });
+
+    // Mapping both settlement kinds (fulfilled or rejected) to the same
+    // sentinel means the race only rejects if `deadlockGuard` wins, i.e. a
+    // real hang — the blob URL chain build is what would hang; `load()` may
+    // still reject afterwards at `importBlobModule` (dynamic `import()` of a
+    // `blob:` URL isn't supported under Node/vitest's module loader).
+    const outcome = await Promise.race([
+      handler.load(entry, 'ext-diamond-cycle').then(
+        () => 'settled',
+        () => 'settled'
+      ),
+      deadlockGuard,
+    ]);
+    expect(outcome).toBe('settled');
+
+    fetchSpy.mockRestore();
+  });
+
+  it('settles mutually-importing chunks within bounded time instead of deadlocking', async () => {
+    // x.js and y.js statically import each other on a single, linear call
+    // path. This is the simplest cycle shape: x registers itself in
+    // `inFlight` and starts resolving y; y sees x's still-pending `inFlight`
+    // promise and awaits it; x cannot finish until y does. No rejection, no
+    // timeout, unless the cycle is detected and short-circuited.
     const manifest = buildManifest(PUBLIC_PATH, []);
     const entry = buildEntry(manifest);
 
@@ -298,11 +406,11 @@ describe('MfeHandlerMF — concurrent dependency fetch (issue #618 / F-007, F-00
       );
     });
 
-    // The blob URL chain build (what F-004 targets) is what would hang; the
-    // load may still reject afterwards at `importBlobModule` (dynamic
-    // `import()` of a `blob:` URL isn't supported under Node/vitest's
-    // module loader) — mapping both settlement kinds to the same sentinel
-    // means the race only rejects if `deadlockGuard` wins, i.e. a real hang.
+    // The blob URL chain build is what would hang; the load may still
+    // reject afterwards at `importBlobModule` (dynamic `import()` of a
+    // `blob:` URL isn't supported under Node/vitest's module loader) —
+    // mapping both settlement kinds to the same sentinel means the race
+    // only rejects if `deadlockGuard` wins, i.e. a real hang.
     const outcome = await Promise.race([
       handler.load(entry, 'ext-cycle').then(
         () => 'settled',
@@ -315,13 +423,14 @@ describe('MfeHandlerMF — concurrent dependency fetch (issue #618 / F-007, F-00
     fetchSpy.mockRestore();
   });
 
-  it('rejects with a diagnostic MfeLoadError roughly at the configured timeout when a fetch never resolves (F-006 regression)', async () => {
+  it('rejects with a diagnostic MfeLoadError roughly at the configured timeout when a fetch never resolves', async () => {
     const manifest = buildManifest(PUBLIC_PATH, []);
     const entry = buildEntry(manifest);
 
-    // Never resolves — RetryHandler.retry only retries on a thrown error and
-    // races nothing against a clock, so before F-006 this would hang the
-    // returned promise indefinitely.
+    // Never resolves — `RetryHandler.retry` only retries on a thrown error
+    // and races nothing against a clock on its own, so without a timeout
+    // race around the whole attempt this would hang the returned promise
+    // indefinitely.
     const fetchSpy = vi
       .spyOn(globalThis, 'fetch')
       .mockImplementation(() => new Promise<Response>(() => {}));
@@ -343,7 +452,7 @@ describe('MfeHandlerMF — concurrent dependency fetch (issue #618 / F-007, F-00
     fetchSpy.mockRestore();
   });
 
-  it('fails fast on a manifest that declares the same shared-dependency name twice (F-011)', async () => {
+  it('fails fast on a manifest that declares the same shared-dependency name twice', async () => {
     const manifest = buildManifest(PUBLIC_PATH, [
       sharedDep('dup-dep', 'shared/dup-dep-v1.js'),
       sharedDep('dup-dep', 'shared/dup-dep-v2.js'),
@@ -363,7 +472,7 @@ describe('MfeHandlerMF — concurrent dependency fetch (issue #618 / F-007, F-00
   });
 });
 
-describe('LruCache — capacity eviction and MRU re-insertion (F-009)', () => {
+describe('LruCache — capacity eviction and MRU re-insertion', () => {
   it('evicts the oldest entry once capacity is exceeded', () => {
     const cache = new LruCache<string, number>(2);
     cache.set('a', 1);
