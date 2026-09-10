@@ -47,8 +47,10 @@ import { MfeBridgeFactoryDefault } from './mfe-bridge-factory-default';
 import {
   sourceImports,
   rewriteBareSpecifier,
+  findSurvivingDeclaredSharedDepSpecifier,
   importBlobModule,
 } from './mf-dynamic-module-ops';
+import { findUndeclaredWellFormedSpecifiers } from './mf-shared-dep-specifier-scan';
 
 const RUNTIME_STYLE_ID_PREFIX = '__frontx-mfe-runtime-style-';
 
@@ -464,10 +466,12 @@ const SOURCE_TEXT_CACHE_CAPACITY = 256;
  * Max shared-dep text entries retained (keyed by name@version, cross-MFE).
  *
  * Same burst-eviction trade-off as {@link SOURCE_TEXT_CACHE_CAPACITY}
- * applies here, scaled down: shared deps are bounded by the distinct
+ * applies here, scaled down: entries are now bounded by distinct
  * npm-published packages declared across all MFEs' `rollupOptions.external`
- * (typically far fewer than the number of chunks any one MFE emits), so 128
- * keeps ample headroom even with concurrent fan-out bursts of up to
+ * MULTIPLIED by the distinct builds of each that are observed (per-build
+ * `contentHash`, or per-microfrontend resolved chunk URL when no hash is
+ * declared) — still far fewer than the number of chunks any one MFE emits,
+ * so 128 keeps ample headroom even with concurrent fan-out bursts of up to
  * {@link MAX_CONCURRENT_FETCHES} per load.
  */
 const SHARED_DEP_TEXT_CACHE_CAPACITY = 128;
@@ -635,6 +639,15 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
     SHARED_DEP_TEXT_CACHE_CAPACITY,
   );
 
+  /**
+   * Tracks which `name@version` + manifest id pairs have already received
+   * the one-time adoption notice emitted when a shared-dep entry declares
+   * no `contentHash` (see `inst-emit-adoption-notice`). Scoped to the
+   * handler instance, same lifetime as `sharedDepTextCache`, so the notice
+   * fires once per pair across every load this handler serves — not once
+   * per load.
+   */
+  private readonly sharedDepAdoptionNoticesEmitted = new Set<string>();
 
   constructor(
     handledBaseTypeId: string,
@@ -704,7 +717,7 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
           const ledger = new AttemptSourceTextLedger();
           try {
             return await this.withLoadTimeout(
-              this.loadInternal(entry, ledger),
+              this.loadInternal(entry, extensionId, ledger),
               entry.id,
               ledger
             );
@@ -867,6 +880,7 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
    */
   private async loadInternal(
     entry: MfeEntryMF,
+    extensionId: string,
     ledger?: AttemptSourceTextLedger
   ): Promise<MfeEntryLifecycle<ChildMfeBridge>> {
     // @cpt-begin:cpt-frontx-flow-mfe-loading-on-demand-load:p1:inst-register-entry
@@ -880,6 +894,7 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
       entry.exposedModule,
       entry.exposeAssets,
       entry.id,
+      extensionId,
       ledger
     );
     // @cpt-end:cpt-frontx-flow-mfe-loading-on-demand-load:p1:inst-trigger-load
@@ -923,6 +938,7 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
     exposedModule: string,
     exposeAssets: MfeEntryMF['exposeAssets'],
     entryId: string,
+    extensionId: string,
     ledger?: AttemptSourceTextLedger
   ): Promise<{
     moduleFactory: () => unknown;
@@ -942,6 +958,7 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
     const sharedDepBlobUrls = await this.buildSharedDepBlobUrls(
       manifest,
       entryId,
+      extensionId,
       ledger
     );
     // @cpt-end:cpt-frontx-flow-mfe-loading-on-demand-load:p1:inst-run-manifest-discovery
@@ -1222,6 +1239,7 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
   private async buildSharedDepBlobUrls(
     manifest: MfManifest,
     entryId: string,
+    extensionId: string,
     ledger?: AttemptSourceTextLedger
   ): Promise<Map<string, string>> {
     // `sources`/`sharedDepBlobUrls` are keyed by bare `dep.name`, while
@@ -1237,7 +1255,12 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
     this.assertUniqueSharedDepNames(manifest, entryId);
     const sources = await this.fetchSharedDepSources(manifest, ledger);
     const sharedNames = new Set(manifest.shared.map((d) => d.name));
-    return this.createBlobUrlsInDependencyOrder(sources, sharedNames, entryId);
+    return this.createBlobUrlsInDependencyOrder(
+      sources,
+      sharedNames,
+      entryId,
+      extensionId
+    );
   }
 
   /**
@@ -1310,19 +1333,46 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
     // separates them), which is what keeps the cross-MFE dedup race-free
     // regardless of how the fetches are interleaved.
     const settled = await boundedMap(manifest.shared, async (dep) => {
-      const cacheKey = `${dep.name}@${dep.version}`;
-      // @cpt-begin:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-compute-key
+      // @cpt-begin:cpt-frontx-algo-mfe-loading-manifest-discovery:p1:inst-md-resolve-chunk-path
+      // @cpt-begin:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-derive-url
+      const absoluteUrl = dep.chunkPath.startsWith('http')
+        ? dep.chunkPath
+        : manifest.metaData.publicPath + dep.chunkPath;
+      // @cpt-end:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-derive-url
+      // @cpt-end:cpt-frontx-algo-mfe-loading-manifest-discovery:p1:inst-md-resolve-chunk-path
+
+      let cacheKey: string;
+      // @cpt-begin:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-if-hash-declared
+      if (dep.contentHash !== undefined) {
+        // @cpt-begin:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-compute-key-hash
+        cacheKey = `${dep.name}@${dep.version}@${dep.contentHash}`;
+        // @cpt-end:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-compute-key-hash
+      } else {
+        // @cpt-begin:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-else-no-hash
+        // @cpt-begin:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-compute-key-fallback
+        cacheKey = `${dep.name}@${dep.version}@${absoluteUrl}`;
+        // @cpt-end:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-compute-key-fallback
+        // @cpt-begin:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-emit-adoption-notice
+        const noticeKey = `${dep.name}@${dep.version} ${manifest.id}`;
+        if (!this.sharedDepAdoptionNoticesEmitted.has(noticeKey)) {
+          this.sharedDepAdoptionNoticesEmitted.add(noticeKey);
+          console.warn(
+            `Shared dependency '${dep.name}@${dep.version}' declared by ` +
+              `manifest '${manifest.id}' carries no contentHash. ` +
+              'Cross-MFE reuse is disabled for this dependency; its source ' +
+              "text will be keyed on this manifest's own resolved chunk " +
+              'URL rather than shared with other microfrontends declaring ' +
+              'the same name@version.'
+          );
+        }
+        // @cpt-end:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-emit-adoption-notice
+        // @cpt-end:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-else-no-hash
+      }
+      // @cpt-end:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-if-hash-declared
+
       let textPromise = this.sharedDepTextCache.get(cacheKey);
-      // @cpt-end:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-compute-key
       // @cpt-begin:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-else-fetch
       if (textPromise === undefined) {
-        // @cpt-begin:cpt-frontx-algo-mfe-loading-manifest-discovery:p1:inst-md-resolve-chunk-path
-        // @cpt-begin:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-derive-url
-        const absoluteUrl = dep.chunkPath.startsWith('http')
-          ? dep.chunkPath
-          : manifest.metaData.publicPath + dep.chunkPath;
-        // @cpt-end:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-derive-url
-        // @cpt-end:cpt-frontx-algo-mfe-loading-manifest-discovery:p1:inst-md-resolve-chunk-path
         // @cpt-begin:cpt-frontx-algo-mfe-loading-manifest-discovery:p1:inst-md-fetch-shared-dep
         // @cpt-begin:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-fetch-and-cache
         textPromise = this.fetchSourceText(absoluteUrl, ledger);
@@ -1386,7 +1436,8 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
   private createBlobUrlsInDependencyOrder(
     sources: Map<string, string>,
     sharedNames: Set<string>,
-    entryId: string
+    entryId: string,
+    extensionId: string
   ): Map<string, string> {
     const blobUrls = new Map<string, string>();
     const pending = new Map(sources);
@@ -1396,7 +1447,17 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
       // @cpt-begin:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-for-each-resolved
       for (const [name, source] of pending) {
         if (this.isDepReadyToResolve(name, source, sharedNames, blobUrls)) {
-          blobUrls.set(name, this.createRewrittenBlobUrl(source, blobUrls));
+          blobUrls.set(
+            name,
+            this.createRewrittenBlobUrl(
+              source,
+              blobUrls,
+              sharedNames,
+              name,
+              entryId,
+              extensionId
+            )
+          );
           pending.delete(name);
         }
       }
@@ -1441,13 +1502,50 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
 
   private createRewrittenBlobUrl(
     source: string,
-    blobUrls: Map<string, string>
+    blobUrls: Map<string, string>,
+    sharedNames: Set<string>,
+    depName: string,
+    entryId: string,
+    extensionId: string
   ): string {
     // @cpt-begin:cpt-frontx-algo-mfe-loading-manifest-discovery:p1:inst-md-rewrite-specifiers
     // @cpt-begin:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-rewrite-specifiers
     const rewritten = this.rewriteBareSpecifiers(source, blobUrls);
     // @cpt-end:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-rewrite-specifiers
     // @cpt-end:cpt-frontx-algo-mfe-loading-manifest-discovery:p1:inst-md-rewrite-specifiers
+    // @cpt-begin:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-assert-shared-dep-no-bare-specifier
+    const survivor = findSurvivingDeclaredSharedDepSpecifier(rewritten, sharedNames);
+    // @cpt-end:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-assert-shared-dep-no-bare-specifier
+    // @cpt-begin:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-if-shared-dep-bare-specifier
+    if (survivor !== undefined) {
+      // @cpt-begin:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-raise-shared-dep-bare-specifier
+      throw new MfeLoadError(
+        `shared-dep chunk '${depName}' still imports the bare specifier ` +
+          `'${survivor}' after rewriting its declared shared ` +
+          `dependencies, for microfrontend '${extensionId}'. Every ` +
+          'declared shared-dependency name that survives rewriting must ' +
+          'resolve to a blob URL; this indicates a rewrite defect rather ' +
+          'than a missing declaration.',
+        entryId
+      );
+      // @cpt-end:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-raise-shared-dep-bare-specifier
+    }
+    // @cpt-end:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-if-shared-dep-bare-specifier
+    // @cpt-begin:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-if-undeclared-specifier
+    const undeclared = findUndeclaredWellFormedSpecifiers(rewritten, sharedNames);
+    for (const specifier of undeclared) {
+      // @cpt-begin:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-warn-undeclared-specifier
+      console.warn(
+        `shared-dep chunk '${depName}' imports '${specifier}', which is ` +
+          `not declared in manifest.shared[], for microfrontend ` +
+          `'${extensionId}'. This specifier cannot resolve inside an ` +
+          'isolated module; declare it in manifest.shared[] if it should ' +
+          'be shared, or remove the import if it is unused. The load ' +
+          'proceeds — this is a diagnostic only.'
+      );
+      // @cpt-end:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-warn-undeclared-specifier
+    }
+    // @cpt-end:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-if-undeclared-specifier
     // @cpt-begin:cpt-frontx-algo-mfe-loading-manifest-discovery:p1:inst-md-mint-shared-blob
     // @cpt-begin:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-create-dep-blob
     const blob = new Blob([rewritten], { type: 'text/javascript' });
