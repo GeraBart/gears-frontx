@@ -1,17 +1,55 @@
 /**
- * MfeHandlerMF — publicPath resolution guard tests.
+ * MfeHandlerMF — handler-level behaviour tests.
  *
- * Covers the "auto" / "auto/" placeholder guard added at
- * @cpt-begin/@cpt-end markers in MfeHandlerMF.ts's
- * `assertResolvedPublicPath`. Module Federation emits `publicPath: "auto"`
- * for any remote whose vite.config.ts does not set an explicit publicPath —
- * that literal string must never reach the fetch layer as a base URL (see
- * MfeHandlerMF.ts header comment: "No remoteEntry.js parsing is required" —
- * this handler has no channel to recover the real origin at runtime, so an
- * unresolved "auto" must fail loudly rather than silently building a bogus
- * same-origin relative URL).
+ * Covers, in file order:
+ *  - the unresolved `publicPath` placeholder guard (`assertResolvedPublicPath`);
+ *  - chunk-source fetch concurrency: sibling fan-out, cross-caller dedup,
+ *    the build-wide fetch width, cross-branch dependency cycles, the
+ *    per-attempt timeout, and declaration-order failure reporting;
+ *  - lazy-import isolation: one failed chain build must not poison a later
+ *    independent one, sequentially or concurrently;
+ *  - the hard failure for a dependency that was never built;
+ *  - the per-load isolation invariant: every specifier in every minted
+ *    source is an inline-content URL this load minted — no origin URL and
+ *    no unrewritten bare specifier survives anywhere;
+ *  - deterministic (cycle) failures not being retried;
+ *  - `LruCache` capacity eviction and MRU re-insertion.
+ *
+ * On the `publicPath` guard specifically: Module Federation emits
+ * `publicPath: "auto"` for any remote whose vite.config.ts does not set an
+ * explicit publicPath — that literal string must never reach the fetch
+ * layer as a base URL (see MfeHandlerMF.ts header comment: "No
+ * remoteEntry.js parsing is required" — this handler has no channel to
+ * recover the real origin at runtime, so an unresolved "auto" must fail
+ * loudly rather than silently building a bogus same-origin relative URL).
  */
 import { describe, expect, it, vi } from 'vitest';
+
+/**
+ * Opt-in stub for `importBlobModule`.
+ *
+ * Dynamic `import()` of a `blob:` URL is unsupported under Node/vitest's
+ * module loader, so a `load()` that gets all the way through its chain
+ * build still rejects at the import step. Tests that need to observe a
+ * SUCCESSFUL load (the timeout-recovery test below) set
+ * `blobModuleStub.current` to the module the expose chunk would have
+ * evaluated to; every other test leaves it `undefined` and gets the real
+ * implementation, unchanged.
+ */
+const blobModuleStub = vi.hoisted(() => ({ current: undefined as unknown }));
+
+vi.mock('../mf-dynamic-module-ops', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('../mf-dynamic-module-ops')>();
+  return {
+    ...actual,
+    importBlobModule: (blobUrl: string): Promise<unknown> =>
+      blobModuleStub.current !== undefined
+        ? Promise.resolve(blobModuleStub.current)
+        : actual.importBlobModule(blobUrl),
+  };
+});
+
 import { MfeHandlerMF, LruCache } from '../MfeHandlerMF';
 import { MfeLoadError } from '../../errors';
 import type { MfeEntryMF } from '../../types/mfe-entry-mf';
@@ -160,6 +198,62 @@ function resolveLazy(
       resolveLazyChunk: (p: string, s: unknown) => Promise<string>;
     }
   ).resolveLazyChunk(relPath, loadState);
+}
+
+/**
+ * Capture the source text of every module this load mints.
+ *
+ * `URL.createObjectURL` is the single choke point through which every minted
+ * module passes (chunks and shared deps alike), so spying on it recovers
+ * exactly the set of sources the browser would have evaluated — which is what
+ * the isolation invariant has to be asserted over. The real implementation is
+ * still called, so the URLs the handler stores stay genuine `blob:` URLs.
+ */
+function captureMintedSources(): {
+  sources: () => Promise<string[]>;
+  restore: () => void;
+} {
+  const blobs: Blob[] = [];
+  const original = URL.createObjectURL.bind(URL);
+  const spy = vi
+    .spyOn(URL, 'createObjectURL')
+    .mockImplementation((object: Blob | MediaSource) => {
+      if (object instanceof Blob) blobs.push(object);
+      return original(object);
+    });
+  // jsdom's Blob has no `text()`, so the text comes back through FileReader.
+  const readAsText = (blob: Blob): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(reader.error ?? new Error('read failed'));
+      reader.readAsText(blob);
+    });
+  return {
+    sources: () => Promise.all(blobs.map(readAsText)),
+    restore: () => {
+      spy.mockRestore();
+    },
+  };
+}
+
+/**
+ * Every static/side-effect import specifier in `source` that is NOT an
+ * inline-content URL minted by this load — i.e. every specifier that would
+ * make the browser instantiate a module under a URL some other load could
+ * reach too (`http(s):`), or that it could not resolve at all (a bare
+ * specifier left unrewritten).
+ */
+function foreignSpecifiers(source: string): string[] {
+  const found: string[] = [];
+  const pattern = /(?:^|[^.\w$])(?:from|import)\s*(['"])([^'"]+)\1/g;
+  for (const match of source.matchAll(pattern)) {
+    const specifier = match[2];
+    if (!specifier.startsWith('blob:') && !specifier.startsWith('data:')) {
+      found.push(specifier);
+    }
+  }
+  return found;
 }
 
 const sleep = (ms: number): Promise<void> =>
@@ -379,7 +473,7 @@ describe('MfeHandlerMF — concurrent dependency fetch', () => {
     fetchSpy.mockRestore();
   });
 
-  it('resolves a diamond-shaped cross-branch cycle: every chunk on it is blob-URL\'d and each is fetched once', async () => {
+  it('fails a diamond-shaped cross-branch cycle with a diagnostic rather than resolving any chunk from origin', async () => {
     // a.js and b.js are independent siblings (both reached directly from
     // root.js) that both statically import c.js, and c.js statically imports
     // back to b.js — the cycle only closes once a's branch and b's branch
@@ -393,9 +487,13 @@ describe('MfeHandlerMF — concurrent dependency fetch', () => {
     // The 20ms delay on c.js is the ordering device, not incidental: it is
     // what guarantees b joins c's in-flight construction (contributing its
     // lineage) BEFORE c parses its own imports, which is the order in which
-    // the cross-branch cycle is detectable at all. The assertions below are
-    // on observable outcomes — which filenames ended up in `blobUrlMap` and
-    // the per-chunk fetch counts — not merely on "it settled".
+    // the cross-branch cycle is detectable at all.
+    //
+    // A cyclic chunk graph has no order in which per-load blob URLs could be
+    // minted, so the load fails rather than resolving the cycle-closing
+    // specifier from origin. The deadlock guard still earns its keep: the
+    // rejection has to arrive inside it, which is what proves detection
+    // failed the build instead of entering the circular wait.
     const { fetchImpl, callCounts } = createFetchRouter({
       'root.js': { body: "import './a.js';\nimport './b.js';\nexport const r = 1;" },
       'a.js': { body: "import './c.js';\nexport const a = 1;" },
@@ -406,10 +504,12 @@ describe('MfeHandlerMF — concurrent dependency fetch', () => {
       .spyOn(globalThis, 'fetch')
       .mockImplementation(fetchImpl as typeof fetch);
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const minted = captureMintedSources();
 
     const handler = new MfeHandlerMF(ENTRY_BASE_ID, { retries: 0 });
     const loadState = buildLoadState();
 
+    const startedAt = Date.now();
     const deadlockGuard = new Promise<never>((_resolve, reject) => {
       setTimeout(
         () => reject(new Error('deadlocked: diamond-shaped cycle never settled')),
@@ -417,43 +517,56 @@ describe('MfeHandlerMF — concurrent dependency fetch', () => {
       );
     });
 
-    const blobUrl = await Promise.race([
-      resolveLazy(handler, './root.js', loadState),
-      deadlockGuard,
-    ]);
-    expect(blobUrl).toMatch(/^blob:/);
-
-    // Every chunk on the cycle still receives its own blob URL — the
-    // short-circuit costs one SPECIFIER its blob (c's import of b resolves
-    // from origin), never a whole chunk.
-    expect([...loadState.blobUrlMap.keys()].sort()).toEqual([
-      'assets/a.js',
-      'assets/b.js',
-      'assets/c.js',
-      'assets/root.js',
-    ]);
-    // Each chunk fetched exactly once: the shared `inFlight`/`blobUrlMap`
-    // dedup holds across the two branches that meet at c.
-    for (const chunk of ['root.js', 'a.js', 'b.js', 'c.js']) {
-      expect(fetchesFor(callCounts, chunk), `fetch count for ${chunk}`).toBe(1);
+    let thrown: unknown;
+    try {
+      await Promise.race([
+        resolveLazy(handler, './root.js', loadState),
+        deadlockGuard,
+      ]);
+    } catch (error) {
+      thrown = error;
     }
-    // The origin-URL fallback is reported, not applied silently.
-    expect(warnSpy).toHaveBeenCalled();
-    expect(warnSpy.mock.calls.flat().join(' ')).toMatch(
+
+    expect(thrown).toBeInstanceOf(MfeLoadError);
+    expect((thrown as Error).message).toMatch(
       /dependency cycle: chunk 'assets\/b\.js'/
     );
+    // Well inside the guard, not near it: a rejection arriving at 1900ms of
+    // a 2000ms guard would be a latent hang rather than a detection.
+    expect(Date.now() - startedAt).toBeLessThan(1000);
 
+    // Nothing minted for this build may name a module by anything other than
+    // the inline content this load produced.
+    for (const source of await minted.sources()) {
+      expect(foreignSpecifiers(source), `minted source: ${source}`).toEqual([]);
+    }
+    // The cross-caller dedup still holds on the chunks that were fetched;
+    // fail-at-detection stops the build early, so not every chunk
+    // necessarily is.
+    for (const chunk of ['root.js', 'a.js', 'b.js', 'c.js']) {
+      expect(
+        fetchesFor(callCounts, chunk),
+        `fetch count for ${chunk}`
+      ).toBeLessThanOrEqual(1);
+    }
+    // The diagnostic IS the raised error; a warning alongside it would be
+    // noise for a condition that is fatal.
+    expect(warnSpy).not.toHaveBeenCalled();
+
+    minted.restore();
     warnSpy.mockRestore();
     fetchSpy.mockRestore();
   });
 
-  it("resolves mutually-importing chunks: both are blob-URL'd and each is fetched once", async () => {
+  it('fails mutually-importing chunks with a diagnostic naming the chunk on the cycle', async () => {
     // x.js and y.js statically import each other on a single, linear call
     // path — the simplest cycle shape, and fully deterministic: no fetch
     // delay is needed to reproduce it, because x is on y's own recursion
     // path by construction. x registers itself in `inFlight` and starts
-    // resolving y; y's request for x is short-circuited by the plain
-    // ancestor check instead of awaiting x's still-pending promise.
+    // resolving y; y's request for x is detected by the plain ancestor
+    // check instead of awaiting x's still-pending promise. Being the
+    // deterministic fixture, this is where the exact diagnostic text is
+    // asserted.
     const { fetchImpl, callCounts } = createFetchRouter({
       'x.js': { body: "import './y.js';\nexport const x = 1;" },
       'y.js': { body: "import './x.js';\nexport const y = 1;" },
@@ -462,10 +575,12 @@ describe('MfeHandlerMF — concurrent dependency fetch', () => {
       .spyOn(globalThis, 'fetch')
       .mockImplementation(fetchImpl as typeof fetch);
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const minted = captureMintedSources();
 
     const handler = new MfeHandlerMF(ENTRY_BASE_ID, { retries: 0 });
     const loadState = buildLoadState();
 
+    const startedAt = Date.now();
     const deadlockGuard = new Promise<never>((_resolve, reject) => {
       setTimeout(
         () => reject(new Error('deadlocked: mutually-importing chunks never settled')),
@@ -473,22 +588,35 @@ describe('MfeHandlerMF — concurrent dependency fetch', () => {
       );
     });
 
-    const blobUrl = await Promise.race([
-      resolveLazy(handler, './x.js', loadState),
-      deadlockGuard,
-    ]);
-    expect(blobUrl).toMatch(/^blob:/);
+    let thrown: unknown;
+    try {
+      await Promise.race([
+        resolveLazy(handler, './x.js', loadState),
+        deadlockGuard,
+      ]);
+    } catch (error) {
+      thrown = error;
+    }
 
-    expect([...loadState.blobUrlMap.keys()].sort()).toEqual([
-      'assets/x.js',
-      'assets/y.js',
-    ]);
-    expect(fetchesFor(callCounts, 'x.js')).toBe(1);
-    expect(fetchesFor(callCounts, 'y.js')).toBe(1);
-    expect(warnSpy.mock.calls.flat().join(' ')).toMatch(
-      /dependency cycle: chunk 'assets\/x\.js'/
-    );
+    expect(thrown).toBeInstanceOf(MfeLoadError);
+    const message = (thrown as Error).message;
+    // Names the chunk on the cycle, the lineage that closes it, the
+    // microfrontend, and the remedy.
+    expect(message).toMatch(/dependency cycle: chunk 'assets\/x\.js'/);
+    expect(message).toContain('own lineage');
+    expect(message).toContain('assets/x.js');
+    expect(message).toContain(ENTRY_ID);
+    expect(message).toMatch(/acyclic/);
+    expect(Date.now() - startedAt).toBeLessThan(1000);
 
+    for (const source of await minted.sources()) {
+      expect(foreignSpecifiers(source), `minted source: ${source}`).toEqual([]);
+    }
+    expect(fetchesFor(callCounts, 'x.js')).toBeLessThanOrEqual(1);
+    expect(fetchesFor(callCounts, 'y.js')).toBeLessThanOrEqual(1);
+    expect(warnSpy).not.toHaveBeenCalled();
+
+    minted.restore();
     warnSpy.mockRestore();
     fetchSpy.mockRestore();
   });
@@ -518,6 +646,96 @@ describe('MfeHandlerMF — concurrent dependency fetch', () => {
     // overhead should stay well under 1s; a hang would blow past this (and
     // the suite's own timeout) entirely.
     expect(elapsed).toBeLessThan(1000);
+
+    fetchSpy.mockRestore();
+  });
+
+  it('releases the abandoned attempt\'s source-text cache entry on timeout, so the retry re-fetches and can succeed', async () => {
+    // The recovery case, not just the bound: attempt 1's fetch never
+    // settles and is abandoned at the budget; attempt 2 must issue its OWN
+    // fetch for the same URL and complete the load. Before the release,
+    // attempt 2 got the same hung promise back out of `sourceTextCache`
+    // (evicted only on rejection, and a hang never rejects) and expired
+    // against its own budget, so the load failed after every attempt.
+    const manifest = buildManifest(PUBLIC_PATH, []);
+    const entry = buildEntry(manifest);
+
+    const lifecycleUrls: string[] = [];
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(((
+      input: string | URL | Request
+    ) => {
+      const url = String(input);
+      if (!url.endsWith('lifecycle.js')) {
+        return Promise.reject(new TypeError(`unmocked fetch: ${url}`));
+      }
+      lifecycleUrls.push(url);
+      // Attempt 1 hangs forever; attempt 2's own fetch resolves.
+      return lifecycleUrls.length === 1
+        ? new Promise<Response>(() => {})
+        : Promise.resolve(
+            jsResponse('export default { mount(){}, unmount(){} };')
+          );
+    }) as unknown as typeof fetch);
+
+    const lifecycle = { mount: (): void => {}, unmount: (): void => {} };
+    blobModuleStub.current = { default: lifecycle };
+
+    const handler = new MfeHandlerMF(ENTRY_BASE_ID, {
+      retries: 1,
+      timeout: 50,
+    });
+
+    try {
+      const loaded = await handler.load(entry, 'ext-timeout-recovery');
+      expect(typeof loaded.mount).toBe('function');
+      // Two SEPARATE fetches for the one chunk URL: the abandoned attempt's
+      // and the retry's own. One call would mean the retry rejoined the
+      // hung promise.
+      expect(lifecycleUrls).toHaveLength(2);
+      expect(lifecycleUrls[0]).toBe(lifecycleUrls[1]);
+    } finally {
+      blobModuleStub.current = undefined;
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it('leaves an entry a concurrent load registered under the same key untouched when an attempt times out', async () => {
+    // The release is identity-checked: it removes the key only while it
+    // still maps to the very promise the abandoned attempt was waiting on.
+    // An entry another, still-live load has since registered under that key
+    // must survive.
+    const manifest = buildManifest(PUBLIC_PATH, []);
+    const entry = buildEntry(manifest);
+
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(() => new Promise<Response>(() => {}));
+
+    const handler = new MfeHandlerMF(ENTRY_BASE_ID, {
+      retries: 0,
+      timeout: 80,
+    });
+    const sourceTextCache = (
+      handler as unknown as {
+        sourceTextCache: LruCache<string, Promise<string>>;
+      }
+    ).sourceTextCache;
+
+    const chunkUrl = `${PUBLIC_PATH}assets/lifecycle.js`;
+    const rejection = expect(
+      handler.load(entry, 'ext-timeout-identity')
+    ).rejects.toThrow(/timed out after 80ms/);
+
+    // Let the attempt register its own hung promise, then stand in for a
+    // concurrent load that replaces the entry under the same key.
+    await sleep(20);
+    expect(sourceTextCache.has(chunkUrl)).toBe(true);
+    const concurrentEntry = new Promise<string>(() => {});
+    sourceTextCache.set(chunkUrl, concurrentEntry);
+
+    await rejection;
+
+    expect(sourceTextCache.get(chunkUrl)).toBe(concurrentEntry);
 
     fetchSpy.mockRestore();
   });
@@ -695,12 +913,11 @@ describe('MfeHandlerMF — lazy-import failure isolation', () => {
     // `broken.js` itself fetches fine but statically imports `missing-dep.js`,
     // which does not. This is deliberate, not incidental: the failure must
     // surface through the sibling-fan-out rejection path in
-    // `createBlobUrlChainInternal` (parse deps → fan out via `boundedMap` →
-    // `firstRejection` → set the failure signal → throw) — the exact path
-    // that used to set the shared, never-reset `loadState.failed` flag. A
-    // fetch failure on the top-level lazy chunk's OWN source text rejects
-    // before that code ever runs, so it would not exercise the bug this
-    // test guards against.
+    // `createBlobUrlChainInternal` (parse deps → fan out → first rejection
+    // in declaration order → raise the build's failure signal → throw),
+    // which is the path that raises the signal at all. A fetch failure on
+    // the top-level lazy chunk's OWN source text rejects before that code
+    // ever runs, so it would not exercise the isolation this test asserts.
     const fetchSpy = vi
       .spyOn(globalThis, 'fetch')
       .mockImplementation(((input: string | URL | Request) => {
@@ -722,8 +939,8 @@ describe('MfeHandlerMF — lazy-import failure isolation', () => {
     const handler = new MfeHandlerMF(ENTRY_BASE_ID, { retries: 0 });
 
     // Hand-built per-load state, mirroring what `loadExposedModuleIsolated`
-    // builds internally — no `failed` field: that shared flag is exactly
-    // what this test proves must be gone.
+    // builds internally. The failure signal is per chain build, never on
+    // this per-load state.
     const loadState = {
       blobUrlMap: new Map<string, string>(),
       inFlight: new Map(),
@@ -741,13 +958,10 @@ describe('MfeHandlerMF — lazy-import failure isolation', () => {
     ).rejects.toThrow(MfeLoadError);
 
     // A second, wholly independent lazy import on the SAME load must still
-    // succeed — it never depends on './broken.js' in any way. Before the
-    // fix, the first failure latched `loadState.failed = true` for the rest
-    // of the load's lifetime, so this second call would exit
-    // `createBlobUrlChainInternal` immediately without fetching, mint no
-    // `blobUrlMap` entry, and `resolveLazyChunk` would reject with:
-    //   "__frontx_lazy: failed to mint blob URL for lazy chunk './ok.js'"
-    // — observed directly against the pre-fix implementation.
+    // succeed — it never depends on './broken.js' in any way. A failure
+    // signal that outlived its own chain build would stop this call inside
+    // `createBlobUrlChainInternal` before it fetched anything, leaving no
+    // `blobUrlMap` entry for `resolveLazyChunk` to return.
     const blobUrl = await (
       handler as unknown as {
         resolveLazyChunk: (relPath: string, loadState: unknown) => Promise<string>;
@@ -760,17 +974,18 @@ describe('MfeHandlerMF — lazy-import failure isolation', () => {
 
   it('re-attempts a chunk the failed build abandoned instead of joining its settled, empty in-flight entry', async () => {
     // The previous test uses two DISJOINT lazy chunks, so the failed build
-    // and the later one share nothing. This one makes them overlap, which is
-    // the case the in-flight registry got wrong: `broken.js` fans out to
-    // `a.js` (which imports a chunk that never loads) and to `slow.js`
-    // (which is still mid-fetch when a's failure raises the build's failure
-    // signal). `slow.js`'s construction therefore RESOLVES — it returns
-    // early rather than throwing — without ever minting a blob URL, leaving
-    // a settled promise in `inFlight` under 'assets/slow.js' that produced
-    // nothing. Every later request for that filename then joined it,
-    // resolved instantly, never re-fetched, and found no `blobUrlMap` entry:
-    // `resolveLazyChunk` rejected with "failed to mint blob URL for lazy
-    // chunk './slow.js'" for the rest of the page's life.
+    // and the later one share nothing. This one makes them overlap, in the
+    // SEQUENTIAL order: `broken.js` fans out to `a.js` (which imports a
+    // chunk that never loads) and to `slow.js` (still mid-fetch when a's
+    // failure raises the build's failure signal). `slow.js`'s construction
+    // therefore RESOLVES — it returns early rather than throwing — without
+    // ever minting a blob URL, leaving a settled promise in `inFlight`
+    // under 'assets/slow.js' that produced nothing. Unless that entry is
+    // dropped on settle, every later request for the filename joins it,
+    // resolves instantly, never re-fetches, and finds no `blobUrlMap`
+    // entry — so `resolveLazyChunk` rejects with "failed to mint blob URL
+    // for lazy chunk './slow.js'" for the rest of the page's life.
+    // The OVERLAPPING-CONCURRENT case is the test below.
     const { fetchImpl, callCounts } = createFetchRouter({
       'broken.js': { body: "import './a.js';\nimport './slow.js';\nexport const b = 1;" },
       // `missing.js` is deliberately unrouted — the router rejects any URL
@@ -818,59 +1033,104 @@ describe('MfeHandlerMF — lazy-import failure isolation', () => {
 
     fetchSpy.mockRestore();
   });
+
+  it('re-attempts a chunk it joined when the build it joined abandons that chunk mid-flight', async () => {
+    // The OVERLAPPING-CONCURRENT case: build B does not arrive after build
+    // A has finished — it joins A's still-running construction of a chunk
+    // two levels down A's graph, and A then abandons that chunk.
+    //
+    //   A: abandon-root.js → fail-branch.js → nope.js   (unrouted: fails)
+    //                      → mid.js         → shared.js → shared-dep.js
+    //   B: b-root.js       → shared.js
+    //
+    // `shared.js` is registered in `inFlight` by A almost immediately and
+    // is still mid-fetch when `fail-branch.js` raises A's failure signal,
+    // so A's construction of it RESOLVES without minting a blob URL. B
+    // joined that promise before it settled, so dropping the unproductive
+    // entry afterwards does nothing for B: B resumes on a cleanly-resolved
+    // promise with no `blobUrlMap` entry behind it, and — unless it
+    // verifies and re-attempts — fails its own build at
+    // `rewriteModuleImports` with the never-built diagnostic, for a chunk
+    // that is perfectly fetchable and that nothing ever tried to build on
+    // B's behalf.
+    const { fetchImpl, callCounts } = createFetchRouter({
+      'abandon-root.js': {
+        body: "import './fail-branch.js';\nimport './mid.js';\nexport const r = 1;",
+      },
+      // `nope.js` is deliberately unrouted — the router rejects any URL it
+      // has no route for, which is the network failure this needs. The
+      // delay puts A's failure AFTER B has joined `shared.js`.
+      'fail-branch.js': {
+        body: "import './nope.js';\nexport const f = 1;",
+        delayMs: 40,
+      },
+      'mid.js': { body: "import './shared.js';\nexport const m = 1;" },
+      'shared.js': {
+        body: "import './shared-dep.js';\nexport const s = 1;",
+        delayMs: 80,
+      },
+      'shared-dep.js': { body: 'export const d = 1;' },
+      'b-root.js': { body: "import './shared.js';\nexport const b = 1;" },
+    });
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(fetchImpl as typeof fetch);
+
+    const handler = new MfeHandlerMF(ENTRY_BASE_ID, { retries: 0 });
+    const loadState = buildLoadState();
+
+    const buildA = resolveLazy(handler, './abandon-root.js', loadState);
+    // Long enough for A to reach `shared.js` and register it in `inFlight`
+    // (only zero-delay fetches stand between the two), far short of the
+    // 40ms that raises A's failure signal.
+    await sleep(5);
+    expect(loadState.inFlight.has('assets/shared.js')).toBe(true);
+    const buildB = resolveLazy(handler, './b-root.js', loadState);
+
+    await expect(buildA).rejects.toThrow(MfeLoadError);
+
+    // B must survive A's abandonment of the chunk they share.
+    const blobUrl = await buildB;
+    expect(blobUrl).toMatch(/^blob:/);
+    expect(loadState.blobUrlMap.get('assets/shared.js')).toBeDefined();
+    // B re-ran the CONSTRUCTION, so `shared.js`'s own dependency — which
+    // A's abandoned build never got as far as requesting — is built now.
+    expect(loadState.blobUrlMap.has('assets/shared-dep.js')).toBe(true);
+    expect(fetchesFor(callCounts, 'shared-dep.js')).toBe(1);
+    // The source text is not re-fetched: the URL-keyed `sourceTextCache`
+    // still holds A's successful fetch. Re-running the construction is what
+    // matters, not re-fetching the bytes.
+    expect(fetchesFor(callCounts, 'shared.js')).toBe(1);
+
+    fetchSpy.mockRestore();
+  });
 });
 
-describe('MfeHandlerMF — unbuilt vs. cycle-short-circuited dependency at rewrite time', () => {
-  // These drive the private `rewriteModuleImports` directly: the two
-  // branches differ only in whether the build recorded the dependency as a
-  // deliberate cycle short-circuit, which is build state no fetch mock can
-  // set from the outside.
+describe('MfeHandlerMF — an unbuilt dependency at rewrite time', () => {
+  // Drives the private `rewriteModuleImports` directly. An absence from the
+  // per-load blob URL map now has a single outcome: there is no sanctioned
+  // reason for one, because a detected dependency cycle fails the build
+  // where it is detected rather than leaving a hole to be filled from
+  // origin here.
   const rewrite = (
     handler: MfeHandlerMF,
     source: string,
     loadState: unknown,
-    chunkFilename: string,
-    build: unknown
+    chunkFilename: string
   ): string =>
     (
       handler as unknown as {
         rewriteModuleImports: (
           src: string,
           state: unknown,
-          chunk: string,
-          build: unknown
+          chunk: string
         ) => string;
       }
-    ).rewriteModuleImports(source, loadState, chunkFilename, build);
-
-  it("resolves a cycle-short-circuited dependency to its origin chunk URL", () => {
-    const handler = new MfeHandlerMF(ENTRY_BASE_ID, { retries: 0 });
-    const loadState = buildLoadState();
-    const build = {
-      failed: false,
-      fetchBudget: null,
-      cycleShortCircuits: new Set(['assets/cyclic.js']),
-    };
-
-    const result = rewrite(
-      handler,
-      "import './cyclic.js';\nexport const v = 1;",
-      loadState,
-      'assets/referrer.js',
-      build
-    );
-
-    expect(result).toContain(`${PUBLIC_PATH}assets/cyclic.js`);
-  });
+    ).rewriteModuleImports(source, loadState, chunkFilename);
 
   it('fails the load with a diagnostic naming the referring chunk and the dependency that was never built', () => {
     const handler = new MfeHandlerMF(ENTRY_BASE_ID, { retries: 0 });
     const loadState = buildLoadState();
-    const build = {
-      failed: false,
-      fetchBudget: null,
-      cycleShortCircuits: new Set<string>(),
-    };
 
     let thrown: unknown;
     try {
@@ -878,8 +1138,7 @@ describe('MfeHandlerMF — unbuilt vs. cycle-short-circuited dependency at rewri
         handler,
         "import './never-built.js';\nexport const v = 1;",
         loadState,
-        'assets/referrer.js',
-        build
+        'assets/referrer.js'
       );
     } catch (error) {
       thrown = error;
@@ -890,6 +1149,217 @@ describe('MfeHandlerMF — unbuilt vs. cycle-short-circuited dependency at rewri
     expect((thrown as Error).message).toContain('assets/never-built.js');
     // The whole point: no origin URL is emitted for it.
     expect((thrown as Error).message).toMatch(/origin URL/);
+  });
+});
+
+/**
+ * The headline invariant: for every load, cyclic or acyclic, every module
+ * this handler mints names its dependencies ONLY by inline-content URLs this
+ * load produced. Any `http(s):` specifier would be a module the browser keys
+ * by that URL and therefore shares with every other load reaching it; any
+ * surviving bare specifier would be a module the browser cannot resolve at
+ * all. The property is universal ("never emits"), so it is asserted by
+ * scanning every minted source of every fixture rather than by exhibiting
+ * one good case.
+ */
+describe('MfeHandlerMF — per-load isolation invariant over every fixture', () => {
+  const FIXTURES: Record<
+    string,
+    {
+      routes: Record<string, { body: string; delayMs?: number }>;
+      shared: MfManifestShared[];
+      loads: boolean;
+    }
+  > = {
+    'a linear chunk chain': {
+      routes: {
+        'lifecycle.js': { body: "import './a.js';\nexport default {};" },
+        'a.js': { body: "import './b.js';\nexport const a = 1;" },
+        'b.js': { body: 'export const b = 1;' },
+      },
+      shared: [],
+      loads: true,
+    },
+    'a diamond with no back edge': {
+      routes: {
+        'lifecycle.js': {
+          body: "import './a.js';\nimport './b.js';\nexport default {};",
+        },
+        'a.js': { body: "import './c.js';\nexport const a = 1;", delayMs: 10 },
+        'b.js': { body: "import './c.js';\nexport const b = 1;" },
+        'c.js': { body: 'export const c = 1;' },
+      },
+      shared: [],
+      loads: true,
+    },
+    'shared dependencies that import one another acyclically': {
+      routes: {
+        'lifecycle.js': { body: 'import "react";\nexport default {};' },
+        'react.js': { body: 'import "scheduler";\nexport const react = 1;' },
+        'scheduler.js': { body: 'export const scheduler = 1;' },
+      },
+      shared: [
+        sharedDep('react', 'shared/react.js'),
+        sharedDep('scheduler', 'shared/scheduler.js'),
+      ],
+      loads: true,
+    },
+    'a cyclic chunk graph': {
+      routes: {
+        'lifecycle.js': { body: "import './a.js';\nexport default {};" },
+        'a.js': { body: "import './b.js';\nexport const a = 1;" },
+        'b.js': { body: "import './a.js';\nexport const b = 1;" },
+      },
+      shared: [],
+      loads: false,
+    },
+    'circular shared dependencies': {
+      routes: {
+        'lifecycle.js': { body: 'import "react";\nexport default {};' },
+        'react.js': { body: 'import "scheduler";\nexport const react = 1;' },
+        'scheduler.js': { body: 'import "react";\nexport const scheduler = 1;' },
+      },
+      shared: [
+        sharedDep('react', 'shared/react.js'),
+        sharedDep('scheduler', 'shared/scheduler.js'),
+      ],
+      loads: false,
+    },
+  };
+
+  it.each(Object.keys(FIXTURES))(
+    'mints no origin URL and no unrewritten bare specifier for %s',
+    async (name) => {
+      const fixture = FIXTURES[name];
+      const { fetchImpl } = createFetchRouter(fixture.routes);
+      const fetchSpy = vi
+        .spyOn(globalThis, 'fetch')
+        .mockImplementation(fetchImpl as typeof fetch);
+      const minted = captureMintedSources();
+      blobModuleStub.current = { default: { mount: (): void => {}, unmount: (): void => {} } };
+
+      const handler = new MfeHandlerMF(ENTRY_BASE_ID, { retries: 0 });
+      const entry = buildEntry(buildManifest(PUBLIC_PATH, fixture.shared));
+
+      try {
+        const settled = await handler
+          .load(entry, `ext-invariant-${name}`)
+          .then(
+            () => 'fulfilled' as const,
+            () => 'rejected' as const
+          );
+        expect(settled).toBe(fixture.loads ? 'fulfilled' : 'rejected');
+
+        const sources = await minted.sources();
+        // A successful load must actually have minted something, or the
+        // scan below would pass vacuously. A failing one legitimately mints
+        // nothing — refusing before any blob exists is the strongest form
+        // of the property, and the diagnostic itself is asserted by the
+        // dedicated cycle tests.
+        if (fixture.loads) expect(sources.length).toBeGreaterThan(0);
+        for (const source of sources) {
+          expect(
+            foreignSpecifiers(source),
+            `minted source: ${source}`
+          ).toEqual([]);
+        }
+      } finally {
+        blobModuleStub.current = undefined;
+        minted.restore();
+        fetchSpy.mockRestore();
+      }
+    }
+  );
+
+  it('fails circular shared dependencies with a diagnostic naming the packages and the imports among them', async () => {
+    // Today's alternative — minting them anyway with partial rewrites —
+    // produces blobs with `from "react"` left intact, which cannot be
+    // instantiated, and emits no diagnostic at all.
+    const { fetchImpl } = createFetchRouter({
+      'lifecycle.js': { body: 'import "react";\nexport default {};' },
+      'react.js': { body: 'import "scheduler";\nexport const react = 1;' },
+      'scheduler.js': { body: 'import "react";\nexport const scheduler = 1;' },
+    });
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(fetchImpl as typeof fetch);
+
+    const handler = new MfeHandlerMF(ENTRY_BASE_ID, { retries: 0 });
+    const entry = buildEntry(
+      buildManifest(PUBLIC_PATH, [
+        sharedDep('react', 'shared/react.js'),
+        sharedDep('scheduler', 'shared/scheduler.js'),
+      ])
+    );
+
+    let thrown: unknown;
+    try {
+      await handler.load(entry, 'ext-shared-cycle');
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(MfeLoadError);
+    const message = (thrown as Error).message;
+    expect(message).toContain('circular shared dependencies');
+    expect(message).toContain("'react' (imports 'scheduler')");
+    expect(message).toContain("'scheduler' (imports 'react')");
+
+    fetchSpy.mockRestore();
+  });
+});
+
+describe('MfeHandlerMF — deterministic failures are not retried', () => {
+  it('makes one attempt at a cyclic chunk graph, not one per configured retry', async () => {
+    // A cycle is a property of the microfrontend's build: every attempt
+    // reaches the same refusal, so retrying only multiplies the fetches and
+    // delays the same error by the backoff. `retries: 2` is the default the
+    // handler ships with, and would otherwise triple the fetch count.
+    const { fetchImpl, callCounts } = createFetchRouter({
+      'lifecycle.js': { body: "import './a.js';\nexport default {};" },
+      'a.js': { body: "import './b.js';\nexport const a = 1;" },
+      'b.js': { body: "import './a.js';\nexport const b = 1;" },
+    });
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(fetchImpl as typeof fetch);
+
+    const handler = new MfeHandlerMF(ENTRY_BASE_ID, { retries: 2 });
+    const entry = buildEntry(buildManifest(PUBLIC_PATH));
+
+    const startedAt = Date.now();
+    await expect(handler.load(entry, 'ext-no-retry-cycle')).rejects.toThrow(
+      /dependency cycle/
+    );
+
+    // One attempt's worth of fetches, not three — and none of the 1000ms /
+    // 2000ms backoff a retried attempt would have waited.
+    expect(fetchesFor(callCounts, 'lifecycle.js')).toBe(1);
+    expect(Date.now() - startedAt).toBeLessThan(1000);
+
+    fetchSpy.mockRestore();
+  });
+
+  it('still retries a failure a repeat attempt could change', async () => {
+    // The guard above must not disable retrying in general: a transient
+    // fetch failure keeps its attempts.
+    let calls = 0;
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation((() => {
+        calls += 1;
+        return Promise.reject(new TypeError('network error for test'));
+      }) as unknown as typeof fetch);
+
+    const handler = new MfeHandlerMF(ENTRY_BASE_ID, { retries: 1 });
+    const entry = buildEntry(buildManifest(PUBLIC_PATH));
+
+    await expect(handler.load(entry, 'ext-retryable')).rejects.toThrow(
+      MfeLoadError
+    );
+    expect(calls).toBe(2);
+
+    fetchSpy.mockRestore();
   });
 });
 
