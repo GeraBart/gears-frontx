@@ -378,26 +378,6 @@ export interface FrontXAppRuntimeExtensions {
 }
 
 /**
- * FrontX App Interface
- * The built application with all features available.
- *
- * @example
- * ```typescript
- * const app = createFrontXApp();
- *
- * // Access store
- * const state = app.store.getState();
- *
- * // Access actions
- * app.actions.mountExtension(extensionId);
- *
- * // Access MFE registry (if microfrontends plugin is used)
- * if (app.mfeRegistry) {
- *   app.mfeRegistry.registerDomain(myDomain, containerProvider);
- * }
- * ```
- */
-/**
  * FrontX App Guarantees
  *
  * Empty by default. An application that always builds with the `microfrontends()`
@@ -420,7 +400,19 @@ export interface FrontXAppRuntimeExtensions {
  *
  * With that declaration in scope, `app.mfeRegistry` is typed as `MfeRegistry`
  * (no longer `MfeRegistry | undefined`), so call sites no longer need an
- * `if (!app.mfeRegistry)` guard or a `app.mfeRegistry!` assertion.
+ * `if (!app.mfeRegistry)` guard or a `app.mfeRegistry!` assertion:
+ *
+ * ```typescript
+ * app.mfeRegistry.registerDomain(myDomain, containerProvider);
+ * ```
+ *
+ * The cost: nothing verifies the declaration against the plugins an app
+ * actually composes, so an app that declares `mfeRegistry: true` but builds
+ * without the `microfrontends()` plugin gets a type that lies — and the
+ * framework's own composition is the first place that becomes unsound, since
+ * `createFrontX` casts the aggregated registry to `FrontXApp['mfeRegistry']`
+ * whether or not the plugin contributed one. This is an opt-in assertion by
+ * design; it is checked by nothing at runtime.
  */
 export interface FrontXAppGuarantees {}
 
@@ -428,6 +420,26 @@ type MfeRegistrySlot = FrontXAppGuarantees extends { mfeRegistry: true }
   ? { mfeRegistry: MfeRegistry }
   : { mfeRegistry?: MfeRegistry };
 
+/**
+ * FrontX App Interface
+ * The built application with all features available.
+ *
+ * @example
+ * ```typescript
+ * const app = createFrontXApp();
+ *
+ * // Access store
+ * const state = app.store.getState();
+ *
+ * // Access actions
+ * app.actions.mountExtension(extensionId);
+ *
+ * // Access MFE registry (if microfrontends plugin is used)
+ * if (app.mfeRegistry) {
+ *   app.mfeRegistry.registerDomain(myDomain, containerProvider);
+ * }
+ * ```
+ */
 export interface FrontXApp extends FrontXAppRuntimeExtensions, MfeRegistrySlot {
   /** Application configuration */
   config: FrontXConfig;

@@ -13,34 +13,14 @@ import { useFrontX } from '../../FrontXContext';
 import type { FrontXApp, MfeRegistry } from '@gears-frontx/framework';
 
 // ============================================================================
-// Hook Implementation
+// Internal Guard
 // ============================================================================
 
 /**
- * Hook for accessing the MFE-enabled registry off the current FrontX app.
- *
- * Throws if the app was built without the `microfrontends()` plugin. The
- * optional `callerName` argument is included in the thrown message so a
- * developer still learns which hook failed, even though the guard itself is
- * shared. It defaults to this hook's own name for direct consumers.
- *
- * @param callerName - Name of the calling hook, used in the error message
- * @returns The MFE-enabled registry
- *
- * @example
- * ```ts
- * const registry = useMfeRegistry();
- * ```
- */
-export function useMfeRegistry(callerName: string = 'useMfeRegistry'): MfeRegistry {
-  const app = useFrontX();
-
-  return resolveMfeRegistry(app, callerName);
-}
-
-/**
- * Non-hook form of the guard, for callers that already hold the app instance
- * (e.g. hooks that need `app.store` as well) and must not read the context twice.
+ * Internal, non-hook form of the guard. Lets the registry-consuming hooks name
+ * themselves in the thrown message, so a developer learns which hook failed
+ * even though the guard itself is shared. Not part of the package's public
+ * surface — app code uses {@link useMfeRegistry}.
  *
  * @param app - The FrontX app instance to resolve the registry from
  * @param callerName - Name of the calling hook, used in the error message
@@ -57,4 +37,26 @@ export function resolveMfeRegistry(app: FrontXApp, callerName: string): MfeRegis
   }
 
   return registry;
+}
+
+// ============================================================================
+// Hook Implementation
+// ============================================================================
+
+/**
+ * Hook for accessing the MFE-enabled registry off the current FrontX app.
+ *
+ * Throws if the app was built without the `microfrontends()` plugin.
+ *
+ * @returns The MFE-enabled registry
+ *
+ * @example
+ * ```ts
+ * const registry = useMfeRegistry();
+ * ```
+ */
+export function useMfeRegistry(): MfeRegistry {
+  const app = useFrontX();
+
+  return resolveMfeRegistry(app, 'useMfeRegistry');
 }
