@@ -157,9 +157,9 @@ Internal system functions that implement the isolation mechanism.
 
 ### Shared-Dependency Blob URL Construction
 
-- [x] `p1` - **ID**: `cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls`
+- [ ] `p1` - **ID**: `cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls`
 
-**Input**: MFE manifest containing the shared-dependency list (name, version, chunk path) in the manifest's published enumeration order, which fixes only the sequence in which the declarations are visited (`cpt-frontx-adr-mfe-asset-discovery`)
+**Input**: MFE manifest containing the shared-dependency list (name, version, chunk path, and an optional content hash of the entry's emitted chunk) in the manifest's published enumeration order, which fixes only the sequence in which the declarations are visited (`cpt-frontx-adr-mfe-asset-discovery`)
 
 **Output**: Map of shared-dependency package name to blob URL, covering all shared dependencies declared in the manifest
 
@@ -167,20 +167,33 @@ Internal system functions that implement the isolation mechanism.
 1. [x] - `p1` - Verify that every shared-dependency package name declared in the manifest is unique within that manifest, before any network access - `inst-assert-unique-names`
 2. [x] - `p1` - **IF** the same package name is declared more than once, regardless of version - `inst-if-duplicate-name`
    1. [x] - `p1` - **RETURN** error — fail the load with a diagnostic naming the duplicated package and the manifest, because sources and rewrite maps are keyed by bare package name and a duplicate would silently displace the earlier declaration - `inst-raise-duplicate-name`
-3. [x] - `p1` - **FOR EACH** shared dependency declared in the manifest, visited in the manifest's enumeration order — which governs only the sequence of visits and, when two declarations collide on the same `name@version` key, which one claims the cross-MFE cache entry, so the enumeration may issue its fetches concurrently, admitted through the same fixed width `inst-fanout-bounded` names; this phase completes before the load's expose-chunk chain build begins, so the two phases never contribute to one another's in-flight count - `inst-for-each-dep`
-   1. [x] - `p1` - Compute the deduplication cache key as `name@version` - `inst-compute-key`
-   2. [x] - `p1` - **IF** the cross-MFE shared-dep text cache already holds a promise for this key - `inst-if-cache-hit`
+3. [ ] - `p1` - **FOR EACH** shared dependency declared in the manifest, visited in the manifest's enumeration order — which governs only the sequence of visits, so the enumeration may issue its fetches concurrently, admitted through the same fixed width `inst-fanout-bounded` names; this phase completes before the load's expose-chunk chain build begins, so the two phases never contribute to one another's in-flight count - `inst-for-each-dep`
+   1. [x] - `p1` - Derive the absolute chunk URL from the manifest's `publicPath` and the dependency's `chunkPath` - `inst-derive-url`
+   2. [ ] - `p1` - **IF** the manifest's shared-dependency entry declares a content hash of its emitted chunk - `inst-if-hash-declared`
+      1. [ ] - `p1` - Compute the deduplication cache key as `name@version@<content hash>`, so reuse is scoped to loads whose declared hash agrees on the identity of the emitted build - `inst-compute-key-hash`
+   3. [ ] - `p1` - **ELSE** - `inst-else-no-hash`
+      1. [ ] - `p1` - Compute the deduplication cache key as `name@version@<resolved absolute chunk URL>`, which confines reuse to loads of the same microfrontend because that URL is unique to it - `inst-compute-key-fallback`
+      2. [ ] - `p1` - Emit a one-time adoption notice — deduplicated per package `name@version` and the manifest's own id, not per load — naming the dependency, the manifest it came from, and that cross-MFE reuse is disabled for that dependency; the load proceeds on the fallback key rather than failing - `inst-emit-adoption-notice`
+   4. [x] - `p1` - **IF** the cross-MFE shared-dep text cache already holds a promise for this key - `inst-if-cache-hit`
       1. [x] - `p1` - Retrieve the cached source text promise - `inst-retrieve-cached`
-   3. [x] - `p1` - **ELSE** - `inst-else-fetch`
-      1. [x] - `p1` - Derive the absolute chunk URL from the manifest's `publicPath` and the dependency's `chunkPath` - `inst-derive-url`
-      2. [x] - `p1` - Fetch the source text and store the *in-flight fetch promise* in the cross-MFE cache under the key before awaiting it — which is what keeps the deduplication race-free however the concurrent fetches are interleaved; on rejection, evict the entry to permit retry - `inst-fetch-and-cache`
+   5. [x] - `p1` - **ELSE** - `inst-else-fetch`
+      1. [x] - `p1` - Fetch the source text from the absolute chunk URL derived earlier and store the *in-flight fetch promise* in the cross-MFE cache under the key before awaiting it — which is what keeps the deduplication race-free however the concurrent fetches are interleaved; on rejection, evict the entry to permit retry - `inst-fetch-and-cache`
 4. [x] - `p1` - Resolve the collected sources in dependency order — the sole source of dependency-order correctness for blob construction, derived from the fetched sources themselves and not from the manifest's enumeration order — processing each dependency only after all dependencies it imports have been resolved - `inst-resolve-order`
 5. [x] - `p1` - **IF** a pass over the pending shared dependencies resolves none of them, the remaining set imports one another circularly and no dependency order over it exists - `inst-if-shared-cycle`
    1. [x] - `p1` - **RETURN** error — fail the load with a diagnostic naming the shared dependencies that remain unresolved and the imports among them that form the cycle, rather than minting a module whose bare specifiers are left unrewritten and which therefore cannot be instantiated - `inst-raise-shared-cycle`
-6. [x] - `p1` - **FOR EACH** dependency in resolved order - `inst-for-each-resolved`
+6. [ ] - `p1` - **FOR EACH** dependency in resolved order - `inst-for-each-resolved`
    1. [x] - `p1` - Rewrite bare shared-dep specifiers in the source to the already-resolved blob URLs - `inst-rewrite-specifiers`
-   2. [x] - `p1` - Wrap the rewritten source in a blob, create a fresh blob URL, and add it to the shared-dep blob URL map - `inst-create-dep-blob`
+   2. [ ] - `p1` - Assert that no bare specifier survives that rewrite: the check covers exactly the same two import forms the rewrite handles — `from "x"` and `import "x"` — requiring every specifier found there to begin with `blob:` or `data:`; a dynamically imported specifier (`import("x")`) is outside this surface and is not asserted, because that rewrite does not handle it either - `inst-assert-shared-dep-no-bare-specifier`
+   3. [ ] - `p1` - **IF** a bare specifier survives that assertion - `inst-if-shared-dep-bare-specifier`
+      1. [ ] - `p1` - **RETURN** error — fail the load with a diagnostic naming the chunk, the surviving specifier, and the microfrontend - `inst-raise-shared-dep-bare-specifier`
+   4. [x] - `p1` - Wrap the rewritten source in a blob, create a fresh blob URL, and add it to the shared-dep blob URL map - `inst-create-dep-blob`
 7. [x] - `p1` - **RETURN** the complete shared-dep blob URL map - `inst-return-map`
+
+**Notes** (deferred, not decided here):
+
+* Whether the cross-MFE LRU cache's capacity remains right once entries are bounded by distinct packages times distinct builds, rather than by distinct packages alone, is open and left for measurement.
+* Whether the runtime should verify fetched bytes against a declared content hash is out of scope for this amendment and deferred.
+* Whether an equivalent bare-specifier assertion should also cover expose-chain chunks is open; this amendment scopes the assertion to shared-dependency chunks only.
 
 ### Trust-Kernel Guarded Import
 
@@ -281,7 +294,7 @@ The system **MUST** accept an entry's manifest either as the document itself or 
 - [x] All dynamic-code primitives (dynamic import of inline content, dynamic construction of specifier matchers) are confined to the single audited trust-kernel file; a lint rule enforces this boundary
 - [x] The trust-kernel import primitive rejects any input URL that does not begin with `blob:` or `data:` before any import executes
 - [x] All blob URLs in the instance-keyed load cache are retained for the page lifetime and are never revoked after the import resolves
-- [x] Shared-dependency source text is deduplicated across MFE loads using a cross-MFE LRU cache keyed by `name@version`; cache entries for failed fetches are evicted to permit retry
+- [ ] Shared-dependency source text is deduplicated across MFE loads using a cross-MFE LRU cache keyed by a producer-published content hash of the emitted chunk when the manifest declares one for that entry, and by the resolved absolute chunk URL — scoping reuse to loads of the same microfrontend — when it does not; cache entries for failed fetches are evicted to permit retry
 - [x] On load failure, the cache entry for the failed extension instance is evicted so a subsequent call can attempt a fresh load
 - [ ] No load ever emits, for any module and for any reason, a specifier that is not an inline-content URL minted by that load. There is no exception for dependency cycles.
 - [ ] A chunk whose static-dependency graph closes a cycle — including one that closes across two branches that fanned out independently — fails the load without a circular wait, with a diagnostic naming the chunk, the lineage that closes the cycle, and the microfrontend.
