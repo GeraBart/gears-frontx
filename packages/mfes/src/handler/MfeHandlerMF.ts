@@ -475,6 +475,18 @@ const SOURCE_TEXT_CACHE_CAPACITY = 256;
  * {@link MAX_CONCURRENT_FETCHES} per load.
  */
 const SHARED_DEP_TEXT_CACHE_CAPACITY = 128;
+/**
+ * Max adoption-notice ledger entries retained (keyed by name@version plus
+ * the declaring manifest's id).
+ *
+ * Entries are bounded by the distinct (shared dep, manifest) pairs a host
+ * actually observes without a declared `contentHash` — smaller in practice
+ * than {@link SHARED_DEP_TEXT_CACHE_CAPACITY}, since one manifest usually
+ * contributes only a handful of such pairs. 64 keeps ample headroom while
+ * still bounding a long-running host's memory instead of retaining one
+ * string per pair for the handler's entire lifetime.
+ */
+const SHARED_DEP_ADOPTION_NOTICE_CACHE_CAPACITY = 64;
 
 /**
  * One load attempt's record of the source-text cache entries it is waiting
@@ -641,13 +653,20 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
 
   /**
    * Tracks which `name@version` + manifest id pairs have already received
-   * the one-time adoption notice emitted when a shared-dep entry declares
-   * no `contentHash` (see `inst-emit-adoption-notice`). Scoped to the
-   * handler instance, same lifetime as `sharedDepTextCache`, so the notice
-   * fires once per pair across every load this handler serves — not once
-   * per load.
+   * the adoption notice emitted when a shared-dep entry declares no
+   * `contentHash` (see `inst-emit-adoption-notice`). Scoped to the handler
+   * instance, so the notice fires at most once per pair across every load
+   * this handler serves — not once per load — while the pair's entry
+   * survives in this ledger.
+   *
+   * LRU-bounded for the same reason as `sourceTextCache` and
+   * `sharedDepTextCache`: an unbounded ledger would retain one string per
+   * pair for the handler's entire lifetime. Eviction here only means the
+   * pair may be renotified later; it never affects correctness of the load.
    */
-  private readonly sharedDepAdoptionNoticesEmitted = new Set<string>();
+  private readonly sharedDepAdoptionNoticesEmitted = new LruCache<string, true>(
+    SHARED_DEP_ADOPTION_NOTICE_CACHE_CAPACITY,
+  );
 
   constructor(
     handledBaseTypeId: string,
@@ -1355,7 +1374,7 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
         // @cpt-begin:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-emit-adoption-notice
         const noticeKey = `${dep.name}@${dep.version} ${manifest.id}`;
         if (!this.sharedDepAdoptionNoticesEmitted.has(noticeKey)) {
-          this.sharedDepAdoptionNoticesEmitted.add(noticeKey);
+          this.sharedDepAdoptionNoticesEmitted.set(noticeKey, true);
           console.warn(
             `Shared dependency '${dep.name}@${dep.version}' declared by ` +
               `manifest '${manifest.id}' carries no contentHash. ` +
