@@ -173,7 +173,7 @@ Internal system functions that implement the isolation mechanism.
       1. [x] - `p1` - Compute the deduplication cache key as `name@version@<content hash>`, so reuse is scoped to loads whose declared hash agrees on the identity of the emitted build - `inst-compute-key-hash`
    3. [x] - `p1` - **ELSE** - `inst-else-no-hash`
       1. [x] - `p1` - Compute the deduplication cache key as `name@version@<resolved absolute chunk URL>`, which confines reuse to loads of the same microfrontend because that URL is unique to it - `inst-compute-key-fallback`
-      2. [x] - `p1` - Emit a one-time adoption notice — deduplicated per package `name@version` and the manifest's own id, not per load — naming the dependency, the manifest it came from, and that cross-MFE reuse is disabled for that dependency; the load proceeds on the fallback key rather than failing - `inst-emit-adoption-notice`
+      2. [x] - `p1` - Emit an adoption notice, deduplicated per package `name@version` and the manifest's own id, not per load — naming the dependency, the manifest it came from, and that cross-MFE reuse is disabled for that dependency; the deduplication ledger is bounded so it cannot grow without limit on a long-lived handler, so the same pair may be renotified after its entry is evicted; the load proceeds on the fallback key rather than failing - `inst-emit-adoption-notice`
    4. [x] - `p1` - **IF** the cross-MFE shared-dep text cache already holds a promise for this key - `inst-if-cache-hit`
       1. [x] - `p1` - Retrieve the cached source text promise - `inst-retrieve-cached`
    5. [x] - `p1` - **ELSE** - `inst-else-fetch`

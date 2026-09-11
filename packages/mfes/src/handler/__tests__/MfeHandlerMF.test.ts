@@ -1658,6 +1658,62 @@ describe('MfeHandlerMF — shared-dep cross-MFE cache key (issue #621)', () => {
     }
   });
 
+  it('bounds the adoption-notice ledger: once more distinct pairs than its capacity have been observed, the earliest pair is renotified', async () => {
+    // The ledger's capacity is an implementation detail (not exported), so
+    // this drives enough distinct (name@version, manifest id) pairs to
+    // guarantee eviction regardless of the exact number chosen, then
+    // re-triggers the FIRST pair and asserts it is renotified — behaviour
+    // that is only possible if its ledger entry was evicted.
+    const PAIR_COUNT = 100;
+    const routes: Record<string, { body: string }> = {};
+    for (let i = 0; i < PAIR_COUNT; i++) {
+      const publicPath = `http://localhost:5${String(i).padStart(3, '0')}/mfe/`;
+      routes[`${publicPath}assets/lifecycle.js`] = {
+        body: `import "dep-bound-${i}";\nexport default {};`,
+      };
+      routes[`${publicPath}shared/dep-bound-${i}.js`] = {
+        body: `export const v = ${i};`,
+      };
+    }
+    const { fetchImpl } = createFetchRouter(routes);
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(fetchImpl as typeof fetch);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    stubSuccessfulImport();
+
+    const handler = new MfeHandlerMF(ENTRY_BASE_ID, { retries: 0 });
+    const manifestFor = (i: number): MfManifest => ({
+      ...buildManifest(`http://localhost:5${String(i).padStart(3, '0')}/mfe/`, [
+        sharedDep(`dep-bound-${i}`, `shared/dep-bound-${i}.js`),
+      ]),
+      id: `mock.mfe.mf_manifest.v1~test.notice-bound-${i}.v1`,
+    });
+
+    const noticeCountFor = (i: number): number =>
+      warnSpy.mock.calls.filter((args) =>
+        args.some((arg) => String(arg).includes(`dep-bound-${i}@`))
+      ).length;
+
+    try {
+      for (let i = 0; i < PAIR_COUNT; i++) {
+        await handler.load(buildEntry(manifestFor(i)), `ext-notice-bound-${i}`);
+      }
+      expect(noticeCountFor(0)).toBe(1);
+
+      // Re-load pair 0. If the ledger were unbounded, this would still be
+      // deduplicated (no second notice). Because it is LRU-bounded well
+      // under PAIR_COUNT, pair 0's entry has been evicted by the later
+      // pairs, so it is renotified.
+      await handler.load(buildEntry(manifestFor(0)), 'ext-notice-bound-0-again');
+      expect(noticeCountFor(0)).toBe(2);
+    } finally {
+      blobModuleStub.current = undefined;
+      warnSpy.mockRestore();
+      fetchSpy.mockRestore();
+    }
+  });
+
   it('fails the load when a DECLARED shared-dependency name survives rewriting, naming the chunk, the specifier, and the microfrontend', async () => {
     // Under normal operation this path is unreachable: dependency-order
     // resolution (`createBlobUrlsInDependencyOrder`) guarantees every
