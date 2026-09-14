@@ -235,7 +235,7 @@ class MfeJsonEnricher {
   ): EnrichedSharedEntry[] {
     return declaredDeps.map((name) => {
       const fileName = `${StandaloneEsmBuilder.normalizeDepName(name)}.js`;
-      const contentHash = this.computeContentHash(
+      const contentHash = computeContentHash(
         path.join(sharedOutputDir, fileName)
       );
       return {
@@ -246,26 +246,6 @@ class MfeJsonEnricher {
         ...(contentHash !== undefined ? { contentHash } : {}),
       };
     });
-  }
-
-  /**
-   * sha256 (hex, full 64 chars — well past the 16-char collision-safety
-   * floor) of a shared dep's emitted chunk, computed over the file's final
-   * on-disk bytes: after every post-process pass, including path
-   * normalization, so the hash is stable across package-manager layout and
-   * build-depth differences that would otherwise make two builds of the
-   * same dependency at the same version hash differently. Returns
-   * `undefined` when the chunk is missing rather than emitting a hash for
-   * bytes that were never actually published — an absent `contentHash` is a
-   * valid, well-handled manifest state; a wrong one is not.
-   */
-  private computeContentHash(chunkFilePath: string): string | undefined {
-    try {
-      const bytes = fs.readFileSync(chunkFilePath);
-      return createHash('sha256').update(bytes).digest('hex');
-    } catch {
-      return undefined;
-    }
   }
 
   /**
@@ -319,6 +299,86 @@ class MfeJsonEnricher {
       };
     });
   }
+}
+
+/**
+ * sha256 (hex, full 64 chars — well past the 16-char collision-safety floor)
+ * of a shared dep's emitted chunk, computed over the file's final on-disk
+ * bytes: after every post-process pass, including path normalization (see
+ * `normalizeEmbeddedModulePaths`), so the hash is stable across the
+ * package-manager layouts and build depths that normalization handles,
+ * making two such builds of the same dependency at the same version hash
+ * identically. Returns `undefined` when the chunk cannot be read — normally
+ * because it is missing, so no hash is emitted for bytes that were never
+ * actually published — but also on any other I/O fault reading a file
+ * `StandaloneEsmBuilder.build()` wrote moments earlier; either way an
+ * absent `contentHash` is a valid, well-handled manifest state, a wrong one
+ * is not, so a warning is logged (naming the path and the underlying error)
+ * to let an operator distinguish a genuine fault from an unadopted
+ * producer. Exported for unit testing — see
+ * `template-shell/__tests__/build/content-hash.test.ts`.
+ */
+export function computeContentHash(chunkFilePath: string): string | undefined {
+  try {
+    const bytes = fs.readFileSync(chunkFilePath);
+    return createHash('sha256').update(bytes).digest('hex');
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    console.warn(
+      `[frontx-mf-gts] contentHash: could not read shared chunk ` +
+        `"${chunkFilePath}" (${reason}). Publishing manifest without a ` +
+        `contentHash for this dependency.`
+    );
+    return undefined;
+  }
+}
+
+/**
+ * Canonicalizes the embedded `node_modules` source paths esbuild writes into
+ * non-minified output, so the same dependency/version/externals combination
+ * produces byte-identical output across the two layout-dependent shapes this
+ * handles — a different, unhandled layout (e.g. a workspace-linked
+ * dependency emitting a bare `../packages/<pkg>/dist/...` path with no
+ * `node_modules` segment at all) simply passes through unnormalized; that
+ * only costs a missed dedup opportunity, never a wrong `contentHash`.
+ *
+ * esbuild never bundles a minified path, comment, or absolute prefix into
+ * these outputs — only two path-bearing forms occur, both derived from the
+ * same cwd-relative path per module: the `// <path>` provenance comment
+ * above each `__commonJS`-wrapped module, and that same path repeated as
+ * the object key esbuild uses to name/register the wrapper (e.g.
+ * `"node_modules/react-dom/cjs/react-dom.development.js"(exports, module) {`).
+ * A single textual substitution handles both, since neither form needs to
+ * be located independently — whichever regex matches, matches in either
+ * context.
+ *
+ * The two shapes collapsed to one canonical form:
+ *   - pnpm's content-addressed store segment, e.g.
+ *     `node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/` →
+ *     `node_modules/` (npm's flat layout never has this segment, so this
+ *     only fires on pnpm output; the peer suffix after `_` is optional and
+ *     part of the same segment; the enclosing `node_modules/` on both
+ *     sides collapses to the single flat-layout one).
+ *   - leading `../` hops before `node_modules/`, produced when esbuild's
+ *     cwd sits at a different depth than the dependency's install path,
+ *     e.g. `../../node_modules/` → `node_modules/`.
+ *
+ * Pure; exported for unit testing — see
+ * `template-shell/__tests__/build/content-hash.test.ts`. Must run after
+ * `patchCjsExternals`/`patchCjsNamedExports` (both can rewrite surrounding
+ * source, though neither touches these path strings) and before anything
+ * hashes the file's bytes.
+ */
+export function normalizeEmbeddedModulePathsInSource(source: string): string {
+  return source
+    // pnpm's store-path segment (with its enclosing node_modules/ on
+    // both sides), with or without leading '../' hops.
+    .replace(
+      /(?:\.\.\/)*(?:node_modules\/)?\.pnpm\/[^/"'\s]+\/node_modules\//g,
+      'node_modules/'
+    )
+    // Remaining depth-only '../' hops immediately preceding node_modules.
+    .replace(/(?:\.\.\/)+node_modules\//g, 'node_modules/');
 }
 
 // ── Standalone ESM builder ──────────────────────────────────────────────────
@@ -642,10 +702,12 @@ class StandaloneEsmBuilder {
     this.patchCjsNamedExports(outfile, dep.name);
 
     // Canonicalize embedded module paths so identical (dep, version,
-    // externals) inputs emit byte-identical output regardless of
-    // package-manager layout (pnpm vs npm-flat) or build depth relative to
-    // cwd. Must run last, after both patches above, and before anything
-    // hashes this file's bytes (see `MfeJsonEnricher.computeContentHash`,
+    // externals) inputs emit byte-identical output across the pnpm-store
+    // and build-depth layout variations this normalizes (see
+    // `normalizeEmbeddedModulePaths` for exactly which shapes those are —
+    // other layouts, e.g. a workspace-linked dependency, simply pass
+    // through unnormalized). Must run last, after both patches above, and
+    // before anything hashes this file's bytes (see `computeContentHash`,
     // which runs later in `closeBundle` once every chunk on this list is
     // final).
     StandaloneEsmBuilder.normalizeEmbeddedModulePaths(outfile);
@@ -805,47 +867,15 @@ class StandaloneEsmBuilder {
   }
 
   /**
-   * Canonicalizes the embedded `node_modules` source paths esbuild writes
-   * into non-minified output, so the same dependency/version/externals
-   * combination produces byte-identical output regardless of package
-   * manager layout or the build's depth relative to `cwd`.
-   *
-   * esbuild never bundles a minified path, comment, or absolute prefix into
-   * these outputs — only two path-bearing forms occur, both derived from the
-   * same cwd-relative path per module: the `// <path>` provenance comment
-   * above each `__commonJS`-wrapped module, and that same path repeated as
-   * the object key esbuild uses to name/register the wrapper (e.g.
-   * `"node_modules/react-dom/cjs/react-dom.development.js"(exports, module) {`).
-   * A single textual substitution handles both, since neither form needs to
-   * be located independently — whichever regex matches, matches in either
-   * context.
-   *
-   * Two layout-dependent variations are collapsed to one canonical form:
-   *   - pnpm's content-addressed store segment, e.g.
-   *     `node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/` →
-   *     `node_modules/` (npm's flat layout never has this segment, so this
-   *     only fires on pnpm output; the peer suffix after `_` is optional and
-   *     part of the same segment; the enclosing `node_modules/` on both
-   *     sides collapses to the single flat-layout one).
-   *   - leading `../` hops before `node_modules/`, produced when esbuild's
-   *     cwd sits at a different depth than the dependency's install path,
-   *     e.g. `../../node_modules/` → `node_modules/`.
-   *
-   * Must run after `patchCjsExternals`/`patchCjsNamedExports` (both can
-   * rewrite surrounding source, though neither touches these path strings)
-   * and before anything hashes the file's bytes.
+   * File-I/O wrapper around {@link normalizeEmbeddedModulePathsInSource}:
+   * reads the freshly-minted chunk, normalizes it, and writes it back only
+   * if it changed. Kept as the plugin's call site; the pure substitution is
+   * exported separately so it can be unit-tested without esbuild or the
+   * filesystem.
    */
   private static normalizeEmbeddedModulePaths(outfile: string): void {
     const source = fs.readFileSync(outfile, 'utf-8');
-    const normalized = source
-      // pnpm's store-path segment (with its enclosing node_modules/ on
-      // both sides), with or without leading '../' hops.
-      .replace(
-        /(?:\.\.\/)*(?:node_modules\/)?\.pnpm\/[^/"'\s]+\/node_modules\//g,
-        'node_modules/'
-      )
-      // Remaining depth-only '../' hops immediately preceding node_modules.
-      .replace(/(?:\.\.\/)+node_modules\//g, 'node_modules/');
+    const normalized = normalizeEmbeddedModulePathsInSource(source);
 
     if (normalized !== source) {
       fs.writeFileSync(outfile, normalized, 'utf-8');

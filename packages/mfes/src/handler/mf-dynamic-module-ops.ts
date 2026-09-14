@@ -34,18 +34,23 @@
  * (side-effect imports). Exact package names only — `react-dom` is not matched
  * by a query for `react`.
  *
- * @safety-reviewed 2026-04-20
- * @why The `packageName` argument is interpolated into a RegExp. All regex
- *      metacharacters are escaped one line above via
- *      `/[.*+?^${}()|[\]\\]/g` → `String.raw\`\\$&\``. The escape covers every
- *      character that has regex meaning; ReDoS requires a pattern capable of
- *      catastrophic backtracking, which the escaped literal cannot produce.
+ * Builds on {@link bareSpecifierPattern} — the single per-name pattern this
+ * file also uses to rewrite and to assert survival — rather than a second,
+ * independently escaped `RegExp`, so a boolean "does it import this name"
+ * check can never drift from what the rewriter itself matches. A fresh
+ * `RegExp` instance is obtained from `bareSpecifierPattern` on every call, so
+ * the global (`/g`) flag's `lastIndex` state never carries across calls.
+ *
+ * @safety-reviewed 2026-09-14
+ * @why Delegates entirely to `bareSpecifierPattern`, which regex-escapes
+ *      `packageName` before interpolation; this function performs no
+ *      interpolation of its own, so it introduces no additional attack
+ *      surface beyond what that function already documents.
  * @inputs `packageName` ∈ the set of shared dep names declared on the resolved
  *         `MfManifest` contract — bounded, author-declared, not user input.
  */
 export function sourceImports(source: string, packageName: string): boolean {
-  const escaped = packageName.replace(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
-  return new RegExp(String.raw`(?:from|import)\s*["']${escaped}["']`).test(source);
+  return bareSpecifierPattern(packageName).test(source);
 }
 
 /**
@@ -57,23 +62,32 @@ export function sourceImports(source: string, packageName: string): boolean {
  * import) — neither this function's callers rewrite that form, so nothing
  * may assert against it either.
  *
- * `rewriteBareSpecifier` and `findSurvivingDeclaredSharedDepSpecifier` both
- * build on this single per-name pattern so the two can never drift apart:
- * whatever the rewriter can rewrite for a given declared name is exactly
- * what the assertion checks for that name's survival. A generic (no package
+ * `sourceImports`, `rewriteBareSpecifier`, and
+ * `findSurvivingDeclaredSharedDepSpecifier` all build on this single
+ * per-name pattern so none of the three can ever drift apart: whatever the
+ * rewriter can rewrite for a given declared name is exactly what the
+ * membership test and the survival assertion check for that name. The
+ * returned `RegExp` carries the `/g` flag (`rewriteBareSpecifier` needs it
+ * for `String.prototype.replace` to rewrite every occurrence); callers that
+ * only need a boolean or a single match must not retain and reuse one
+ * instance across calls; each call here returns a fresh `RegExp`, so
+ * `lastIndex` never leaks state between callers. A generic (no package
  * name) form of this matcher intentionally does not live here — see
  * `findUndeclaredWellFormedSpecifiers` in `mf-shared-dep-specifier-scan.ts`,
  * which needs no interpolation and so carries no trust-kernel residency
  * requirement.
  *
- * @safety-reviewed 2026-04-20
- * @why `packageName` is regex-escaped before interpolation (same escaping
- *      argument as `sourceImports`), so the constructed RegExp cannot be
- *      exploited by adversarial inputs.
+ * @safety-reviewed 2026-09-14
+ * @why `packageName` is regex-escaped before interpolation, covering every
+ *      character with regex meaning; ReDoS requires a pattern capable of
+ *      catastrophic backtracking, which the escaped literal cannot produce.
+ *      This is the sole place in the file that performs the escaping and
+ *      constructs the RegExp — `sourceImports` and `rewriteBareSpecifier`
+ *      both delegate here rather than repeating the escape.
  * @inputs `packageName` is a shared dep name from the resolved `MfManifest`
  *         contract — bounded, author-declared, not user input.
  */
-export function bareSpecifierPattern(packageName: string): RegExp {
+function bareSpecifierPattern(packageName: string): RegExp {
   const specifierPart = packageName.replace(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
   return new RegExp(
     String.raw`(from|import)(\s*["'])(${specifierPart})(["'])`,
@@ -126,11 +140,13 @@ export function rewriteBareSpecifier(
  * for the separate, heuristic, warn-only scan over specifiers the manifest
  * never declared.
  *
- * @safety-reviewed 2026-04-20
- * @why Delegates to `sourceImports`, which regex-escapes each declared name
- *      before interpolation (same escaping argument as `sourceImports`
- *      itself), so the constructed RegExp cannot be exploited by
- *      adversarial inputs.
+ * @safety-reviewed 2026-09-14
+ * @why Iterates `declaredNames` and delegates each membership test to
+ *      `sourceImports`/`bareSpecifierPattern` rather than building any
+ *      RegExp of its own; it introduces no new interpolation, only a loop
+ *      over an already-safe primitive, so it carries no additional
+ *      adversarial-input surface beyond what `bareSpecifierPattern`
+ *      documents.
  * @inputs `source` is shared-dep chunk text already fetched from a
  *         manifest-declared chunk URL — not user input. `declaredNames` is
  *         the set of shared dep names declared on the resolved `MfManifest`

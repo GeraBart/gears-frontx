@@ -67,8 +67,8 @@
           },
           "contentHash": {
             "type": "string",
-            "minLength": 1,
-            "description": "Optional content hash of this entry's emitted chunk, published by the producing build. Identifies the producing build so the handler's cross-MFE shared-dep source-text cache can key reuse on it rather than on name+version alone."
+            "pattern": "^[0-9a-f]{64}$",
+            "description": "Optional sha256 hex digest (64 lowercase hex characters) of this entry's emitted chunk, published by the producing build. Identifies the producing build so the handler's cross-MFE shared-dep source-text cache can key reuse on it rather than on name+version alone. Absent when the producer has not adopted content hashing."
           }
         },
         "required": ["name", "version", "chunkPath", "unwrapKey"]

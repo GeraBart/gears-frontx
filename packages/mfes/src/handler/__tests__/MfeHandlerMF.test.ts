@@ -1409,19 +1409,15 @@ describe('LruCache — capacity eviction and MRU re-insertion', () => {
 /**
  * Regression coverage for issue #621 / `cpt-frontx-adr-shared-dep-dedup-key`.
  *
- * The cross-MFE shared-dep source-text cache used to key solely on
- * `name@version`. A shared-dep chunk is built per consuming microfrontend,
- * so two manifests can legitimately declare the same name and version while
- * shipping structurally different chunk bytes; whichever manifest's load
- * reached the cache first served its chunk's text to every later manifest
- * declaring the same name and version, leaving the later manifest with an
- * unrewritten bare specifier baked into a `blob:` module and a silent mount
- * failure. The fix (not implemented by these tests) keys reuse on a
- * declared content hash when the manifest provides one, falls back to the
- * resolved absolute chunk URL (which is unique per microfrontend) when it
- * does not — emitting a one-time adoption notice per `name@version` and
- * manifest id in that case — and asserts no bare specifier survives a
- * shared-dep chunk's rewrite before minting its blob.
+ * A shared-dep chunk is built per consuming microfrontend, so two manifests
+ * can legitimately declare the same name and version while shipping
+ * structurally different chunk bytes. The cross-MFE shared-dep source-text
+ * cache keys reuse on a declared content hash when the manifest provides
+ * one, and falls back to the resolved absolute chunk URL (unique per
+ * microfrontend) when it does not — emitting an adoption notice, deduplicated
+ * per `name@version` and manifest id pair while that pair's ledger entry
+ * survives, in the fallback case. No bare specifier is left unrewritten in a
+ * shared-dep chunk before its blob is minted.
  */
 describe('MfeHandlerMF — shared-dep cross-MFE cache key (issue #621)', () => {
   const PUBLIC_PATH_A = 'http://localhost:4101/mfe-a/';
@@ -1523,10 +1519,10 @@ describe('MfeHandlerMF — shared-dep cross-MFE cache key (issue #621)', () => {
 
     const handler = new MfeHandlerMF(ENTRY_BASE_ID, { retries: 0 });
     const manifestA = buildManifest(PUBLIC_PATH_A, [
-      sharedDep('dep-x', 'shared/dep-x.js', { contentHash: 'same-hash' }),
+      sharedDep('dep-x', 'shared/dep-x.js', { contentHash: '0e6ffdcfeba0f920be9dfcd093ae95baba245d9b07dee5348111e3ecb25e3599' }),
     ]);
     const manifestB = buildManifest(PUBLIC_PATH_B, [
-      sharedDep('dep-x', 'shared/dep-x.js', { contentHash: 'same-hash' }),
+      sharedDep('dep-x', 'shared/dep-x.js', { contentHash: '0e6ffdcfeba0f920be9dfcd093ae95baba245d9b07dee5348111e3ecb25e3599' }),
     ]);
 
     try {
@@ -1570,10 +1566,10 @@ describe('MfeHandlerMF — shared-dep cross-MFE cache key (issue #621)', () => {
 
     const handler = new MfeHandlerMF(ENTRY_BASE_ID, { retries: 0 });
     const manifestA = buildManifest(PUBLIC_PATH_A, [
-      sharedDep('dep-x', 'shared/dep-x.js', { contentHash: 'hash-a' }),
+      sharedDep('dep-x', 'shared/dep-x.js', { contentHash: 'a73f08acc63e6f8d9732679dae84b4942b3148be0a9ba8f670084b8fef530f6d' }),
     ]);
     const manifestB = buildManifest(PUBLIC_PATH_B, [
-      sharedDep('dep-x', 'shared/dep-x.js', { contentHash: 'hash-b' }),
+      sharedDep('dep-x', 'shared/dep-x.js', { contentHash: 'de4d39c675358c5beb85c910733bb377518691f115c5be822015449bb651133b' }),
     ]);
 
     try {
@@ -1586,6 +1582,54 @@ describe('MfeHandlerMF — shared-dep cross-MFE cache key (issue #621)', () => {
         1
       );
       expect(fetchesFor(callCounts, `${PUBLIC_PATH_B}shared/dep-x.js`)).toBe(
+        1
+      );
+    } finally {
+      blobModuleStub.current = undefined;
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it('does not reuse cached shared-dep text across manifests when their declared contentHash is malformed', async () => {
+    // Malformed hash (4 chars instead of 64 hex) to verify isWellFormedContentHash guard.
+    const routes = {
+      [`${PUBLIC_PATH_A}assets/lifecycle.js`]: {
+        body: 'import "dep-z";\nexport default {};',
+      },
+      [`${PUBLIC_PATH_A}shared/dep-z.js`]: {
+        body: 'export const depz = 1;',
+      },
+      [`${PUBLIC_PATH_B}assets/lifecycle.js`]: {
+        body: 'import "dep-z";\nexport default {};',
+      },
+      [`${PUBLIC_PATH_B}shared/dep-z.js`]: {
+        body: 'export const depz = 1;',
+      },
+    };
+    const { fetchImpl, callCounts } = createFetchRouter(routes);
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(fetchImpl as typeof fetch);
+    stubSuccessfulImport();
+
+    const handler = new MfeHandlerMF(ENTRY_BASE_ID, { retries: 0 });
+    const manifestA = buildManifest(PUBLIC_PATH_A, [
+      sharedDep('dep-z', 'shared/dep-z.js', { contentHash: 'abcd' }),
+    ]);
+    const manifestB = buildManifest(PUBLIC_PATH_B, [
+      sharedDep('dep-z', 'shared/dep-z.js', { contentHash: 'abcd' }),
+    ]);
+
+    try {
+      await handler.load(buildEntry(manifestA), 'ext-malformed-hash-a');
+      await handler.load(buildEntry(manifestB), 'ext-malformed-hash-b');
+
+      // Both manifests declare the same malformed contentHash, but the guard
+      // rejects it, so each load must fetch its own text rather than reuse.
+      expect(fetchesFor(callCounts, `${PUBLIC_PATH_A}shared/dep-z.js`)).toBe(
+        1
+      );
+      expect(fetchesFor(callCounts, `${PUBLIC_PATH_B}shared/dep-z.js`)).toBe(
         1
       );
     } finally {
@@ -1637,8 +1681,8 @@ describe('MfeHandlerMF — shared-dep cross-MFE cache key (issue #621)', () => {
       );
 
       // A load of a DIFFERENT manifest: different resolved chunk URL, so
-      // the fallback key does NOT reuse A's text, and gets its own
-      // one-time notice keyed on its own manifest id.
+      // the fallback key does NOT reuse A's text, and gets its own notice
+      // deduplicated on its own (name@version, manifest id) pair.
       await handler.load(buildEntry(manifestB), 'ext-notice-b-1');
       expect(fetchesFor(callCounts, `${PUBLIC_PATH_B}shared/dep-y.js`)).toBe(
         1
@@ -1761,22 +1805,24 @@ describe('MfeHandlerMF — shared-dep cross-MFE cache key (issue #621)', () => {
       ])
     );
 
-    let thrown: unknown;
     try {
-      await handler.load(entry, 'ext-declared-bare-specifier-survives');
-    } catch (error) {
-      thrown = error;
+      let thrown: unknown;
+      try {
+        await handler.load(entry, 'ext-declared-bare-specifier-survives');
+      } catch (error) {
+        thrown = error;
+      }
+
+      expect(thrown).toBeInstanceOf(MfeLoadError);
+      const message = (thrown as Error).message;
+      expect(message).toContain('dep-b');
+      expect(message).toContain('dep-a');
+      expect(message).toContain('ext-declared-bare-specifier-survives');
+    } finally {
+      blobModuleStub.current = undefined;
+      rewriteSpy.mockRestore();
+      fetchSpy.mockRestore();
     }
-
-    expect(thrown).toBeInstanceOf(MfeLoadError);
-    const message = (thrown as Error).message;
-    expect(message).toContain('dep-b');
-    expect(message).toContain('dep-a');
-    expect(message).toContain('ext-declared-bare-specifier-survives');
-
-    blobModuleStub.current = undefined;
-    rewriteSpy.mockRestore();
-    fetchSpy.mockRestore();
   });
 
   it('does not trip the bare-specifier detector on a dynamic import()', async () => {
@@ -1814,20 +1860,17 @@ describe('MfeHandlerMF — shared-dep cross-MFE cache key (issue #621)', () => {
 
 /**
  * `findUndeclaredWellFormedSpecifiers` (`mf-shared-dep-specifier-scan.ts`) —
- * the heuristic, warn-only half of the amended
+ * the heuristic, warn-only half of the
  * `cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls` algorithm
  * (`inst-if-undeclared-specifier` / `inst-warn-undeclared-specifier`).
  *
  * This half must NEVER fail a load: it reads chunk text without parsing it,
  * so it cannot distinguish an ordinary string literal from an actual
- * import. That is exactly the defect the REJECTED prior design had — it
- * called the generic (no-package-name) form of the trust kernel's
- * `bareSpecifierPattern` and failed the load on whatever it matched,
- * which took down every microfrontend on ordinary code containing the word
- * "import" inside a string (issue reproduced below). The decided design
- * keeps the generic scan, but demotes it to a `console.warn` and adds a
- * well-formed-specifier filter (no whitespace, quote, parenthesis, colon,
- * or line break) that rejects everything the reproducer would have matched.
+ * import. It performs a generic (no-package-name) scan, reports through
+ * `console.warn` only, and applies a well-formed-specifier filter (no
+ * whitespace, quote, parenthesis, colon, or line break) that excludes
+ * ordinary code containing the word "import" inside a string (issue
+ * reproduced below) from ever matching.
  */
 describe('MfeHandlerMF — undeclared shared-dep specifier diagnostic (warn, never fail)', () => {
   function stubSuccessfulImport(): void {
@@ -1838,8 +1881,9 @@ describe('MfeHandlerMF — undeclared shared-dep specifier diagnostic (warn, nev
 
   /**
    * Fixtures in this block declare no `contentHash`, so every load also
-   * emits the unrelated one-time "carries no contentHash" adoption notice
-   * (`inst-emit-adoption-notice`) through the same `console.warn` spy. Only
+   * emits the unrelated "carries no contentHash" adoption notice
+   * (`inst-emit-adoption-notice`), deduplicated per (name@version, manifest
+   * id) pair, through the same `console.warn` spy. Only
    * calls naming the undeclared-specifier diagnostic itself
    * (`inst-warn-undeclared-specifier`) are relevant here.
    */
@@ -1964,14 +2008,13 @@ describe('MfeHandlerMF — undeclared shared-dep specifier diagnostic (warn, nev
   });
 
   it('does not warn and does not fail on the exact issue reproducer — the word "import" occurring inside ordinary string literals', async () => {
-    // This is the REJECTED design's failure mode, reproduced verbatim: none
-    // of these lines contain an actual import of an unresolved package —
-    // "import" and "from" only ever appear as substrings of string VALUES.
-    // The old generic `findSurvivingBareSharedDepSpecifiers` matched the
-    // keyword-then-quote adjacency regardless of context and took the load
-    // down; the well-formedness filter here rejects every resulting
-    // "specifier" candidate (multi-word text containing spaces, parens, and
-    // newlines is never well-formed as a package module specifier).
+    // None of these lines contain an actual import of an unresolved
+    // package — "import" and "from" only ever appear as substrings of
+    // string VALUES. A keyword-then-quote match without a well-formedness
+    // filter would treat every one of these as a candidate specifier; the
+    // well-formedness filter here rejects every resulting "specifier"
+    // candidate (multi-word text containing spaces, parens, and newlines is
+    // never well-formed as a package module specifier).
     const reproducerSource = [
       "const KEY = 'import';",
       "function f(a) { return a.indexOf('import', 0); }",
