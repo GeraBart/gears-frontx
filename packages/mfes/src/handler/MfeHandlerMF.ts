@@ -352,6 +352,21 @@ function isDeterministicLoadFailure(error: unknown): boolean {
 }
 
 /**
+ * Whether `hash` is a well-formed lowercase-hex SHA-256 digest — the shape
+ * `contentHash` is expected to carry. The JSON Schema for the manifest
+ * currently accepts any non-empty string in that field, so a malformed
+ * value (truncated, uppercase, non-hex, or otherwise not a 64-hex-digit
+ * digest) can still reach the runtime; trusting it verbatim as a cross-MFE
+ * cache key would let two builds with different bytes collide under a
+ * hash that was never actually computed correctly. A value that fails this
+ * check is treated the same as no declared hash at all — the cache key
+ * falls back to the resolved chunk URL instead.
+ */
+function isWellFormedContentHash(hash: string): boolean {
+  return /^[0-9a-f]{64}$/.test(hash);
+}
+
+/**
  * Name the shared dependencies left unresolved by a stalled dependency-order
  * pass, together with the imports among them that close the cycle.
  */
@@ -463,10 +478,11 @@ export class LruCache<K, V> {
  */
 const SOURCE_TEXT_CACHE_CAPACITY = 256;
 /**
- * Max shared-dep text entries retained (keyed by name@version, cross-MFE).
+ * Max shared-dep text entries retained (keyed by name@version@contentHash
+ * when a build hash is declared, or name@version@<resolved URL> otherwise).
  *
  * Same burst-eviction trade-off as {@link SOURCE_TEXT_CACHE_CAPACITY}
- * applies here, scaled down: entries are now bounded by distinct
+ * applies here, scaled down: entries are bounded by distinct
  * npm-published packages declared across all MFEs' `rollupOptions.external`
  * MULTIPLIED by the distinct builds of each that are observed (per-build
  * `contentHash`, or per-microfrontend resolved chunk URL when no hash is
@@ -494,7 +510,7 @@ const SHARED_DEP_ADOPTION_NOTICE_CACHE_CAPACITY = 64;
  *
  * `MfeHandlerMF.fetchSourceText` publishes its in-flight fetch promise in
  * the handler-level, URL-keyed `sourceTextCache` (and
- * `buildSharedDepBlobUrls` does the same in the `name@version`-keyed
+ * `fetchSharedDepSources` does the same in the two-tier-keyed
  * `sharedDepTextCache`), evicting it only when it REJECTS. A fetch that
  * never settles is therefore never evicted, so the retry that follows a
  * timeout rejoins the very promise the timed-out attempt already gave up
@@ -555,7 +571,7 @@ class AttemptSourceTextLedger {
       }
       // @cpt-begin:cpt-frontx-algo-mfe-loading-attempt-timeout:p1:inst-lto-release-identity-checked
       // Identity-checked, exactly as the eviction-on-rejection in
-      // `fetchSourceText` and `buildSharedDepBlobUrls` is: remove the key
+      // `fetchSourceText` and `fetchSharedDepSources` is: remove the key
       // only while it still maps to the very promise this attempt was
       // waiting on, never one a concurrent load has since registered
       // under the same key.
@@ -636,11 +652,22 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
   );
 
   /**
-   * Cross-runtime shared dep source text deduplication.
-   * Keyed by `name@version`. The first MFE to load a given shared dep
-   * caches its source text here. Subsequent MFEs declaring the same
-   * name@version get a cache hit — zero network fetch, regardless of
-   * which server hosts the MFE.
+   * Shared dep source text cache for this handler instance.
+   *
+   * Keyed on a two-tier scheme: when a shared-dep entry declares a
+   * `contentHash`, the key is `name@version@contentHash` and the entry is
+   * shared across every MFE loaded through this handler — the first MFE to
+   * load it fetches the source, and every other MFE declaring the identical
+   * `name@version@contentHash` gets a cache hit, zero network fetch, even
+   * across different manifests and origins served by this host application.
+   * When no `contentHash` is declared, the key falls back to
+   * `name@version@<resolved chunk URL>`, so reuse is scoped to that one
+   * manifest's own resolved URL rather than shared cross-MFE.
+   *
+   * A host application constructs the handler once, so this cache is shared
+   * by all microfrontends mounted through that application's registry.
+   * Nested extension hosts that load through their own handler instance do
+   * not share this cache; see issue #627.
    *
    * LRU-bounded for the same reason as `sourceTextCache`. Shared deps are
    * naturally fewer (only npm-published packages declared in `rollupOptions.external`),
@@ -804,8 +831,8 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
    * The race is also a recovery path, not only a bound.
    * {@link fetchSourceText} stores the in-flight fetch promise in the
    * handler-level, URL-keyed `sourceTextCache` (and
-   * {@link buildSharedDepBlobUrls} does the same in the
-   * `name@version`-keyed `sharedDepTextCache`) and evicts it only when
+   * {@link fetchSharedDepSources} does the same in the
+   * two-tier-keyed `sharedDepTextCache`) and evicts it only when
    * that promise REJECTS, so a fetch that never settles would never be
    * evicted and every retry would rejoin the same hung promise and expire
    * against its own budget in turn. On expiry this method therefore
@@ -1319,9 +1346,14 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
 
   /**
    * Fetch standalone ESM source text for each shared dep.
-   * sharedDepTextCache deduplicates by name@version across ALL MFEs — the
-   * first MFE to load react@19.2.4 fetches it from its server; subsequent MFEs
-   * get a cache hit regardless of their server URL.
+   * sharedDepTextCache dedups on a two-tier key: when a `contentHash` is
+   * declared, the key is `name@version@contentHash` and reuse spans ALL
+   * MFEs — the first MFE to load react@19.2.4 at a given build hash fetches
+   * it from its server, and every other MFE declaring that same
+   * name@version@contentHash gets a cache hit regardless of their server
+   * URL. Without a declared `contentHash`, the key falls back to
+   * `name@version@<resolved chunk URL>`, so reuse is scoped to that one
+   * manifest's own URL instead of shared cross-MFE.
    *
    * A rejected shared-dep fetch surfaces only once every sibling in the
    * batch has settled. Nothing is gained by aborting sooner: the batch is
@@ -1344,9 +1376,9 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
     // MAX_CONCURRENT_FETCHES, via `boundedMap` rather than a `for...of` loop
     // with a trailing `await` that would serialize every dep behind the
     // previous one's full round trip.
-    // Per the FEATURE Note on `inst-for-each-dep`: enumeration order governs
-    // cache-key precedence only (which declaration claims a `name@version`
-    // cross-MFE cache slot), not fetch issuance/completion order. Each dep's
+    // Enumeration order governs cache-key precedence only (which
+    // declaration claims a given cache slot when several manifests declare
+    // the same shared dep), not fetch issuance/completion order. Each dep's
     // cache-get → derive-URL → fetch → catch-eviction → cache-set sequence
     // still runs synchronously relative to that dep's own fetch (no `await`
     // separates them), which is what keeps the cross-MFE dedup race-free
@@ -1362,7 +1394,7 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
 
       let cacheKey: string;
       // @cpt-begin:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-if-hash-declared
-      if (dep.contentHash !== undefined) {
+      if (dep.contentHash !== undefined && isWellFormedContentHash(dep.contentHash)) {
         // @cpt-begin:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-compute-key-hash
         cacheKey = `${dep.name}@${dep.version}@${dep.contentHash}`;
         // @cpt-end:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-compute-key-hash
@@ -1372,12 +1404,16 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
         cacheKey = `${dep.name}@${dep.version}@${absoluteUrl}`;
         // @cpt-end:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-compute-key-fallback
         // @cpt-begin:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-emit-adoption-notice
-        const noticeKey = `${dep.name}@${dep.version} ${manifest.id}`;
+        const noticeKey = `${dep.name}@${dep.version}@${manifest.id}`;
         if (!this.sharedDepAdoptionNoticesEmitted.has(noticeKey)) {
           this.sharedDepAdoptionNoticesEmitted.set(noticeKey, true);
+          const reason =
+            dep.contentHash === undefined
+              ? 'carries no contentHash'
+              : `declares a malformed contentHash ('${dep.contentHash}')`;
           console.warn(
             `Shared dependency '${dep.name}@${dep.version}' declared by ` +
-              `manifest '${manifest.id}' carries no contentHash. ` +
+              `manifest '${manifest.id}' ${reason}. ` +
               'Cross-MFE reuse is disabled for this dependency; its source ' +
               "text will be keyed on this manifest's own resolved chunk " +
               'URL rather than shared with other microfrontends declaring ' +
@@ -1538,14 +1574,19 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
     // @cpt-begin:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-if-shared-dep-bare-specifier
     if (survivor !== undefined) {
       // @cpt-begin:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-raise-shared-dep-bare-specifier
-      throw new MfeLoadError(
-        `shared-dep chunk '${depName}' still imports the bare specifier ` +
-          `'${survivor}' after rewriting its declared shared ` +
-          `dependencies, for microfrontend '${extensionId}'. Every ` +
-          'declared shared-dependency name that survives rewriting must ' +
-          'resolve to a blob URL; this indicates a rewrite defect rather ' +
-          'than a missing declaration.',
-        entryId
+      throw markDeterministicLoadFailure(
+        new MfeLoadError(
+          `shared-dep chunk '${depName}' still imports the bare specifier ` +
+            `'${survivor}' after rewriting its declared shared ` +
+            `dependencies, for microfrontend '${extensionId}'. Every ` +
+            'declared shared-dependency name that survives rewriting must ' +
+            'resolve to a blob URL; this indicates a rewrite defect, UNLESS ' +
+            `'${survivor}' names '${depName}' itself — a chunk cannot ` +
+            "import its own not-yet-minted blob URL, so a shared dep that " +
+            'bare-imports its own package name is a producer-build problem, ' +
+            'not a rewrite defect in this handler.',
+          entryId
+        )
       );
       // @cpt-end:cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls:p1:inst-raise-shared-dep-bare-specifier
     }

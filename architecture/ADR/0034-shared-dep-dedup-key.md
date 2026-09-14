@@ -60,6 +60,7 @@ This decision fixes the identity the cache key must express and the fail-safe po
 * Bad, because cross-microfrontend reuse is recovered only for shared-dependency entries whose producing build publishes the hash — until adoption is widespread, a microfrontend's first load of a given shared dependency costs one fetch per remote rather than one fetch across all remotes.
 * Bad, because the published manifest gains an optional field that must be declared consistently everywhere the shared-dependency shape is declared, adding a small, permanent surface to that contract.
 * Neutral, because whether two independently produced builds of the same dependency at the same version emit identical bytes is a property to be measured for each producing build, not assumed from this decision; where it does not hold, the remedy is to make the producing build's output deterministic, never to weaken the key back toward the package name and version.
+* Neutral, because the cache's entries are bounded by distinct packages times distinct producing builds rather than by distinct packages alone; whether the cache's existing capacity remains right under that larger cardinality is a question for measurement, not one this decision resolves.
 
 ### Confirmation
 

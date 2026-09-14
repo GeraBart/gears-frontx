@@ -52,7 +52,7 @@ A registered microfrontend must evaluate as its own module instance so distinct 
 
 - **PRD**: [PRD.md](../../../../../architecture/PRD.md)
 - **Design**: [DESIGN.md](../../DESIGN.md)
-- **ADR**: `cpt-frontx-adr-mfe-load-isolation`
+- **ADR**: `cpt-frontx-adr-mfe-load-isolation`, `cpt-frontx-adr-shared-dep-dedup-key`
 - **Component**: `cpt-frontx-component-mfe-runtime` (shared with F4, F5, F6, F7)
 - **Dependencies**: `cpt-frontx-feature-mfe-registry` (F4), `cpt-frontx-feature-mfe-loading` (F5)
 
@@ -80,6 +80,7 @@ User-facing interactions that start with an actor and describe the end-to-end fl
 - A chunk's static dependency has no blob URL when that chunk is rewritten — load fails with an error naming the referring chunk and the unbuilt dependency, rather than emitting an origin URL for it
 - A chunk's static-dependency graph contains a cycle, whether closed within one branch or across two branches that fanned out independently — load fails with a diagnostic naming the chunks on the cycle and the microfrontend, because no module may be resolved outside the load's own graph
 - The manifest's shared dependencies import one another circularly — load fails with a diagnostic naming those dependencies and the imports among them, rather than minting a module whose bare specifiers are left unrewritten
+- A declared shared-dependency name survives the rewrite as a bare specifier — load fails with a diagnostic naming the chunk, the surviving specifier, and the microfrontend
 
 **Steps**:
 1. [x] - `p1` - Actor registers the microfrontend entry with the registry - `inst-register`
@@ -193,8 +194,6 @@ Internal system functions that implement the isolation mechanism.
 
 **Notes** (deferred, not decided here):
 
-* Whether the cross-MFE LRU cache's capacity remains right once entries are bounded by distinct packages times distinct builds, rather than by distinct packages alone, is open and left for measurement.
-* Whether the runtime should verify fetched bytes against a declared content hash is out of scope for this amendment and deferred.
 * Whether the undeclared-specifier diagnostic should also scan expose-chain chunks is open; demoting that half to diagnostic-only removes any safety dimension from the question — a warn-only scan cannot fail an expose-chain load — leaving only scan cost and console noise to weigh.
 
 ### Trust-Kernel Guarded Import
@@ -305,5 +304,8 @@ The system **MUST** accept an entry's manifest either as the document itself or 
 - [x] A chain build that fails does not affect any later independent chain build of the same load: a lazy import that follows a failed one re-attempts construction of every chunk the failed build abandoned, including chunks the two builds share.
 - [x] Sibling static-import dependencies are fetched concurrently, and the number of chunk-source fetches in flight for one chain build never exceeds the runtime's fixed width no matter how deep or how wide the dependency graph is; the failure reported for a group of siblings is still the first in declaration order regardless of completion order.
 - [x] A manifest declaring the same shared-dependency package name more than once fails the load with a diagnostic naming that package, before any shared-dependency source is fetched.
+- [x] A declared shared-dependency name that survives the rewrite as a bare specifier fails the load with a diagnostic naming the chunk, the surviving specifier, and the microfrontend.
+- [x] An undeclared, well-formed specifier that survives the rewrite is reported in a diagnostic naming the chunk, the specifier, and the microfrontend, and the load completes rather than failing.
+- [x] The adoption notice emitted when a shared dependency's manifest entry carries no content hash is deduplicated per package `name@version` and the manifest's own id, not per load, so distinct manifests declaring the same name and version each surface exactly one notice while repeated loads of the same manifest surface none after the first.
 - [ ] An entry whose manifest is named by id loads when the manifest is registered with the type system of the registry the handler was registered into, without the id ever being cached by an earlier load
 - [ ] An entry whose manifest id no source resolves fails the load with a diagnostic naming that reference, both when a type system was supplied and when the handler belongs to no registry
