@@ -132,6 +132,48 @@ describe('createObserver — a throwing initial report (D1)', () => {
   });
 });
 
+describe('createObserver — subscribing before the initial report', () => {
+  it('observes a registration made from inside its own initial report', () => {
+    // The registration-source subscription must exist before the initial
+    // report runs, exactly like the fan-out subscription above: a route
+    // owner that registers itself synchronously from inside the very first
+    // report it receives is the cold-mount flow this signal exists for, and
+    // that registration must land on a source that is already listening.
+    resetRealm('/en?screen=app');
+    const source = mutableSource([]);
+    const reportedResolutions: boolean[] = [];
+    let calls = 0;
+
+    createObserver('screen' as DomainKey, source, (transition) => {
+      calls += 1;
+      reportedResolutions.push(transition.entries[0]?.resolution.resolved ?? false);
+      if (calls === 1) {
+        source.set([{ extension: 'app', routeOwner: 'AppScreen' }]);
+      }
+    });
+
+    expect(reportedResolutions).toEqual([false, true]);
+  });
+
+  it('releases both the fan-out and registration-source subscriptions when the first report throws', () => {
+    const adapter = resetRealm('/en?screen=dashboard');
+    const history = resolveNavigationHistory(() => adapter);
+    const source = mutableSource([]);
+    const onTransition = vi.fn(() => {
+      throw new Error('boom');
+    });
+
+    expect(() => createObserver('screen' as DomainKey, source, onTransition)).toThrow('boom');
+    expect(onTransition).toHaveBeenCalledTimes(1);
+    expect(source.sourceReleaseCallCount).toBe(1);
+
+    history.push('/en?screen=other');
+    source.set([{ extension: 'other', routeOwner: 'OtherScreen' }]);
+
+    expect(onTransition).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('createObserver — input validation', () => {
   it('throws invalid-domain-key synchronously for a malformed domain key', () => {
     const error = expectRoutingError(() => createObserver('a.b' as DomainKey, staticSource([]), vi.fn()));
@@ -342,10 +384,9 @@ describe('createObserver — a throwing consumer callback (M1, review round 20)'
   });
 });
 
-describe('createObserver — reentrant report (F1)', () => {
-  it('axis A: a navigation triggered synchronously from a registered-extensions-source report does not clobber the baseline — silence probe', () => {
-    // Reproduces the review scope's own F1, axis A: a report delivered on
-    // the registration-source path, whose own consumer navigates
+describe('createObserver — a reentrant trigger deferred to its own round', () => {
+  it('axis A: a navigation triggered synchronously from a registered-extensions-source report does not clobber the baseline', () => {
+    // A report delivered on the registration-source path, whose own consumer navigates
     // synchronously. Before the round guard, the nested `push`'s own
     // resolve ran immediately, inside the outer (source-triggered) round;
     // the outer round then overwrote that correct baseline with the stale
@@ -378,8 +419,8 @@ describe('createObserver — reentrant report (F1)', () => {
     // needs.
     source.set([]);
 
-    // SILENCE PROBE: the baseline must now correctly read 'other' — a
-    // genuine, later navigation back to 'dashboard' must still be reported.
+    // The baseline must now correctly read 'other' — a genuine, later
+    // navigation back to 'dashboard' must still be reported.
     // Under the bug, the outer round's stale commit left the baseline
     // already claiming 'dashboard', so this exact transition would diff
     // empty and report nothing at all.
@@ -389,8 +430,8 @@ describe('createObserver — reentrant report (F1)', () => {
     expect(history.location.search).toBe('screen=dashboard');
   });
 
-  it('axis D: a registered-extensions-source mutation triggered synchronously from a fan-out report does not clobber the baseline — silence probe', () => {
-    // Reproduces F1, axis D: a fan-out report whose own consumer mutates
+  it('axis D: a registered-extensions-source mutation triggered synchronously from a fan-out report does not clobber the baseline', () => {
+    // A fan-out report whose own consumer mutates
     // the registered-extensions source synchronously (a nested onChange
     // report, not a nested navigation) — the loss the fan-out's own
     // history-to-history deferral does not reach, since neither nesting
@@ -418,7 +459,7 @@ describe('createObserver — reentrant report (F1)', () => {
     // triggering the fan-out report above (call 2) with a non-empty diff.
     history.push('/en?screen=other');
 
-    // SILENCE PROBE: a later, genuine deregistration must still be
+    // A later, genuine deregistration must still be
     // reported. Under the bug, the outer (fan-out) round's stale commit
     // left the baseline already claiming 'other' unresolved — identical to
     // what this deregistration would produce — so it would diff empty and
@@ -456,17 +497,12 @@ describe('createObserver — reentrant report (F1)', () => {
     expect(reported).toEqual(['other', 'settings']);
     expect(history.location.search).toBe('screen=settings');
 
-    // Silence probe: a further genuine navigation still reports normally.
+    // A further genuine navigation still reports normally.
     history.push('/en?screen=dashboard');
     expect(reported).toEqual(['other', 'settings', 'dashboard']);
   });
 
-  it('a throwing consumer during a reentrant round still leaves no permanent silence once a later navigation succeeds', () => {
-    // Combines M1 (a throwing callback must not advance the baseline) with
-    // the round guard: the deferred round this throw leaves un-drained
-    // (the round guard's own `while` never reached once `onTransition`
-    // throws) is not lost — the next successful round always re-resolves
-    // against the live URL, so it converges regardless.
+  it('a throwing registration-source report still reports the navigation it queued, in its own later round', () => {
     const adapter = resetRealm('/en?screen=dashboard');
     const history = resolveNavigationHistory(() => adapter);
     const source = mutableSource([{ extension: 'dashboard', routeOwner: 'DashboardScreen' }]);
@@ -480,25 +516,87 @@ describe('createObserver — reentrant report (F1)', () => {
       }
       reported.push({ added: transition.diff.added, removed: transition.diff.removed });
       if (callCount === 2) {
-        history.push('/en?screen=other'); // reentrant, from the source axis; deferred
+        history.push('/en?screen=other'); // deferred to its own later round
         throw new Error('boom');
       }
     });
 
-    source.set([]); // deregisters 'dashboard' -> Resolution-changed report; callback throws
+    // Deregistering 'dashboard' triggers a report on the registration-source
+    // axis (call 2), whose callback navigates and then throws. The drained
+    // round for that navigation must still deliver 'other' — the queue this
+    // axis has none of its own must not cost it the round the fan-out's own
+    // queue already carries through an identical throw.
+    source.set([]);
 
-    // A later, unrelated genuine navigation must still be reported
-    // correctly — not silently dropped because of the earlier throw.
-    history.push('/en?screen=third');
+    expect(reported).toEqual([
+      { added: [], removed: [] },
+      { added: ['other'], removed: ['dashboard'] },
+    ]);
+    expect(history.location.search).toBe('screen=other');
+  });
 
-    expect(reported.at(-1)).toEqual({ added: ['third'], removed: expect.any(Array) });
-    expect(history.location.search).toBe('screen=third');
+  it('a throwing fan-out report still reports the navigation it queued, in its own later round', () => {
+    const adapter = resetRealm('/en?screen=dashboard');
+    const history = resolveNavigationHistory(() => adapter);
+    let callCount = 0;
+    const reportedScreens: string[] = [];
+
+    createObserver('screen' as DomainKey, staticSource([]), (transition) => {
+      callCount += 1;
+      reportedScreens.push(transition.entries[0]?.extension ?? '(none)');
+      if (callCount === 2) {
+        history.push('/en?screen=nested'); // deferred to its own later round
+        throw new Error('boom');
+      }
+    });
+
+    history.push('/en?screen=settings');
+
+    expect(reportedScreens).toEqual(['dashboard', 'settings', 'nested']);
+    expect(history.location.search).toBe('screen=nested');
+  });
+
+  it('a throw with no nested navigation leaves no phantom round for the next trigger', () => {
+    const adapter = resetRealm('/en?screen=dashboard');
+    const history = resolveNavigationHistory(() => adapter);
+    const source = staticSource([]);
+    const getRegistrationsSpy = vi.spyOn(source, 'getRegistrations');
+    let callCount = 0;
+
+    createObserver('screen' as DomainKey, source, () => {
+      callCount += 1;
+      if (callCount === 2) {
+        throw new Error('boom');
+      }
+    });
+    getRegistrationsSpy.mockClear(); // drop the call the initial report itself made
+
+    history.push('/en?screen=settings'); // one round; its own callback throws, queuing nothing
+    const roundsAfterThrow = getRegistrationsSpy.mock.calls.length;
+
+    history.push('/en?screen=other'); // exactly one further round, never a leaked extra one
+
+    expect(roundsAfterThrow).toBe(1);
+    expect(getRegistrationsSpy.mock.calls.length - roundsAfterThrow).toBe(1);
+  });
+
+  it('two consecutive, non-nested navigations each report exactly once', () => {
+    const adapter = resetRealm('/en?screen=dashboard');
+    const history = resolveNavigationHistory(() => adapter);
+    const onTransition = vi.fn<(transition: Transition<string>) => void>();
+    createObserver('screen' as DomainKey, staticSource([]), onTransition);
+    onTransition.mockClear();
+
+    history.push('/en?screen=settings');
+    history.push('/en?screen=other');
+
+    expect(onTransition).toHaveBeenCalledTimes(2);
   });
 });
 
-describe('createObserver — registered-extensions-source axis isolation (MEDIUM)', () => {
+describe('createObserver — registered-extensions-source axis isolation', () => {
   it('one observer\'s own throwing callback does not stop the source from notifying its other listeners', () => {
-    // The sibling MEDIUM: unlike the navigation substrate's own fan-out
+    // Unlike the navigation substrate's own fan-out
     // (`FanOutDispatcher`), the registered-extensions-source axis had no
     // per-callback isolation of its own — a throw from one observer's
     // `onTransition` propagated straight into the source's own emitter

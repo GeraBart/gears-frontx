@@ -161,9 +161,10 @@ export function mutableSource(
   readonly sourceReleaseCallCount: number;
 } {
   let current = registrations;
-  // A `Set`, not a single binding: the isolation suite (observe-change's
-  // MEDIUM fix) needs more than one observer subscribed to the identical
-  // source at once, to prove one observer's own callback throw does not
+  // A `Set`, not a single binding: the registered-extensions-source axis
+  // isolation suite (`observe-change.test.ts`) needs more than one observer
+  // subscribed to the identical source at once, to prove one observer's own
+  // callback throw does not
   // stop this emitter from notifying the others — a single-callback source
   // could never exercise that. Deliberately no isolation of its own here
   // (no try/catch around an individual `cb()` call): this is the naive

@@ -190,15 +190,30 @@ export function createObserverBoundTo(history: NavigationHistory): CreateObserve
     reporting = true;
     try {
       reresolveAndReportRound();
-      // A round triggered while this one was still running queued itself
-      // above instead of interleaving with it; drain it now as its own,
-      // later round — never folded into the round that deferred it.
-      while (pendingRounds > 0) {
-        pendingRounds -= 1;
-        reresolveAndReportRound();
-      }
     } finally {
-      reporting = false;
+      // Drained in `finally`, not appended after the round above: a round
+      // that throws must not cost the round it deferred its own delivery —
+      // a consumer that navigates and then throws still queued a genuine,
+      // later transition, and the registration-source axis has no queue of
+      // its own (unlike the fan-out's `FanOutDispatcher`) to carry it
+      // through a throw the way that axis's own delivery already does. The
+      // two trigger axes must not disagree about whether a queued round
+      // survives the round that queued it.
+      try {
+        // A round triggered while this one was still running queued itself
+        // above instead of interleaving with it; drain it now as its own,
+        // later round — never folded into the round that deferred it.
+        while (pendingRounds > 0) {
+          pendingRounds -= 1;
+          reresolveAndReportRound();
+        }
+      } finally {
+        // Reset unconditionally, whether or not draining above itself threw:
+        // a stale positive count would otherwise survive into the next
+        // trigger and run an extra, unrequested round then.
+        pendingRounds = 0;
+        reporting = false;
+      }
     }
   }
 
@@ -279,38 +294,17 @@ export function createObserverBoundTo(history: NavigationHistory): CreateObserve
   });
   // @cpt-end:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-subscribe-fanout
 
-  // @cpt-begin:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-initial-report
-  // @cpt-begin:cpt-frontx-flow-routing-route-ownership-signal-deep-link-cold-mount:p1:inst-report-initial-transition
-  // The fan-out subscription above already exists by the time this call
-  // runs. If this first callback throws, `createObserver` throws too and
-  // never returns a release handle to the caller — so the subscription
-  // would otherwise stay registered forever with nothing able to release
-  // it, and keep firing this observer's callback on every later
-  // navigation. Releasing it here, before propagating the throw, keeps a
-  // failed construction as inert as a construction that never subscribed
-  // at all.
-  try {
-    onTransition({
-      domainKey,
-      entries: previous,
-      diff: {
-        added: previous.map((entry) => entry.extension),
-        removed: [],
-        payloadChanged: [],
-        reordered: false,
-        resolutionChanged: [],
-        unresolved: previous.filter((entry) => !entry.resolution.resolved).map((entry) => entry.extension),
-      },
-    });
-  } catch (error) {
-    unsubscribeFanout();
-    throw error;
-  }
-  // @cpt-end:cpt-frontx-flow-routing-route-ownership-signal-deep-link-cold-mount:p1:inst-report-initial-transition
-  // @cpt-end:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-initial-report
-  // @cpt-end:cpt-frontx-flow-routing-route-ownership-signal-deep-link-cold-mount:p1:inst-create-observer
-
   // @cpt-begin:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-if-source-has-notification
+  // Subscribed here, before the initial report below, for the identical
+  // reason the fan-out subscription immediately above already is: a route
+  // owner that registers itself synchronously from inside its own first
+  // report needs this same subscription to already exist so that
+  // registration is observed instead of landing on a source with no
+  // listener yet — the baseline would otherwise keep reporting the
+  // pre-registration state, permanently, until some later, unrelated
+  // change happened to re-diff it. Released on the identical throw path as
+  // the fan-out subscription, in the same `catch` below, so a failed
+  // construction ends with neither subscription outliving it.
   let unsubscribeSource: ReleaseFunction | undefined;
   if (source.onChange !== undefined) {
     // @cpt-begin:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-subscribe-extensions-source
@@ -347,6 +341,40 @@ export function createObserverBoundTo(history: NavigationHistory): CreateObserve
     // @cpt-end:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-subscribe-extensions-source
   }
   // @cpt-end:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-if-source-has-notification
+
+  // @cpt-begin:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-initial-report
+  // @cpt-begin:cpt-frontx-flow-routing-route-ownership-signal-deep-link-cold-mount:p1:inst-report-initial-transition
+  // Both subscriptions above already exist by the time this call runs. If
+  // this first callback throws, `createObserver` throws too and never
+  // returns a release handle to the caller — so both subscriptions would
+  // otherwise stay registered forever with nothing able to release either
+  // of them, and keep firing this observer's callback on every later
+  // navigation or registration change. Releasing both here, before
+  // propagating the throw, keeps a failed construction as inert as a
+  // construction that never subscribed at all.
+  try {
+    onTransition({
+      domainKey,
+      entries: previous,
+      diff: {
+        added: previous.map((entry) => entry.extension),
+        removed: [],
+        payloadChanged: [],
+        reordered: false,
+        resolutionChanged: [],
+        unresolved: previous.filter((entry) => !entry.resolution.resolved).map((entry) => entry.extension),
+      },
+    });
+  } catch (error) {
+    unsubscribeFanout();
+    if (unsubscribeSource !== undefined) {
+      unsubscribeSource();
+    }
+    throw error;
+  }
+  // @cpt-end:cpt-frontx-flow-routing-route-ownership-signal-deep-link-cold-mount:p1:inst-report-initial-transition
+  // @cpt-end:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-initial-report
+  // @cpt-end:cpt-frontx-flow-routing-route-ownership-signal-deep-link-cold-mount:p1:inst-create-observer
 
   // @cpt-begin:cpt-frontx-algo-routing-route-ownership-signal-release:p2:inst-when-release-called
   let released = false;

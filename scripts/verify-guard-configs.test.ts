@@ -119,14 +119,35 @@ describe('verifyRoutingEngineLeakPattern', () => {
   });
 
   it.each(['@tanstack/react-table', '@tanstack/react-query', 'lodash', 'react'])(
-    'allows %s',
+    'router-name patterns do not match %s',
     (packageName) => {
       expect(results).toContainEqual(
         expect.objectContaining({
-          name: `frontx-routing-3-no-engine-leak: allows ${packageName}`,
+          name: `frontx-routing-3-no-engine-leak: router-name patterns do not match ${packageName}`,
           passed: true,
         }),
       );
     },
   );
+
+  it.each(['@tanstack/react-table', '@tanstack/react-query'])(
+    'the blanket @tanstack/ ban still blocks %s',
+    (packageName) => {
+      expect(results).toContainEqual(
+        expect.objectContaining({
+          name: `frontx-routing-3-no-engine-leak: the blanket @tanstack/ ban still blocks ${packageName}`,
+          passed: true,
+        }),
+      );
+    },
+  );
+
+  it.each(['lodash', 'react'])('no part of the rule blocks %s', (packageName) => {
+    expect(results).toContainEqual(
+      expect.objectContaining({
+        name: `frontx-routing-3-no-engine-leak: no part of the rule blocks ${packageName}`,
+        passed: true,
+      }),
+    );
+  });
 });

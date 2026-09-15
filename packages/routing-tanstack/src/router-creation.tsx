@@ -68,9 +68,9 @@ export function createProviderRouter<TRouteTree extends AnyRoute>(routeTree: TRo
   // (`RouterProvider`) is a separate instruction, performed by
   // `EngineProvider` below, with its own marker at its own call site there —
   // this call site's own ids were renamed off "…-and-mount"/"…-mounted-…"
-  // for exactly this reason (F11 of the review scope this comment closed):
-  // the port this function backs constructs a router the consumer mounts
-  // through the provider, it does not mount one itself.
+  // for exactly this reason: the port this function backs constructs a
+  // router the consumer mounts through the provider, it does not mount one
+  // itself.
   // @cpt-begin:cpt-frontx-flow-routing-engine-provider-swap-engine:p1:inst-construct-router
   // @cpt-begin:cpt-frontx-algo-routing-engine-provider-standalone-deployment:p2:inst-construct-with-standalone-virtual-history
   // @cpt-begin:cpt-frontx-algo-routing-engine-provider-router-creation:p2:inst-call-create-router

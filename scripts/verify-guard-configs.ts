@@ -370,7 +370,15 @@ const ROUTER_ENGINE_PACKAGE_NAMES = [
   '@tanstack/react-router',
   '@tanstack/router-core',
 ];
+// Every name below must not be caught by the router-name patterns — but the
+// rule also carries a separate blanket ban on the entire `@tanstack/` scope
+// (`.dependency-cruiser.cjs`, same rule, two additional `path` entries), so
+// the two `@tanstack/*` names here are still blocked by the rule as a whole,
+// just not by the router-name patterns this script isolates above. Only
+// `lodash` and `react` are unblocked by every part of the rule.
 const NON_ROUTER_PACKAGE_NAMES = ['@tanstack/react-table', '@tanstack/react-query', 'lodash', 'react'];
+const TANSTACK_SCOPE_PACKAGE_NAMES = ['@tanstack/react-table', '@tanstack/react-query'];
+const RULE_UNBLOCKED_PACKAGE_NAMES = ['lodash', 'react'];
 
 function verifyRoutingEngineLeakPattern(): TestResult[] {
   const results: TestResult[] = [];
@@ -397,9 +405,10 @@ function verifyRoutingEngineLeakPattern(): TestResult[] {
         : [];
     // Isolate the router-name patterns from the rule's separate blanket
     // `@tanstack/` ban: only the former claims to catch "any package whose
-    // name contains router", so only the former is asserted here. Neither
-    // blanket-ban entry contains the substring "router".
+    // name contains router", so only the former is asserted below to not
+    // over-match. Neither blanket-ban entry contains the substring "router".
     const routerNamePatterns = allPaths.filter((p) => p.includes('router'));
+    const blanketTanstackBanPatterns = allPaths.filter((p) => !p.includes('router'));
 
     for (const engineName of ROUTER_ENGINE_PACKAGE_NAMES) {
       const matchesBare = routerNamePatterns.some((p) => new RegExp(p).test(engineName));
@@ -416,14 +425,44 @@ function verifyRoutingEngineLeakPattern(): TestResult[] {
       });
     }
 
-    for (const allowedName of NON_ROUTER_PACKAGE_NAMES) {
-      const matches = routerNamePatterns.some((p) => new RegExp(p).test(allowedName));
+    for (const packageName of NON_ROUTER_PACKAGE_NAMES) {
+      const matches = routerNamePatterns.some((p) => new RegExp(p).test(packageName));
       results.push({
-        name: `frontx-routing-3-no-engine-leak: allows ${allowedName}`,
+        name: `frontx-routing-3-no-engine-leak: router-name patterns do not match ${packageName}`,
         passed: !matches,
         message: matches
-          ? `OVER-MATCH - ${allowedName} incorrectly caught by the router-name pattern`
+          ? `OVER-MATCH - ${packageName} incorrectly caught by the router-name pattern`
           : 'Not matched',
+      });
+    }
+
+    // The two `@tanstack/*` names above pass the assertion above for the
+    // wrong reason if the blanket ban were ever removed — assert separately
+    // that the rule as a whole still blocks them, via that other pattern
+    // pair, not the router-name one.
+    for (const packageName of TANSTACK_SCOPE_PACKAGE_NAMES) {
+      const matchesBare = blanketTanstackBanPatterns.some((p) => new RegExp(p).test(packageName));
+      const matchesNodeModules = blanketTanstackBanPatterns.some((p) =>
+        new RegExp(p).test(`node_modules/${packageName}`),
+      );
+      const passed = matchesBare && matchesNodeModules;
+      results.push({
+        name: `frontx-routing-3-no-engine-leak: the blanket @tanstack/ ban still blocks ${packageName}`,
+        passed,
+        message: passed
+          ? 'Matched in both bare-specifier and node_modules forms'
+          : `PATTERN GAP - ${packageName} not blocked by the blanket @tanstack/ ban (bare=${matchesBare}, node_modules=${matchesNodeModules})`,
+      });
+    }
+
+    // `lodash` and `react` sit outside both the router-name patterns and the
+    // `@tanstack/` scope — nothing in this rule should match them.
+    for (const packageName of RULE_UNBLOCKED_PACKAGE_NAMES) {
+      const matches = allPaths.some((p) => new RegExp(p).test(packageName));
+      results.push({
+        name: `frontx-routing-3-no-engine-leak: no part of the rule blocks ${packageName}`,
+        passed: !matches,
+        message: matches ? `OVER-MATCH - ${packageName} incorrectly caught by the rule` : 'Not matched',
       });
     }
   } catch (error) {

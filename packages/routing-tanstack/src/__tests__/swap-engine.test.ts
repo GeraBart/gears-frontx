@@ -9,7 +9,7 @@ import { resetRealm } from './helpers/index.js';
 // engine-provider port" (§2, step 1, consumer-side — every replacement
 // provider still goes through the same two provider-side steps this
 // default one does: adapt-history (§3, History Adaptation) and
-// construct-and-mount (§3, Router Creation)).
+// construct-router (§3, Router Creation)).
 const ENTRY_ADDRESS: EntryAddress = { domainKey: 'screen' as DomainKey, extension: 'dashboard' as ExtensionToken };
 const URL = '/en?screen=dashboard;route=settings/general;orientation=left';
 
