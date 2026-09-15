@@ -202,10 +202,34 @@ export function createObserverBoundTo(history: NavigationHistory): CreateObserve
       try {
         // A round triggered while this one was still running queued itself
         // above instead of interleaving with it; drain it now as its own,
-        // later round — never folded into the round that deferred it.
+        // later round — never folded into the round that deferred it. Each
+        // drained round gets its own `try`/`catch`, not one shared around
+        // the whole `while`: without it, a throw from one drained round
+        // would exit the loop before the rounds still behind it in
+        // `pendingRounds` ever ran, discarding a transition a *later*
+        // consumer queued rather than the one whose callback actually
+        // threw. Swallowed rather than surfaced anywhere, matching this
+        // observer's own two trigger axes, which already swallow an
+        // outer round's throw the identical way — the fan-out axis through
+        // `FanOutDispatcher`'s own per-subscriber `catch`
+        // (`../history/fanout-dispatch.js`, `inst-isolate-error`), the
+        // registration-source axis through the local `catch` a few lines
+        // below this function. This package has no reporting channel of
+        // its own for a consumer callback's throw; the one `reportError`
+        // channel in the ecosystem lives one layer up, in
+        // `@gears-frontx/routing-tanstack`'s provider adapter
+        // (`history-adaptation.ts`), which wraps `history.subscribe`
+        // itself rather than anything in this file — reaching for it here
+        // would report a drained round's throw while its sibling axes stay
+        // silent about theirs, the exact kind of one-sided rule this file
+        // keeps closing.
         while (pendingRounds > 0) {
           pendingRounds -= 1;
-          reresolveAndReportRound();
+          try {
+            reresolveAndReportRound();
+          } catch {
+            // Empty on purpose: isolating the error IS not re-throwing it.
+          }
         }
       } finally {
         // Reset unconditionally, whether or not draining above itself threw:

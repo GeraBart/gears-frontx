@@ -594,6 +594,167 @@ describe('createObserver — a reentrant trigger deferred to its own round', () 
   });
 });
 
+describe('createObserver — a throw from a drained round', () => {
+  it('on the fan-out axis: a drained round whose own consumer mutates the registered-extensions source and then throws still reports the state it queued, in its own later round', () => {
+    // Three rounds deep, not two: the outer round (triggered by the push
+    // below) queues a round without throwing; that queued round is what
+    // runs *drained*, and it is that drained round's own consumer — not the
+    // outer round's — that mutates the source again and throws. Losing the
+    // state this drained round queued is the failure this test pins:
+    // draining used to share one `try`/`catch` around the whole loop, so a
+    // throw from any iteration abandoned every round still behind it in
+    // `pendingRounds`. Both nested triggers here mutate the
+    // registered-extensions source rather than navigate again, deliberately:
+    // a nested `push` would be absorbed by the navigation substrate's own
+    // fan-out queue (`FanOutDispatcher`) before ever reaching this
+    // observer's own `pendingRounds` a second time, which would not exercise
+    // this fix at all.
+    const adapter = resetRealm('/en?screen=dashboard');
+    const history = resolveNavigationHistory(() => adapter);
+    const source = mutableSource([{ extension: 'dashboard', routeOwner: 'DashboardScreen' }]);
+    let callCount = 0;
+    const reportedOwners: string[] = [];
+
+    createObserver('screen' as DomainKey, source, (transition) => {
+      callCount += 1;
+      const resolution = transition.entries[0]?.resolution;
+      reportedOwners.push(resolution?.resolved === true ? resolution.routeOwner : 'unresolved');
+      if (callCount === 2) {
+        // Nested from the outer (push-triggered) round — deferred, becomes
+        // the drained round below.
+        source.set([{ extension: 'settings', routeOwner: 'FromDrainedRoundOne' }]);
+      } else if (callCount === 3) {
+        // Nested from inside the drained round itself — deferred again, and
+        // this round then throws.
+        source.set([{ extension: 'settings', routeOwner: 'FromDrainedRoundTwo' }]);
+        throw new Error('boom');
+      }
+    });
+
+    history.push('/en?screen=settings'); // triggers the outer round (call 2)
+
+    expect(reportedOwners).toEqual(['DashboardScreen', 'unresolved', 'FromDrainedRoundOne', 'FromDrainedRoundTwo']);
+  });
+
+  it('on the registration-source axis: a drained round whose own consumer navigates and then throws still reports the state it queued, in its own later round', () => {
+    const adapter = resetRealm('/en?screen=dashboard');
+    const history = resolveNavigationHistory(() => adapter);
+    const source = mutableSource([{ extension: 'dashboard', routeOwner: 'DashboardScreen' }]);
+    let callCount = 0;
+    const reportedScreens: string[] = [];
+
+    createObserver('screen' as DomainKey, source, (transition) => {
+      callCount += 1;
+      reportedScreens.push(transition.entries[0]?.extension ?? '(none)');
+      if (callCount === 2) {
+        history.push('/en?screen=other'); // deferred — becomes the drained round below
+      } else if (callCount === 3) {
+        history.push('/en?screen=nested'); // deferred from inside the drained round itself
+        throw new Error('boom');
+      }
+    });
+
+    source.set([]); // deregisters 'dashboard' — triggers the outer round (call 2) on this axis
+
+    expect(reportedScreens).toEqual(['dashboard', 'dashboard', 'other', 'nested']);
+    expect(history.location.search).toBe('screen=nested');
+  });
+
+  it('a later, unrelated navigation reports exactly once once the drained rounds above have settled — no phantom round, no abandoned queue', () => {
+    const adapter = resetRealm('/en?screen=dashboard');
+    const history = resolveNavigationHistory(() => adapter);
+    let callCount = 0;
+    const reportedScreens: string[] = [];
+
+    createObserver('screen' as DomainKey, staticSource([]), (transition) => {
+      callCount += 1;
+      reportedScreens.push(transition.entries[0]?.extension ?? '(none)');
+      if (callCount === 2) {
+        history.push('/en?screen=other');
+      } else if (callCount === 3) {
+        history.push('/en?screen=nested');
+        throw new Error('boom');
+      }
+    });
+
+    history.push('/en?screen=settings');
+    expect(reportedScreens).toEqual(['dashboard', 'settings', 'other', 'nested']);
+
+    reportedScreens.length = 0;
+    history.push('/en?screen=unrelated');
+
+    // Not zero (the queue was not left disabled) and not two (no leftover
+    // round fires alongside this one) — exactly the one report this
+    // navigation is actually owed.
+    expect(reportedScreens).toEqual(['unrelated']);
+  });
+
+  it('replaying the exact URL a drained round settled on reports nothing — its own baseline matches that state', () => {
+    const adapter = resetRealm('/en?screen=dashboard');
+    const history = resolveNavigationHistory(() => adapter);
+    let callCount = 0;
+    const reportedScreens: string[] = [];
+
+    createObserver('screen' as DomainKey, staticSource([]), (transition) => {
+      callCount += 1;
+      reportedScreens.push(transition.entries[0]?.extension ?? '(none)');
+      if (callCount === 2) {
+        history.push('/en?screen=other');
+      } else if (callCount === 3) {
+        history.push('/en?screen=nested');
+        throw new Error('boom');
+      }
+    });
+
+    history.push('/en?screen=settings');
+    expect(reportedScreens).toEqual(['dashboard', 'settings', 'other', 'nested']);
+
+    reportedScreens.length = 0;
+    history.push('/en?screen=nested'); // replays the state the last drained round settled on
+
+    expect(reportedScreens).toEqual([]);
+  });
+
+  it('a drained round whose own consumer throws with nothing further queued still leaves that state unrecorded, and does not stop a second observer sharing the same source', () => {
+    const adapter = resetRealm('/en?screen=dashboard');
+    const history = resolveNavigationHistory(() => adapter);
+    const source = mutableSource([{ extension: 'dashboard', routeOwner: 'DashboardScreen' }]);
+
+    let firstCallCount = 0;
+    const firstReported: string[] = [];
+    createObserver('screen' as DomainKey, source, (transition) => {
+      firstCallCount += 1;
+      firstReported.push(transition.entries[0]?.extension ?? '(none)');
+      if (firstCallCount === 2) {
+        history.push('/en?screen=other'); // deferred — becomes the drained round below
+      } else if (firstCallCount === 3) {
+        throw new Error('boom'); // the drained round's own consumer throws; nothing further queued
+      }
+    });
+
+    const secondObserverCalls = vi.fn<(transition: Transition<string>) => void>();
+    createObserver('screen' as DomainKey, source, secondObserverCalls);
+    secondObserverCalls.mockClear();
+
+    expect(() => source.set([])).not.toThrow();
+
+    // The first observer's drained round threw before it could record its
+    // own commit, so its baseline still reads the pre-'other' state — the
+    // next navigation back to the identical 'other' state it never finished
+    // processing must still diff as a change and get reported again, not be
+    // silently absorbed as if it had already been seen.
+    firstReported.length = 0;
+    history.push('/en?screen=other');
+    expect(firstReported).toEqual(['other']);
+
+    // The second observer shares the identical source and the identical
+    // navigation substrate, but not the first observer's own round-guard
+    // state: its own report of 'other' (from the nested push above) was
+    // never touched by the first observer's throw.
+    expect(secondObserverCalls.mock.calls.at(-1)?.[0]?.entries[0]?.extension).toBe('other');
+  });
+});
+
 describe('createObserver — registered-extensions-source axis isolation', () => {
   it('one observer\'s own throwing callback does not stop the source from notifying its other listeners', () => {
     // Unlike the navigation substrate's own fan-out
