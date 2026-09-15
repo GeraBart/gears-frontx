@@ -55,13 +55,20 @@ export const parseGrammar: ParseGrammar = (input) => {
   if (search === '') {
     // @cpt-begin:cpt-frontx-algo-routing-navigation-substrate-grammar-parse:p1:inst-return-empty
     // @cpt-begin:cpt-frontx-algo-routing-navigation-substrate-grammar-parse:p1:inst-copy-verbatim
-    return { shellSubroute, hash, entries: [], warnings: [] };
+    return { shellSubroute, hash, entries: [], foreignSegments: [], warnings: [] };
     // @cpt-end:cpt-frontx-algo-routing-navigation-substrate-grammar-parse:p1:inst-copy-verbatim
     // @cpt-end:cpt-frontx-algo-routing-navigation-substrate-grammar-parse:p1:inst-return-empty
   }
   // @cpt-end:cpt-frontx-algo-routing-navigation-substrate-grammar-parse:p1:inst-if-empty-query
 
   const entries: Entry[] = [];
+  // A segment that never becomes an `Entry` because it does not parse as one
+  // at all is not this package's own business (ADR 0003, "Repetition and
+  // order") — kept verbatim here, in encounter order, rather than lost the
+  // way an earlier revision of this algorithm discarded it. A segment
+  // dropped for colliding with an earlier one under the same domain key
+  // (`duplicate-extension`) is not pushed here — it *did* parse as an entry.
+  const foreignSegments: string[] = [];
   const warnings: ParseWarning[] = [];
 
   // @cpt-begin:cpt-frontx-algo-routing-navigation-substrate-grammar-parse:p1:inst-split-entries
@@ -84,13 +91,31 @@ export const parseGrammar: ParseGrammar = (input) => {
     const headEquals = head.indexOf('=');
     const candidateDomainKey = headEquals === -1 ? '' : head.slice(0, headEquals);
     const candidateExtension = headEquals === -1 ? '' : head.slice(headEquals + 1);
-    if (
-      headEquals === -1 ||
-      !isValidDomainKey(candidateDomainKey) ||
-      !validateName(candidateExtension)
-    ) {
+
+    // @cpt-begin:cpt-frontx-algo-routing-navigation-substrate-grammar-parse:p1:inst-if-plainly-foreign
+    // Plainly not an entry — no `=` at all, or a candidate domain key that
+    // fails the `domain-key` production outright (a token outside the
+    // `name` alphabet, or an even segment count). This is the line ADR 0003
+    // draws between "not this package's own business" (kept, no warning)
+    // and "looks like an entry" (warned, below): a bare `utm_source=news`
+    // fails here on its key alone, so it is never even a candidate for the
+    // malformed-entry warning.
+    if (headEquals === -1 || !isValidDomainKey(candidateDomainKey)) {
+      // @cpt-begin:cpt-frontx-algo-routing-navigation-substrate-grammar-parse:p1:inst-keep-foreign
+      foreignSegments.push(rawEntry);
+      continue;
+      // @cpt-end:cpt-frontx-algo-routing-navigation-substrate-grammar-parse:p1:inst-keep-foreign
+    }
+    // @cpt-end:cpt-frontx-algo-routing-navigation-substrate-grammar-parse:p1:inst-if-plainly-foreign
+
+    if (!validateName(candidateExtension)) {
       // @cpt-begin:cpt-frontx-algo-routing-navigation-substrate-grammar-parse:p1:inst-drop-malformed
+      // A valid-looking domain key with an invalid extension token still
+      // looks enough like an entry to warn about, unlike the plainly
+      // foreign case above — dropped from `entries`, warned, and kept
+      // verbatim as a foreign segment on the same terms as one.
       warnings.push({ code: 'malformed-entry', rawEntry });
+      foreignSegments.push(rawEntry);
       continue;
       // @cpt-end:cpt-frontx-algo-routing-navigation-substrate-grammar-parse:p1:inst-drop-malformed
     }
@@ -171,6 +196,11 @@ export const parseGrammar: ParseGrammar = (input) => {
       // flag+break above that detects the condition.
       warnings.length = warningsBeforeThisEntry;
       warnings.push({ code: 'malformed-entry', rawEntry });
+      // This entry's own head looked valid but a param broke the entry
+      // rules further in — kept verbatim as a foreign segment, on the same
+      // terms as any other segment that warns malformed-entry (see
+      // inst-drop-malformed above).
+      foreignSegments.push(rawEntry);
       continue;
     }
     // @cpt-end:cpt-frontx-algo-routing-navigation-substrate-grammar-parse:p1:inst-drop-entry-malformed-escape
@@ -183,7 +213,7 @@ export const parseGrammar: ParseGrammar = (input) => {
 
   // @cpt-begin:cpt-frontx-algo-routing-navigation-substrate-grammar-parse:p1:inst-return-parsed
   // @cpt-begin:cpt-frontx-algo-routing-navigation-substrate-grammar-parse:p1:inst-copy-verbatim
-  return { shellSubroute, hash, entries, warnings };
+  return { shellSubroute, hash, entries, foreignSegments, warnings };
   // @cpt-end:cpt-frontx-algo-routing-navigation-substrate-grammar-parse:p1:inst-copy-verbatim
   // @cpt-end:cpt-frontx-algo-routing-navigation-substrate-grammar-parse:p1:inst-return-parsed
 };

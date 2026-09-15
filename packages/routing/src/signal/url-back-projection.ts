@@ -260,6 +260,10 @@ function runBackProjection(
     shellSubroute: parsed.shellSubroute,
     hash: pageHash !== undefined ? pageHash : parsed.hash,
     entries: composed,
+    // A foreign query segment — an OAuth `code`/`state`, an analytics
+    // `utm_*` parameter — is never this helper's own business to touch; it
+    // passes straight through, unchanged, from parse to this single write.
+    foreignSegments: parsed.foreignSegments,
   });
   // @cpt-end:cpt-frontx-algo-routing-route-ownership-signal-url-back-projection:p2:inst-serialize
 

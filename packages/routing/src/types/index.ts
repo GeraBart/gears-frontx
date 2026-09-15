@@ -246,12 +246,29 @@ export interface ParseWarning {
 
 /**
  * The output of a grammar parse: the shell subroute and hash copied
- * verbatim, the ordered entry list kept, and every warning produced along
- * the way. Parsing never throws (FEATURE §3, Grammar Parse).
+ * verbatim, the ordered entry list kept, the foreign segments kept (below),
+ * and every warning produced along the way. Parsing never throws (FEATURE
+ * §3, Grammar Parse).
  *
  * `hash` is `undefined` when the input carries no `#` at all; a present
  * `hash` never includes the leading `#` (parse strips it, serialize
  * re-adds it only when the value is non-empty).
+ *
+ * `foreignSegments` is the raw text of every `&`-delimited query segment
+ * that did not become an `Entry` because it does not parse as one at all —
+ * no `=` in its head, or a candidate domain key failing the `domain-key`
+ * production — in original relative order among themselves. This is *not*
+ * the substrate's own business (ADR 0003, "Repetition and order"): the
+ * parser keeps the text unchanged rather than discarding it, so a write
+ * that touches only its own entries never erases a query parameter another
+ * party put there (an OAuth callback's `state`, an analytics `utm_*`
+ * parameter). A segment that *looks* like an entry but breaks the entry
+ * rules further in (an invalid extension token, a malformed percent-escape)
+ * is also collected here, alongside the `malformed-entry` warning it still
+ * produces — see that warning's own doc comment on `ParseWarningCode`. A
+ * segment dropped for colliding with an earlier one under the same domain
+ * key (`duplicate-extension`) is not foreign — it *did* parse as an entry —
+ * and is not collected here.
  *
  * FEATURE (navigation-substrate) §1.5, "Grammar codec shapes — Parse result".
  */
@@ -259,19 +276,28 @@ export interface ParseResult {
   readonly shellSubroute: string;
   readonly hash: string | undefined;
   readonly entries: readonly Entry[];
+  readonly foreignSegments: readonly string[];
   readonly warnings: readonly ParseWarning[];
 }
 
 /**
  * The input a grammar serialize accepts: the identical shape a parse
  * produces, minus the warnings — serialize is never fed a raw parse
- * warning, only the entries that survived them (FEATURE §1.5, "Grammar
- * codec shapes — Serialize input").
+ * warning, only the entries and foreign segments that survived them
+ * (FEATURE §1.5, "Grammar codec shapes — Serialize input").
+ *
+ * `foreignSegments` re-emits verbatim, after every entry in its own
+ * canonical order, in its own original relative order — not necessarily
+ * interleaved with entries the way the source query string had them, since
+ * entries and foreign segments are two separate lists once parsed and this
+ * package does not track their original interleaving (ADR 0003,
+ * "Repetition and order").
  */
 export interface SerializeInput {
   readonly shellSubroute: string;
   readonly hash: string | undefined;
   readonly entries: readonly Entry[];
+  readonly foreignSegments: readonly string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -509,7 +535,7 @@ export type EngineProviderPort<TRouteTree = unknown, TRouter = unknown> = (
 // ---------------------------------------------------------------------------
 
 /**
- * The seven shapes a thrown `RoutingError` (`../errors.js`) can carry, one
+ * The eight shapes a thrown `RoutingError` (`../errors.js`) can carry, one
  * per `code`. Documented here as prose, not as exported interfaces: no value
  * ever satisfies one of these shapes on its own — `RoutingError` is a
  * single flat runtime class whose static factories populate only the
@@ -518,6 +544,14 @@ export type EngineProviderPort<TRouteTree = unknown, TRouter = unknown> = (
  * produced or consumed anywhere in this package's own public surface
  * (DESIGN §3.3 lists no per-code error type).
  *
+ * - `invalid-shell-subroute` — `value` (the offending shell subroute); the
+ *   given `shellSubroute` contains `?`, `#`, or `&` — a grammar delimiter
+ *   that would otherwise reparse into a different, corrupted structure the
+ *   moment the written URL is read back (FEATURE §3, Grammar Serialize,
+ *   step 0). A shell subroute that reached serialize by way of grammar
+ *   parse can never contain one of these three characters by construction
+ *   (parse cuts the shell subroute off at the first `?`); this throw exists
+ *   for the caller that builds a `SerializeInput` by hand instead.
  * - `invalid-domain-key` — `value` (the offending key); `entry` set only
  *   when thrown by grammar serialize (FEATURE §3, Grammar Serialize, step
  *   1.1: "THROW an error naming this entry"), absent at every other throw

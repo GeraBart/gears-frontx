@@ -47,7 +47,7 @@ describe('serializeGrammar — round-trip (parse -> serialize is byte-exact for 
   // prove serialize's own guard holds against a caller that constructs
   // `{ hash: '' }` directly instead of getting it from parse.
   it('treats an explicit empty-string hash as absent — no bare trailing "#"', () => {
-    const input: SerializeInput = { shellSubroute: '/en', hash: '', entries: [] };
+    const input: SerializeInput = { shellSubroute: '/en', hash: '', entries: [], foreignSegments: [] };
     expect(serializeGrammar(input)).toBe('/en');
   });
 
@@ -56,13 +56,44 @@ describe('serializeGrammar — round-trip (parse -> serialize is byte-exact for 
       shellSubroute: '/en',
       hash: '',
       entries: [entry('screen', 'dashboard')],
+      foreignSegments: [],
     };
     expect(serializeGrammar(input)).toBe('/en?screen=dashboard');
   });
 });
 
+describe('serializeGrammar — foreign segments (H3)', () => {
+  it('re-emits both foreign parameters after a write to a real entry — the reviewer\'s exact probe', () => {
+    const parsed = parseGrammar('/en?screen=app&utm_source=news&code=oauth123');
+    const written = {
+      ...parsed,
+      entries: parsed.entries.map((e) => (e.domainKey === 'screen' ? { ...e, params: [{ name: 'tab', value: '2' }] } : e)),
+    };
+    expect(serializeGrammar(written)).toBe('/en?screen=app;tab=2&code=oauth123&utm_source=news');
+  });
+
+  it('an OAuth-style return (code, state) survives a write untouched', () => {
+    const parsed = parseGrammar('/en?code=abc123&state=xyz789');
+    const written = { ...parsed, entries: [...parsed.entries, entry('screen', 'dashboard')] };
+    expect(serializeGrammar(written)).toBe('/en?code=abc123&state=xyz789&screen=dashboard');
+  });
+
+  it('round-trips a URL carrying only foreign segments byte-exactly', () => {
+    const url = '/en?utm_source=news&fbclid=abc_123';
+    const parsed = parseGrammar(url);
+    expect(parsed.entries).toEqual([]);
+    expect(parsed.foreignSegments).toEqual(['utm_source=news', 'fbclid=abc_123']);
+    expect(serializeGrammar(parsed)).toBe(url);
+  });
+
+  it('re-emits a malformed-looking (warned) segment verbatim, after the entries', () => {
+    const parsed = parseGrammar('/en?screen=Dashboard&widgets=line-a');
+    expect(serializeGrammar(parsed)).toBe('/en?widgets=line-a&screen=Dashboard');
+  });
+});
+
 describe('serializeGrammar — validation errors', () => {
-  const base: SerializeInput = { shellSubroute: '/en', hash: undefined, entries: [] };
+  const base: SerializeInput = { shellSubroute: '/en', hash: undefined, entries: [], foreignSegments: [] };
 
   it('throws invalid-domain-key for a malformed domainKey, naming the offending entry', () => {
     const input = { ...base, entries: [entry('a.b', 'dashboard')] };
@@ -128,6 +159,33 @@ describe('serializeGrammar — percent-encoding table', () => {
   });
 
   function base(): SerializeInput {
-    return { shellSubroute: '/en', hash: undefined, entries: [] };
+    return { shellSubroute: '/en', hash: undefined, entries: [], foreignSegments: [] };
   }
+});
+
+describe('serializeGrammar — shell subroute validation (H1)', () => {
+  const withSubroute = (shellSubroute: string) =>
+    ({ shellSubroute, hash: undefined, entries: [entry('screen', 'app')], foreignSegments: [] }) satisfies SerializeInput;
+
+  it.each(['?', '#', '&'])('throws invalid-shell-subroute for a shell subroute containing %j', (char) => {
+    const error = expectRoutingError(() => serializeGrammar(withSubroute(`/en${char}injected`)));
+    expect(error.code).toBe('invalid-shell-subroute');
+    expect(error.value).toBe(`/en${char}injected`);
+  });
+
+  it('leaves a normal subroute unaffected', () => {
+    expect(serializeGrammar(withSubroute('/en'))).toBe('/en?screen=app');
+  });
+
+  it("throws instead of corrupting — the reviewer's own probe (/en?injected=1 plus one written entry)", () => {
+    const error = expectRoutingError(() =>
+      serializeGrammar({
+        shellSubroute: '/en?injected=1',
+        hash: undefined,
+        entries: [entry('screen', 'app')],
+        foreignSegments: [],
+      }),
+    );
+    expect(error.code).toBe('invalid-shell-subroute');
+  });
 });

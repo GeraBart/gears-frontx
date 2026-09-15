@@ -137,6 +137,11 @@ function getMonorepoPostChecks(): ArchCheck[] {
  *   cpt-frontx-constraint-gts-plugin-excludes-solution-schemas (GTS-PLUGIN-2) — dep-cruiser
  *   cpt-frontx-constraint-api-no-solution-content           (API-1) — dep-cruiser
  *   cpt-frontx-constraint-cli-template-independence         (CLI-1) — dep-cruiser + grep check below
+ *   cpt-frontx-constraint-routing-no-intra-ecosystem-dependency,
+ *   cpt-frontx-constraint-routing-no-engine-leak,
+ *   cpt-frontx-routing-tanstack-nfr-single-ecosystem-edge,
+ *   cpt-frontx-constraint-routing-tanstack-sole-engine-import
+ *                                                (ROUTING-1..3 / ROUTING-TANSTACK-1..3) — dep-cruiser
  */
 function getEcosystemBoundaryChecks(): ArchCheck[] {
   return [
@@ -196,6 +201,17 @@ function getEcosystemBoundaryChecks(): ArchCheck[] {
         'CLI-1 (cpt-frontx-constraint-cli-template-independence): cli sources contain no hardcoded template package names (excluding auto-generated version registry)',
     },
     // @cpt-end:cpt-frontx-constraint-cli-template-independence:p17:inst-hardcoded-name-check
+    // @cpt-begin:cpt-frontx-constraint-routing-no-intra-ecosystem-dependency:p10:inst-arch-check
+    {
+      command:
+        'npx dependency-cruiser packages/routing/src packages/routing-tanstack/src --config .dependency-cruiser.cjs --output-type err-long',
+      description:
+        'ROUTING-1..3 / ROUTING-TANSTACK-1..3 (cpt-frontx-constraint-routing-no-intra-ecosystem-dependency, ' +
+        'cpt-frontx-constraint-routing-no-engine-leak, cpt-frontx-routing-tanstack-nfr-single-ecosystem-edge, ' +
+        'cpt-frontx-constraint-routing-tanstack-sole-engine-import): routing & routing-tanstack boundary — no ' +
+        'template content, no intra-ecosystem dependency, no engine leak, single ecosystem edge, sole engine import',
+    },
+    // @cpt-end:cpt-frontx-constraint-routing-no-intra-ecosystem-dependency:p10:inst-arch-check
   ];
 }
 

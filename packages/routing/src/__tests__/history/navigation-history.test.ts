@@ -219,6 +219,32 @@ describe('createNavigationHistory — position tracking', () => {
     expect(adapter.getState()).toEqual({ hostOwnField: 'keep-me', '@gears-frontx/routing': { position: 0 } });
   });
 
+  // M2 (review round 20): a throwing `pushState` must not drift `position` —
+  // the write never landed, so the previously recorded position is still the
+  // real one.
+  it('leaves position unchanged, and propagates the error, when the adapter\'s pushState throws', () => {
+    const adapter = new FakeHistoryAdapter('/en');
+    const history = createNavigationHistory(adapter);
+    history.push('/a');
+    expect(history.location.position).toBe(1);
+
+    const failure = new Error('SecurityError: pushState rate limit exceeded');
+    const spy = vi.spyOn(adapter, 'pushState').mockImplementationOnce(() => {
+      throw failure;
+    });
+
+    expect(() => history.push('/b')).toThrow(failure);
+    expect(history.location.position).toBe(1);
+    expect(history.location.path).toBe('/a');
+
+    // A later, successful push still advances correctly from the
+    // pre-throw position, rather than from some position the throw itself
+    // had already committed.
+    spy.mockRestore();
+    history.push('/c');
+    expect(history.location.position).toBe(2);
+  });
+
   it('two instances constructed over the same underlying entries see the identical position', () => {
     const adapter = new FakeHistoryAdapter('/en');
     const first = createNavigationHistory(adapter);

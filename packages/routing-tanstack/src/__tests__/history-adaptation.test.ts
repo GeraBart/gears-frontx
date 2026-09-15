@@ -108,7 +108,7 @@ describe('createHref', () => {
 
     const href = history.createHref('/settings/profile?orientation=left');
 
-    const { shellSubroute, hash, entries } = parseGrammar(EXAMPLE_7_3_URL);
+    const { shellSubroute, hash, entries, foreignSegments } = parseGrammar(EXAMPLE_7_3_URL);
     const expected = serializeGrammar({
       shellSubroute,
       hash,
@@ -117,6 +117,7 @@ describe('createHref', () => {
           ? { ...e, params: [{ name: 'route', value: 'settings/profile' }, { name: 'orientation', value: 'left' }] }
           : e,
       ),
+      foreignSegments,
     });
     expect(href).toBe(expected);
   });
@@ -486,6 +487,43 @@ describe('attachAdaptedHistory re-projects location after a real detach gap (L1)
     attachAdaptedHistory(history);
 
     expect(history.location.pathname).toBe('/settings/profile');
+  });
+
+  // M3 (review round 20): re-projecting `location` on its own is not enough
+  // — a remounted router's own renderer is a `subscribe`d listener that
+  // predates `destroy()` and survives it (subscription and attach/detach are
+  // independent lifecycles), so it must also be told about the resync, or
+  // it keeps rendering the route it last rendered before `destroy()` ran.
+  it('notifies a still-registered subscriber exactly once of the resync, with the new location', () => {
+    resetRealm(EXAMPLE_7_3_URL);
+    const navigationHistory = resolveNavigationHistory();
+    const history = adaptComposedHistory(navigationHistory, DASHBOARD_ENTRY_ADDRESS);
+    const subscriber = vi.fn();
+    history.subscribe(subscriber);
+
+    history.destroy();
+    navigationHistory.push('/en?screen=dashboard;route=settings/profile;orientation=left');
+    subscriber.mockClear();
+
+    attachAdaptedHistory(history);
+
+    expect(subscriber).toHaveBeenCalledTimes(1);
+    expect(subscriber.mock.calls[0]![0]).toMatchObject({ location: { pathname: '/settings/profile' } });
+  });
+
+  it('does not notify when the re-attach finds no change (nothing navigated while detached)', () => {
+    resetRealm(EXAMPLE_7_3_URL);
+    const navigationHistory = resolveNavigationHistory();
+    const history = adaptComposedHistory(navigationHistory, DASHBOARD_ENTRY_ADDRESS);
+    const subscriber = vi.fn();
+    history.subscribe(subscriber);
+
+    history.destroy();
+    subscriber.mockClear();
+
+    attachAdaptedHistory(history);
+
+    expect(subscriber).not.toHaveBeenCalled();
   });
 });
 

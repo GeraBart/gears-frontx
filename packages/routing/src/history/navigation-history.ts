@@ -24,6 +24,7 @@ import { readInitialPosition, readPosition, writePosition } from './position.js'
  */
 // @cpt-flow:cpt-frontx-flow-routing-navigation-substrate-imperative-navigation:p1
 // @cpt-algo:cpt-frontx-algo-routing-navigation-substrate-singleton-resolution:p2
+// @cpt-algo:cpt-frontx-algo-routing-navigation-substrate-position-tracking:p2
 // @cpt-dod:cpt-frontx-dod-routing-navigation-substrate-imperative-navigation:p1
 // This constructor is also where the shared-history DoD's own singleton and
 // fan-out half is realized; the same DoD's URL grammar codec half is scoped
@@ -99,8 +100,17 @@ export function createNavigationHistory(adapter: HistoryAdapter): NavigationHist
       // whatever the *previous* entry's own state carried, exactly as a
       // real `pushState` call never carries a prior entry's state forward
       // on its own.
-      position += 1;
-      adapter.pushState(path, writePosition(undefined, position));
+      //
+      // The next position is computed into a local and only committed to
+      // `position` after `pushState` returns without throwing — a throwing
+      // write (e.g. a browser `SecurityError` from exceeding its own
+      // `pushState` rate limit) must leave the recorded position exactly
+      // where it was, since the write never landed; committing first would
+      // drift `position` (and everything derived from it, `length`,
+      // `canGoBack`) for the rest of the session.
+      const nextPosition = position + 1;
+      adapter.pushState(path, writePosition(undefined, nextPosition));
+      position = nextPosition;
       // @cpt-end:cpt-frontx-algo-routing-navigation-substrate-position-tracking:p2:inst-advance-on-push
       // @cpt-begin:cpt-frontx-algo-routing-navigation-substrate-fanout-dispatch:p2:inst-own-call-dispatch-round
       // @cpt-begin:cpt-frontx-flow-routing-navigation-substrate-imperative-navigation:p1:inst-return

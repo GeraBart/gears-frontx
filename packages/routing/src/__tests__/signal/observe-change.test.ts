@@ -59,6 +59,33 @@ describe('createObserver — initial report', () => {
     expect(diff.added).toEqual(['unknown-screen']);
     expect(diff.unresolved).toEqual(['unknown-screen']);
   });
+
+  it('observes a navigation performed synchronously from inside its own first callback, exactly once (H2, review round 20)', () => {
+    // Before H2, the fan-out subscription was registered only after the
+    // initial report ran, so a synchronous re-navigation from inside that
+    // very first callback — the deep-link -> mount -> redirect pattern — was
+    // never observed: the subscription that would have caught it did not
+    // exist yet at the moment the redirect fired.
+    const adapter = resetRealm('/en?screen=dashboard');
+    const history = resolveNavigationHistory(() => adapter);
+    const receivedScreens: string[] = [];
+    let redirected = false;
+
+    createObserver('screen' as DomainKey, staticSource([]), (transition) => {
+      const current = transition.entries[0]?.extension;
+      receivedScreens.push(current ?? '(none)');
+      if (!redirected) {
+        redirected = true;
+        history.push('/en?screen=other');
+      }
+    });
+
+    // Initial report ('dashboard'), then the resulting redirect's own
+    // transition ('other') — delivered exactly once, not zero times and not
+    // twice.
+    expect(receivedScreens).toEqual(['dashboard', 'other']);
+    expect(history.location.search).toBe('screen=other');
+  });
 });
 
 describe('createObserver — input validation', () => {
@@ -207,8 +234,8 @@ describe('createObserver — Resolution-changed', () => {
   });
 });
 
-describe('createObserver — a throwing consumer callback', () => {
-  it('still records the transition it threw on, so the next transition reports only the new delta', () => {
+describe('createObserver — a throwing consumer callback (M1, review round 20)', () => {
+  it('does not advance the baseline when the callback throws, so the next navigation still diffs against the pre-throw state', () => {
     const adapter = resetRealm('/en?screen=dashboard');
     let callCount = 0;
     const reported: { added: readonly string[]; removed: readonly string[] }[] = [];
@@ -227,19 +254,46 @@ describe('createObserver — a throwing consumer callback', () => {
     const history = resolveNavigationHistory(() => adapter);
     // The fan-out isolates a subscriber's own thrown error (FanOutDispatcher),
     // so this second transition (dashboard -> settings) reaches `onTransition`
-    // and throws, but `history.push` itself never throws.
+    // and throws, but `history.push` itself never throws. The baseline stays
+    // at 'dashboard' — the callback never finished processing 'settings'.
     history.push('/en?screen=settings');
-    // Third transition: settings -> other. If the second transition's own
-    // state was never recorded because it threw before reaching that
-    // assignment, this diff would be computed against the stale first-round
-    // baseline (dashboard) instead of the real current state (settings) —
-    // reporting "dashboard" removed a second time and never reporting
-    // "settings" removed at all.
+    // Third transition: other. Because the baseline never advanced past
+    // 'dashboard' (M1: the callback that would have advanced it to
+    // 'settings' threw first), this diff is computed against 'dashboard'
+    // again, not against 'settings' — 'dashboard' is reported removed a
+    // second time, and 'settings' (never confirmed processed) is not
+    // reported removed at all.
     history.push('/en?screen=other');
 
     expect(reported).toEqual([
       { added: ['settings'], removed: ['dashboard'] },
-      { added: ['other'], removed: ['settings'] },
+      { added: ['other'], removed: ['dashboard'] },
+    ]);
+  });
+
+  it('re-delivers the identical transition when navigation later returns to the state the throwing callback never finished processing', () => {
+    const adapter = resetRealm('/en?screen=dashboard');
+    let callCount = 0;
+    const reported: { added: readonly string[]; removed: readonly string[] }[] = [];
+    createObserver('screen' as DomainKey, staticSource([]), (transition) => {
+      callCount += 1;
+      if (callCount === 1) {
+        return; // skip the synchronous initial report
+      }
+      reported.push({ added: transition.diff.added, removed: transition.diff.removed });
+      if (callCount === 2) {
+        throw new Error('boom');
+      }
+    });
+
+    const history = resolveNavigationHistory(() => adapter);
+    history.push('/en?screen=settings'); // dashboard -> settings: reported, then throws; baseline stays 'dashboard'
+    history.push('/en?screen=dashboard'); // settings -> dashboard: diffs against the still-frozen 'dashboard' baseline -> empty, no report
+    history.push('/en?screen=settings'); // dashboard -> settings again: baseline never moved past 'dashboard', so this is the identical diff as the very first delivery
+
+    expect(reported).toEqual([
+      { added: ['settings'], removed: ['dashboard'] },
+      { added: ['settings'], removed: ['dashboard'] },
     ]);
   });
 });

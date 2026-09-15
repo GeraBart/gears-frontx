@@ -154,21 +154,31 @@ export function EngineProvider(
   const providedRouter = fromRouter ? props.router : undefined;
   const routeTree = fromRouter ? undefined : props.routeTree;
   const providedHistory = fromRouter ? undefined : props.history;
-  const history = fromRouter ? props.router.history : props.history;
 
   // The two overloads above reject a call site missing both prop shapes at
   // compile time; this runtime check only matters for a caller that
   // bypasses them — a plain JavaScript consumer, or an `as`-cast past the
-  // union — where `props` can otherwise reach `createProviderRouter` (or
-  // `props.router.history` above) as `undefined`, surfacing as an opaque
+  // union — where `props` can otherwise reach `createProviderRouter` (or a
+  // `.history` property read below) as `undefined`, surfacing as an opaque
   // TanStack internal error (reading a property off `undefined`) with no
-  // indication that the missing prop, not this package, is the cause.
+  // indication that the missing prop, not this package, is the cause. This
+  // guard must run before anything derives `history` from `props.router` —
+  // deriving it first (`props.router.history`) reintroduces the exact
+  // opaque error this guard exists to replace, for the `{router: undefined}`
+  // call shape.
   if (fromRouter ? providedRouter === undefined : routeTree === undefined || providedHistory === undefined) {
     throw new Error(
       'EngineProvider requires either a {routeTree, history} pair or a {router} — received neither. ' +
         'This is only reachable when a caller bypasses this function\'s own TypeScript overloads.',
     );
   }
+
+  // `providedHistory` is cast the same way `createProviderRouter`'s own call
+  // below already is (see its comment): the guard above proves it is
+  // defined whenever `providedRouter` is not, but that proof spans two
+  // independently-computed locals TypeScript's control-flow analysis cannot
+  // relate to each other.
+  const history = providedRouter !== undefined ? providedRouter.history : (providedHistory as RouterHistory);
 
   const router = useMemo(() => {
     if (providedRouter !== undefined) {

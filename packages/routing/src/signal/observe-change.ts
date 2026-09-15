@@ -152,13 +152,89 @@ export function createObserverBoundTo(history: NavigationHistory): CreateObserve
   // @cpt-begin:cpt-frontx-flow-routing-route-ownership-signal-deep-link-cold-mount:p1:inst-resolve-entries-at-creation
   validateDomainKeyAndRegistrations(domainKey, source);
 
-  // @cpt-begin:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-record-initial-state
-  // This observer's own initial state — `reresolveAndReport` (below) reads
-  // and overwrites this same binding on every later navigation.
+  // This observer's own initial state, recorded here as part of step 1.1
+  // (H2, review round 20: the FEATURE's own former standalone "record"
+  // step is now folded into this one, since subscribing before reporting —
+  // below — needs this baseline set no later than this point) —
+  // `reresolveAndReport` (below) reads and overwrites this same binding on
+  // every later navigation.
   let previous = resolveCurrentEntries(history, domainKey, source);
-  // @cpt-end:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-record-initial-state
   // @cpt-end:cpt-frontx-flow-routing-route-ownership-signal-deep-link-cold-mount:p1:inst-resolve-entries-at-creation
   // @cpt-end:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-initial-resolve
+
+  /** FEATURE §3, Observable Transition Signal, steps 2.1-2.5 — shared by a
+   * fan-out navigation and a registered-extensions-source change alike
+   * (step 3.2: "exactly as if a navigation had occurred"). */
+  function reresolveAndReport(): void {
+    // @cpt-begin:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-resolve-current
+    // @cpt-begin:cpt-frontx-flow-routing-route-ownership-signal-deep-link-cold-mount:p1:inst-resolve-entries
+    const current = resolveCurrentEntries(history, domainKey, source);
+    // @cpt-end:cpt-frontx-flow-routing-route-ownership-signal-deep-link-cold-mount:p1:inst-resolve-entries
+    // @cpt-end:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-resolve-current
+
+    // @cpt-begin:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-compute-diff
+    const diff = computeDiff(previous, current);
+    // @cpt-end:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-compute-diff
+
+    // @cpt-begin:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-if-diff-empty
+    // @cpt-begin:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-no-report-unchanged
+    // The "no call" branch this instruction names has no code of its own —
+    // co-located with the enclosing `if`/`else`, whose `else` arm below is
+    // the real code this pair wraps.
+    if (diffIsEmpty(diff)) {
+      // Nothing about this domain key's own entries changed — no call, and
+      // the baseline advances immediately: there is no consumer callback
+      // here that could throw and leave it stale.
+      // @cpt-begin:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-record-navigation-state
+      previous = current;
+      // @cpt-end:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-record-navigation-state
+    } else {
+      // @cpt-begin:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-else-diff-nonempty
+      // @cpt-begin:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-report-transition
+      // @cpt-begin:cpt-frontx-flow-routing-route-ownership-signal-deep-link-cold-mount:p1:inst-report-transition
+      onTransition({ domainKey, entries: current, diff });
+      // @cpt-end:cpt-frontx-flow-routing-route-ownership-signal-deep-link-cold-mount:p1:inst-report-transition
+      // @cpt-end:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-report-transition
+      // No `try`/`finally` here (M1, review round 20): the baseline advances
+      // only once `onTransition` above returns without throwing — deliberately
+      // reached *after* the call, not wrapped around it, so a consumer whose
+      // own callback throws leaves `previous` exactly where it was. The next
+      // navigation to the identical state then re-computes the identical,
+      // non-empty diff against that same unmoved baseline and delivers it
+      // again, instead of the baseline silently advancing past a transition
+      // the consumer never actually finished processing and producing an
+      // empty diff — and therefore no report at all — forever after (FEATURE
+      // §3, Observable Transition Signal, step 2.5, amended). A subscriber
+      // whose own callback throws is still isolated from every other
+      // subscriber: this function itself runs inside the fan-out's own
+      // per-callback `try`/`catch` (`cpt-frontx-algo-routing-navigation-substrate-fanout-dispatch`),
+      // which is what stops this throw from reaching the remaining callbacks
+      // in the same round, not anything in this function.
+      // @cpt-begin:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-record-navigation-state
+      previous = current;
+      // @cpt-end:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-record-navigation-state
+      // @cpt-end:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-else-diff-nonempty
+    }
+    // @cpt-end:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-no-report-unchanged
+    // @cpt-end:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-if-diff-empty
+  }
+
+  // @cpt-begin:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-subscribe-fanout
+  // Subscribed *before* the initial report below (H2, review round 20 —
+  // previously this ran after): a consumer that navigates synchronously
+  // from inside its own first callback must have that navigation observed
+  // by this same subscription, not missed because it did not exist yet.
+  // `previous` is already set (immediately above) by the time this
+  // subscription can fire, so a reentrant dispatch triggered from within the
+  // initial report has a correct baseline to diff against.
+  const unsubscribeFanout = history.subscribe(() => {
+    // @cpt-begin:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-when-navigation
+    // @cpt-begin:cpt-frontx-flow-routing-route-ownership-signal-deep-link-cold-mount:p1:inst-notify-navigation
+    reresolveAndReport();
+    // @cpt-end:cpt-frontx-flow-routing-route-ownership-signal-deep-link-cold-mount:p1:inst-notify-navigation
+    // @cpt-end:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-when-navigation
+  });
+  // @cpt-end:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-subscribe-fanout
 
   // @cpt-begin:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-initial-report
   // @cpt-begin:cpt-frontx-flow-routing-route-ownership-signal-deep-link-cold-mount:p1:inst-report-initial-transition
@@ -177,64 +253,6 @@ export function createObserverBoundTo(history: NavigationHistory): CreateObserve
   // @cpt-end:cpt-frontx-flow-routing-route-ownership-signal-deep-link-cold-mount:p1:inst-report-initial-transition
   // @cpt-end:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-initial-report
   // @cpt-end:cpt-frontx-flow-routing-route-ownership-signal-deep-link-cold-mount:p1:inst-create-observer
-
-  /** FEATURE §3, Observable Transition Signal, steps 2.1-2.5 — shared by a
-   * fan-out navigation and a registered-extensions-source change alike
-   * (step 3.2: "exactly as if a navigation had occurred"). */
-  function reresolveAndReport(): void {
-    // @cpt-begin:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-resolve-current
-    // @cpt-begin:cpt-frontx-flow-routing-route-ownership-signal-deep-link-cold-mount:p1:inst-resolve-entries
-    const current = resolveCurrentEntries(history, domainKey, source);
-    // @cpt-end:cpt-frontx-flow-routing-route-ownership-signal-deep-link-cold-mount:p1:inst-resolve-entries
-    // @cpt-end:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-resolve-current
-
-    // @cpt-begin:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-compute-diff
-    const diff = computeDiff(previous, current);
-    // @cpt-end:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-compute-diff
-
-    // The reporting branch below can throw (a consumer's own `onTransition`
-    // callback) — `finally` is what still lets step 5's own
-    // `inst-record-navigation-state` assignment run in that case, matching
-    // FEATURE §3, Observable Transition Signal, step 5: recorded
-    // "regardless of whether step 2.3 or 2.4 ran". Without it, a throwing
-    // callback leaves `previous` at its prior value, so the following
-    // transition diffs against a stale baseline instead of the state this
-    // round actually moved to.
-    try {
-      // @cpt-begin:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-if-diff-empty
-      // @cpt-begin:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-no-report-unchanged
-      // The "no call" branch this instruction names has no code of its own —
-      // co-located with the enclosing `if`/`else`, whose `else` arm below is
-      // the real code this pair wraps.
-      if (diffIsEmpty(diff)) {
-        // Nothing about this domain key's own entries changed — no call.
-      } else {
-        // @cpt-begin:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-else-diff-nonempty
-        // @cpt-begin:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-report-transition
-        // @cpt-begin:cpt-frontx-flow-routing-route-ownership-signal-deep-link-cold-mount:p1:inst-report-transition
-        onTransition({ domainKey, entries: current, diff });
-        // @cpt-end:cpt-frontx-flow-routing-route-ownership-signal-deep-link-cold-mount:p1:inst-report-transition
-        // @cpt-end:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-report-transition
-        // @cpt-end:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-else-diff-nonempty
-      }
-      // @cpt-end:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-no-report-unchanged
-      // @cpt-end:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-if-diff-empty
-    } finally {
-      // @cpt-begin:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-record-navigation-state
-      previous = current;
-      // @cpt-end:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-record-navigation-state
-    }
-  }
-
-  // @cpt-begin:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-subscribe-fanout
-  const unsubscribeFanout = history.subscribe(() => {
-    // @cpt-begin:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-when-navigation
-    // @cpt-begin:cpt-frontx-flow-routing-route-ownership-signal-deep-link-cold-mount:p1:inst-notify-navigation
-    reresolveAndReport();
-    // @cpt-end:cpt-frontx-flow-routing-route-ownership-signal-deep-link-cold-mount:p1:inst-notify-navigation
-    // @cpt-end:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-when-navigation
-  });
-  // @cpt-end:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-subscribe-fanout
 
   // @cpt-begin:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-if-source-has-notification
   let unsubscribeSource: ReleaseFunction | undefined;

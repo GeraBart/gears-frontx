@@ -13,7 +13,7 @@
  * caller from deep inside the default `HistoryAdapter`'s own construction.
  * This module supplies the single runtime value every one of those `throw`
  * statements constructs — see `RoutingErrorCode`'s own doc comment for the
- * seven shapes, documented in `src/types/index.ts`.
+ * eight shapes, documented in `src/types/index.ts`.
  *
  * A single `RoutingError` class, not one subclass per code, because every
  * variant is a plain data-carrying error with no behaviour of its own beyond
@@ -29,9 +29,10 @@
 
 import type { DomainKey, Entry, ExtensionToken } from './types/index.js';
 
-/** The seven codes a thrown `RoutingError` carries — see `src/types/index.ts`
+/** The eight codes a thrown `RoutingError` carries — see `src/types/index.ts`
  * for the field shape each one populates. */
 export type RoutingErrorCode =
+  | 'invalid-shell-subroute'
   | 'invalid-domain-key'
   | 'invalid-extension-token'
   | 'invalid-name'
@@ -42,7 +43,8 @@ export type RoutingErrorCode =
 
 export class RoutingError extends Error {
   readonly code: RoutingErrorCode;
-  /** Set only for `invalid-domain-key` / `invalid-extension-token` / `invalid-name`. */
+  /** Set only for `invalid-shell-subroute` / `invalid-domain-key` /
+   * `invalid-extension-token` / `invalid-name`. */
   readonly value?: string;
   /** Set for `duplicate-param-name`, and for `invalid-domain-key` /
    * `invalid-extension-token` only when thrown by grammar serialize (FEATURE
@@ -74,6 +76,20 @@ export class RoutingError extends Error {
     this.entries = extra?.entries;
     this.domainKey = extra?.domainKey;
     this.reordered = extra?.reordered;
+  }
+
+  /**
+   * A `shellSubroute` argument given to grammar serialize contains `?`, `#`,
+   * or `&` — a grammar delimiter that would otherwise reparse into a
+   * different, corrupted structure the instant the written URL is read back
+   * (FEATURE §3, Grammar Serialize, step 0).
+   */
+  static invalidShellSubroute(value: string): RoutingError {
+    return new RoutingError(
+      'invalid-shell-subroute',
+      `Invalid shell subroute (contains "?", "#", or "&"): "${value}"`,
+      { value },
+    );
   }
 
   /**

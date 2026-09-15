@@ -271,9 +271,27 @@ export function adaptVirtualLocationHistory(
     // this constructor's own initial projection above — brings it back in
     // sync with the substrate before the new subscription's own first
     // notification (which may not arrive until a later navigation).
+    const previousLocation = currentLocation;
     const params = source.readParams();
     if (params !== undefined) {
       currentLocation = buildHistoryLocation(projectParamsToVirtualLocation(params), navigationHistory.location.position);
+    }
+    if (currentLocation.href !== previousLocation.href) {
+      // The substrate moved while this adapter was detached (`destroy()` ran,
+      // then a real back/forward step, a third-party `go`, or another unit's
+      // own write landed, then this call re-attached) — a still-mounted
+      // consumer (a remounted router's own renderer, subscribed before
+      // `destroy()` and left subscribed since; `subscribe`/`unsubscribe` and
+      // this attach/detach pair are independent lifecycles) must see the new
+      // route, not keep rendering the one this resync silently replaced.
+      // Reuses `dispatchToSubscribers`, the identical snapshot-and-isolate
+      // fan-out the internal registration's own callback uses below, rather
+      // than a second dispatch path of this call's own. `toSubscriberAction`
+      // reads `'history'` — the same category this adapter already uses for
+      // a back/forward step or a third-party `go`, exactly what this is:
+      // a substrate change this adapter did not itself cause.
+      const args = { location: currentLocation, action: toSubscriberAction('history') } as RouterSubscriberArgs;
+      dispatchToSubscribers(subscribers, args, reportError);
     }
     unsubscribeFromNavigationHistory = navigationHistory.subscribe((notification) => {
       // @cpt-begin:cpt-frontx-algo-routing-engine-provider-history-adaptation:p2:inst-if-own-entry-absent
@@ -373,7 +391,6 @@ export function adaptVirtualLocationHistory(
   };
   // @cpt-end:cpt-frontx-algo-routing-engine-provider-history-adaptation:p2:inst-derive-block-degraded
 
-  // @cpt-begin:cpt-frontx-algo-routing-engine-provider-history-adaptation:p2:inst-return-adapted-history
   const history: RouterHistory = {
     // @cpt-begin:cpt-frontx-algo-routing-engine-provider-history-adaptation:p2:inst-expose-direct-members
     get location() {
@@ -396,12 +413,19 @@ export function adaptVirtualLocationHistory(
     subscribers,
     // @cpt-end:cpt-frontx-algo-routing-engine-provider-history-adaptation:p2:inst-derive-missing-members
 
+    // @cpt-begin:cpt-frontx-algo-routing-engine-provider-history-adaptation:p2:inst-adapt-subscribe
+    // The other half of step 6 — the internal registration against
+    // `NavigationHistory` lives in `attachToNavigationHistory` above; this is
+    // the public `RouterHistory#subscribe(cb)` member step 6 also names,
+    // collecting `cb` into the same `subscribers` set that internal
+    // registration's own callback fans out over.
     subscribe: (callback: RouterSubscribeCallback) => {
       subscribers.add(callback);
       return () => {
         subscribers.delete(callback);
       };
     },
+    // @cpt-end:cpt-frontx-algo-routing-engine-provider-history-adaptation:p2:inst-adapt-subscribe
 
     // @cpt-begin:cpt-frontx-algo-routing-engine-provider-history-adaptation:p2:inst-expose-direct-members
     push: (path: string, _state?: RouterHistoryState, navigateOpts?: RouterNavigateOptions) => {
@@ -494,6 +518,12 @@ export function adaptVirtualLocationHistory(
     // @cpt-end:cpt-frontx-algo-routing-engine-provider-history-adaptation:p2:inst-derive-block-degraded
   };
 
+  // @cpt-begin:cpt-frontx-algo-routing-engine-provider-history-adaptation:p2:inst-return-adapted-history
+  // Step 8 is exactly this: every member above is already derived and
+  // marked under its own, earlier step; this is only the registration
+  // `attachAdaptedHistory` (module-level, above) keys off, and the return
+  // of the object those already-derived members were assembled into.
+  //
   // Registered by identity, after `history` exists to key it by (N1) — see
   // `attachByHistory`'s own doc comment above.
   attachByHistory.set(history, attachToNavigationHistory);

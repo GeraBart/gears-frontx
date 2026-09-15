@@ -70,30 +70,71 @@ describe('parseGrammar — example 7.8 (zero entries)', () => {
   });
 });
 
-describe('parseGrammar — malformed entries', () => {
-  it('drops an entry with no "=", a token outside the name alphabet, or an even-segment domain key', () => {
+describe('parseGrammar — foreign segments (H3): plainly not an entry, no warning', () => {
+  it('keeps a segment with no "=", or a candidate domain key outside the domain-key production, as a foreign segment with no warning', () => {
     const result = parseGrammar('/en?screen&a.b=x&widgets=line-a;range=7d');
     expect(result.entries).toEqual([
       { domainKey: 'widgets', extension: 'line-a', params: [{ name: 'range', value: '7d' }] },
     ]);
-    expect(result.warnings).toEqual([
-      { code: 'malformed-entry', rawEntry: 'screen' },
-      { code: 'malformed-entry', rawEntry: 'a.b=x' },
-    ]);
-  });
-
-  it('silently ignores an empty raw entry from a doubled or trailing "&", with no warning', () => {
-    const result = parseGrammar('/en?screen=dashboard&&sheet=search&');
-    expect(result.entries).toHaveLength(2);
+    expect(result.foreignSegments).toEqual(['screen', 'a.b=x']);
     expect(result.warnings).toEqual([]);
   });
 
-  it('drops the whole entry on a malformed percent-escape, reporting it as malformed-entry', () => {
+  it('keeps an analytics parameter whose key fails the name alphabet (utm_source) as foreign, while an OAuth-shaped code=value still parses as a real entry', () => {
+    const result = parseGrammar('/en?screen=app&utm_source=news&code=oauth123');
+    expect(result.entries).toEqual([
+      { domainKey: 'screen', extension: 'app', params: [] },
+      { domainKey: 'code', extension: 'oauth123', params: [] },
+    ]);
+    expect(result.foreignSegments).toEqual(['utm_source=news']);
+    expect(result.warnings).toEqual([]);
+  });
+
+  it('silently ignores an empty raw entry from a doubled or trailing "&", with no warning and not as a foreign segment', () => {
+    const result = parseGrammar('/en?screen=dashboard&&sheet=search&');
+    expect(result.entries).toHaveLength(2);
+    expect(result.foreignSegments).toEqual([]);
+    expect(result.warnings).toEqual([]);
+  });
+});
+
+describe('parseGrammar — malformed-looking entries (H3): still warn, and are also kept foreign', () => {
+  it('drops an entry with a valid domain key but an invalid extension token, reporting it as malformed-entry and keeping it foreign', () => {
+    const result = parseGrammar('/en?screen=Dashboard&widgets=line-a;range=7d');
+    expect(result.entries).toEqual([
+      { domainKey: 'widgets', extension: 'line-a', params: [{ name: 'range', value: '7d' }] },
+    ]);
+    expect(result.foreignSegments).toEqual(['screen=Dashboard']);
+    expect(result.warnings).toEqual([{ code: 'malformed-entry', rawEntry: 'screen=Dashboard' }]);
+  });
+
+  it('drops the whole entry on a malformed percent-escape, reporting it as malformed-entry and keeping it foreign', () => {
     const result = parseGrammar('/en?sheet=search;q=%zz&screen=dashboard');
     expect(result.entries).toEqual([
       { domainKey: 'screen', extension: 'dashboard', params: [] },
     ]);
+    expect(result.foreignSegments).toEqual(['sheet=search;q=%zz']);
     expect(result.warnings).toEqual([{ code: 'malformed-entry', rawEntry: 'sheet=search;q=%zz' }]);
+  });
+});
+
+describe('parseGrammar — foreign segments (H3): not confused with a real collision', () => {
+  it('does not treat a duplicate-extension drop as foreign — it parsed as an entry, it just lost to an earlier one', () => {
+    const result = parseGrammar('/en?widgets=line-a;range=7d&widgets=line-a;range=30d');
+    expect(result.foreignSegments).toEqual([]);
+    expect(result.warnings).toEqual([
+      { code: 'duplicate-extension', rawEntry: 'widgets=line-a;range=30d' },
+    ]);
+  });
+
+  it('an OAuth-style return (code, state) round-trips: both are real entries, not foreign, and produce no warning', () => {
+    const result = parseGrammar('/en?code=abc123&state=xyz789');
+    expect(result.entries).toEqual([
+      { domainKey: 'code', extension: 'abc123', params: [] },
+      { domainKey: 'state', extension: 'xyz789', params: [] },
+    ]);
+    expect(result.foreignSegments).toEqual([]);
+    expect(result.warnings).toEqual([]);
   });
 });
 

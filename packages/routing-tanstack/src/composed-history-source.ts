@@ -113,7 +113,7 @@ export function createComposedVirtualLocationSource(
     // convention above.
     createHref: (pathname: string, search: string, hash?: string): string => {
       const newParams = projectVirtualLocationToParams(pathname, search);
-      const { shellSubroute, hash: currentHash, entries } = parseGrammar({
+      const { shellSubroute, hash: currentHash, entries, foreignSegments } = parseGrammar({
         shellSubroute: navigationHistory.location.path,
         search: navigationHistory.location.search,
         hash: navigationHistory.location.hash,
@@ -123,7 +123,15 @@ export function createComposedVirtualLocationSource(
           ? { domainKey: entry.domainKey, extension: entry.extension, params: newParams }
           : entry,
       );
-      return serializeGrammar({ shellSubroute, hash: hash ?? currentHash, entries: updatedEntries });
+      return serializeGrammar({
+        shellSubroute,
+        hash: hash ?? currentHash,
+        entries: updatedEntries,
+        // A foreign query segment is never this derivation's own business —
+        // carried through unchanged, exactly as the core's own
+        // back-projection helper does for the real write this href previews.
+        foreignSegments,
+      });
     },
     // @cpt-end:cpt-frontx-algo-routing-engine-provider-history-adaptation:p2:inst-derive-create-href
   };

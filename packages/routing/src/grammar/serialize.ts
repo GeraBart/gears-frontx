@@ -12,7 +12,23 @@ import { encodePercent } from './percent-codec.js';
 // @cpt-algo:cpt-frontx-algo-routing-navigation-substrate-grammar-serialize:p1
 // @cpt-dod:cpt-frontx-dod-routing-navigation-substrate-shared-history:p1
 export const serializeGrammar: SerializeGrammar = (input) => {
-  const { shellSubroute, hash, entries } = input;
+  const { shellSubroute, hash, entries, foreignSegments } = input;
+
+  // @cpt-begin:cpt-frontx-algo-routing-navigation-substrate-grammar-serialize:p1:inst-if-invalid-shell-subroute
+  // A shell subroute produced by grammar parse can never contain one of
+  // these three grammar delimiters — parse cuts it off at the first `?`, so
+  // `#`/`&` can only ever appear after that cut. This check exists for the
+  // caller building a `SerializeInput` by hand: writing one of these
+  // characters through unvalidated would reparse into a different, silently
+  // corrupted structure the instant the URL is read back (the shell
+  // subroute swallowing the query, or the query gaining an extra entry it
+  // never had) rather than surfacing the caller's own mistake immediately.
+  if (/[?#&]/.test(shellSubroute)) {
+    // @cpt-begin:cpt-frontx-algo-routing-navigation-substrate-grammar-serialize:p1:inst-throw-invalid-shell-subroute
+    throw RoutingError.invalidShellSubroute(shellSubroute);
+    // @cpt-end:cpt-frontx-algo-routing-navigation-substrate-grammar-serialize:p1:inst-throw-invalid-shell-subroute
+  }
+  // @cpt-end:cpt-frontx-algo-routing-navigation-substrate-grammar-serialize:p1:inst-if-invalid-shell-subroute
 
   // @cpt-begin:cpt-frontx-algo-routing-navigation-substrate-grammar-serialize:p1:inst-foreach-entry-validate
   for (let i = 0; i < entries.length; i += 1) {
@@ -93,8 +109,24 @@ export const serializeGrammar: SerializeGrammar = (input) => {
   // @cpt-end:cpt-frontx-algo-routing-navigation-substrate-grammar-serialize:p1:inst-foreach-entry-build
 
   // @cpt-begin:cpt-frontx-algo-routing-navigation-substrate-grammar-serialize:p1:inst-join-entries
-  const joined = entryTexts.join('&');
+  const joinedEntries = entryTexts.join('&');
   // @cpt-end:cpt-frontx-algo-routing-navigation-substrate-grammar-serialize:p1:inst-join-entries
+
+  // @cpt-begin:cpt-frontx-algo-routing-navigation-substrate-grammar-serialize:p1:inst-append-foreign-segments
+  // Foreign segments re-emit after every entry, in their own canonical
+  // order, then in their own original relative order among themselves —
+  // not interleaved with entries the way the source query string may have
+  // had them (ADR 0003, "Repetition and order"): once parse separates
+  // entries from foreign segments into two lists, this package no longer
+  // tracks their original interleaving, and reconstructing it would mean
+  // threading position information through every entries-array
+  // transformation the back-projection helper performs, for a guarantee
+  // (exact original interleaving) neither the FEATURE nor any consumer
+  // needs — only exact content preservation, which this placement rule
+  // already delivers, including a byte-exact round trip for a query string
+  // that carries no entries at all.
+  const joined = [joinedEntries, ...foreignSegments].filter((part) => part !== '').join('&');
+  // @cpt-end:cpt-frontx-algo-routing-navigation-substrate-grammar-serialize:p1:inst-append-foreign-segments
 
   // `hash !== undefined && hash !== ''` (not just `!== undefined`) at both
   // return sites below: parse always normalizes an empty hash to
@@ -103,7 +135,7 @@ export const serializeGrammar: SerializeGrammar = (input) => {
   // parse — could still pass `{ hash: '' }`; without this guard that would
   // write a bare trailing `#` for a URL that carries no fragment at all.
   // @cpt-begin:cpt-frontx-algo-routing-navigation-substrate-grammar-serialize:p1:inst-if-zero-entries
-  if (entries.length === 0) {
+  if (entries.length === 0 && foreignSegments.length === 0) {
     // @cpt-begin:cpt-frontx-algo-routing-navigation-substrate-grammar-serialize:p1:inst-return-bare-subroute
     return hash !== undefined && hash !== '' ? `${shellSubroute}#${hash}` : shellSubroute;
     // @cpt-end:cpt-frontx-algo-routing-navigation-substrate-grammar-serialize:p1:inst-return-bare-subroute

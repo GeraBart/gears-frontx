@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { act, StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
@@ -308,6 +308,40 @@ describe('EngineProvider guards against neither prop shape being given (L6)', ()
   it('throws a clear error instead of letting TanStack fail on a missing router/history', () => {
     const bypassed = EngineProvider as unknown as (props: Record<string, never>) => unknown;
     expect(() => bypassed({})).toThrow(/EngineProvider requires/);
+  });
+
+  // M4 (review round 20): the `{router}` shape's own bad case — `router`
+  // present but `undefined` — is a second, independent way to bypass the
+  // TypeScript overloads (e.g. a consumer forwarding a possibly-undefined
+  // router prop of its own). Before the fix, this shape reached
+  // `props.router.history` before the guard ran, throwing TanStack's own
+  // opaque "Cannot read properties of undefined (reading 'history')"
+  // instead of this function's own message.
+  it('throws the same clear error, not an opaque property-access error, for {router: undefined}', () => {
+    const bypassed = EngineProvider as unknown as (props: { router: undefined }) => unknown;
+    expect(() => bypassed({ router: undefined })).toThrow(/EngineProvider requires/);
+  });
+
+  it('mounted through a real render, {router: undefined} still throws the guard\'s own message', async () => {
+    const Bypassed = EngineProvider as unknown as (props: { router: undefined }) => ReturnType<typeof EngineProvider>;
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    // React reports a render-thrown error to `console.error` in addition to
+    // rethrowing it into `act`'s own rejection — silenced here so this
+    // expected failure does not print as if it were a real test crash.
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      await expect(
+        act(async () => {
+          root.render(<Bypassed router={undefined} />);
+        }),
+      ).rejects.toThrow(/EngineProvider requires/);
+    } finally {
+      consoleError.mockRestore();
+      container.remove();
+    }
   });
 });
 
