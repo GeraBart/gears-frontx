@@ -541,7 +541,7 @@ export type EngineProviderPort<TRouteTree = unknown, TRouter = unknown> = (
 // ---------------------------------------------------------------------------
 
 /**
- * The nine shapes a thrown `RoutingError` (`../errors.js`) can carry, one
+ * The ten shapes a thrown `RoutingError` (`../errors.js`) can carry, one
  * per `code`. Documented here as prose, not as exported interfaces: no value
  * ever satisfies one of these shapes on its own — `RoutingError` is a
  * single flat runtime class whose static factories populate only the
@@ -576,12 +576,17 @@ export type EngineProviderPort<TRouteTree = unknown, TRouter = unknown> = (
  *   grammar serialize, for the identical reason as above.
  * - `invalid-name` — `value`; thrown only by domain-key composition
  *   (FEATURE (navigation-substrate) §3, Domain-Key Composition, step 3).
+ * - `invalid-param-name` — `entry`; a grammar-serialize input entry carried
+ *   a param whose own name is the empty string — `param-name` requires at
+ *   least one character (ADR 0003, "Tokens"), unlike `param-value`, which
+ *   the identical production allows empty (FEATURE §3, Grammar Serialize,
+ *   step 2.2).
  * - `duplicate-param-name` — `entry`; a grammar-serialize input entry
  *   carried two params of the identical name (FEATURE §3, Grammar
- *   Serialize, step 2.2).
+ *   Serialize, step 2.3).
  * - `duplicate-extension` — `entries`, a pair; a grammar-serialize input
  *   list carried two entries sharing the identical `domainKey` and
- *   `extension` (FEATURE §3, Grammar Serialize, step 2.3).
+ *   `extension` (FEATURE §3, Grammar Serialize, step 2.4).
  * - `reordered-not-permutation` — `domainKey`, `reordered`; the URL
  *   back-projection helper's own `reordered` delta named a set of
  *   extension tokens that is not exactly the set of this domain key's own

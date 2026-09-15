@@ -162,10 +162,53 @@ export function createObserverBoundTo(history: NavigationHistory): CreateObserve
   // @cpt-end:cpt-frontx-flow-routing-route-ownership-signal-deep-link-cold-mount:p1:inst-resolve-entries-at-creation
   // @cpt-end:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-initial-resolve
 
+  // Own round guard, mirroring `FanOutDispatcher`'s own reentrancy discipline
+  // (`../history/fanout-dispatch.js`, `dispatch`): a re-entrant call — a
+  // consumer navigating synchronously from inside `onTransition` below, on
+  // either trigger axis this function serves (the fan-out subscription just
+  // below, or the registered-extensions-source subscription further down) —
+  // is deferred to its own later round instead of running inside the round
+  // already in progress. Without this, a nested round's own
+  // `previous = current` commit (`inst-record-navigation-state` below) is
+  // clobbered the instant the outer frame resumes and performs its own,
+  // by-then-stale commit: the baseline permanently disagrees with
+  // `history.location`, and the next genuine navigation back to that exact
+  // state diffs empty against it and reports nothing — forever.
+  // `FanOutDispatcher` only defers a history-to-history nesting; this
+  // observer borrows nothing from it for the other nesting shapes a report
+  // delivered from the registered-extensions-source axis, or a fan-out
+  // report whose own consumer mutates that same source synchronously — so
+  // it needs this same discipline of its own, applied uniformly to every
+  // trigger rather than only to the fan-out one.
+  let reporting = false;
+  let pendingRounds = 0;
+  function reresolveAndReport(): void {
+    if (reporting) {
+      pendingRounds += 1;
+      return;
+    }
+    reporting = true;
+    try {
+      reresolveAndReportRound();
+      // A round triggered while this one was still running queued itself
+      // above instead of interleaving with it; drain it now as its own,
+      // later round — never folded into the round that deferred it.
+      while (pendingRounds > 0) {
+        pendingRounds -= 1;
+        reresolveAndReportRound();
+      }
+    } finally {
+      reporting = false;
+    }
+  }
+
   /** FEATURE §3, Observable Transition Signal, steps 2.1-2.5 — shared by a
    * fan-out navigation and a registered-extensions-source change alike
-   * (step 3.2: "exactly as if a navigation had occurred"). */
-  function reresolveAndReport(): void {
+   * (step 3.2: "exactly as if a navigation had occurred"). Always reached
+   * through `reresolveAndReport` above, never called directly — that
+   * wrapper is what keeps a re-entrant trigger from ever running one of
+   * these rounds nested inside another one already in progress. */
+  function reresolveAndReportRound(): void {
     // @cpt-begin:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-resolve-current
     // @cpt-begin:cpt-frontx-flow-routing-route-ownership-signal-deep-link-cold-mount:p1:inst-resolve-entries
     const current = resolveCurrentEntries(history, domainKey, source);
@@ -274,10 +317,30 @@ export function createObserverBoundTo(history: NavigationHistory): CreateObserve
     unsubscribeSource = source.onChange(() => {
       // @cpt-begin:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-when-extensions-source-changes
       // @cpt-begin:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-validate-extensions-source-change
+      // Deliberately outside the isolating `try`/`catch` below: this is the
+      // observer's own input-validation failure, not a consumer callback's
+      // — FEATURE §3 step 3.1 requires it to THROW, the identical
+      // contract observer creation already makes, so it must still reach
+      // whichever code triggered this source's own change notification.
       validateRegistrations(source);
       // @cpt-end:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-validate-extensions-source-change
       // @cpt-begin:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-reresolve-on-source-change
-      reresolveAndReport();
+      // Isolated the same way `FanOutDispatcher` isolates a subscriber's own
+      // throw (`../history/fanout-dispatch.js`, `inst-isolate-error`): this
+      // registered-extensions source may have more than one observer's own
+      // onChange subscription registered against it, and a throw from one
+      // observer's own `onTransition` consumer callback — surfacing here,
+      // through `reresolveAndReport` — must not reach the source's own
+      // change-notification emitter and stop it from notifying whichever
+      // other listeners it has, exactly as a fan-out subscriber's own throw
+      // never stops delivery to the fan-out's remaining subscribers. The
+      // observer's own baseline still does not advance past a transition
+      // the callback never finished processing (`inst-record-navigation-state`).
+      try {
+        reresolveAndReport();
+      } catch {
+        // Empty on purpose: isolating the error IS not re-throwing it.
+      }
       // @cpt-end:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-reresolve-on-source-change
       // @cpt-end:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-when-extensions-source-changes
     });

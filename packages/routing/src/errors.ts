@@ -13,7 +13,7 @@
  * caller from deep inside the default `HistoryAdapter`'s own construction.
  * This module supplies the single runtime value every one of those `throw`
  * statements constructs — see `RoutingErrorCode`'s own doc comment for the
- * nine shapes, documented in `src/types/index.ts`.
+ * ten shapes, documented in `src/types/index.ts`.
  *
  * A single `RoutingError` class, not one subclass per code, because every
  * variant is a plain data-carrying error with no behaviour of its own beyond
@@ -37,6 +37,7 @@ export type RoutingErrorCode =
   | 'invalid-domain-key'
   | 'invalid-extension-token'
   | 'invalid-name'
+  | 'invalid-param-name'
   | 'duplicate-param-name'
   | 'duplicate-extension'
   | 'reordered-not-permutation'
@@ -47,9 +48,10 @@ export class RoutingError extends Error {
   /** Set only for `invalid-shell-subroute` / `invalid-foreign-segment` /
    * `invalid-domain-key` / `invalid-extension-token` / `invalid-name`. */
   readonly value?: string;
-  /** Set for `duplicate-param-name`, and for `invalid-domain-key` /
-   * `invalid-extension-token` only when thrown by grammar serialize (FEATURE
-   * §3, Grammar Serialize, step 2.1), naming the offending entry. */
+  /** Set for `invalid-param-name` / `duplicate-param-name`, and for
+   * `invalid-domain-key` / `invalid-extension-token` only when thrown by
+   * grammar serialize (FEATURE §3, Grammar Serialize, step 2.1), naming the
+   * offending entry. */
   readonly entry?: Entry;
   /** Set only for `duplicate-extension`. */
   readonly entries?: readonly [Entry, Entry];
@@ -139,6 +141,26 @@ export class RoutingError extends Error {
   /** A nested domain's own locally-chosen `name` argument failed the `name` alphabet. */
   static invalidName(value: string): RoutingError {
     return new RoutingError('invalid-name', `Invalid name: "${value}"`, { value });
+  }
+
+  /**
+   * A serialize-input entry carried a param whose own `name` is the empty
+   * string. `param-name = 1*( pchar-safe | pct-encoded )` (ADR 0003,
+   * "Tokens") requires at least one character — unlike `param-value`, which
+   * the identical production allows empty — so this is not this package's
+   * own added restriction, only the grammar's own rule enforced at write
+   * time, the third case of the same reparse-hazard family
+   * `invalidShellSubroute` and `invalidForeignSegment` guard against: an
+   * unvalidated empty name would serialize to a bare `;=value` segment that
+   * reparses as a malformed entry, dropped whole, the instant the written
+   * URL is read back (FEATURE §3, Grammar Serialize, step 2.2).
+   */
+  static invalidParamName(entry: Entry): RoutingError {
+    return new RoutingError(
+      'invalid-param-name',
+      `Entry "${entry.domainKey}=${entry.extension}" carries a param with an empty name`,
+      { entry },
+    );
   }
 
   /** A serialize-input entry carried two params of the identical `name`. */

@@ -348,6 +348,96 @@ function verifyCoreCruiseTargets(): TestResult[] {
 }
 
 /**
+ * Verify `frontx-routing-3-no-engine-leak`'s router-name patterns actually
+ * catch a scoped router engine, not just an unscoped one.
+ *
+ * `[^/]*router[^/]*` alone only ever tests a bare specifier's first path
+ * segment, so for a scoped package (`@remix-run/router`) that segment is the
+ * npm scope, not the package name — "router" never appears there, so the
+ * unscoped pattern silently let every scoped engine through while the rule's
+ * own comment named `@remix-run/router` as covered. Running the cruise
+ * cannot surface that gap: an unmatched import produces no violation, only
+ * silence, the same failure shape this script exists to catch elsewhere
+ * (#476, #523). Checked against the bare-specifier and `node_modules`-
+ * relative forms dependency-cruiser resolves an import to (the same two
+ * forms the rule's own patterns test), and against names that must keep
+ * passing through unmatched — a router-name pattern has no business
+ * touching an unrelated TanStack or third-party package.
+ */
+const ROUTER_ENGINE_PACKAGE_NAMES = [
+  'react-router',
+  '@remix-run/router',
+  '@tanstack/react-router',
+  '@tanstack/router-core',
+];
+const NON_ROUTER_PACKAGE_NAMES = ['@tanstack/react-table', '@tanstack/react-query', 'lodash', 'react'];
+
+function verifyRoutingEngineLeakPattern(): TestResult[] {
+  const results: TestResult[] = [];
+
+  try {
+    const rootConfig = require(join(REPO_ROOT, '.dependency-cruiser.cjs'));
+    const rule = (
+      rootConfig.forbidden as Array<{ name: string; to?: { path?: string | string[] } }>
+    ).find((r) => r.name === 'frontx-routing-3-no-engine-leak');
+
+    if (!rule) {
+      results.push({
+        name: 'frontx-routing-3-no-engine-leak: Rule present',
+        passed: false,
+        message: 'RULE MISSING - the no-engine-leak boundary is gone!',
+      });
+      return results;
+    }
+
+    const allPaths = Array.isArray(rule.to?.path)
+      ? rule.to.path
+      : rule.to?.path
+        ? [rule.to.path]
+        : [];
+    // Isolate the router-name patterns from the rule's separate blanket
+    // `@tanstack/` ban: only the former claims to catch "any package whose
+    // name contains router", so only the former is asserted here. Neither
+    // blanket-ban entry contains the substring "router".
+    const routerNamePatterns = allPaths.filter((p) => p.includes('router'));
+
+    for (const engineName of ROUTER_ENGINE_PACKAGE_NAMES) {
+      const matchesBare = routerNamePatterns.some((p) => new RegExp(p).test(engineName));
+      const matchesNodeModules = routerNamePatterns.some((p) =>
+        new RegExp(p).test(`node_modules/${engineName}`)
+      );
+      const passed = matchesBare && matchesNodeModules;
+      results.push({
+        name: `frontx-routing-3-no-engine-leak: catches ${engineName}`,
+        passed,
+        message: passed
+          ? 'Matched in both bare-specifier and node_modules forms'
+          : `PATTERN GAP - ${engineName} not caught (bare=${matchesBare}, node_modules=${matchesNodeModules})`,
+      });
+    }
+
+    for (const allowedName of NON_ROUTER_PACKAGE_NAMES) {
+      const matches = routerNamePatterns.some((p) => new RegExp(p).test(allowedName));
+      results.push({
+        name: `frontx-routing-3-no-engine-leak: allows ${allowedName}`,
+        passed: !matches,
+        message: matches
+          ? `OVER-MATCH - ${allowedName} incorrectly caught by the router-name pattern`
+          : 'Not matched',
+      });
+    }
+  } catch (error) {
+    results.push({
+      name: 'frontx-routing-3-no-engine-leak: Verification',
+      passed: false,
+      message: `Error: ${(error as Error).message}`,
+    });
+  }
+
+  return results;
+}
+
+/**
  * Verify `doNotFollow` bounds `node_modules` at any depth in both depcruise
  * configs that cruise the ecosystem tree.
  *
@@ -964,6 +1054,17 @@ async function runVerification(): Promise<void> {
     );
   }
 
+  // Routing engine-leak pattern coverage
+  log('\n🚦 Routing Engine-Leak Pattern', 'blue');
+  const engineLeakResults = verifyRoutingEngineLeakPattern();
+  allResults.push(...engineLeakResults);
+  for (const result of engineLeakResults) {
+    log(
+      `${result.passed ? '✅' : '❌'} ${result.name}: ${result.message}`,
+      result.passed ? 'green' : 'red'
+    );
+  }
+
   // Summary
   const passed = allResults.filter((r) => r.passed).length;
   const failed = allResults.filter((r) => !r.passed).length;
@@ -1007,4 +1108,5 @@ export {
   ignoreEntries,
   memberDebtReasonStatus,
   verifyDoNotFollowPatterns,
+  verifyRoutingEngineLeakPattern,
 };

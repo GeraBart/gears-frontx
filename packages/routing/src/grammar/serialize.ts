@@ -71,6 +71,24 @@ export const serializeGrammar: SerializeGrammar = (input) => {
     }
     // @cpt-end:cpt-frontx-algo-routing-navigation-substrate-grammar-serialize:p1:inst-if-invalid-tokens
 
+    // @cpt-begin:cpt-frontx-algo-routing-navigation-substrate-grammar-serialize:p1:inst-if-invalid-param-name
+    // `param-name = 1*( pchar-safe | pct-encoded )` (ADR 0003, "Tokens")
+    // requires at least one character — `param-value`'s own identical
+    // production allows empty, so this check is deliberately name-only. An
+    // unvalidated empty name would serialize to a bare `;=value` segment
+    // that reparses as a malformed entry, dropped whole, the instant the
+    // written URL is read back — the third case of the same reparse-hazard
+    // family step 0 (shell subroute) and step 1 (foreign segment) already
+    // guard.
+    for (const param of entry.params) {
+      if (param.name === '') {
+        // @cpt-begin:cpt-frontx-algo-routing-navigation-substrate-grammar-serialize:p1:inst-throw-invalid-param-name
+        throw RoutingError.invalidParamName(entry);
+        // @cpt-end:cpt-frontx-algo-routing-navigation-substrate-grammar-serialize:p1:inst-throw-invalid-param-name
+      }
+    }
+    // @cpt-end:cpt-frontx-algo-routing-navigation-substrate-grammar-serialize:p1:inst-if-invalid-param-name
+
     // @cpt-begin:cpt-frontx-algo-routing-navigation-substrate-grammar-serialize:p1:inst-if-duplicate-param-name
     const seenParamNames = new Set<string>();
     for (const param of entry.params) {

@@ -333,12 +333,25 @@ module.exports = {
         // Both resolution shapes (in-tree via node_modules, and the bare
         // specifier a package with no matching workspace resolves to), for
         // `@tanstack/*` and for any package whose name contains "router" —
-        // e.g. `react-router`, `@remix-run/router`, `vue-router`.
+        // e.g. `react-router`, `@remix-run/router`, `vue-router`. The name
+        // check needs a scoped variant alongside the unscoped one: an
+        // unscoped pattern only ever tests the first path segment, and for a
+        // scoped package (`@remix-run/router`) that segment is the scope,
+        // not the package name — `router` never appears there, so the
+        // unscoped-only form silently let every scoped engine through. A
+        // single pattern with an optional `(@[^/]+/)?` scope group would
+        // cover both shapes at once, but dependency-cruiser's `safe-regex`
+        // check bails the whole cruise out on that combination (two
+        // adjacent unbounded `[^/]*`-shaped groups read as catastrophic-
+        // backtracking risk) rather than just reporting no matches, so the
+        // scoped and unscoped cases are kept as separate mandatory patterns.
         path: [
-          '(^|/)node_modules/@tanstack/',
-          '^@tanstack/',
           '(^|/)node_modules/[^/]*router[^/]*(/|$)',
           '^[^/]*router[^/]*(/|$)',
+          '(^|/)node_modules/@[^/]+/[^/]*router[^/]*(/|$)',
+          '^@[^/]+/[^/]*router[^/]*(/|$)',
+          '(^|/)node_modules/@tanstack/',
+          '^@tanstack/',
         ],
       },
       comment:

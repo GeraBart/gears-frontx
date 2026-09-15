@@ -199,7 +199,7 @@ describe('EngineProviderPort', () => {
 
 describe('RoutingError', () => {
   // `RoutingError` is a runtime `class extends Error`, not a type-only
-  // tagged union (see `../errors.ts`) — its `code` field is the nine-code
+  // tagged union (see `../errors.ts`) — its `code` field is the ten-code
   // discriminant documented in `../types/index.ts`, so these are ordinary
   // runtime assertions rather than `expectTypeOf` compile-time-only ones.
 
@@ -210,6 +210,7 @@ describe('RoutingError', () => {
       | 'invalid-domain-key'
       | 'invalid-extension-token'
       | 'invalid-name'
+      | 'invalid-param-name'
       | 'duplicate-param-name'
       | 'duplicate-extension'
       | 'reordered-not-permutation'
@@ -238,6 +239,11 @@ describe('RoutingError', () => {
     expect(duplicateParamError.code).toBe('duplicate-param-name');
     expect(duplicateParamError.entry).toBe(entry);
     expect(duplicateParamError.value).toBeUndefined();
+
+    const invalidParamNameError = RoutingError.invalidParamName(entry);
+    expect(invalidParamNameError.code).toBe('invalid-param-name');
+    expect(invalidParamNameError.entry).toBe(entry);
+    expect(invalidParamNameError.value).toBeUndefined();
 
     const other: Entry = { ...entry, extension: 'other' as ExtensionToken };
     const duplicateExtensionError = RoutingError.duplicateExtension([entry, other]);

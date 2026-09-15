@@ -32,16 +32,16 @@ import { attachAdaptedHistory } from './history-adaptation.js';
  * composed case uses" is this file, unmodified for standalone.
  *
  * FEATURE §3, Router Creation, steps 1-2, 4; Standalone Deployment, steps
- * 4-5; Swap-The-Router-Engine flow, step 5 ("construct-and-mount") for the
- * default provider's own instance of that step.
+ * 4-5; Swap-The-Router-Engine flow, step 5 ("construct-router") for the
+ * default provider's own instance of that step — this function only
+ * constructs; the router it returns is mounted separately, by
+ * `EngineProvider` below, via `RouterProvider`.
  */
 // @cpt-algo:cpt-frontx-algo-routing-engine-provider-router-creation:p2
 // @cpt-algo:cpt-frontx-algo-routing-engine-provider-standalone-deployment:p2
 // @cpt-dod:cpt-frontx-dod-routing-engine-provider-adaptation-and-creation:p1
 // @cpt-dod:cpt-frontx-dod-routing-engine-provider-redirect-and-standalone:p1
 // @cpt-flow:cpt-frontx-flow-routing-engine-provider-swap-engine:p1
-// @cpt-begin:cpt-frontx-algo-routing-engine-provider-standalone-deployment:p2:inst-construct-with-standalone-virtual-history
-// @cpt-begin:cpt-frontx-flow-routing-engine-provider-swap-engine:p1:inst-construct-and-mount
 export function createProviderRouter<TRouteTree extends AnyRoute>(routeTree: TRouteTree, history: RouterHistory) {
   // `RouterConstructorOptions`'s own `context` field is conditionally
   // required, keyed off `TRouteTree`'s own inferred router-context type
@@ -60,16 +60,29 @@ export function createProviderRouter<TRouteTree extends AnyRoute>(routeTree: TRo
   // location, never a sibling occupant's own or another domain's (step 2).
   const options = { routeTree, history } as RouterConstructorOptions<TRouteTree, 'never', false, RouterHistory, Record<string, unknown>>;
   // @cpt-end:cpt-frontx-algo-routing-engine-provider-router-creation:p2:inst-scope-to-entry
+  // The construct call itself is the smallest fragment implementing both
+  // the swap-engine flow's own "constructs its engine's router" step and
+  // the standalone-deployment algo's "same `createRouter` call the composed
+  // case uses" step — neither instruction has code of its own beyond this
+  // one call. It returns the router constructed, not mounted: mounting
+  // (`RouterProvider`) is a separate instruction, performed by
+  // `EngineProvider` below, with its own marker at its own call site there —
+  // this call site's own ids were renamed off "…-and-mount"/"…-mounted-…"
+  // for exactly this reason (F11 of the review scope this comment closed):
+  // the port this function backs constructs a router the consumer mounts
+  // through the provider, it does not mount one itself.
+  // @cpt-begin:cpt-frontx-flow-routing-engine-provider-swap-engine:p1:inst-construct-router
+  // @cpt-begin:cpt-frontx-algo-routing-engine-provider-standalone-deployment:p2:inst-construct-with-standalone-virtual-history
   // @cpt-begin:cpt-frontx-algo-routing-engine-provider-router-creation:p2:inst-call-create-router
-  // @cpt-begin:cpt-frontx-algo-routing-engine-provider-router-creation:p2:inst-return-mounted-router
+  // @cpt-begin:cpt-frontx-algo-routing-engine-provider-router-creation:p2:inst-return-constructed-router
   // @cpt-begin:cpt-frontx-algo-routing-engine-provider-standalone-deployment:p2:inst-return-standalone-router
   return createRouter(options);
   // @cpt-end:cpt-frontx-algo-routing-engine-provider-standalone-deployment:p2:inst-return-standalone-router
-  // @cpt-end:cpt-frontx-algo-routing-engine-provider-router-creation:p2:inst-return-mounted-router
+  // @cpt-end:cpt-frontx-algo-routing-engine-provider-router-creation:p2:inst-return-constructed-router
   // @cpt-end:cpt-frontx-algo-routing-engine-provider-router-creation:p2:inst-call-create-router
+  // @cpt-end:cpt-frontx-algo-routing-engine-provider-standalone-deployment:p2:inst-construct-with-standalone-virtual-history
+  // @cpt-end:cpt-frontx-flow-routing-engine-provider-swap-engine:p1:inst-construct-router
 }
-// @cpt-end:cpt-frontx-flow-routing-engine-provider-swap-engine:p1:inst-construct-and-mount
-// @cpt-end:cpt-frontx-algo-routing-engine-provider-standalone-deployment:p2:inst-construct-with-standalone-virtual-history
 
 export interface EngineProviderProps<TRouteTree extends AnyRoute> {
   /** Expected stable for the lifetime of one mount, exactly like `history`

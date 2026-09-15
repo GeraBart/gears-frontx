@@ -26,9 +26,11 @@ import type { AdaptHistoryOptions } from './history-adaptation.js';
 // This function is also the default provider's own worked instance of the
 // Swap-The-Router-Engine flow's step 3 ("adapt-history"): whichever
 // provider a microfrontend adopts, replacing one means replacing the call
-// this function represents — the default provider's own is marked here.
+// this function represents — the default provider's own is marked at each
+// of its two return statements below, the actual adapt call in each mode;
+// the mode dispatch between them belongs to the standalone-deployment
+// algo's own `inst-if-standalone`, not to this flow step.
 // @cpt-flow:cpt-frontx-flow-routing-engine-provider-swap-engine:p1
-// @cpt-begin:cpt-frontx-flow-routing-engine-provider-swap-engine:p1:inst-adapt-history
 export function adaptProviderHistory(
   navigationHistory: NavigationHistory,
   entryAddress: EntryAddress | undefined,
@@ -36,9 +38,12 @@ export function adaptProviderHistory(
 ): RouterHistory {
   // @cpt-begin:cpt-frontx-algo-routing-engine-provider-standalone-deployment:p2:inst-if-standalone
   if (entryAddress === undefined) {
+    // @cpt-begin:cpt-frontx-flow-routing-engine-provider-swap-engine:p1:inst-adapt-history
     return adaptStandaloneHistory(navigationHistory, options);
+    // @cpt-end:cpt-frontx-flow-routing-engine-provider-swap-engine:p1:inst-adapt-history
   }
   // @cpt-end:cpt-frontx-algo-routing-engine-provider-standalone-deployment:p2:inst-if-standalone
+  // @cpt-begin:cpt-frontx-flow-routing-engine-provider-swap-engine:p1:inst-adapt-history
   return adaptComposedHistory(navigationHistory, entryAddress, options);
+  // @cpt-end:cpt-frontx-flow-routing-engine-provider-swap-engine:p1:inst-adapt-history
 }
-// @cpt-end:cpt-frontx-flow-routing-engine-provider-swap-engine:p1:inst-adapt-history

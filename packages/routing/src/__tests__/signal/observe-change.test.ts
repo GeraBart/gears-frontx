@@ -342,6 +342,201 @@ describe('createObserver — a throwing consumer callback (M1, review round 20)'
   });
 });
 
+describe('createObserver — reentrant report (F1)', () => {
+  it('axis A: a navigation triggered synchronously from a registered-extensions-source report does not clobber the baseline — silence probe', () => {
+    // Reproduces the review scope's own F1, axis A: a report delivered on
+    // the registration-source path, whose own consumer navigates
+    // synchronously. Before the round guard, the nested `push`'s own
+    // resolve ran immediately, inside the outer (source-triggered) round;
+    // the outer round then overwrote that correct baseline with the stale
+    // value it had captured before the callback ran, permanently.
+    const adapter = resetRealm('/en?screen=dashboard');
+    const history = resolveNavigationHistory(() => adapter);
+    const source = mutableSource([{ extension: 'dashboard', routeOwner: 'DashboardScreen' }]);
+    let callCount = 0;
+    const reported: { added: readonly string[]; removed: readonly string[] }[] = [];
+
+    createObserver('screen' as DomainKey, source, (transition) => {
+      callCount += 1;
+      if (callCount === 1) {
+        return; // skip the synchronous initial report — only a report
+        // actually delivered on the source axis (call 2, below) is this
+        // axis's own trigger; the initial report is a different code path.
+      }
+      reported.push({ added: transition.diff.added, removed: transition.diff.removed });
+      if (callCount === 2) {
+        // Reentrant, from inside a report triggered by the source axis —
+        // this is the nested call the round guard must defer rather than
+        // run inside the frame already in progress.
+        history.push('/en?screen=other');
+      }
+    });
+
+    // Deregistering `dashboard` flips its own resolution status without
+    // moving the URL — a report on the registration-source axis (call 2)
+    // with a non-empty diff (Resolution-changed), the trigger this axis
+    // needs.
+    source.set([]);
+
+    // SILENCE PROBE: the baseline must now correctly read 'other' — a
+    // genuine, later navigation back to 'dashboard' must still be reported.
+    // Under the bug, the outer round's stale commit left the baseline
+    // already claiming 'dashboard', so this exact transition would diff
+    // empty and report nothing at all.
+    history.push('/en?screen=dashboard');
+
+    expect(reported.at(-1)).toEqual({ added: ['dashboard'], removed: ['other'] });
+    expect(history.location.search).toBe('screen=dashboard');
+  });
+
+  it('axis D: a registered-extensions-source mutation triggered synchronously from a fan-out report does not clobber the baseline — silence probe', () => {
+    // Reproduces F1, axis D: a fan-out report whose own consumer mutates
+    // the registered-extensions source synchronously (a nested onChange
+    // report, not a nested navigation) — the loss the fan-out's own
+    // history-to-history deferral does not reach, since neither nesting
+    // here is a second navigation.
+    const adapter = resetRealm('/en?screen=dashboard');
+    const history = resolveNavigationHistory(() => adapter);
+    const source = mutableSource([{ extension: 'dashboard', routeOwner: 'DashboardScreen' }]);
+    let callCount = 0;
+    const reported: { resolutionChanged: readonly string[] }[] = [];
+
+    createObserver('screen' as DomainKey, source, (transition) => {
+      callCount += 1;
+      if (callCount === 1) {
+        return; // skip the synchronous initial report
+      }
+      reported.push({ resolutionChanged: transition.diff.resolutionChanged });
+      if (callCount === 2) {
+        // Reentrant, from inside a fan-out report — registers `other` so
+        // this same transition's own token newly resolves.
+        source.set([{ extension: 'other', routeOwner: 'OtherScreen' }]);
+      }
+    });
+
+    // Navigates to an entry the current registrations do not resolve,
+    // triggering the fan-out report above (call 2) with a non-empty diff.
+    history.push('/en?screen=other');
+
+    // SILENCE PROBE: a later, genuine deregistration must still be
+    // reported. Under the bug, the outer (fan-out) round's stale commit
+    // left the baseline already claiming 'other' unresolved — identical to
+    // what this deregistration would produce — so it would diff empty and
+    // report nothing.
+    source.set([]);
+
+    expect(reported.at(-1)).toEqual({ resolutionChanged: ['other'] });
+  });
+
+  it('an asynchronous reentrant navigation (via go, settling on a microtask) still reports correctly — stays working', async () => {
+    // Not a reproduction: the outer round has already fully returned and
+    // committed its own baseline by the time `go`'s own popstate fires, so
+    // this was never nested inside another round in the first place — this
+    // test only pins that the round guard introduces no regression here.
+    const adapter = resetRealm('/en?screen=dashboard');
+    const history = resolveNavigationHistory(() => adapter);
+    history.push('/en?screen=settings');
+    history.push('/en?screen=other');
+
+    const reported: string[] = [];
+    let wentBack = false;
+    createObserver('screen' as DomainKey, staticSource([]), (transition) => {
+      reported.push(transition.entries[0]?.extension ?? '(none)');
+      if (!wentBack) {
+        wentBack = true;
+        history.go(-1);
+      }
+    });
+
+    // The initial report only — `go`'s own popstate has not fired yet.
+    expect(reported).toEqual(['other']);
+
+    await new Promise<void>((resolve) => queueMicrotask(resolve));
+
+    expect(reported).toEqual(['other', 'settings']);
+    expect(history.location.search).toBe('screen=settings');
+
+    // Silence probe: a further genuine navigation still reports normally.
+    history.push('/en?screen=dashboard');
+    expect(reported).toEqual(['other', 'settings', 'dashboard']);
+  });
+
+  it('a throwing consumer during a reentrant round still leaves no permanent silence once a later navigation succeeds', () => {
+    // Combines M1 (a throwing callback must not advance the baseline) with
+    // the round guard: the deferred round this throw leaves un-drained
+    // (the round guard's own `while` never reached once `onTransition`
+    // throws) is not lost — the next successful round always re-resolves
+    // against the live URL, so it converges regardless.
+    const adapter = resetRealm('/en?screen=dashboard');
+    const history = resolveNavigationHistory(() => adapter);
+    const source = mutableSource([{ extension: 'dashboard', routeOwner: 'DashboardScreen' }]);
+    let callCount = 0;
+    const reported: { added: readonly string[]; removed: readonly string[] }[] = [];
+
+    createObserver('screen' as DomainKey, source, (transition) => {
+      callCount += 1;
+      if (callCount === 1) {
+        return; // initial report
+      }
+      reported.push({ added: transition.diff.added, removed: transition.diff.removed });
+      if (callCount === 2) {
+        history.push('/en?screen=other'); // reentrant, from the source axis; deferred
+        throw new Error('boom');
+      }
+    });
+
+    source.set([]); // deregisters 'dashboard' -> Resolution-changed report; callback throws
+
+    // A later, unrelated genuine navigation must still be reported
+    // correctly — not silently dropped because of the earlier throw.
+    history.push('/en?screen=third');
+
+    expect(reported.at(-1)).toEqual({ added: ['third'], removed: expect.any(Array) });
+    expect(history.location.search).toBe('screen=third');
+  });
+});
+
+describe('createObserver — registered-extensions-source axis isolation (MEDIUM)', () => {
+  it('one observer\'s own throwing callback does not stop the source from notifying its other listeners', () => {
+    // The sibling MEDIUM: unlike the navigation substrate's own fan-out
+    // (`FanOutDispatcher`), the registered-extensions-source axis had no
+    // per-callback isolation of its own — a throw from one observer's
+    // `onTransition` propagated straight into the source's own emitter
+    // (`mutableSource`'s own `set`, deliberately un-isolated — see
+    // `helpers.ts`) and stopped it from reaching any listener registered
+    // after the throwing one.
+    resetRealm('/en?screen=dashboard');
+    const source = mutableSource([{ extension: 'dashboard', routeOwner: 'DashboardScreen' }]);
+    let firstObserverCalls = 0;
+
+    createObserver('screen' as DomainKey, source, () => {
+      firstObserverCalls += 1;
+      if (firstObserverCalls > 1) {
+        throw new Error('boom'); // skip the synchronous initial report
+      }
+    });
+    const secondObserverCalls = vi.fn<(transition: Transition<string>) => void>();
+    createObserver('screen' as DomainKey, source, secondObserverCalls);
+    secondObserverCalls.mockClear();
+
+    expect(() => source.set([])).not.toThrow();
+    expect(secondObserverCalls).toHaveBeenCalledTimes(1);
+    expect(secondObserverCalls.mock.calls[0][0].diff.resolutionChanged).toEqual(['dashboard']);
+  });
+
+  it('the observer\'s own input-validation throw (an invalid registered extension) is not isolated — it still reaches the source\'s own emitter', () => {
+    // Deliberate asymmetry (FEATURE §3, step 3.1 vs. step 3.2): this is the
+    // observer's own synchronous validation failure, not a consumer
+    // callback's, and it must still propagate like any other validation
+    // throw in this package.
+    resetRealm('/en?screen=dashboard');
+    const source = mutableSource([{ extension: 'dashboard', routeOwner: 'DashboardScreen' }]);
+    createObserver('screen' as DomainKey, source, vi.fn());
+
+    expect(() => source.set([{ extension: 'Bad', routeOwner: 'x' }])).toThrow(RoutingError);
+  });
+});
+
 describe('createObserver — inert and stale domain keys', () => {
   it('a domain key no entry currently addresses is inert, not an error; it resolves correctly once an entry under it later appears', () => {
     const adapter = resetRealm('/en');

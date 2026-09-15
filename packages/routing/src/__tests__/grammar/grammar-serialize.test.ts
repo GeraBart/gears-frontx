@@ -36,6 +36,19 @@ describe('serializeGrammar — round-trip (parse -> serialize is byte-exact for 
     expect(serializeGrammar(parsed)).toBe('/en?sheet=tenant-details;k');
   });
 
+  it('accepts a param with a non-empty name and an empty value — legal, unlike an empty name', () => {
+    // `param-value = *( pchar-safe | pct-encoded )` (ADR 0003, "Tokens") is
+    // zero-or-more, unlike `param-name`'s own one-or-more — a bare name
+    // with no `=` is already the canonical, complete encoding of this.
+    const input: SerializeInput = {
+      shellSubroute: '/en',
+      hash: undefined,
+      entries: [entry('sheet', 'tenant-details', [{ name: 'k', value: '' }])],
+      foreignSegments: [],
+    };
+    expect(serializeGrammar(input)).toBe('/en?sheet=tenant-details;k');
+  });
+
   it('preserves the hash across a round-trip', () => {
     const parsed = parseGrammar('/en?screen=dashboard#x');
     expect(serializeGrammar(parsed)).toBe('/en?screen=dashboard#x');
@@ -106,6 +119,20 @@ describe('serializeGrammar — validation errors', () => {
     const input = { ...base, entries: [entry('screen', 'Dashboard')] };
     const error = expectRoutingError(() => serializeGrammar(input));
     expect(error.code).toBe('invalid-extension-token');
+    expect(error.entry).toEqual(input.entries[0]);
+  });
+
+  it('throws invalid-param-name for a param whose own name is the empty string, naming the offending entry', () => {
+    // `param-name = 1*( pchar-safe | pct-encoded )` (ADR 0003, "Tokens")
+    // requires at least one character — an unvalidated empty name would
+    // serialize to `screen=app;=x`, which reparses as a malformed entry,
+    // dropped whole (grammar-parse.test.ts covers that reparse side).
+    const input = {
+      ...base,
+      entries: [entry('screen', 'app', [{ name: '', value: 'x' }])],
+    };
+    const error = expectRoutingError(() => serializeGrammar(input));
+    expect(error.code).toBe('invalid-param-name');
     expect(error.entry).toEqual(input.entries[0]);
   });
 

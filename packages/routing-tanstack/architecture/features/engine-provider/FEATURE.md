@@ -105,7 +105,7 @@ This is a convention this provider adopts, not a rule the navigation substrate's
 3. [x] - `p1` - The replacement provider adapts that shared `NavigationHistory` and entry into whatever virtual location and history contract its own engine expects (the default provider's own worked example is `cpt-frontx-algo-routing-engine-provider-history-adaptation`, translating into `RouterHistory`/`SubscriberArgs`) - `inst-adapt-history`
 4. [ ] - `p1` - **IF** the replacement provider does not satisfy the engine-provider port - `inst-if-contract-unsatisfied`
    1. [ ] - `p1` - **RETURN** failure — the microfrontend's routing does not initialize - `inst-return-init-failure`
-5. [x] - `p1` - **ELSE** the replacement provider constructs its engine's router and mounts it over its own virtual history (`cpt-frontx-algo-routing-engine-provider-router-creation`) - `inst-construct-and-mount`
+5. [x] - `p1` - **ELSE** the replacement provider constructs its engine's router over its own virtual history (`cpt-frontx-algo-routing-engine-provider-router-creation`, steps 1-2, 4); that construction returns a router which is not yet mounted — mounting it into the microfrontend's own component tree is a separate act performed by the provider's own mount component (same algo, step 3) - `inst-construct-router`
 6. [ ] - `p1` - The microfrontend's own route tree, its search-parameter handling, and every one of its own imports of this package — rewritten throughout that microfrontend's own code to the replacement provider's own surface — move to the new engine; nothing outside that one microfrontend's own code changes - `inst-territory-confined`
 
 **Postconditions**:
@@ -140,13 +140,13 @@ This is a convention this provider adopts, not a rule the navigation substrate's
 
 **Input**: The adapted `RouterHistory` object, itself built over a virtual location projected from this occupant's own entry; the microfrontend's own route tree.
 
-**Output**: A router instance built via `createRouter({ routeTree, history })`, mounted into the microfrontend's own component tree via `RouterProvider`.
+**Output**: A router instance built via `createRouter({ routeTree, history })` — constructed, not mounted, by steps 1-2 and 4 below — that step 3 below mounts into the microfrontend's own component tree via `RouterProvider`. These are two separate acts, performed by two separate functions (`createProviderRouter` for construction, `EngineProvider` for mounting): the port this algo backs (`createEngineProviderRouter`) returns the constructed router alone; a consumer mounts it by rendering that router through `EngineProvider` (`{router}` form), which is what actually runs step 3.
 
 **Steps**:
 1. [x] - `p1` - Call `createRouter({ routeTree, history })` with the microfrontend's own route tree and the adapted, virtual history - `inst-call-create-router`
 2. [x] - `p1` - The constructed router matches only its own virtual location — the pathname and search this package projected from the occupant's own entry — and never a sibling occupant's own virtual location or another domain's - `inst-scope-to-entry`
-3. [x] - `p1` - Mount the constructed router into the microfrontend's own component tree via `RouterProvider` - `inst-mount-router-provider`
-4. [x] - `p1` - **RETURN** the mounted router - `inst-return-mounted-router`
+3. [x] - `p1` - Mount the constructed router into the microfrontend's own component tree via `RouterProvider` — a separate act, at a separate call site (`EngineProvider`), from constructing it in steps 1-2 and returning it in step 4 below - `inst-mount-router-provider`
+4. [x] - `p1` - **RETURN** the constructed router — not yet mounted at this point; step 3's own mount runs afterward, once a consumer renders the returned router through `EngineProvider` - `inst-return-constructed-router`
 
 ### Location-Preserving Navigation Helper
 
@@ -185,7 +185,7 @@ This is a convention this provider adopts, not a rule the navigation substrate's
 
 **Input**: The microfrontend's own route tree and the substrate's `NavigationHistory`; no entry address — the microfrontend runs standalone; whether the consumer has created a route-ownership-signal observer (`cpt-frontx-feature-routing-route-ownership-signal`) for this deployment — a plain argument-driven choice the consumer makes, not a port-injection state.
 
-**Output**: A router constructed and mounted through the same path the composed case uses, projecting the identical virtual location directly onto the page's own pathname and search instead of onto one entry's own payload, independent of whether the consumer has created a route-ownership-signal observer for this deployment.
+**Output**: A router constructed through the same construction path the composed case uses (step 4), and mounted through the same mount step the composed case uses (step 5, run separately once a consumer renders the constructed router through the provider component), projecting the identical virtual location directly onto the page's own pathname and search instead of onto one entry's own payload, independent of whether the consumer has created a route-ownership-signal observer for this deployment.
 
 **Steps**:
 1. [x] - `p1` - **IF** no entry address is supplied — the microfrontend is served standalone - `inst-if-standalone`
@@ -199,7 +199,7 @@ This is a convention this provider adopts, not a rule the navigation substrate's
 5. [x] - `p1` - Mount the router via `RouterProvider` through the same construction path as the composed case - `inst-mount-standalone-router`
 6. [ ] - `p1` - **IF** a navigation targets a `route=` path the microfrontend's own route tree does not declare — this occupant's own router, internally, not the entry it was mounted at — in either mode - `inst-if-undeclared-path`
    1. [ ] - `p1` - Resolution reaches the engine's own `notFound` route inside this microfrontend's own route tree, identically whether the occupant is composed or standalone: this is the occupant's own router's own not-found, never the consumer-level fallback a domain's own consumer shows for an entry the route ownership signal reports unresolved. The two are distinct levels — an undeclared internal path is always this router's own concern; an unresolved extension token is a decision the route ownership signal reports and this provider never makes, in either mode - `inst-standalone-fallback`
-7. [x] - `p1` - **RETURN** the mounted router — differing from the composed case only in whether an entry address was supplied, and in whether a route-ownership-signal observer exists at all - `inst-return-standalone-router`
+7. [x] - `p1` - **RETURN** the constructed router — not yet mounted; step 5 above mounts it, once a consumer renders the returned router through the provider component — differing from the composed case only in whether an entry address was supplied, and in whether a route-ownership-signal observer exists at all - `inst-return-standalone-router`
 
 Two conditions of this mode fall on the deployment rather than on this feature: the server answering every path this package's own virtual routing table declares with the entry document, without which a deep link fails before any of this package's code runs; and the build's asset base URL, configured independently of this package's own virtual location since neither derives from the other.
 

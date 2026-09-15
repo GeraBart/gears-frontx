@@ -161,24 +161,37 @@ export function mutableSource(
   readonly sourceReleaseCallCount: number;
 } {
   let current = registrations;
-  let onChangeCallback: (() => void) | undefined;
+  // A `Set`, not a single binding: the isolation suite (observe-change's
+  // MEDIUM fix) needs more than one observer subscribed to the identical
+  // source at once, to prove one observer's own callback throw does not
+  // stop this emitter from notifying the others — a single-callback source
+  // could never exercise that. Deliberately no isolation of its own here
+  // (no try/catch around an individual `cb()` call): this is the naive
+  // multi-listener emitter shape the fix defends against, so a test can
+  // prove the *observer's* own subscription is what isolates a throw, not
+  // this helper quietly doing it first.
+  const onChangeCallbacks = new Set<() => void>();
   let sourceReleaseCallCount = 0;
   return {
     getRegistrations: () =>
       current.map((r) => ({ extension: r.extension as ExtensionToken, routeOwner: r.routeOwner })),
     onChange(callback: () => void): ReleaseFunction {
-      onChangeCallback = callback;
+      onChangeCallbacks.add(callback);
       return () => {
         sourceReleaseCallCount += 1;
-        onChangeCallback = undefined;
+        onChangeCallbacks.delete(callback);
       };
     },
     set(next: typeof registrations): void {
       current = next;
-      onChangeCallback?.();
+      for (const callback of onChangeCallbacks) {
+        callback();
+      }
     },
     fireChange(): void {
-      onChangeCallback?.();
+      for (const callback of onChangeCallbacks) {
+        callback();
+      }
     },
     get sourceReleaseCallCount() {
       return sourceReleaseCallCount;
