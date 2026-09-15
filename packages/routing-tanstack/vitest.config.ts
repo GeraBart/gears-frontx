@@ -7,7 +7,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
   root: __dirname,
   resolve: {
-    // F4 (review scope): this package is the one ecosystem package with an
+    // This package is the one ecosystem package with an
     // intra-ecosystem edge at all (`@gears-frontx/routing`,
     // `cpt-frontx-routing-tanstack-nfr-single-ecosystem-edge`) — every other
     // package's own `vitest.config.ts` has no sibling-package alias because

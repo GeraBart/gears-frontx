@@ -80,12 +80,11 @@ function validateBackProjectionInput(
 /**
  * Builds a `BackProjectEntries` function bound to `history` — for both
  * reading the current location and issuing the resulting `push`/`replace`
- * call — rather than resolving the realm-shared singleton internally (F1 of
- * the review scope this factory closed: the previous top-level export
- * always called `resolveNavigationHistory()` itself, so a caller that had
+ * call — rather than resolving the realm-shared singleton internally (a
+ * top-level export that always called `resolveNavigationHistory()` itself
+ * would route every write to the real singleton even for a caller that had
  * gone to the trouble of constructing its own `NavigationHistory` — a test
- * double, an SSR instance — still had every one of its writes routed to the
- * real singleton instead). Not exported directly; `createRouteSignal`
+ * double, an SSR instance). Not exported directly; `createRouteSignal`
  * (`./route-signal.js`) is this package's own public construction path for
  * a `history`-bound instance, so a consumer never has to know a second,
  * unbound public shape exists to keep in sync with this one.
@@ -251,7 +250,7 @@ function runBackProjection(
   // @cpt-end:cpt-frontx-algo-routing-route-ownership-signal-url-back-projection:p2:inst-compose-full-list
 
   // @cpt-begin:cpt-frontx-algo-routing-route-ownership-signal-url-back-projection:p2:inst-serialize
-  // D2 (review round 16-re): an explicit `pageHash` (including `''`, which
+  // An explicit `pageHash` (including `''`, which
   // `serializeGrammar` drops per its own `hash !== ''` check) overrides
   // whatever hash the current URL carries; `undefined` preserves it — this
   // is the one place the write's hash is decided, so a caller never has to

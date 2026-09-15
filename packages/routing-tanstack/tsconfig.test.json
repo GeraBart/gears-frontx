@@ -1,5 +1,5 @@
 {
-  // F4 (review scope): extends `tsconfig.typecheck.json`, not the base
+  // Extends `tsconfig.typecheck.json`, not the base
   // `tsconfig.json`, so this file's own `type-check:test`
   // (`tsc -p tsconfig.test.json`) resolves `@gears-frontx/routing` to its
   // sibling's source on a fresh clone too, exactly like `type-check` does —

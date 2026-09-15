@@ -55,9 +55,9 @@ export function createStandaloneVirtualLocationSource(navigationHistory: Navigat
     // (`cpt-frontx-algo-routing-navigation-substrate-singleton-resolution`);
     // no separate `window.history` call is made here.
     //
-    // The hash written is `hash` when the caller gave one (F7: a hash
+    // The hash written is `hash` when the caller gave one (a hash
     // passed to a navigation is applied to the page's own hash) — otherwise
-    // the page's own current hash is carried forward verbatim (A4; matches
+    // the page's own current hash is carried forward verbatim (matches
     // the composed source, whose write-back re-serializes the current hash
     // it never touches) — a virtual location carries no hash of its own
     // (DESIGN §3.1), so leaving it off here on an unspecified-hash call
@@ -88,7 +88,7 @@ export function createStandaloneVirtualLocationSource(navigationHistory: Navigat
  * standalone counterpart of `adaptComposedHistory`
  * (`./composed-history-source.js`).
  */
-// `options` (F6, review round 16-re) is forwarded straight through to
+// `options` is forwarded straight through to
 // `adaptVirtualLocationHistory`, exactly as `adaptComposedHistory` forwards
 // it — `reportError` in particular, so a consumer building standalone
 // history through this entry point gets the same seam.

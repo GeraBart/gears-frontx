@@ -47,8 +47,7 @@ export interface Location {
    * an entry this substrate never itself recorded a position for (a cold
    * mount, or an entry a third party added).
    *
-   * FEATURE (navigation-substrate) §1.5, "Location shape — Position"
-   * (ruling F8/D3, review round 16-re).
+   * FEATURE (navigation-substrate) §1.5, "Location shape — Position".
    */
   readonly position: number;
 }
@@ -663,7 +662,7 @@ export type CreateObserver = <TRouteOwner = unknown>(
  *
  * `pageHash` is optional and governs the page hash the helper's single
  * history write carries, independent of the domain-key rewrite the other
- * three parameters describe (D2, review round 16-re): given (including
+ * three parameters describe: given (including
  * `''`), that value replaces whatever hash is currently in the URL —
  * `''` clears it, matching `serializeGrammar`'s own `hash !== ''` check
  * (`../grammar/serialize.js`); absent, the helper preserves the current

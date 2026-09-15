@@ -7,62 +7,56 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { classifySpecifier, collectModuleSpecifiers } from './helpers/module-specifiers.js';
 import { TANSTACK_RUNTIME_SURFACE, TANSTACK_TYPE_ONLY_SURFACE } from './helpers/public-surface.js';
 
-// F3 (review round 16-re): the published `dist/index.d.ts` must never
+// The published `dist/index.d.ts` must never
 // import a module specifier this package does not declare as a dependency
 // or peerDependency (or a relative path) — an undeclared import resolves
 // only by accident, through hoisting in this monorepo's own workspace, and
-// breaks the moment a consumer installs this package on its own (the
-// defect this round's own `@tanstack/router-core` fix closed: it appeared
-// in `dist/index.d.ts` while only implicitly present via
-// `@tanstack/react-router`'s own dependency).
+// breaks the moment a consumer installs this package on its own (this is
+// what let `@tanstack/router-core` appear in `dist/index.d.ts` while only
+// implicitly present via `@tanstack/react-router`'s own dependency).
 //
-// R1 (review round 16-re2): the previous version of this test read the
-// *real* `packages/routing-tanstack/dist/index.d.ts`, building it on demand
-// with `npm run build -w packages/routing-tanstack` when absent. That build
-// resolves `@gears-frontx/routing` through `node_modules` to
-// `packages/routing/package.json`'s own `exports`, which point at
-// `packages/routing/dist` — also absent on a fresh clone — so the on-demand
-// build itself failed there (`TS2307`), and a *present* `dist/` was read
-// stale, checking whatever a previous build happened to leave behind rather
-// than the change under test. Both are closed the same way: this test
-// builds its own throwaway declaration output into a temp directory, via
-// `tsc --declaration --emitDeclarationOnly` (not `tsup`, whose dts step is a
-// slower, less-composable rollup-dts bundle this test has no need for) —
-// `packages/routing` first, then `packages/routing-tanstack` against it
-// through a `paths` override pointing at that temp declaration output
-// rather than `packages/routing`'s own `dist` or `src`. The `paths`
-// override changes only how the specifier resolves for type-checking; the
-// specifier text preserved in the emitted `.d.ts` is exactly what the
-// source wrote (`from '@gears-frontx/routing'`), so this still exercises
-// the same "is this specifier declared" question the real published
-// artifact answers.
+// This test builds its own throwaway declaration output into a temp
+// directory, via `tsc --declaration --emitDeclarationOnly` (not `tsup`,
+// whose dts step is a slower, less-composable rollup-dts bundle this test
+// has no need for) — `packages/routing` first, then
+// `packages/routing-tanstack` against it through a `paths` override
+// pointing at that temp declaration output rather than
+// `packages/routing`'s own `dist` or `src`. Reading the real
+// `packages/routing-tanstack/dist/index.d.ts` instead would either fail to
+// build on a fresh clone (`@gears-frontx/routing`'s own `exports` point at
+// its `dist`, also absent) or, if `dist/` happens to already be present,
+// check whatever a previous build left behind rather than the change under
+// test. The `paths` override changes only how the specifier resolves for
+// type-checking; the specifier text preserved in the emitted `.d.ts` is
+// exactly what the source wrote (`from '@gears-frontx/routing'`), so this
+// still exercises the same "is this specifier declared" question the real
+// published artifact answers.
 //
-// N1 (review round 16-re3): a per-file `tsc` emit (what this test builds,
+// A per-file `tsc` emit (what this test builds,
 // and what `tsup`'s own rollup-dts step ultimately draws from too) spreads
 // a package's own import surface across *several* `.d.ts` files, not just
 // `index.d.ts` — `react` and `@tanstack/router-core` sit in
 // `router-creation.d.ts`, the latter only as a dynamic `import("…")` type
 // reference, not a static `from '…'`. Reading only `index.d.ts` and
-// matching only `from '…'` understated the real surface enough that
+// matching only `from '…'` would understate the real surface enough that
 // removing `@tanstack/router-core` from `dependencies` — the exact defect
-// this test exists to catch — would have kept passing. This version scans
+// this test exists to catch — would keep passing. This version scans
 // every `*.d.ts` file the build produces and matches both import forms
 // (`./helpers/module-specifiers.ts`, unit-tested on its own in
 // `module-specifiers.test.ts`).
 //
-// N3 (review round 16-re4): the build this file already produces — one
+// The build this file already produces — one
 // throwaway declaration output for `packages/routing`, one for
 // `packages/routing-tanstack` compiled against it — is also exactly what a
 // presence/consumer-type-check pair needs, mirroring
 // `packages/routing`'s own `dist-internal.test.ts`. Built once in
-// `beforeAll` (this file used to build fresh per `it`, and now has more than
-// one) rather than once per assertion.
+// `beforeAll`, rather than once per assertion.
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const repoRoot = path.resolve(packageRoot, '../..');
 const tscBin = path.join(repoRoot, 'node_modules/.bin/tsc');
 
-// LOW (review round 16-re3): `stdio: 'pipe'` swallows `tsc`'s own
-// diagnostics — a failing compile used to surface here as a bare
+// `stdio: 'pipe'` swallows `tsc`'s own
+// diagnostics — a failing compile would otherwise surface here as a bare
 // "Command failed" with no indication of which type error caused it.
 // `execFileSync` attaches the captured output to the thrown error's own
 // `stdout`; folding it into the re-thrown message is what actually makes a
@@ -103,13 +97,13 @@ function buildFreshTanstackDtsDir(): BuiltTanstackDts {
   // somewhere — pointed here at the just-built temp declaration output
   // (not at `../routing/src`, which would pull the sibling's own source
   // graph into this compile and prove nothing about the published
-  // artifact's import specifiers). LOW (review round 16-re3): this
-  // throwaway tsconfig used to be written next to the package's own
-  // `tsconfig.json` — inside the tracked package directory, untracked and
-  // gitignore-invisible, so a killed run left residue there. It now lives
-  // in `workDir` alongside the rest of this test's own temp output, with
-  // an absolute `extends` back to the real config so a relative location
-  // never matters for how it resolves.
+  // artifact's import specifiers). This throwaway tsconfig lives
+  // in `workDir` alongside the rest of this test's own temp output —
+  // writing it next to the package's own `tsconfig.json` instead would put
+  // it inside the tracked package directory, untracked and
+  // gitignore-invisible, so a killed run would leave residue there. It
+  // carries an absolute `extends` back to the real config so a relative
+  // location never matters for how it resolves.
   const tmpConfigPath = path.join(workDir, 'tsconfig.dist-imports-test.tmp.json');
   writeFileSync(
     tmpConfigPath,
@@ -146,11 +140,7 @@ afterAll(() => {
   rmSync(built.workDir, { recursive: true, force: true });
 });
 
-// LOW (review round 16-re4): this describe title used to read
-// "dist/index.d.ts module specifiers" while the test scanned every emitted
-// `.d.ts` file (N1's own fix, above) — corrected to say what it actually
-// checks.
-describe('published declarations: module specifiers (F3) and public surface (N3)', () => {
+describe('published declarations: module specifiers and public surface', () => {
   it('every non-relative import, across every emitted .d.ts, is a declared dependency or peerDependency', () => {
     const specifiers = collectModuleSpecifiers(built.tanstackOutDir);
     expect(specifiers.size).toBeGreaterThan(0);
@@ -215,8 +205,8 @@ describe('published declarations: module specifiers (F3) and public surface (N3)
       // `react`/`@tanstack/react-router`/`@tanstack/router-core` normally.
       // Pointing `paths` at those packages' own declaration entry points
       // directly sidesteps that without moving this test's temp output
-      // into the tracked package tree (the residue LOW review round 16-re3
-      // already closed once for this same test file).
+      // into the tracked package tree, matching the same temp-output
+      // convention the build above already uses.
       writeFileSync(
         path.join(consumerDir, 'tsconfig.json'),
         JSON.stringify(

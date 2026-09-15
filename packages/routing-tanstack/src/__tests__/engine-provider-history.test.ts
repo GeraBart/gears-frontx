@@ -52,7 +52,7 @@ function buildRouteTreeWithTwoRoutes() {
   return rootRoute.addChildren([generalRoute, profileRoute]);
 }
 
-// B1: exercises `router.navigate()` end to end — the real path a mounted
+// Exercises `router.navigate()` end to end — the real path a mounted
 // router's own imperative navigation takes (`commitLocation` ->
 // `history.push(href, state, { ignoreBlocker })`), not only this adapter's
 // own `history.push` called directly. A defect only reachable through the
@@ -60,7 +60,7 @@ function buildRouteTreeWithTwoRoutes() {
 // argument `commitLocation` supplies that this adapter mishandles) is
 // invisible to every other test in this package, which drives `history`
 // itself.
-describe('router.navigate() writes back through the adapter, in both modes (B1)', () => {
+describe('router.navigate() writes back through the adapter, in both modes', () => {
   it('composed mode: navigate() reaches the occupant own entry', async () => {
     const adapter = resetRealm(COMPOSED_URL);
     const history = adaptProviderHistory(resolveNavigationHistory(), DASHBOARD_ENTRY_ADDRESS);

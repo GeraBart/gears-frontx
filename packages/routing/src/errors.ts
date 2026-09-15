@@ -5,8 +5,8 @@
  * (navigation-substrate) §3 (Domain-Key Composition, Grammar Serialize)
  * specify a *thrown* error at a handful of synchronous input paths; FEATURE
  * (route-ownership-signal) §3 (URL Back-Projection Helper) adds a sixth.
- * `resolveNavigationHistory`'s own default adapter adds a seventh (F1 of the
- * review scope this file's `noNavigationHistoryInRealm` factory closed):
+ * `resolveNavigationHistory`'s own default adapter adds a seventh, via this
+ * file's `noNavigationHistoryInRealm` factory:
  * resolving the realm-shared singleton with no adapter override, in a realm
  * with no `window` at all (an SSR render, most commonly), is a recognized,
  * clearly-named failure rather than a raw `ReferenceError` reaching the

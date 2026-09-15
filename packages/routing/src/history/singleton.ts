@@ -55,7 +55,7 @@ export function resolveNavigationHistory(
 
   // @cpt-begin:cpt-frontx-algo-routing-navigation-substrate-singleton-resolution:p2:inst-if-absent
   if (existing === undefined) {
-    // F1 (review scope): the default browser adapter has nothing to
+    // The default browser adapter has nothing to
     // construct itself over in a realm with no `window` — an SSR render
     // that never passed its own adapter override. Checked here, ahead of
     // `createAdapter()`, rather than inside `createWindowHistoryAdapter`

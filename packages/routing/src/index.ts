@@ -20,7 +20,7 @@ export type * from './types/index.js';
 // `createWindowHistoryAdapter` — is this package's own public construction
 // path (DESIGN §3.3, public surface); see `./history/index.ts` for why.
 // `HistoryAdapter` and `AdapterLocation` (its own return/parameter type) are
-// re-exported here as types (N3, review round 16-re4): they sit in
+// re-exported here as types: they sit in
 // `resolveNavigationHistory`'s own public signature — the `HistoryAdapter`
 // seam, FEATURE §3 — so a caller can name that shape for its own
 // `createAdapter` argument; see `./history/index.ts`'s own comment for why
@@ -45,7 +45,7 @@ export * from './grammar/serialize.js';
 // DoD `cpt-frontx-dod-routing-route-ownership-signal-resolution-and-observation`
 // / `cpt-frontx-dod-routing-route-ownership-signal-release` /
 // `cpt-frontx-dod-routing-route-ownership-signal-url-back-projection`) —
-// entry resolution, and `createRouteSignal` (F1: the `history`-bound
+// entry resolution, and `createRouteSignal` (the `history`-bound
 // construction path for the observable transition signal and the URL
 // back-projection helper — see `./signal/route-signal.js` for why the
 // previous unbound `createObserver`/`backProjectEntries` exports are gone,

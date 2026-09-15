@@ -17,13 +17,13 @@
 // package's own public entry point.
 export { resolveNavigationHistory } from './singleton.js';
 
-// N3 (review round 16-re4): `AdapterLocation`/`HistoryAdapter` are
+// `AdapterLocation`/`HistoryAdapter` are
 // `resolveNavigationHistory`'s own `createAdapter` parameter and its return
 // type — the `HistoryAdapter` seam (FEATURE §3) — so they cannot be marked
-// compiler-internal at all: N2 (review round 16-re3) tagged them that way
+// compiler-internal at all: tagging them that way
 // instead of leaving them untagged and unexported, on the theory that
-// neither type was part of this package's public surface; `stripInternal`
-// then dropped `resolveNavigationHistory`'s own declaration wholesale,
+// neither type was part of this package's public surface, would
+// drop `resolveNavigationHistory`'s own declaration wholesale,
 // because TypeScript's internal-declaration handling tests a declaration's
 // *own* leading JSDoc, and a `@param` carrying that same tag inside that
 // JSDoc is enough to strip the function it documents, not just the

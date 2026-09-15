@@ -5,9 +5,9 @@ import { declaresRuntimeExport, declaresType } from './surface-check.js';
 // something a test in this repository can perform — these fixtures stand in
 // for "one name went missing from the emitted declarations", proving the
 // presence check `dist-internal.test.ts` runs against a real build would
-// actually fail loudly rather than passing regardless (MEDIUM, review round
-// 16-re5: the surface pin these checks feed was silently partial, and the
-// concern was that no test would fail on a name the pin never covered).
+// actually fail loudly rather than passing regardless — the surface pin
+// these checks feed must never stay silently partial, with no test failing
+// on a name the pin never covered.
 describe('declaresRuntimeExport', () => {
   const dts = "export { foo, bar, baz } from './index.js';\n";
 
@@ -23,8 +23,7 @@ describe('declaresRuntimeExport', () => {
 describe('declaresType', () => {
   it('finds a bare `interface X {` with no `declare` keyword', () => {
     // The exact form rollup-dts emits for every interface this package
-    // publishes — the case the pre-fix regex never matched (LOW, review
-    // round 16-re5).
+    // publishes.
     expect(declaresType('interface HistoryAdapter {\n  getLocation(): unknown;\n}\n', 'HistoryAdapter')).toBe(true);
   });
 

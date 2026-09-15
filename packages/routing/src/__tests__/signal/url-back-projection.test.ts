@@ -394,12 +394,12 @@ describe('url-back-projection — reordered must be a permutation of the survivi
   });
 });
 
-// D2 (review round 16-re): the optional fourth `pageHash` parameter — the
+// The optional fourth `pageHash` parameter — the
 // single write path for the page hash. Given (including `''`), it
 // overrides whatever hash is currently in the URL; absent, the current
 // hash is preserved verbatim, the pre-existing behaviour every other
 // describe block in this file already exercises implicitly.
-describe('url-back-projection — optional pageHash parameter (D2)', () => {
+describe('url-back-projection — optional pageHash parameter', () => {
   it('given, replaces the current page hash in the same single write', () => {
     const adapter = resetRealm('/en?screen=dashboard#old-hash');
 

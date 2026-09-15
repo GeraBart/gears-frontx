@@ -53,7 +53,7 @@ export function createComposedVirtualLocationSource(
   navigationHistory: NavigationHistory,
   entryAddress: EntryAddress,
 ): VirtualLocationSource {
-  // F1: bound to the identical `navigationHistory` this source was itself
+  // Bound to the identical `navigationHistory` this source was itself
   // constructed with, never the realm singleton — the seam that lets a
   // caller supply its own `NavigationHistory` (a test double, an SSR
   // instance) and have both reads (`resolveOwnEntry`, `createHref` below)
@@ -70,7 +70,7 @@ export function createComposedVirtualLocationSource(
     // search is dropped here for free — the new list is built purely from
     // the virtual location just navigated to (FEATURE §3, step 2).
     //
-    // A5: once this occupant's own entry is no longer present in the URL
+    // Once this occupant's own entry is no longer present in the URL
     // (step 7's own absent-entry case), there is nothing of its own left to
     // write to — issuing `backProjectEntries` anyway would still write
     // *something* (the unchanged URL, since there is no matching entry for
@@ -79,7 +79,7 @@ export function createComposedVirtualLocationSource(
     // changes nothing (FEATURE §3, step 7.1: "no write-back runs, because
     // there is no longer an entry of this occupant's own to write to").
     //
-    // F7/D2 (review round 16-re): a caller-supplied `hash` is applied to the
+    // A caller-supplied `hash` is applied to the
     // page's own hash, never to this entry. The core's own
     // `backProjectEntries` now takes an optional page-hash parameter for
     // exactly this — this call passes `hash` straight through instead of
@@ -145,7 +145,7 @@ export function createComposedVirtualLocationSource(
  * algorithm this package does not yet implement
  * (`cpt-frontx-algo-routing-engine-provider-standalone-deployment`).
  *
- * `options` (F6, review round 16-re) is forwarded straight through to
+ * `options` is forwarded straight through to
  * `adaptVirtualLocationHistory` — `reportError` in particular, so a
  * consumer building composed history through this entry point can set its
  * own error-reporting channel exactly as one calling

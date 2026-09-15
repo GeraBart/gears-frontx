@@ -1,19 +1,17 @@
 // Shared test scaffolding for `packages/routing`. Not part of the package's
 // own public surface — imported only by files under `__tests__/`.
 
-// DESIGN §3.3 public surface (N3, review round 16-re4; MEDIUM, review round
-// 16-re5): the runtime values and the type-only names `src/index.ts`
-// exports, pinned once here so `package.test.ts` (the runtime
+// DESIGN §3.3 public surface: the runtime values and the type-only names
+// `src/index.ts` exports, pinned once here so `package.test.ts` (the runtime
 // `import * as routing` pin) and `dist-internal.test.ts` (the built
 // `dist/index.d.ts` presence/consumer checks) assert against the identical
 // name list rather than two lists that could silently drift apart.
 //
-// MEDIUM (review round 16-re5): the runtime half used to be a hand-listed
-// subset (5 of the 10 actual runtime exports) — a literal `@internal` in a
-// `//` comment above `export { deriveExtensionToken, namesEqual,
-// validateName }` (`../index.ts`) would have dropped all three from
-// `dist/index.d.ts` with no test failing, exactly N3's own class of defect,
-// because the hand list never claimed to cover them. It is now derived from
+// A hand-listed subset (5 of the 10 actual runtime exports) would let a
+// literal `@internal` in a `//` comment above `export { deriveExtensionToken,
+// namesEqual, validateName }` (`../index.ts`) drop all three from
+// `dist/index.d.ts` with no test failing, because the hand list never
+// claimed to cover them. It is instead derived from
 // `../index.js`'s own actual runtime exports (`Object.keys`, sorted) rather
 // than maintained by hand, so a future export this package's own entry point
 // adds or removes changes this list automatically instead of silently
@@ -73,7 +71,7 @@ import type {
   RegisteredExtensionsSource,
 } from '../types/index.js';
 
-// F1 (review scope): `backProjectEntries`/`createObserver` are no longer
+// `backProjectEntries`/`createObserver` are no longer
 // free, realm-singleton-defaulting exports of the package itself — a
 // conforming consumer now calls `createRouteSignal(history)` once and reuses
 // the pair it returns. These two module-level bindings are this test

@@ -57,8 +57,7 @@ export function createNavigationHistory(adapter: HistoryAdapter): NavigationHist
     // position from whatever the browser's own per-entry state now holds
     // for the entry it landed on — never advanced or decremented by a
     // fixed delta the way a provider-local counter would, since this is
-    // the one case a delta cannot be attributed reliably (F8's own root
-    // cause). No recorded position on that entry (a foreign entry a real
+    // the one case a delta cannot be attributed reliably. No recorded position on that entry (a foreign entry a real
     // back/forward step landed on, or a cold mount observed only now)
     // defaults to `0`, identically to construction above.
     position = readPosition(adapter.getState()) ?? 0;

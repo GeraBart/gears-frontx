@@ -1,11 +1,10 @@
-// Shared `tsup` build helper for `dist-internal.test.ts` and
-// `package.test.ts` (LOW, review round 16-re4): both need the *real*
+// Shared `tsup` build helper for tests that need the *real*
 // published `dist/index.d.ts` — not a bare `tsc` declaration emit, since
 // `tsup`'s rollup-dts bundling step is exactly where a re-export chain's
-// `@internal` handling (N2/N3, review rounds 16-re3/16-re4) either does or
+// `@internal` handling either does or
 // does not survive — built once into a throwaway directory. Factoring the
-// build itself out here means both test files exercise the identical build
-// rather than two independently maintained copies of the same `execFileSync`
+// build itself out here means every caller exercises the identical build
+// rather than an independently maintained copy of the same `execFileSync`
 // call that could drift apart.
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';

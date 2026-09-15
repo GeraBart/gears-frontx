@@ -2,8 +2,8 @@
  * Route Signal Factory — `history`-bound construction of the route
  * ownership signal's own write and observe surfaces.
  *
- * F1 of the review scope this factory closed: the previous public surface
- * exported `backProjectEntries` and `createObserver` as free, top-level
+ * This factory replaces a public surface that used to
+ * export `backProjectEntries` and `createObserver` as free, top-level
  * bindings that resolved the realm-shared `NavigationHistory` singleton
  * internally on every call. A caller that constructed its own
  * `NavigationHistory` — a test double, an SSR instance carrying its own

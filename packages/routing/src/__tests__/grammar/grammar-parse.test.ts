@@ -71,7 +71,7 @@ describe('parseGrammar — example 7.8 (zero entries)', () => {
   });
 });
 
-describe('parseGrammar — foreign segments (H3): plainly not an entry, no warning', () => {
+describe('parseGrammar — foreign segments: plainly not an entry, no warning', () => {
   it('keeps a segment with no "=", or a candidate domain key outside the domain-key production, as a foreign segment with no warning', () => {
     const result = parseGrammar('/en?screen&a.b=x&widgets=line-a;range=7d');
     expect(result.entries).toEqual([
@@ -99,7 +99,7 @@ describe('parseGrammar — foreign segments (H3): plainly not an entry, no warni
   });
 });
 
-describe('parseGrammar — malformed-looking entries (H3): still warn, and are also kept foreign', () => {
+describe('parseGrammar — malformed-looking entries: still warn, and are also kept foreign', () => {
   it('drops the whole entry on a malformed percent-escape, reporting it as malformed-entry and keeping it foreign', () => {
     const result = parseGrammar('/en?sheet=search;q=%zz&screen=dashboard');
     expect(result.entries).toEqual([
@@ -110,7 +110,7 @@ describe('parseGrammar — malformed-looking entries (H3): still warn, and are a
   });
 });
 
-describe('parseGrammar — warning scope (owner decision, 20-fix3): only a segment plainly shaped as an entry may warn', () => {
+describe('parseGrammar — warning scope: only a segment plainly shaped as an entry may warn', () => {
   it('keeps a single-segment key with an invalid extension as foreign, with no warning, when nothing else marks it as ours — indistinguishable from an unrelated query parameter', () => {
     const url = '/en?page=2&utm_source=news&code=4%2F0AX&state=eyJhbGciOiJIUzI1NiJ9&flag&screen=Dashboard';
     const result = parseGrammar(url);
@@ -173,7 +173,7 @@ describe('parseGrammar — warning scope (owner decision, 20-fix3): only a segme
   });
 });
 
-describe('parseGrammar — foreign segments (H3): not confused with a real collision', () => {
+describe('parseGrammar — foreign segments: not confused with a real collision', () => {
   it('does not treat a duplicate-extension drop as foreign — it parsed as an entry, it just lost to an earlier one', () => {
     const result = parseGrammar('/en?widgets=line-a;range=7d&widgets=line-a;range=30d');
     expect(result.foreignSegments).toEqual([]);

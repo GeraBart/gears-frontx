@@ -1,8 +1,8 @@
 // Test-only double for `@gears-frontx/routing`'s own `HistoryAdapter`.
 // Copied from that package's own `src/__tests__/history/fake-history-adapter.ts`
 // pattern. `AdapterLocation` is imported from `@gears-frontx/routing`'s
-// public entry point (N3, review round 16-re4): both `AdapterLocation` and
-// `HistoryAdapter` are public types again — they sit in
+// public entry point: both `AdapterLocation` and
+// `HistoryAdapter` are public types — they sit in
 // `resolveNavigationHistory`'s own `createAdapter` parameter's signature
 // (see `packages/routing/src/history/index.ts`'s own comment for why a
 // compiler-internal tag could not be relied on to strip them) — so this test
@@ -26,7 +26,7 @@ export class FakeHistoryAdapter {
   private entries: AdapterLocation[];
   // Mirrors `window.history.state` per entry, exactly as the core
   // package's own `FakeHistoryAdapter` does (see that copy's own comment) —
-  // needed now that position (F8/D3, review round 16-re) is restored from
+  // needed since position is restored from
   // this per-entry state on an external pop.
   private entryStates: unknown[];
   private index = 0;

@@ -26,10 +26,10 @@ const REACT_ROUTER_PASSTHROUGH = [
 // exports, mirroring `packages/routing`'s own `ROUTING_RUNTIME_SURFACE`
 // (`packages/routing/src/__tests__/helpers.ts`).
 //
-// MEDIUM (review round 16-re5, `packages/routing`'s own surface pin):
-// derived from `../../index.js`'s own actual runtime exports (`Object.keys`,
-// sorted) rather than maintained by hand, for the identical reason
-// `ROUTING_RUNTIME_SURFACE` now is — a hand-listed subset can silently stop
+// Derived from `../../index.js`'s own actual runtime exports (`Object.keys`,
+// sorted) rather than maintained by hand, mirroring
+// `ROUTING_RUNTIME_SURFACE`'s own approach (`packages/routing`'s own surface
+// pin) — a hand-listed subset can silently stop
 // covering a real export with no test failing.
 export const TANSTACK_RUNTIME_SURFACE = Object.keys(tanstackIndex).filter(
   (name) => !(REACT_ROUTER_PASSTHROUGH as readonly string[]).includes(name),

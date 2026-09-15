@@ -75,8 +75,8 @@ describe('serializeGrammar — round-trip (parse -> serialize is byte-exact for 
   });
 });
 
-describe('serializeGrammar — foreign segments (H3)', () => {
-  it('re-emits both foreign parameters after a write to a real entry — the reviewer\'s exact probe', () => {
+describe('serializeGrammar — foreign segments', () => {
+  it('re-emits both foreign parameters after a write to a real entry', () => {
     const parsed = parseGrammar('/en?screen=app&utm_source=news&code=oauth123');
     const written = {
       ...parsed,
@@ -190,7 +190,7 @@ describe('serializeGrammar — percent-encoding table', () => {
   }
 });
 
-describe('serializeGrammar — shell subroute validation (H1)', () => {
+describe('serializeGrammar — shell subroute validation', () => {
   const withSubroute = (shellSubroute: string) =>
     ({ shellSubroute, hash: undefined, entries: [entry('screen', 'app')], foreignSegments: [] }) satisfies SerializeInput;
 
@@ -204,7 +204,7 @@ describe('serializeGrammar — shell subroute validation (H1)', () => {
     expect(serializeGrammar(withSubroute('/en'))).toBe('/en?screen=app');
   });
 
-  it("throws instead of corrupting — the reviewer's own probe (/en?injected=1 plus one written entry)", () => {
+  it('throws instead of corrupting a shell subroute that already carries a query string, plus one written entry', () => {
     const error = expectRoutingError(() =>
       serializeGrammar({
         shellSubroute: '/en?injected=1',
@@ -217,7 +217,7 @@ describe('serializeGrammar — shell subroute validation (H1)', () => {
   });
 });
 
-describe('serializeGrammar — foreign segment validation (D2)', () => {
+describe('serializeGrammar — foreign segment validation', () => {
   const withForeignSegment = (segment: string) =>
     ({
       shellSubroute: '/en',
@@ -226,13 +226,13 @@ describe('serializeGrammar — foreign segment validation (D2)', () => {
       foreignSegments: [segment],
     }) satisfies SerializeInput;
 
-  it("throws invalid-foreign-segment for a hand-built segment carrying '&' — the reviewer's own probe", () => {
+  it("throws invalid-foreign-segment for a hand-built segment carrying '&'", () => {
     const error = expectRoutingError(() => serializeGrammar(withForeignSegment('x&screen=evil')));
     expect(error.code).toBe('invalid-foreign-segment');
     expect(error.value).toBe('x&screen=evil');
   });
 
-  it("throws invalid-foreign-segment for a hand-built segment carrying '#' — the reviewer's own probe", () => {
+  it("throws invalid-foreign-segment for a hand-built segment carrying '#'", () => {
     const error = expectRoutingError(() => serializeGrammar(withForeignSegment('x#frag')));
     expect(error.code).toBe('invalid-foreign-segment');
     expect(error.value).toBe('x#frag');
@@ -243,7 +243,7 @@ describe('serializeGrammar — foreign segment validation (D2)', () => {
   });
 });
 
-describe('serializeGrammar — optional foreignSegments field (D3)', () => {
+describe('serializeGrammar — optional foreignSegments field', () => {
   it('serializes an input with foreignSegments omitted entirely, emitting only the entries', () => {
     const input: SerializeInput = { shellSubroute: '/en', hash: undefined, entries: [entry('screen', 'app')] };
     expect(serializeGrammar(input)).toBe('/en?screen=app');

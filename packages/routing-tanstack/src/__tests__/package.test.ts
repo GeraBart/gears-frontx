@@ -10,7 +10,7 @@ import * as routingTanstack from '../index.js';
 // and — per DESIGN §3.3's public-surface table — the concrete engine's own
 // component-tree hooks and components, re-exported so a microfrontend never
 // has to import `@tanstack/react-router` itself
-// (`cpt-frontx-constraint-routing-tanstack-sole-engine-import`; A3). Teardown
+// (`cpt-frontx-constraint-routing-tanstack-sole-engine-import`). Teardown
 // has no separate export — it is `RouterHistory#destroy`, already reachable
 // through every function below that returns a `RouterHistory`.
 describe('@gears-frontx/routing-tanstack entry point', () => {

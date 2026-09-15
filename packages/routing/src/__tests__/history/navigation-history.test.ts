@@ -115,8 +115,8 @@ describe('createNavigationHistory — subscribe release', () => {
   });
 });
 
-// FEATURE §3, Position Tracking (`cpt-frontx-algo-routing-navigation-substrate-position-tracking`,
-// ruling F8/D3, review round 16-re): the substrate itself, not a
+// FEATURE §3, Position Tracking (`cpt-frontx-algo-routing-navigation-substrate-position-tracking`):
+// the substrate itself, not a
 // provider-local counter, owns the current entry's own position.
 describe('createNavigationHistory — position tracking', () => {
   it('starts at 0 for a cold mount (no recorded position on the current entry)', () => {
@@ -219,7 +219,7 @@ describe('createNavigationHistory — position tracking', () => {
     expect(adapter.getState()).toEqual({ hostOwnField: 'keep-me', '@gears-frontx/routing': { position: 0 } });
   });
 
-  // M2 (review round 20): a throwing `pushState` must not drift `position` —
+  // A throwing `pushState` must not drift `position` —
   // the write never landed, so the previously recorded position is still the
   // real one.
   it('leaves position unchanged, and propagates the error, when the adapter\'s pushState throws', () => {

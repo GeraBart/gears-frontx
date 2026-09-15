@@ -7,7 +7,7 @@ import type { DomainKey, ExtensionToken } from '../../types/index.js';
 
 let singletonAdapter: FakeHistoryAdapter;
 
-// F1 (review scope, `cpt-frontx-algo-routing-route-ownership-signal-url-back-projection`
+// (`cpt-frontx-algo-routing-route-ownership-signal-url-back-projection`
 // / `cpt-frontx-algo-routing-route-ownership-signal-observe-change`): a
 // `RouteSignal` built by `createRouteSignal(history)` reads AND writes
 // through that exact `history` instance, never the realm-shared singleton —

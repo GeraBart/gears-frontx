@@ -137,8 +137,8 @@ function diffIsEmpty(diff: TransitionDiff): boolean {
 // @cpt-dod:cpt-frontx-dod-routing-route-ownership-signal-resolution-and-observation:p1
 // @cpt-dod:cpt-frontx-dod-routing-route-ownership-signal-release:p1
 /**
- * Builds a `CreateObserver` function bound to `history` (F1 of the review
- * scope this factory closed) rather than resolving the realm-shared
+ * Builds a `CreateObserver` function bound to `history` rather than
+ * resolving the realm-shared
  * singleton internally — the identical seam `./url-back-projection.js`'s
  * `createBackProjectEntries` adds for the same reason. Not exported
  * directly; `createRouteSignal` (`./route-signal.js`) is this package's own
@@ -153,8 +153,8 @@ export function createObserverBoundTo(history: NavigationHistory): CreateObserve
   validateDomainKeyAndRegistrations(domainKey, source);
 
   // This observer's own initial state, recorded here as part of step 1.1
-  // (H2, review round 20: the FEATURE's own former standalone "record"
-  // step is now folded into this one, since subscribing before reporting —
+  // (folded into this one rather than a separate standalone "record"
+  // step, since subscribing before reporting —
   // below — needs this baseline set no later than this point) —
   // `reresolveAndReport` (below) reads and overwrites this same binding on
   // every later navigation.
@@ -277,7 +277,7 @@ export function createObserverBoundTo(history: NavigationHistory): CreateObserve
       onTransition({ domainKey, entries: current, diff });
       // @cpt-end:cpt-frontx-flow-routing-route-ownership-signal-deep-link-cold-mount:p1:inst-report-transition
       // @cpt-end:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-report-transition
-      // No `try`/`finally` here (M1, review round 20): the baseline advances
+      // No `try`/`finally` here: the baseline advances
       // only once `onTransition` above returns without throwing — deliberately
       // reached *after* the call, not wrapped around it, so a consumer whose
       // own callback throws leaves `previous` exactly where it was. The next
@@ -302,8 +302,7 @@ export function createObserverBoundTo(history: NavigationHistory): CreateObserve
   }
 
   // @cpt-begin:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-subscribe-fanout
-  // Subscribed *before* the initial report below (H2, review round 20 —
-  // previously this ran after): a consumer that navigates synchronously
+  // Subscribed *before* the initial report below: a consumer that navigates synchronously
   // from inside its own first callback must have that navigation observed
   // by this same subscription, not missed because it did not exist yet.
   // `previous` is already set (immediately above) by the time this

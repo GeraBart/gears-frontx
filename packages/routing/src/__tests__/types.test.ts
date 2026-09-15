@@ -30,7 +30,7 @@ import { RoutingError, type RoutingErrorCode } from '../errors.js';
 // checker is the tool that verifies them.
 
 describe('Location', () => {
-  // F8/D3 (review round 16-re): `position` is substrate-owned bookkeeping
+  // `position` is substrate-owned bookkeeping
   // (§1.5, "Location shape — Position"), not engine- or occupant-owned
   // state — added here alongside path/search/hash, never as a separate
   // shape.
@@ -112,7 +112,7 @@ describe('ParseResult / SerializeInput', () => {
       .toEqualTypeOf<readonly ParseWarning[]>();
   });
 
-  it('SerializeInput is ParseResult minus warnings, with foreignSegments optional (D3)', () => {
+  it('SerializeInput is ParseResult minus warnings, with foreignSegments optional', () => {
     expectTypeOf<SerializeInput>().toEqualTypeOf<{
       readonly shellSubroute: string;
       readonly hash: string | undefined;

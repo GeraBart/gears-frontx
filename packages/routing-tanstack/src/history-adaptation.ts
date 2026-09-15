@@ -86,8 +86,8 @@ export interface VirtualLocationSource {
  * cleanup, making the two true inverses of each other: React's StrictMode
  * double-invoking that effect (setup, cleanup, setup) is then exactly as
  * safe as invoking it once, since the second setup re-does precisely what
- * the cleanup undid, rather than finding nothing left to redo (the N1
- * regression this pair fixes — see `router-creation.tsx`).
+ * the cleanup undid, rather than finding nothing left to redo — see
+ * `router-creation.tsx`.
  */
 const attachByHistory = new WeakMap<RouterHistory, () => void>();
 
@@ -103,7 +103,7 @@ export function attachAdaptedHistory(history: RouterHistory): void {
 
 /**
  * @internal Default channel for an error this adapter catches rather than
- * lets propagate as a genuine unhandled promise rejection (F6) — a
+ * lets propagate as a genuine unhandled promise rejection — a
  * navigation blocker that throws or rejects, or a subscriber that throws.
  * `@tanstack/history`'s own `RouterHistory` contract has no error-reporting
  * member of its own to route through, so this package adds the smallest one
@@ -117,8 +117,8 @@ function defaultReportError(error: unknown): void {
 
 /**
  * Options `adaptVirtualLocationHistory` accepts, and every entry point that
- * builds history through it forwards straight through unchanged (F6,
- * review round 16-re): `adaptComposedHistory`, `adaptStandaloneHistory`,
+ * builds history through it forwards straight through unchanged:
+ * `adaptComposedHistory`, `adaptStandaloneHistory`,
  * `adaptProviderHistory`. `reportError` in particular gives a consumer at
  * any of those entry points the same error-reporting channel this file's
  * own `dispatchToSubscribers`/blocker handling already routes through —
@@ -131,7 +131,7 @@ export interface AdaptHistoryOptions {
 /**
  * Fans `args` out to every currently-registered subscriber, isolating each
  * one's own error the way the core's own `FanOutDispatcher` isolates a
- * history subscriber's error (F5): snapshotting the registry before
+ * history subscriber's error: snapshotting the registry before
  * iterating (so a subscriber that subscribes or unsubscribes mid-round
  * cannot mutate the round already under way) and wrapping each individual
  * invocation in its own `try`/`catch`, so a throwing subscriber's own
@@ -162,8 +162,8 @@ function dispatchToSubscribers(
 function buildHistoryLocation(parts: { pathname: string; search: string }, position: number): RouterHistoryLocation {
   // `__TSR_index` mirrors what the engine's own real browser history keeps
   // in `window.history.state` — `position` here is the navigation
-  // substrate's own `Location.position` (F8/D3, review round 16-re:
-  // `cpt-frontx-algo-routing-navigation-substrate-position-tracking`), not
+  // substrate's own `Location.position`
+  // (`cpt-frontx-algo-routing-navigation-substrate-position-tracking`), not
   // a counter this adapter keeps of its own: the substrate is the one
   // party that sits on both sides of every write *and* every externally
   // observed traversal, so it is the only party that can keep this number
@@ -253,8 +253,8 @@ export function adaptVirtualLocationHistory(
   // call. Wrapped in `attachToNavigationHistory` (below), rather than
   // called inline, so the same registration this constructor performs
   // eagerly can also be re-performed later by `attachAdaptedHistory` — the
-  // exact inverse of `destroy()` (N1: the object that constructs this
-  // registration owns re-establishing it, not just tearing it down once).
+  // exact inverse of `destroy()`: the object that constructs this
+  // registration owns re-establishing it, not just tearing it down once.
   let unsubscribeFromNavigationHistory: (() => void) | undefined;
   function attachToNavigationHistory(): void {
     if (unsubscribeFromNavigationHistory !== undefined) {
@@ -304,7 +304,7 @@ export function adaptVirtualLocationHistory(
         // @cpt-end:cpt-frontx-algo-routing-engine-provider-history-adaptation:p2:inst-own-entry-absent-inert
       }
       // @cpt-end:cpt-frontx-algo-routing-engine-provider-history-adaptation:p2:inst-if-own-entry-absent
-      // F8/D3 (review round 16-re): `notification.location.position` is the
+      // `notification.location.position` is the
       // substrate's own recorded position for whichever entry this round's
       // navigation landed on — read from the notification already in hand
       // rather than a second `navigationHistory.location` access, though
@@ -321,14 +321,14 @@ export function adaptVirtualLocationHistory(
   const write = (path: string, verb: HistoryVerb, hash?: string): void => {
     const { pathname, search } = splitHref(path);
     source.write(pathname, search, verb, hash);
-    // `length`/`canGoBack` below no longer count this write themselves
-    // (F8/D3, review round 16-re): `source.write`'s own push, when it
+    // `length`/`canGoBack` below no longer count this write themselves:
+    // `source.write`'s own push, when it
     // actually reaches the shared history, already advances the
-    // substrate's own `Location.position` — N3's own "no write reached the
-    // shared history, so nothing should count" concern is satisfied for
+    // substrate's own `Location.position` — so "no write reached the
+    // shared history, so nothing should count" is satisfied for
     // free, since a `source.write` this occupant's own entry is absent for
     // never calls `navigationHistory[verb]` at all
-    // (`./composed-history-source.js`'s own A5 early return).
+    // (`./composed-history-source.js`'s own early return for that case).
   };
   // @cpt-end:cpt-frontx-algo-routing-engine-provider-history-adaptation:p2:inst-expose-direct-members
 
@@ -342,7 +342,7 @@ export function adaptVirtualLocationHistory(
   // registered is the common case, and stays fully synchronous, since the
   // loop below never runs and this function returns before any `await`.
   //
-  // F6: the engine's own `tryNavigation` awaits `blockerFn` with no
+  // The engine's own `tryNavigation` awaits `blockerFn` with no
   // `try`/`catch` of its own, and its own callers (`push`/`replace`) invoke
   // it fire-and-forget — a rejecting or throwing `blockerFn` becomes a
   // genuine unhandled promise rejection there too. This adapter does not
@@ -358,7 +358,7 @@ export function adaptVirtualLocationHistory(
     }
     if (typeof document !== 'undefined' && blockers.length > 0) {
       const { hash, ...pathnameAndSearch } = splitHref(path);
-      // LOW (review round 16-re2): `@tanstack/history`'s own `tryNavigation`
+      // `@tanstack/history`'s own `tryNavigation`
       // builds the blocked-navigation's `next` location with
       // `currentIndex + 1` for a push (a push always lands one entry past
       // the current one) and `currentIndex` for a replace (a replace
@@ -399,7 +399,7 @@ export function adaptVirtualLocationHistory(
     // @cpt-end:cpt-frontx-algo-routing-engine-provider-history-adaptation:p2:inst-expose-direct-members
 
     // @cpt-begin:cpt-frontx-algo-routing-engine-provider-history-adaptation:p2:inst-derive-missing-members
-    // F8/D3 (review round 16-re): derived from the navigation substrate's
+    // Derived from the navigation substrate's
     // own `Location.position`
     // (`cpt-frontx-algo-routing-navigation-substrate-position-tracking`),
     // never a counter this adapter keeps of its own — the substrate is the
@@ -434,8 +434,8 @@ export function adaptVirtualLocationHistory(
     replace: (path: string, _state?: RouterHistoryState, navigateOpts?: RouterNavigateOptions) => {
       void tryNavigation(path, 'replace', navigateOpts);
     },
-    // F8/D3 (review round 16-re): no optimistic local adjustment here
-    // anymore — `go`/`back`/`forward` simply delegate to the shared
+    // No optimistic local adjustment here —
+    // `go`/`back`/`forward` simply delegate to the shared
     // history and let its own asynchronous `popstate` observation
     // (`cpt-frontx-algo-routing-navigation-substrate-position-tracking`,
     // step 3) restore `Location.position` from the browser's own
@@ -456,9 +456,9 @@ export function adaptVirtualLocationHistory(
     forward: () => {
       navigationHistory.go(1);
     },
-    // F8/D3: `> 0`, no `|| canGoBackFallback()` — a fallback that read
+    // `> 0`, no `|| canGoBackFallback()` — a fallback that read
     // `window.history.length > 1` reported `true` in almost every real tab
-    // regardless of this occupant's own stack (the original F8 symptom);
+    // regardless of this occupant's own stack;
     // `Location.position` is accurate from construction (cold mount reads
     // `0`, per the substrate's own Position Tracking), so no fallback is
     // needed at all.
@@ -481,7 +481,7 @@ export function adaptVirtualLocationHistory(
       // `ReleaseFunction`, already documented idempotent — "calling it more
       // than once is a no-op after the first call"
       // (`cpt-frontx-feature-routing-navigation-substrate` §1.5). This
-      // adapter additionally clears its own reference once released (N1):
+      // adapter additionally clears its own reference once released:
       // that clearing is what lets `attachToNavigationHistory` tell a
       // torn-down registration apart from a still-active one, so a second
       // `destroy()` call stays a safe no-op, and a later `attachAdaptedHistory`
@@ -524,7 +524,7 @@ export function adaptVirtualLocationHistory(
   // `attachAdaptedHistory` (module-level, above) keys off, and the return
   // of the object those already-derived members were assembled into.
   //
-  // Registered by identity, after `history` exists to key it by (N1) — see
+  // Registered by identity, after `history` exists to key it by — see
   // `attachByHistory`'s own doc comment above.
   attachByHistory.set(history, attachToNavigationHistory);
 

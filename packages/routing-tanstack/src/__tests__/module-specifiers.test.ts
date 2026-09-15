@@ -1,12 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { classifySpecifier, extractModuleSpecifiers } from './helpers/module-specifiers.js';
 
-// N1 (review round 16-re3): unit-tests the extractor/classifier
+// Unit-tests the extractor/classifier
 // `dist-imports.test.ts` relies on, against a fixture rather than a real
 // `tsc` build — this is what actually proves the regex covers the dynamic
-// `import("…")` form a per-file `tsc` emit uses (the shape the F3 fix was
-// supposed to close but the previous version of this test, matching only
-// `from '…'`, could not see: `@tanstack/router-core` appeared exactly this
+// `import("…")` form a per-file `tsc` emit uses (a check matching only
+// `from '…'` would miss it: `@tanstack/router-core` can appear exactly this
 // way in `router-creation.d.ts`, not in `index.d.ts`'s own `from '…'`).
 describe('extractModuleSpecifiers', () => {
   it('captures a static `from` import, a dynamic `import()` type reference, a relative path, and a node: builtin', () => {

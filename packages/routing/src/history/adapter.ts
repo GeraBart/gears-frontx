@@ -21,7 +21,7 @@ import type { Location } from '../types/index.js';
  *
  * Exists only as `HistoryAdapter`'s own return/parameter type (below) — a
  * conforming consumer never constructs or reads one directly; it is public
- * only because `HistoryAdapter` is (N3, review round 16-re4): a caller
+ * only because `HistoryAdapter` is: a caller
  * supplying `resolveNavigationHistory`'s `createAdapter` parameter (the
  * `HistoryAdapter` seam, FEATURE §3) needs this shape to satisfy it.
  */
@@ -31,7 +31,7 @@ export type AdapterLocation = Omit<Location, 'position'>;
  * must satisfy to pass as `resolveNavigationHistory`'s `createAdapter`
  * parameter (`./singleton.js`); most conforming consumers never construct or
  * read one, since the default `createWindowHistoryAdapter` below already
- * builds one over `window`. Public (N3, review round 16-re4) because it sits
+ * builds one over `window`. Public because it sits
  * in that public function's own signature — see `../history/index.js`'s own
  * comment for why TypeScript's own `stripInternal` compiler option strips
  * the whole declaration either type sits on when a leading comment merely

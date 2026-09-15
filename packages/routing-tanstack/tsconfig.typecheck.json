@@ -1,7 +1,7 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    // F4 (review scope): this package's own `type-check` script needs to
+    // This package's own `type-check` script needs to
     // resolve `@gears-frontx/routing` straight to its sibling's source on a
     // fresh clone, before `packages/routing/dist` exists — the `paths`
     // override below does that. It cannot live in `tsconfig.json` itself:

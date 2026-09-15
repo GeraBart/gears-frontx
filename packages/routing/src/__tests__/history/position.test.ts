@@ -6,7 +6,7 @@ import { POSITION_STATE_KEY, readPosition } from '../../history/position.js';
 // `readPosition` reads state a host, or another library sharing the same
 // entry, controls; anything that is not a position this substrate itself
 // could have written (a non-negative safe integer) must be treated exactly
-// like the key being absent (LOW, review round 16-re2), never propagated
+// like the key being absent, never propagated
 // into `NavigationHistory#length`/`canGoBack` as `NaN` or a negative depth.
 describe('readPosition — malformed or absent state', () => {
   it('returns undefined when the raw state is not an object', () => {

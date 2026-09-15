@@ -4,7 +4,7 @@ import { resolveNavigationHistory, type DomainKey, type Entry, type ExtensionTok
 import { FakeHistoryAdapter } from './fake-history-adapter.js';
 
 // `@gears-frontx/routing`'s own realm-shared singleton is keyed by this
-// well-known `Symbol.for` value (recorded as a ruling in the scope ledger —
+// well-known `Symbol.for` value —
 // `Symbol.for('@gears-frontx/routing/navigation-history/v1')`, bumped only
 // on a breaking `NavigationHistory` shape change). Not exported from that
 // package's own public dist, so this test helper re-derives it via

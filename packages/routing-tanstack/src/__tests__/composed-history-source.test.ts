@@ -44,7 +44,7 @@ describe('createComposedVirtualLocationSource', () => {
     );
   });
 
-  // A5: once this occupant's own entry is no longer in the URL, a write
+  // Once this occupant's own entry is no longer in the URL, a write
   // through this source has nothing of its own left to write to (FEATURE
   // §3, step 7.1 — "no write-back runs, because there is no longer an
   // entry of this occupant's own to write to"). Without this guard,
@@ -62,15 +62,15 @@ describe('createComposedVirtualLocationSource', () => {
   });
 });
 
-// F7/D2 (review round 16-re): a hash given to a navigation is applied to
-// the page's own hash, never to this occupant's own entry. `write` now
+// A hash given to a navigation is applied to
+// the page's own hash, never to this occupant's own entry. `write`
 // passes the hash straight through to the core's own `backProjectEntries`,
-// which since D2 accepts an optional fourth `pageHash` parameter for
+// which accepts an optional fourth `pageHash` parameter for
 // exactly this — no separate grammar-codec round trip of this provider's
 // own, still exactly one history call either way. `createHref` never
 // writes to history, so it keeps composing the hash directly via the
 // grammar serializer (FEATURE §3, step 4).
-describe('composed hash on write/createHref (F7)', () => {
+describe('composed hash on write/createHref', () => {
   it('applies a given hash to the page, leaving every entry exactly as payloadChanged would have', () => {
     const adapter = resetRealm(`${URL}#old`);
     const source = createComposedVirtualLocationSource(resolveNavigationHistory(), SHEET_ENTRY_ADDRESS);
@@ -111,7 +111,7 @@ describe('composed hash on write/createHref (F7)', () => {
     );
   });
 
-  // D2: an explicit empty-string hash clears the page's own current hash,
+  // An explicit empty-string hash clears the page's own current hash,
   // through the same single `backProjectEntries` write — the core helper's
   // own `''` convention (serializeGrammar drops it), reached here through
   // `write`'s pass-through rather than a codec round trip of this

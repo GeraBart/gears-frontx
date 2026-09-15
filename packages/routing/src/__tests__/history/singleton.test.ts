@@ -86,8 +86,8 @@ describe('resolveNavigationHistory', () => {
       expect(history.location).toEqual({ path: '/en', search: 'screen=dashboard', hash: '', position: 0 });
     });
 
-    // F1 (review scope): resolving with no adapter override, in a realm with
-    // no `window` at all, used to fail deep inside the default adapter's own
+    // Resolving with no adapter override, in a realm with
+    // no `window` at all, would otherwise fail deep inside the default adapter's own
     // construction with a raw `ReferenceError: window is not defined` — a
     // real SSR realm never defines `window`, so this is the actual failure
     // path an SSR caller that forgot to pass its own adapter would hit.

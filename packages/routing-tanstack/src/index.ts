@@ -35,7 +35,7 @@ export type { EngineProviderProps, EngineProviderFromRouterProps } from './route
 // hooks and components this package's public surface lists alongside its
 // own adapter, so a microfrontend using this package's default provider
 // never needs its own direct `@tanstack/react-router` import for these
-// (`cpt-frontx-constraint-routing-tanstack-sole-engine-import`, A3): a
+// (`cpt-frontx-constraint-routing-tanstack-sole-engine-import`): a
 // direct import would move the sole permitted ecosystem edge into the
 // consumer, which the ecosystem-wide `no-restricted-imports` guard exists
 // to prevent.

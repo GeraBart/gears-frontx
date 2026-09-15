@@ -2,7 +2,7 @@
 //
 // FEATURE (navigation-substrate) §3, Position Tracking
 // (`cpt-frontx-algo-routing-navigation-substrate-position-tracking`) — the
-// human ruling behind this file (F8/D3, review round 16-re): the position
+// position
 // of the current entry belongs to the navigation substrate, not to any one
 // engine-provider port's own ad hoc counter, because only the substrate
 // itself sits on both sides of every write *and* every externally observed
@@ -31,7 +31,7 @@ interface PositionState {
   readonly position: number;
 }
 
-// LOW (review round 16-re2): a host-written entry's state is data this
+// A host-written entry's state is data this
 // substrate does not control — another library sharing the entry, a stale
 // bundle from before `position` existed, or a hand-edited devtools session
 // could carry a negative number, `NaN`, or a non-integer under this

@@ -87,7 +87,7 @@ export function createProviderRouter<TRouteTree extends AnyRoute>(routeTree: TRo
 export interface EngineProviderProps<TRouteTree extends AnyRoute> {
   /** Expected stable for the lifetime of one mount, exactly like `history`
    * below — `EngineProvider`'s own `useMemo` rebuilds the router whenever
-   * this identity changes (B4). The teardown effect below is keyed on
+   * this identity changes. The teardown effect below is keyed on
    * `history`, not on the memoized router, so replacing this prop's own
    * identity does destroy the previously adapted `history` (the effect's
    * cleanup runs against the old dependency value before the new setup
@@ -101,7 +101,7 @@ export interface EngineProviderProps<TRouteTree extends AnyRoute> {
 }
 
 /**
- * N2: `createEngineProviderRouter` below returns only a constructed
+ * `createEngineProviderRouter` below returns only a constructed
  * router — a consumer mounting it directly through `RouterProvider`,
  * bypassing this component, has no lifecycle hook of its own from which to
  * call `router.history.destroy()`, reopening the exact leak §3, Teardown
@@ -135,14 +135,14 @@ export interface EngineProviderFromRouterProps<TRouter extends AnyRouter> {
  * `{routeTree, history}` (the same adapted `RouterHistory` a caller built
  * once via `adaptComposedHistory`/`adaptStandaloneHistory`,
  * `./engine-provider-history.js`) or mounts one already constructed
- * elsewhere — `createEngineProviderRouter`'s own output — via `{router}`
- * (N2). Mounting a standalone-adapted history runs through this identical
+ * elsewhere — `createEngineProviderRouter`'s own output — via `{router}`.
+ * Mounting a standalone-adapted history runs through this identical
  * component (FEATURE §3, Standalone Deployment, step 5).
  *
  * FEATURE §3, Teardown On Unmount, step 1 (`inst-when-unmount`): this
  * component is the mount boundary the FEATURE names — its own effect below
  * is the actual "WHEN...unmounted" moment, symmetric with construction
- * rather than a one-way teardown (N1): setup re-establishes the adapted
+ * rather than a one-way teardown: setup re-establishes the adapted
  * history's own internal `NavigationHistory` registration
  * (`attachAdaptedHistory`, a no-op when it is already active), and cleanup
  * releases it (`history.destroy()`, already documented idempotent). Making
@@ -228,7 +228,7 @@ export function EngineProvider(
  * from `EngineProviderInput` (`history`, `entryAddress`, `routeTree`) to a
  * constructed router, typed against the port so a mismatch between this
  * package's own construction path and the port's normative contract is a
- * compile-time diagnostic, not a hoped-for convention (A3; DESIGN §3.3
+ * compile-time diagnostic, not a hoped-for convention (DESIGN §3.3
  * table row "`createRouter({ routeTree, history })`" reframed against the
  * port's own input shape). Composes `adaptProviderHistory`'s own mode
  * dispatch (`./engine-provider-history.js`) with `createProviderRouter`
@@ -237,7 +237,7 @@ export function EngineProvider(
  * instance already names, exposed here as one callable a consumer can pass
  * anywhere the port itself is expected.
  *
- * Teardown (N2): the port's own signature returns a router, not a
+ * Teardown: the port's own signature returns a router, not a
  * `{router, destroy}` pair — widening it would break the port typing this
  * function exists to satisfy. The returned router's own `history` member
  * (TanStack's `Router#history` field) is the same adapted `RouterHistory`

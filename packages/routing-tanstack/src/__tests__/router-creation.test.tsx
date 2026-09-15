@@ -40,7 +40,7 @@ function buildRouteTree() {
 }
 
 /** Counts every registration `navigationHistory.subscribe` makes and every
- * one of those releases — the same counting wrapper the A2 unmount test
+ * one of those releases — the same counting wrapper the unmount test
  * below already uses, factored out so the StrictMode and port-entry
  * teardown tests can share it. */
 function countSubscriptions(navigationHistory: ReturnType<typeof resolveNavigationHistory>): { active: () => number } {
@@ -105,7 +105,7 @@ describe('EngineProvider', () => {
     container.remove();
   });
 
-  it('releases the internal NavigationHistory subscription exactly once on unmount (A2)', async () => {
+  it('releases the internal NavigationHistory subscription exactly once on unmount', async () => {
     resetRealm('/en?screen=dashboard;route=settings/general;orientation=left');
     const navigationHistory = resolveNavigationHistory();
 
@@ -155,18 +155,18 @@ describe('EngineProvider', () => {
     expect(activeSubscriptions).toBe(0);
   });
 
-  // N1 — regression found by the 12-re review: React (18+) dev StrictMode
-  // double-invokes an effect's setup/cleanup/setup on every mount. The
-  // previous teardown effect only ever tore down (`() => history.destroy()`
-  // in cleanup, nothing in setup), so the sequence left the mounted
-  // router's own history with zero active substrate subscriptions —
-  // navigation from outside this occupant (a sibling, back/forward, a deep
-  // link) stopped reaching it for the rest of that mount, silently, in
+  // React (18+) dev StrictMode
+  // double-invokes an effect's setup/cleanup/setup on every mount. A
+  // teardown effect that only ever tears down (`() => history.destroy()`
+  // in cleanup, nothing in setup) leaves the mounted
+  // router's own history with zero active substrate subscriptions after that
+  // sequence — navigation from outside this occupant (a sibling, back/forward, a deep
+  // link) would stop reaching it for the rest of that mount, silently, in
   // every StrictMode-wrapped dev environment (Vite/CRA/Next default).
   // `attachAdaptedHistory` (`../history-adaptation.js`) re-establishes the
   // same registration `destroy()` released, making the two effect halves
   // true inverses regardless of how many times React runs them.
-  it('ends a StrictMode mount with exactly one live subscription, and unmount with zero — composed mode (N1)', async () => {
+  it('ends a StrictMode mount with exactly one live subscription, and unmount with zero — composed mode', async () => {
     resetRealm('/en?screen=dashboard;route=settings/general;orientation=left');
     const navigationHistory = resolveNavigationHistory();
     const subscriptions = countSubscriptions(navigationHistory);
@@ -197,7 +197,7 @@ describe('EngineProvider', () => {
     expect(subscriptions.active()).toBe(0);
   });
 
-  it('ends a StrictMode mount with exactly one live subscription, and unmount with zero — standalone mode (N1)', async () => {
+  it('ends a StrictMode mount with exactly one live subscription, and unmount with zero — standalone mode', async () => {
     resetRealm('/');
     const navigationHistory = resolveNavigationHistory();
     const subscriptions = countSubscriptions(navigationHistory);
@@ -229,14 +229,14 @@ describe('EngineProvider', () => {
   });
 });
 
-// N2 — the 12-re review's own probe: `createEngineProviderRouter` (the
+// `createEngineProviderRouter` (the
 // engine-provider port's own conforming instance) builds and internally
 // owns an adapted history that no plain `<RouterProvider router={router}/>`
-// mount can ever tear down, reopening the A2 leak on the one export typed
-// against the port. `EngineProvider`'s `{router}` overload (N1/N2 design:
-// whoever the effect belongs to owns teardown) gives it the same lifecycle
-// hook the `{routeTree, history}` overload already has.
-describe('createEngineProviderRouter teardown (N2)', () => {
+// mount can ever tear down, reopening the same subscription leak on the one
+// export typed against the port. `EngineProvider`'s `{router}` overload
+// (design: whoever the effect belongs to owns teardown) gives it the same
+// lifecycle hook the `{routeTree, history}` overload already has.
+describe('createEngineProviderRouter teardown', () => {
   it('reaches zero active subscriptions after unmount when mounted through EngineProvider({router})', async () => {
     resetRealm('/en?screen=dashboard;route=settings/general;orientation=left');
     const navigationHistory = resolveNavigationHistory();
@@ -265,12 +265,12 @@ describe('createEngineProviderRouter teardown (N2)', () => {
   });
 });
 
-// re2 review L5: `EngineProvider`'s `{router}` overload commits to an
+// `EngineProvider`'s `{router}` overload commits to an
 // unconditional contract — it owns the lifecycle of whatever `history` the
 // given router carries, adapted by this package or not — documented at
-// `createEngineProviderRouter`'s own "Teardown (N2)" comment and this
+// `createEngineProviderRouter`'s own "Teardown" comment and this
 // overload's own doc comment above `EngineProviderFromRouterProps`.
-describe('EngineProvider({router}) destroys a consumer-owned, non-adapted history too (L5)', () => {
+describe('EngineProvider({router}) destroys a consumer-owned, non-adapted history too', () => {
   it('calls destroy() on unmount even for a router built outside this package, over a plain memory history', async () => {
     const consumerHistory = createMemoryHistory({ initialEntries: ['/'] });
     let destroyed = false;
@@ -299,18 +299,18 @@ describe('EngineProvider({router}) destroys a consumer-owned, non-adapted histor
   });
 });
 
-// re2 review L6: neither prop shape given is rejected at compile time by
+// Neither prop shape given is rejected at compile time by
 // `EngineProvider`'s own overloads; this exercises the runtime guard that
 // exists for a caller who bypasses them (a plain JavaScript consumer, or an
 // `as`-cast past the union), so that case fails with a clear message
 // instead of an opaque TanStack internal error.
-describe('EngineProvider guards against neither prop shape being given (L6)', () => {
+describe('EngineProvider guards against neither prop shape being given', () => {
   it('throws a clear error instead of letting TanStack fail on a missing router/history', () => {
     const bypassed = EngineProvider as unknown as (props: Record<string, never>) => unknown;
     expect(() => bypassed({})).toThrow(/EngineProvider requires/);
   });
 
-  // M4 (review round 20): the `{router}` shape's own bad case — `router`
+  // The `{router}` shape's own bad case — `router`
   // present but `undefined` — is a second, independent way to bypass the
   // TypeScript overloads (e.g. a consumer forwarding a possibly-undefined
   // router prop of its own). Before the fix, this shape reached
@@ -345,14 +345,10 @@ describe('EngineProvider guards against neither prop shape being given (L6)', ()
   });
 });
 
-// Residual noted by the 12-re review: the only place `useBlocker` (a
-// consumer's own blocking route guard) was exercised end to end through
-// this adapted history was an out-of-tree probe
-// (`review12/re/probe/probe.test.tsx`), not this package's own suite.
-// Ported here verbatim in substance — same route tree shape, same
-// blocked/unblocked assertions — so the guarantee A1 documents (`block`
-// stops only a navigation issued through this same constructed router's
-// own `RouterHistory`) stays covered by this package's own tests.
+// `useBlocker` (a consumer's own blocking route guard) needs its own
+// end-to-end coverage through this adapted history — the guarantee that
+// `block` stops only a navigation issued through this same constructed
+// router's own `RouterHistory` is otherwise only exercised indirectly.
 describe('useBlocker end to end through the adapted history', () => {
   function buildBlockableRouteTree(blockerCalls: unknown[], shouldBlock: () => boolean) {
     // Named (capitalized) rather than an inline arrow assigned to

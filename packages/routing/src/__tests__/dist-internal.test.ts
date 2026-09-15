@@ -8,26 +8,23 @@ import { ROUTING_EXCLUDED_BUILDING_BLOCKS, ROUTING_RUNTIME_SURFACE, ROUTING_TYPE
 import { buildFreshDts, cleanupBuiltDts } from './helpers/build-dts.js';
 import { declaresRuntimeExport, declaresType } from './helpers/surface-check.js';
 
-// N2 (review round 16-re3): `stripInternal` (`../../tsconfig.json`, the same
+// `stripInternal` (`../../tsconfig.json`, the same
 // config `tsup` reads to build this package's own published declarations)
 // is what is supposed to keep an `@internal`-tagged export — `HistoryAdapter`
 // and `AdapterLocation` (`./history/adapter.ts`) were the concrete case —
-// out of `dist/index.d.ts`. It was silently not in effect for a full
-// review round (16-re/16-re2): the previous fix only added the tag, never
-// verified the flag actually stripped it, and a follow-up fix that enabled
-// the flag alone was not enough either — a multi-file re-export chain
-// carries no `@internal` tag of its own at any hop, so `stripInternal`
-// (which only strips a declaration where the tag is itself written) left
-// it untouched regardless.
+// out of `dist/index.d.ts`. Merely adding the tag does not guarantee that:
+// a multi-file re-export chain carries no `@internal` tag of its own at any
+// hop, so `stripInternal` (which only strips a declaration where the tag is
+// itself written) leaves it untouched regardless of the flag being enabled.
 //
-// N3 (review round 16-re4): the fix above regressed the other direction —
-// `resolveNavigationHistory`'s own leading JSDoc carried an `@internal`-
-// tagged `@param`, and TypeScript's `stripInternal` tests a declaration's
-// *whole* leading comment range, so it silently dropped the entire function
+// TypeScript's `stripInternal` also tests a declaration's
+// *whole* leading comment range, not only a tag on the declaration itself —
+// an `@internal`-tagged `@param` in `resolveNavigationHistory`'s own leading
+// JSDoc silently drops the entire function
 // (the package's sole public construction path) from `dist/index.d.ts`
-// while the runtime `dist/index.js` still exported it — invisible to N2's
-// own absence-only assertions below. `HistoryAdapter`/`AdapterLocation` are
-// now public types instead (they sit in that function's own signature), so
+// while the runtime `dist/index.js` still exports it — invisible to an
+// absence-only assertion. `HistoryAdapter`/`AdapterLocation` are
+// public types instead (they sit in that function's own signature), so
 // this file also asserts their *presence*, and runs a real consumer
 // type-check against the emitted declarations so a name TypeScript cannot
 // resolve fails loudly here instead of at a real consumer's own build.
@@ -35,7 +32,7 @@ import { declaresRuntimeExport, declaresType } from './helpers/surface-check.js'
 // This test runs the real build (`tsup`, not a bare `tsc` declaration emit —
 // the rollup-dts bundling step is exactly where a re-export chain either
 // does or does not survive) into a throwaway output directory once for the
-// whole file (LOW, review round 16-re4 — it used to rebuild per `it`), so it
+// whole file, so it
 // exercises today's `tsconfig.json` + `src/index.ts` combination rather than
 // a possibly-stale committed `dist/`.
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..');
@@ -54,7 +51,7 @@ afterAll(() => {
   cleanupBuiltDts(outDir);
 });
 
-describe('published dist/index.d.ts strips @internal declarations (N2)', () => {
+describe('published dist/index.d.ts strips @internal declarations', () => {
   it('carries no @internal tag', () => {
     expect(dts).not.toMatch(/@internal/);
   });
@@ -69,7 +66,7 @@ describe('published dist/index.d.ts strips @internal declarations (N2)', () => {
   });
 });
 
-describe('published dist/index.d.ts declares the full DESIGN §3.3 public surface (N3)', () => {
+describe('published dist/index.d.ts declares the full DESIGN §3.3 public surface', () => {
   it.each(ROUTING_RUNTIME_SURFACE)('exports %s', (name) => {
     expect(declaresRuntimeExport(dts, name), `${name} missing from the export list`).toBe(true);
   });

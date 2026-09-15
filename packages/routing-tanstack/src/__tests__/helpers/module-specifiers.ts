@@ -1,8 +1,7 @@
-// Extraction/classification helpers for `dist-imports.test.ts` (F3), pulled
+// Extraction/classification helpers for `dist-imports.test.ts`, pulled
 // out into their own module so the regex and the declared/relative
 // classification rule can be unit-tested directly against a fixture,
-// without paying for a real `tsc` build per assertion (N1, review round
-// 16-re3).
+// without paying for a real `tsc` build per assertion.
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
@@ -10,9 +9,9 @@ import path from 'node:path';
 // '…'`) and the dynamic type-only form TypeScript emits for a declaration
 // it can only reference lazily (`import("…").Foo`) — a per-file `tsc` emit
 // uses the latter routinely for a type that is used, but not re-exported,
-// by the file doing the importing (N1: `router-creation.d.ts` importing
-// `@tanstack/router-core` this way is exactly what the previous version of
-// this test, matching only `from '…'`, could not see).
+// by the file doing the importing — `router-creation.d.ts` importing
+// `@tanstack/router-core` this way is exactly what a check matching only
+// `from '…'` would miss.
 const SPECIFIER_PATTERN = /(?:from\s+|import\()\s*['"]([^'"]+)['"]/g;
 
 /** Every module specifier a single `.d.ts` file's text imports from — in
@@ -34,8 +33,8 @@ function listDtsFilesRecursive(dir: string): string[] {
 
 /** Every module specifier imported by any `*.d.ts` file under `dir`,
  * recursively — a per-file `tsc` emit (as opposed to a single rolled-up
- * bundle) spreads a package's own import surface across several files
- * (N1), so reading only the entry point's own `index.d.ts` understates it. */
+ * bundle) spreads a package's own import surface across several files,
+ * so reading only the entry point's own `index.d.ts` understates it. */
 export function collectModuleSpecifiers(dir: string): Set<string> {
   const specifiers = new Set<string>();
   for (const file of listDtsFilesRecursive(dir)) {

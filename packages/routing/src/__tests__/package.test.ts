@@ -22,7 +22,7 @@ describe('@gears-frontx/routing entry point', () => {
     }
   });
 
-  // F1 (review scope): `createRouteSignal` is the one public construction
+  // `createRouteSignal` is the one public construction
   // path for the route ownership signal's write/observe surfaces — the
   // free, realm-singleton-defaulting `backProjectEntries`/`createObserver`
   // exports this package used to carry are gone, with no compatibility
@@ -33,7 +33,7 @@ describe('@gears-frontx/routing entry point', () => {
     expect((routing as Record<string, unknown>).createObserver).toBeUndefined();
   });
 
-  // N3 (review round 16-re4): `RoutingError`/`parseGrammar`/`serializeGrammar`
+  // `RoutingError`/`parseGrammar`/`serializeGrammar`
   // complete the runtime half of the DESIGN §3.3 surface pin shared with
   // `dist-internal.test.ts` (`./helpers.js`'s `ROUTING_RUNTIME_SURFACE`) —
   // added here so the two lists cover the identical names rather than this
@@ -44,14 +44,7 @@ describe('@gears-frontx/routing entry point', () => {
   });
 });
 
-// LOW (review round 16-re5): the "dist/index.d.ts declares the same public
-// surface as src/index.ts" describe block that used to live here (added LOW,
-// review round 16-re4) duplicated `dist-internal.test.ts`'s own "published
-// dist/index.d.ts declares the full DESIGN §3.3 public surface (N3)" block
-// assertion-for-assertion — both ran an independent `tsup` build in
-// `beforeAll` just to re-check names `dist-internal.test.ts` already checks
-// against the identical build. Removed rather than deduplicated into a
-// shared cache: with only `dist-internal.test.ts` left calling
-// `buildFreshDts`, this package's test suite now runs `tsup` once per test
-// run instead of twice, and every "is this name declared in dist" assertion
-// lives in exactly one place.
+// The "is this name declared in dist" assertion against a `tsup` build
+// lives only in `dist-internal.test.ts` (`buildFreshDts`) — this file
+// checks the runtime entry point only, so the test suite runs `tsup`
+// exactly once per run.

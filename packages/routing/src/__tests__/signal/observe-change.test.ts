@@ -60,11 +60,11 @@ describe('createObserver — initial report', () => {
     expect(diff.unresolved).toEqual(['unknown-screen']);
   });
 
-  it('observes a navigation performed synchronously from inside its own first callback, exactly once (H2, review round 20)', () => {
-    // Before H2, the fan-out subscription was registered only after the
-    // initial report ran, so a synchronous re-navigation from inside that
-    // very first callback — the deep-link -> mount -> redirect pattern — was
-    // never observed: the subscription that would have caught it did not
+  it('observes a navigation performed synchronously from inside its own first callback, exactly once', () => {
+    // If the fan-out subscription were registered only after the
+    // initial report ran, a synchronous re-navigation from inside that
+    // very first callback — the deep-link -> mount -> redirect pattern — would go
+    // unobserved: the subscription that would catch it would not
     // exist yet at the moment the redirect fired.
     const adapter = resetRealm('/en?screen=dashboard');
     const history = resolveNavigationHistory(() => adapter);
@@ -88,7 +88,7 @@ describe('createObserver — initial report', () => {
   });
 });
 
-describe('createObserver — a throwing initial report (D1)', () => {
+describe('createObserver — a throwing initial report', () => {
   it('leaves zero live subscriptions when the very first callback throws, so a later navigation calls nothing', () => {
     // The fan-out subscription is registered before this initial report
     // runs (so a synchronous redirect from a *successful* first callback is
@@ -320,7 +320,7 @@ describe('createObserver — Resolution-changed', () => {
   });
 });
 
-describe('createObserver — a throwing consumer callback (M1, review round 20)', () => {
+describe('createObserver — a throwing consumer callback', () => {
   it('does not advance the baseline when the callback throws, so the next navigation still diffs against the pre-throw state', () => {
     const adapter = resetRealm('/en?screen=dashboard');
     let callCount = 0;
@@ -344,7 +344,7 @@ describe('createObserver — a throwing consumer callback (M1, review round 20)'
     // at 'dashboard' — the callback never finished processing 'settings'.
     history.push('/en?screen=settings');
     // Third transition: other. Because the baseline never advanced past
-    // 'dashboard' (M1: the callback that would have advanced it to
+    // 'dashboard' (the callback that would have advanced it to
     // 'settings' threw first), this diff is computed against 'dashboard'
     // again, not against 'settings' — 'dashboard' is reported removed a
     // second time, and 'settings' (never confirmed processed) is not

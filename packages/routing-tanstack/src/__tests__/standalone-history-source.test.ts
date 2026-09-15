@@ -72,7 +72,7 @@ describe('standalone source never reports an absent entry', () => {
   });
 });
 
-describe('standalone write-back preserves the page hash (A4, composed/standalone parity)', () => {
+describe('standalone write-back preserves the page hash (composed/standalone parity)', () => {
   it('keeps the page own hash on push, exactly as the composed source does', () => {
     const adapter = resetRealm('/settings/general?orientation=left#frag');
     const history = adaptStandaloneHistory(resolveNavigationHistory());
@@ -101,11 +101,11 @@ describe('standalone write-back preserves the page hash (A4, composed/standalone
   });
 });
 
-// F7: a hash passed to a navigation is applied to the page's own hash in
+// A hash passed to a navigation is applied to the page's own hash in
 // both modes, never carried into an entry — this mode has no entry to carry
 // it into at all, but the given-versus-absent distinction still governs
 // whether the page's own existing hash survives.
-describe('standalone hash on push/replace/createHref (F7)', () => {
+describe('standalone hash on push/replace/createHref', () => {
   it('applies a caller-given hash to the page, replacing whatever hash was there before', () => {
     const adapter = resetRealm('/settings/general?orientation=left#old');
     const history = adaptStandaloneHistory(resolveNavigationHistory());
@@ -143,11 +143,11 @@ describe('standalone hash on push/replace/createHref (F7)', () => {
   });
 });
 
-// F2: `decodeURIComponent` throws `URIError` on a bare `%` or any other
+// `decodeURIComponent` throws `URIError` on a bare `%` or any other
 // malformed percent-escape — a real possibility for a page's own query
 // string, which this adapter never controls. Construction (and every read
 // through it) must stay total rather than throwing.
-describe('standalone source with a malformed query string (F2)', () => {
+describe('standalone source with a malformed query string', () => {
   it('does not throw at construction on a bare "%"', () => {
     resetRealm('/settings/general?a=%');
     expect(() => adaptStandaloneHistory(resolveNavigationHistory())).not.toThrow();
@@ -185,7 +185,7 @@ describe('standalone source with a malformed query string (F2)', () => {
     ]);
   });
 
-  // F2 (review round 16-re): the raw, kept-as-is value does not survive a
+  // The raw, kept-as-is value does not survive a
   // write unchanged — `buildSearchString` re-encodes every value on write
   // regardless of where it came from, so the malformed escape becomes its
   // own percent-encoded form (`%` -> `%25`) on the next history call, with
