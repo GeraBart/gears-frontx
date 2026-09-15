@@ -52,7 +52,7 @@ A registered microfrontend must evaluate as its own module instance so distinct 
 
 - **PRD**: [PRD.md](../../../../../architecture/PRD.md)
 - **Design**: [DESIGN.md](../../DESIGN.md)
-- **ADR**: `cpt-frontx-adr-mfe-load-isolation`
+- **ADR**: `cpt-frontx-adr-mfe-load-isolation`, `cpt-frontx-adr-shared-dep-dedup-key`
 - **Component**: `cpt-frontx-component-mfe-runtime` (shared with F4, F5, F6, F7)
 - **Dependencies**: `cpt-frontx-feature-mfe-registry` (F4), `cpt-frontx-feature-mfe-loading` (F5)
 
@@ -80,6 +80,7 @@ User-facing interactions that start with an actor and describe the end-to-end fl
 - A chunk's static dependency has no blob URL when that chunk is rewritten — load fails with an error naming the referring chunk and the unbuilt dependency, rather than emitting an origin URL for it
 - A chunk's static-dependency graph contains a cycle, whether closed within one branch or across two branches that fanned out independently — load fails with a diagnostic naming the chunks on the cycle and the microfrontend, because no module may be resolved outside the load's own graph
 - The manifest's shared dependencies import one another circularly — load fails with a diagnostic naming those dependencies and the imports among them, rather than minting a module whose bare specifiers are left unrewritten
+- A declared shared-dependency name survives the rewrite as a bare specifier — load fails with a diagnostic naming the chunk, the surviving specifier, and the microfrontend
 
 **Steps**:
 1. [x] - `p1` - Actor registers the microfrontend entry with the registry - `inst-register`
@@ -159,7 +160,7 @@ Internal system functions that implement the isolation mechanism.
 
 - [x] `p1` - **ID**: `cpt-frontx-algo-mfe-isolation-build-shared-dep-blob-urls`
 
-**Input**: MFE manifest containing the shared-dependency list (name, version, chunk path) in the manifest's published enumeration order, which fixes only the sequence in which the declarations are visited (`cpt-frontx-adr-mfe-asset-discovery`)
+**Input**: MFE manifest containing the shared-dependency list (name, version, chunk path, and an optional content hash of the entry's emitted chunk) in the manifest's published enumeration order, which fixes only the sequence in which the declarations are visited (`cpt-frontx-adr-mfe-asset-discovery`)
 
 **Output**: Map of shared-dependency package name to blob URL, covering all shared dependencies declared in the manifest
 
@@ -167,20 +168,33 @@ Internal system functions that implement the isolation mechanism.
 1. [x] - `p1` - Verify that every shared-dependency package name declared in the manifest is unique within that manifest, before any network access - `inst-assert-unique-names`
 2. [x] - `p1` - **IF** the same package name is declared more than once, regardless of version - `inst-if-duplicate-name`
    1. [x] - `p1` - **RETURN** error — fail the load with a diagnostic naming the duplicated package and the manifest, because sources and rewrite maps are keyed by bare package name and a duplicate would silently displace the earlier declaration - `inst-raise-duplicate-name`
-3. [x] - `p1` - **FOR EACH** shared dependency declared in the manifest, visited in the manifest's enumeration order — which governs only the sequence of visits and, when two declarations collide on the same `name@version` key, which one claims the cross-MFE cache entry, so the enumeration may issue its fetches concurrently, admitted through the same fixed width `inst-fanout-bounded` names; this phase completes before the load's expose-chunk chain build begins, so the two phases never contribute to one another's in-flight count - `inst-for-each-dep`
-   1. [x] - `p1` - Compute the deduplication cache key as `name@version` - `inst-compute-key`
-   2. [x] - `p1` - **IF** the cross-MFE shared-dep text cache already holds a promise for this key - `inst-if-cache-hit`
+3. [x] - `p1` - **FOR EACH** shared dependency declared in the manifest, visited in the manifest's enumeration order — which governs only the sequence of visits, so the enumeration may issue its fetches concurrently, admitted through the same fixed width `inst-fanout-bounded` names; this phase completes before the load's expose-chunk chain build begins, so the two phases never contribute to one another's in-flight count - `inst-for-each-dep`
+   1. [x] - `p1` - Derive the absolute chunk URL from the manifest's `publicPath` and the dependency's `chunkPath` - `inst-derive-url`
+   2. [x] - `p1` - **IF** the manifest's shared-dependency entry declares a content hash of its emitted chunk - `inst-if-hash-declared`
+      1. [x] - `p1` - Compute the deduplication cache key as `name@version@<content hash>`, so reuse is scoped to loads whose declared hash agrees on the identity of the emitted build - `inst-compute-key-hash`
+   3. [x] - `p1` - **ELSE** - `inst-else-no-hash`
+      1. [x] - `p1` - Compute the deduplication cache key as `name@version@<resolved absolute chunk URL>`, which confines reuse to loads of the same microfrontend because that URL is unique to it - `inst-compute-key-fallback`
+      2. [x] - `p1` - Emit an adoption notice, deduplicated per package `name@version` and the manifest's own id, not per load — naming the dependency, the manifest it came from, and that cross-MFE reuse is disabled for that dependency; the deduplication ledger is bounded so it cannot grow without limit on a long-lived handler, so the same pair may be renotified after its entry is evicted; the load proceeds on the fallback key rather than failing - `inst-emit-adoption-notice`
+   4. [x] - `p1` - **IF** the cross-MFE shared-dep text cache already holds a promise for this key - `inst-if-cache-hit`
       1. [x] - `p1` - Retrieve the cached source text promise - `inst-retrieve-cached`
-   3. [x] - `p1` - **ELSE** - `inst-else-fetch`
-      1. [x] - `p1` - Derive the absolute chunk URL from the manifest's `publicPath` and the dependency's `chunkPath` - `inst-derive-url`
-      2. [x] - `p1` - Fetch the source text and store the *in-flight fetch promise* in the cross-MFE cache under the key before awaiting it — which is what keeps the deduplication race-free however the concurrent fetches are interleaved; on rejection, evict the entry to permit retry - `inst-fetch-and-cache`
+   5. [x] - `p1` - **ELSE** - `inst-else-fetch`
+      1. [x] - `p1` - Fetch the source text from the absolute chunk URL derived earlier and store the *in-flight fetch promise* in the cross-MFE cache under the key before awaiting it — which is what keeps the deduplication race-free however the concurrent fetches are interleaved; on rejection, evict the entry to permit retry - `inst-fetch-and-cache`
 4. [x] - `p1` - Resolve the collected sources in dependency order — the sole source of dependency-order correctness for blob construction, derived from the fetched sources themselves and not from the manifest's enumeration order — processing each dependency only after all dependencies it imports have been resolved - `inst-resolve-order`
 5. [x] - `p1` - **IF** a pass over the pending shared dependencies resolves none of them, the remaining set imports one another circularly and no dependency order over it exists - `inst-if-shared-cycle`
    1. [x] - `p1` - **RETURN** error — fail the load with a diagnostic naming the shared dependencies that remain unresolved and the imports among them that form the cycle, rather than minting a module whose bare specifiers are left unrewritten and which therefore cannot be instantiated - `inst-raise-shared-cycle`
 6. [x] - `p1` - **FOR EACH** dependency in resolved order - `inst-for-each-resolved`
    1. [x] - `p1` - Rewrite bare shared-dep specifiers in the source to the already-resolved blob URLs - `inst-rewrite-specifiers`
-   2. [x] - `p1` - Wrap the rewritten source in a blob, create a fresh blob URL, and add it to the shared-dep blob URL map - `inst-create-dep-blob`
+   2. [x] - `p1` - Assert that no shared-dependency name the manifest declares survives the rewrite as a bare specifier in the rewritten source, checked in the same two import forms the rewrite handles — `from "x"` and `import "x"` — because that check is the exact inverse of a rewrite performed per declared name and so cannot mistake ordinary code for an import; a dynamically imported specifier (`import("x")`) is outside this surface and is not asserted, because the rewrite does not handle it either - `inst-assert-shared-dep-no-bare-specifier`
+   3. [x] - `p1` - **IF** a declared shared-dependency name survives that assertion - `inst-if-shared-dep-bare-specifier`
+      1. [x] - `p1` - **RETURN** error — fail the load with a diagnostic naming the chunk, the surviving specifier, and the microfrontend - `inst-raise-shared-dep-bare-specifier`
+   4. [x] - `p1` - **IF** the rewritten source still carries, in those same two import forms, a specifier the manifest never declared which is well-formed as a package module specifier — an optionally scoped package name with an optional subpath, carrying no whitespace, quote, parenthesis, colon or line break - `inst-if-undeclared-specifier`
+      1. [x] - `p1` - Emit a diagnostic naming the chunk, that specifier, and the microfrontend, and proceed with the load — because such a specifier cannot resolve inside an isolated module and the browser's own resolution failure names neither the chunk nor the microfrontend, while this detection reads the chunk's text without parsing it and therefore must never be able to fail a load that would otherwise succeed - `inst-warn-undeclared-specifier`
+   5. [x] - `p1` - Wrap the rewritten source in a blob, create a fresh blob URL, and add it to the shared-dep blob URL map - `inst-create-dep-blob`
 7. [x] - `p1` - **RETURN** the complete shared-dep blob URL map - `inst-return-map`
+
+**Notes** (deferred, not decided here):
+
+* Whether the undeclared-specifier diagnostic should also scan expose-chain chunks is open; demoting that half to diagnostic-only removes any safety dimension from the question — a warn-only scan cannot fail an expose-chain load — leaving only scan cost and console noise to weigh.
 
 ### Trust-Kernel Guarded Import
 
@@ -281,7 +295,7 @@ The system **MUST** accept an entry's manifest either as the document itself or 
 - [x] All dynamic-code primitives (dynamic import of inline content, dynamic construction of specifier matchers) are confined to the single audited trust-kernel file; a lint rule enforces this boundary
 - [x] The trust-kernel import primitive rejects any input URL that does not begin with `blob:` or `data:` before any import executes
 - [x] All blob URLs in the instance-keyed load cache are retained for the page lifetime and are never revoked after the import resolves
-- [x] Shared-dependency source text is deduplicated across MFE loads using a cross-MFE LRU cache keyed by `name@version`; cache entries for failed fetches are evicted to permit retry
+- [x] Shared-dependency source text is deduplicated across MFE loads using a cross-MFE LRU cache keyed by a producer-published content hash of the emitted chunk when the manifest declares one for that entry, and by the resolved absolute chunk URL — scoping reuse to loads of the same microfrontend — when it does not; cache entries for failed fetches are evicted to permit retry
 - [x] On load failure, the cache entry for the failed extension instance is evicted so a subsequent call can attempt a fresh load
 - [ ] No load ever emits, for any module and for any reason, a specifier that is not an inline-content URL minted by that load. There is no exception for dependency cycles.
 - [ ] A chunk whose static-dependency graph closes a cycle — including one that closes across two branches that fanned out independently — fails the load without a circular wait, with a diagnostic naming the chunk, the lineage that closes the cycle, and the microfrontend.
@@ -290,5 +304,8 @@ The system **MUST** accept an entry's manifest either as the document itself or 
 - [x] A chain build that fails does not affect any later independent chain build of the same load: a lazy import that follows a failed one re-attempts construction of every chunk the failed build abandoned, including chunks the two builds share.
 - [x] Sibling static-import dependencies are fetched concurrently, and the number of chunk-source fetches in flight for one chain build never exceeds the runtime's fixed width no matter how deep or how wide the dependency graph is; the failure reported for a group of siblings is still the first in declaration order regardless of completion order.
 - [x] A manifest declaring the same shared-dependency package name more than once fails the load with a diagnostic naming that package, before any shared-dependency source is fetched.
+- [x] A declared shared-dependency name that survives the rewrite as a bare specifier fails the load with a diagnostic naming the chunk, the surviving specifier, and the microfrontend.
+- [x] An undeclared, well-formed specifier that survives the rewrite is reported in a diagnostic naming the chunk, the specifier, and the microfrontend, and the load completes rather than failing.
+- [x] The adoption notice emitted when a shared dependency's manifest entry carries no content hash is deduplicated per package `name@version` and the manifest's own id, not per load, so distinct manifests declaring the same name and version each surface exactly one notice while repeated loads of the same manifest surface none after the first.
 - [ ] An entry whose manifest is named by id loads when the manifest is registered with the type system of the registry the handler was registered into, without the id ever being cached by an earlier load
 - [ ] An entry whose manifest id no source resolves fails the load with a diagnostic naming that reference, both when a type system was supplied and when the handler belongs to no registry
