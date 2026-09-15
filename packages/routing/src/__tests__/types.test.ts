@@ -112,12 +112,12 @@ describe('ParseResult / SerializeInput', () => {
       .toEqualTypeOf<readonly ParseWarning[]>();
   });
 
-  it('SerializeInput is ParseResult minus warnings', () => {
+  it('SerializeInput is ParseResult minus warnings, with foreignSegments optional (D3)', () => {
     expectTypeOf<SerializeInput>().toEqualTypeOf<{
       readonly shellSubroute: string;
       readonly hash: string | undefined;
       readonly entries: readonly Entry[];
-      readonly foreignSegments: readonly string[];
+      readonly foreignSegments?: readonly string[];
     }>();
   });
 
@@ -199,13 +199,14 @@ describe('EngineProviderPort', () => {
 
 describe('RoutingError', () => {
   // `RoutingError` is a runtime `class extends Error`, not a type-only
-  // tagged union (see `../errors.ts`) — its `code` field is the eight-code
+  // tagged union (see `../errors.ts`) — its `code` field is the nine-code
   // discriminant documented in `../types/index.ts`, so these are ordinary
   // runtime assertions rather than `expectTypeOf` compile-time-only ones.
 
   it('is an Error subclass discriminated by `code`', () => {
     expectTypeOf<RoutingErrorCode>().toEqualTypeOf<
       | 'invalid-shell-subroute'
+      | 'invalid-foreign-segment'
       | 'invalid-domain-key'
       | 'invalid-extension-token'
       | 'invalid-name'

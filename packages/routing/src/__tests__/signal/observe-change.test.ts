@@ -88,6 +88,50 @@ describe('createObserver — initial report', () => {
   });
 });
 
+describe('createObserver — a throwing initial report (D1)', () => {
+  it('leaves zero live subscriptions when the very first callback throws, so a later navigation calls nothing', () => {
+    // The fan-out subscription is registered before this initial report
+    // runs (so a synchronous redirect from a *successful* first callback is
+    // still observed — see the "exactly once" test above). If the report
+    // itself throws, `createObserver` throws too and never reaches the
+    // return statement that would hand the caller a release function — so
+    // without an explicit release inside the throw path, that subscription
+    // would stay registered forever with nothing able to release it.
+    const adapter = resetRealm('/en?screen=dashboard');
+    const history = resolveNavigationHistory(() => adapter);
+    const onTransition = vi.fn(() => {
+      throw new Error('boom');
+    });
+
+    expect(() => createObserver('screen' as DomainKey, staticSource([]), onTransition)).toThrow('boom');
+    expect(onTransition).toHaveBeenCalledTimes(1);
+
+    history.push('/en?screen=other');
+
+    expect(onTransition).toHaveBeenCalledTimes(1);
+  });
+
+  it('still delivers exactly once, and still allows a redirect from the first callback, when the first callback does not throw', () => {
+    // Same scenario as the "exactly once" test above, restated here
+    // alongside the throwing case so the two outcomes — release-on-throw
+    // versus normal delivery — are visible side by side.
+    const adapter = resetRealm('/en?screen=dashboard');
+    const history = resolveNavigationHistory(() => adapter);
+    const receivedScreens: string[] = [];
+    let redirected = false;
+
+    createObserver('screen' as DomainKey, staticSource([]), (transition) => {
+      receivedScreens.push(transition.entries[0]?.extension ?? '(none)');
+      if (!redirected) {
+        redirected = true;
+        history.push('/en?screen=other');
+      }
+    });
+
+    expect(receivedScreens).toEqual(['dashboard', 'other']);
+  });
+});
+
 describe('createObserver — input validation', () => {
   it('throws invalid-domain-key synchronously for a malformed domain key', () => {
     const error = expectRoutingError(() => createObserver('a.b' as DomainKey, staticSource([]), vi.fn()));

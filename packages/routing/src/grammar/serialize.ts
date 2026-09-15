@@ -12,7 +12,12 @@ import { encodePercent } from './percent-codec.js';
 // @cpt-algo:cpt-frontx-algo-routing-navigation-substrate-grammar-serialize:p1
 // @cpt-dod:cpt-frontx-dod-routing-navigation-substrate-shared-history:p1
 export const serializeGrammar: SerializeGrammar = (input) => {
-  const { shellSubroute, hash, entries, foreignSegments } = input;
+  const { shellSubroute, hash, entries } = input;
+  // `foreignSegments` is optional on `SerializeInput` (unlike `ParseResult`,
+  // which always produces it): a caller building a `SerializeInput` by hand
+  // for a URL with nothing foreign in it has no list to supply, and
+  // shouldn't have to invent an empty one just to satisfy the type.
+  const foreignSegments = input.foreignSegments ?? [];
 
   // @cpt-begin:cpt-frontx-algo-routing-navigation-substrate-grammar-serialize:p1:inst-if-invalid-shell-subroute
   // A shell subroute produced by grammar parse can never contain one of
@@ -29,6 +34,26 @@ export const serializeGrammar: SerializeGrammar = (input) => {
     // @cpt-end:cpt-frontx-algo-routing-navigation-substrate-grammar-serialize:p1:inst-throw-invalid-shell-subroute
   }
   // @cpt-end:cpt-frontx-algo-routing-navigation-substrate-grammar-serialize:p1:inst-if-invalid-shell-subroute
+
+  // @cpt-begin:cpt-frontx-algo-routing-navigation-substrate-grammar-serialize:p1:inst-foreach-foreign-segment-validate
+  // Same reparse hazard as the shell-subroute check above, for the other
+  // input a hand-built `SerializeInput` controls directly: a foreign
+  // segment produced by grammar parse can never contain `&` or `#` (parse
+  // only ever collects a segment already split on `&`, with any `#`
+  // already cut off into the hash), so this rejects only a caller-built
+  // segment that would otherwise reparse into an extra entry-or-foreign
+  // position (`&`) or bleed into the fragment (`#`) the instant the
+  // written URL is read back.
+  for (const segment of foreignSegments) {
+    // @cpt-begin:cpt-frontx-algo-routing-navigation-substrate-grammar-serialize:p1:inst-if-invalid-foreign-segment
+    if (/[&#]/.test(segment)) {
+      // @cpt-begin:cpt-frontx-algo-routing-navigation-substrate-grammar-serialize:p1:inst-throw-invalid-foreign-segment
+      throw RoutingError.invalidForeignSegment(segment);
+      // @cpt-end:cpt-frontx-algo-routing-navigation-substrate-grammar-serialize:p1:inst-throw-invalid-foreign-segment
+    }
+    // @cpt-end:cpt-frontx-algo-routing-navigation-substrate-grammar-serialize:p1:inst-if-invalid-foreign-segment
+  }
+  // @cpt-end:cpt-frontx-algo-routing-navigation-substrate-grammar-serialize:p1:inst-foreach-foreign-segment-validate
 
   // @cpt-begin:cpt-frontx-algo-routing-navigation-substrate-grammar-serialize:p1:inst-foreach-entry-validate
   for (let i = 0; i < entries.length; i += 1) {

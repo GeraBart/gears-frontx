@@ -238,18 +238,31 @@ export function createObserverBoundTo(history: NavigationHistory): CreateObserve
 
   // @cpt-begin:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-initial-report
   // @cpt-begin:cpt-frontx-flow-routing-route-ownership-signal-deep-link-cold-mount:p1:inst-report-initial-transition
-  onTransition({
-    domainKey,
-    entries: previous,
-    diff: {
-      added: previous.map((entry) => entry.extension),
-      removed: [],
-      payloadChanged: [],
-      reordered: false,
-      resolutionChanged: [],
-      unresolved: previous.filter((entry) => !entry.resolution.resolved).map((entry) => entry.extension),
-    },
-  });
+  // The fan-out subscription above already exists by the time this call
+  // runs. If this first callback throws, `createObserver` throws too and
+  // never returns a release handle to the caller — so the subscription
+  // would otherwise stay registered forever with nothing able to release
+  // it, and keep firing this observer's callback on every later
+  // navigation. Releasing it here, before propagating the throw, keeps a
+  // failed construction as inert as a construction that never subscribed
+  // at all.
+  try {
+    onTransition({
+      domainKey,
+      entries: previous,
+      diff: {
+        added: previous.map((entry) => entry.extension),
+        removed: [],
+        payloadChanged: [],
+        reordered: false,
+        resolutionChanged: [],
+        unresolved: previous.filter((entry) => !entry.resolution.resolved).map((entry) => entry.extension),
+      },
+    });
+  } catch (error) {
+    unsubscribeFanout();
+    throw error;
+  }
   // @cpt-end:cpt-frontx-flow-routing-route-ownership-signal-deep-link-cold-mount:p1:inst-report-initial-transition
   // @cpt-end:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-initial-report
   // @cpt-end:cpt-frontx-flow-routing-route-ownership-signal-deep-link-cold-mount:p1:inst-create-observer

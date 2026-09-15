@@ -13,7 +13,7 @@
  * caller from deep inside the default `HistoryAdapter`'s own construction.
  * This module supplies the single runtime value every one of those `throw`
  * statements constructs — see `RoutingErrorCode`'s own doc comment for the
- * eight shapes, documented in `src/types/index.ts`.
+ * nine shapes, documented in `src/types/index.ts`.
  *
  * A single `RoutingError` class, not one subclass per code, because every
  * variant is a plain data-carrying error with no behaviour of its own beyond
@@ -33,6 +33,7 @@ import type { DomainKey, Entry, ExtensionToken } from './types/index.js';
  * for the field shape each one populates. */
 export type RoutingErrorCode =
   | 'invalid-shell-subroute'
+  | 'invalid-foreign-segment'
   | 'invalid-domain-key'
   | 'invalid-extension-token'
   | 'invalid-name'
@@ -43,12 +44,12 @@ export type RoutingErrorCode =
 
 export class RoutingError extends Error {
   readonly code: RoutingErrorCode;
-  /** Set only for `invalid-shell-subroute` / `invalid-domain-key` /
-   * `invalid-extension-token` / `invalid-name`. */
+  /** Set only for `invalid-shell-subroute` / `invalid-foreign-segment` /
+   * `invalid-domain-key` / `invalid-extension-token` / `invalid-name`. */
   readonly value?: string;
   /** Set for `duplicate-param-name`, and for `invalid-domain-key` /
    * `invalid-extension-token` only when thrown by grammar serialize (FEATURE
-   * §3, Grammar Serialize, step 1.1), naming the offending entry. */
+   * §3, Grammar Serialize, step 2.1), naming the offending entry. */
   readonly entry?: Entry;
   /** Set only for `duplicate-extension`. */
   readonly entries?: readonly [Entry, Entry];
@@ -93,10 +94,27 @@ export class RoutingError extends Error {
   }
 
   /**
+   * A `foreignSegments` entry given to grammar serialize contains `&` or
+   * `#` — the same reparse hazard `invalidShellSubroute` guards against, for
+   * the other input a caller building a `SerializeInput` by hand controls
+   * directly: an embedded `&` splits it into an entry-or-foreign-segment
+   * position it never had, and an embedded `#` moves everything after it
+   * out of the query string and into the fragment (FEATURE §3, Grammar
+   * Serialize, step 1).
+   */
+  static invalidForeignSegment(value: string): RoutingError {
+    return new RoutingError(
+      'invalid-foreign-segment',
+      `Invalid foreign segment (contains "&" or "#"): "${value}"`,
+      { value },
+    );
+  }
+
+  /**
    * A `domainKey` argument failed the `domain-key` production (ADR 0003,
    * "Tokens"). `entry` is set only when this is thrown by grammar serialize,
    * which names the offending entry, not merely its `domainKey` value
-   * (FEATURE §3, Grammar Serialize, step 1.1).
+   * (FEATURE §3, Grammar Serialize, step 2.1).
    */
   static invalidDomainKey(value: string, entry?: Entry): RoutingError {
     return new RoutingError('invalid-domain-key', `Invalid domain key: "${value}"`, {
@@ -107,7 +125,8 @@ export class RoutingError extends Error {
 
   /**
    * An `extension` argument failed the `name` alphabet. `entry` is set only
-   * when this is thrown by grammar serialize (see `invalidDomainKey`).
+   * when this is thrown by grammar serialize (FEATURE §3, Grammar
+   * Serialize, step 2.1; see `invalidDomainKey`).
    */
   static invalidExtensionToken(value: string, entry?: Entry): RoutingError {
     return new RoutingError(

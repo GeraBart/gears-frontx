@@ -109,12 +109,33 @@ export const parseGrammar: ParseGrammar = (input) => {
     // @cpt-end:cpt-frontx-algo-routing-navigation-substrate-grammar-parse:p1:inst-if-plainly-foreign
 
     if (!validateName(candidateExtension)) {
+      // @cpt-begin:cpt-frontx-algo-routing-navigation-substrate-grammar-parse:p1:inst-entry-candidate-shape
+      // A single-segment domain key with no `;` parameters is exactly as
+      // shaped as a foreign `key=value` pair (ADR 0003, "Repetition and
+      // order") — nothing at this layer tells `page=2` apart from a real
+      // occupant's malformed extension. `parseGrammar` is never handed the
+      // caller's registered domain names (its signature is `string | {
+      // shellSubroute, search, hash }` — see the algorithm type and every
+      // call site), so it cannot ask "is this key one of mine" and does not
+      // invent a channel to do so. It warns only when the shape is
+      // unmistakable on its own: the domain key already carries the
+      // ancestry form (a `.`-composed key), or the raw segment carries `;`
+      // parameters. Either shape could not plausibly be an unrelated query
+      // parameter, so a broken extension under it still warns below; a bare
+      // single-segment key is foreign, silently, however invalid its
+      // extension looks.
+      const isEntryCandidate = candidateDomainKey.includes('.') || paramSegments.length > 0;
+      // @cpt-end:cpt-frontx-algo-routing-navigation-substrate-grammar-parse:p1:inst-entry-candidate-shape
+
       // @cpt-begin:cpt-frontx-algo-routing-navigation-substrate-grammar-parse:p1:inst-drop-malformed
       // A valid-looking domain key with an invalid extension token still
       // looks enough like an entry to warn about, unlike the plainly
-      // foreign case above — dropped from `entries`, warned, and kept
-      // verbatim as a foreign segment on the same terms as one.
-      warnings.push({ code: 'malformed-entry', rawEntry });
+      // foreign case above — dropped from `entries`, warned when its shape
+      // is unmistakably ours, and kept verbatim as a foreign segment on the
+      // same terms as one either way.
+      if (isEntryCandidate) {
+        warnings.push({ code: 'malformed-entry', rawEntry });
+      }
       foreignSegments.push(rawEntry);
       continue;
       // @cpt-end:cpt-frontx-algo-routing-navigation-substrate-grammar-parse:p1:inst-drop-malformed

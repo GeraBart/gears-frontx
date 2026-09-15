@@ -95,7 +95,7 @@ No package in this ecosystem other than this one imports a concrete router engin
 
 #### ROUTING-TANSTACK-1 — Sole engine import in the ecosystem
 
-- [ ] `p2` - **ID**: `cpt-frontx-constraint-routing-tanstack-sole-engine-import`
+- [x] `p2` - **ID**: `cpt-frontx-constraint-routing-tanstack-sole-engine-import`
 
 No other package in this ecosystem imports a concrete router engine or its packages directly — concretely, no package other than this one imports `@tanstack/react-router` or `@tanstack/history`. This package is the sole, deliberate exception, so a mechanical import-graph guard can name exactly those two packages against exactly this one package.
 

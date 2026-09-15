@@ -306,6 +306,7 @@ The installed SDLC kit currently defines feature-entry identifiers only in DECOM
 - `cpt-frontx-component-routing-navigation-substrate`
 - `cpt-frontx-routing-principle-single-history-authority`
 - `cpt-frontx-constraint-routing-no-intra-ecosystem-dependency`
+- `cpt-frontx-constraint-routing-no-engine-leak`
 
 ### 2.23 [Routing Route Ownership Signal](../packages/routing/architecture/features/route-ownership-signal/) - MEDIUM
 

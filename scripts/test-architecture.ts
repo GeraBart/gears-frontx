@@ -201,7 +201,17 @@ function getEcosystemBoundaryChecks(): ArchCheck[] {
         'CLI-1 (cpt-frontx-constraint-cli-template-independence): cli sources contain no hardcoded template package names (excluding auto-generated version registry)',
     },
     // @cpt-end:cpt-frontx-constraint-cli-template-independence:p17:inst-hardcoded-name-check
-    // @cpt-begin:cpt-frontx-constraint-routing-no-intra-ecosystem-dependency:p10:inst-arch-check
+    // One dep-cruiser invocation enforces all four ROUTING-1..3 /
+    // ROUTING-TANSTACK-1..3 constraints at once (`.dependency-cruiser.cjs`
+    // rules `frontx-routing-2`, `frontx-routing-3`, `frontx-routing-tanstack-2`,
+    // `frontx-routing-tanstack-3`) — each DESIGN's own constraint gets its
+    // own marker pair over this identical block, at `p2` to match its own
+    // declaration (`packages/routing/architecture/DESIGN.md` §2.2,
+    // `packages/routing-tanstack/architecture/DESIGN.md` §2.1), rather than
+    // one marker standing in for all four.
+    // @cpt-begin:cpt-frontx-constraint-routing-no-intra-ecosystem-dependency:p2:inst-arch-check
+    // @cpt-begin:cpt-frontx-constraint-routing-no-engine-leak:p2:inst-arch-check
+    // @cpt-begin:cpt-frontx-constraint-routing-tanstack-sole-engine-import:p2:inst-arch-check
     {
       command:
         'npx dependency-cruiser packages/routing/src packages/routing-tanstack/src --config .dependency-cruiser.cjs --output-type err-long',
@@ -211,7 +221,9 @@ function getEcosystemBoundaryChecks(): ArchCheck[] {
         'cpt-frontx-constraint-routing-tanstack-sole-engine-import): routing & routing-tanstack boundary — no ' +
         'template content, no intra-ecosystem dependency, no engine leak, single ecosystem edge, sole engine import',
     },
-    // @cpt-end:cpt-frontx-constraint-routing-no-intra-ecosystem-dependency:p10:inst-arch-check
+    // @cpt-end:cpt-frontx-constraint-routing-tanstack-sole-engine-import:p2:inst-arch-check
+    // @cpt-end:cpt-frontx-constraint-routing-no-engine-leak:p2:inst-arch-check
+    // @cpt-end:cpt-frontx-constraint-routing-no-intra-ecosystem-dependency:p2:inst-arch-check
   ];
 }
 

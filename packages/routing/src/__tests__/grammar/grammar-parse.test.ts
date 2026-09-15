@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseGrammar } from '../../grammar/parse.js';
+import { serializeGrammar } from '../../grammar/serialize.js';
 
 // cpt-frontx-algo-routing-navigation-substrate-grammar-parse
 // FEATURE §6 Acceptance Criteria — examples 7.1, 7.6, 7.8, malformed,
@@ -99,15 +100,6 @@ describe('parseGrammar — foreign segments (H3): plainly not an entry, no warni
 });
 
 describe('parseGrammar — malformed-looking entries (H3): still warn, and are also kept foreign', () => {
-  it('drops an entry with a valid domain key but an invalid extension token, reporting it as malformed-entry and keeping it foreign', () => {
-    const result = parseGrammar('/en?screen=Dashboard&widgets=line-a;range=7d');
-    expect(result.entries).toEqual([
-      { domainKey: 'widgets', extension: 'line-a', params: [{ name: 'range', value: '7d' }] },
-    ]);
-    expect(result.foreignSegments).toEqual(['screen=Dashboard']);
-    expect(result.warnings).toEqual([{ code: 'malformed-entry', rawEntry: 'screen=Dashboard' }]);
-  });
-
   it('drops the whole entry on a malformed percent-escape, reporting it as malformed-entry and keeping it foreign', () => {
     const result = parseGrammar('/en?sheet=search;q=%zz&screen=dashboard');
     expect(result.entries).toEqual([
@@ -115,6 +107,69 @@ describe('parseGrammar — malformed-looking entries (H3): still warn, and are a
     ]);
     expect(result.foreignSegments).toEqual(['sheet=search;q=%zz']);
     expect(result.warnings).toEqual([{ code: 'malformed-entry', rawEntry: 'sheet=search;q=%zz' }]);
+  });
+});
+
+describe('parseGrammar — warning scope (owner decision, 20-fix3): only a segment plainly shaped as an entry may warn', () => {
+  it('keeps a single-segment key with an invalid extension as foreign, with no warning, when nothing else marks it as ours — indistinguishable from an unrelated query parameter', () => {
+    const url = '/en?page=2&utm_source=news&code=4%2F0AX&state=eyJhbGciOiJIUzI1NiJ9&flag&screen=Dashboard';
+    const result = parseGrammar(url);
+    expect(result.entries).toEqual([]);
+    expect(result.foreignSegments).toEqual([
+      'page=2',
+      'utm_source=news',
+      'code=4%2F0AX',
+      'state=eyJhbGciOiJIUzI1NiJ9',
+      'flag',
+      'screen=Dashboard',
+    ]);
+    expect(result.warnings).toEqual([]);
+  });
+
+  it('survives a write unchanged — the zero-warning foreign segments round-trip byte-exact', () => {
+    const url = '/en?page=2&utm_source=news&code=4%2F0AX&state=eyJhbGciOiJIUzI1NiJ9&flag';
+    const parsed = parseGrammar(url);
+    const written = serializeGrammar({
+      shellSubroute: parsed.shellSubroute,
+      hash: parsed.hash,
+      entries: parsed.entries,
+      foreignSegments: parsed.foreignSegments,
+    });
+    expect(written).toBe(url);
+    expect(parseGrammar(written).warnings).toEqual([]);
+  });
+
+  it('still warns when the domain key carries the ancestry form, even though the extension is invalid', () => {
+    const result = parseGrammar('/en?screen.app.panel=Bad_1&widgets=line-a;range=7d');
+    expect(result.entries).toEqual([
+      { domainKey: 'widgets', extension: 'line-a', params: [{ name: 'range', value: '7d' }] },
+    ]);
+    expect(result.foreignSegments).toEqual(['screen.app.panel=Bad_1']);
+    expect(result.warnings).toEqual([{ code: 'malformed-entry', rawEntry: 'screen.app.panel=Bad_1' }]);
+  });
+
+  it('still warns when the raw segment carries ";" parameters, even for a single-segment key with an invalid extension', () => {
+    const result = parseGrammar('/en?screen=Bad_1;tab=x&widgets=line-a;range=7d');
+    expect(result.entries).toEqual([
+      { domainKey: 'widgets', extension: 'line-a', params: [{ name: 'range', value: '7d' }] },
+    ]);
+    expect(result.foreignSegments).toEqual(['screen=Bad_1;tab=x']);
+    expect(result.warnings).toEqual([{ code: 'malformed-entry', rawEntry: 'screen=Bad_1;tab=x' }]);
+  });
+
+  it('does not warn on a well-formed entry that merely carries a parameter value outside the name alphabet — params have no such constraint', () => {
+    const result = parseGrammar('/en?screen=app;tab=Bad_1');
+    expect(result.entries).toEqual([
+      { domainKey: 'screen', extension: 'app', params: [{ name: 'tab', value: 'Bad_1' }] },
+    ]);
+    expect(result.warnings).toEqual([]);
+  });
+
+  it('a duplicate extension still reports its own warning, unchanged by the entry-candidate shape rule', () => {
+    const result = parseGrammar('/en?widgets=line-a;range=7d&widgets=line-a;range=30d');
+    expect(result.warnings).toEqual([
+      { code: 'duplicate-extension', rawEntry: 'widgets=line-a;range=30d' },
+    ]);
   });
 });
 

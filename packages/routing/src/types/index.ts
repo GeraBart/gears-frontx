@@ -291,13 +291,19 @@ export interface ParseResult {
  * interleaved with entries the way the source query string had them, since
  * entries and foreign segments are two separate lists once parsed and this
  * package does not track their original interleaving (ADR 0003,
- * "Repetition and order").
+ * "Repetition and order"). Optional here, unlike on `ParseResult` — a
+ * caller building a `SerializeInput` by hand for a URL with nothing foreign
+ * in it has no list to supply; `serializeGrammar` treats an omitted field
+ * exactly as an empty one. Every entry, once supplied, is validated the
+ * same way a hand-built shell subroute is (FEATURE §3, Grammar Serialize,
+ * step 1): one containing `&` or `#` throws `invalid-foreign-segment`
+ * rather than reparsing into a corrupted structure on the next read.
  */
 export interface SerializeInput {
   readonly shellSubroute: string;
   readonly hash: string | undefined;
   readonly entries: readonly Entry[];
-  readonly foreignSegments: readonly string[];
+  readonly foreignSegments?: readonly string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -535,7 +541,7 @@ export type EngineProviderPort<TRouteTree = unknown, TRouter = unknown> = (
 // ---------------------------------------------------------------------------
 
 /**
- * The eight shapes a thrown `RoutingError` (`../errors.js`) can carry, one
+ * The nine shapes a thrown `RoutingError` (`../errors.js`) can carry, one
  * per `code`. Documented here as prose, not as exported interfaces: no value
  * ever satisfies one of these shapes on its own — `RoutingError` is a
  * single flat runtime class whose static factories populate only the
@@ -552,9 +558,18 @@ export type EngineProviderPort<TRouteTree = unknown, TRouter = unknown> = (
  *   parse can never contain one of these three characters by construction
  *   (parse cuts the shell subroute off at the first `?`); this throw exists
  *   for the caller that builds a `SerializeInput` by hand instead.
+ * - `invalid-foreign-segment` — `value` (the offending segment); a given
+ *   `foreignSegments` entry contains `&` or `#` — the same reparse hazard as
+ *   `invalid-shell-subroute`, for the other input a hand-built
+ *   `SerializeInput` controls directly (FEATURE §3, Grammar Serialize, step
+ *   1). A foreign segment that reached serialize by way of grammar parse
+ *   can never contain either character by construction (parse only ever
+ *   collects a segment already split on `&`, with any `#` already cut off
+ *   into the hash); this throw exists for the same hand-built-input case
+ *   `invalid-shell-subroute` guards against.
  * - `invalid-domain-key` — `value` (the offending key); `entry` set only
  *   when thrown by grammar serialize (FEATURE §3, Grammar Serialize, step
- *   1.1: "THROW an error naming this entry"), absent at every other throw
+ *   2.1: "THROW an error naming this entry"), absent at every other throw
  *   site (observer creation, the back-projection helper, domain-key
  *   composition).
  * - `invalid-extension-token` — `value`; `entry` set only when thrown by
@@ -563,16 +578,16 @@ export type EngineProviderPort<TRouteTree = unknown, TRouter = unknown> = (
  *   (FEATURE (navigation-substrate) §3, Domain-Key Composition, step 3).
  * - `duplicate-param-name` — `entry`; a grammar-serialize input entry
  *   carried two params of the identical name (FEATURE §3, Grammar
- *   Serialize, step 1.2).
+ *   Serialize, step 2.2).
  * - `duplicate-extension` — `entries`, a pair; a grammar-serialize input
  *   list carried two entries sharing the identical `domainKey` and
- *   `extension` (FEATURE §3, Grammar Serialize, step 1.3).
+ *   `extension` (FEATURE §3, Grammar Serialize, step 2.3).
  * - `reordered-not-permutation` — `domainKey`, `reordered`; the URL
  *   back-projection helper's own `reordered` delta named a set of
  *   extension tokens that is not exactly the set of this domain key's own
  *   entries surviving the delta's other operations (added, removed,
  *   payload-changed, replaced) — a missing survivor, an extra token, or a
- *   duplicate. None of the other five codes names this case: it is neither
+ *   duplicate. None of the other seven codes names this case: it is neither
  *   a lexical failure (`invalid-*`) nor a serialize-input shape violation
  *   (`duplicate-*`), so it is its own code.
  * - `no-navigation-history-in-realm` — no fields set; `resolveNavigationHistory`
