@@ -34,6 +34,7 @@ const UTF8_DECODER = new TextDecoder('utf-8', { fatal: true });
  * every other character (including all non-ASCII) is UTF-8-encoded and
  * percent-escaped byte by byte.
  */
+// @cpt-algo:cpt-frontx-algo-routing-navigation-substrate-grammar-serialize:p1
 // @cpt-begin:cpt-frontx-algo-routing-navigation-substrate-grammar-serialize:p1:inst-percent-encode
 export function encodePercent(value: string): string {
   let out = '';
@@ -65,6 +66,7 @@ export function encodePercent(value: string): string {
  * both "malformed escape" per the FEATURE, reported by the caller as a
  * dropped, malformed *entry*, never a per-parameter failure.
  */
+// @cpt-algo:cpt-frontx-algo-routing-navigation-substrate-grammar-parse:p1
 // @cpt-begin:cpt-frontx-algo-routing-navigation-substrate-grammar-parse:p1:inst-decode-once
 export function decodePercent(raw: string): string | null {
   let out = '';
