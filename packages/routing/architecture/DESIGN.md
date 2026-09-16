@@ -428,7 +428,7 @@ An implementation **MUST** reproduce this example as one of its own acceptance s
 
 ### Worked Example: A Console Layout And Its URL
 
-Requested by a reviewer as a concrete check for this design and for whatever implements it: a composed layout, the state a user has reached inside it, and the single URL that state resolves to and is recoverable from.
+This example serves as a concrete check for this design and for whatever implements it, because it exercises a composed layout, the state a user has reached inside it, and the single URL that state resolves to and is recoverable from.
 
 **The layout**: a console — the outermost level — projects a `screen` domain and a root `modal` domain, each holding one occupant at a time and each addressed identically, with neither privileged over the other. One occupant of the screen domain is a *Tenants* screen; a button inside its own zone opens a `tabs` domain nested inside that screen's own extension, one of whose occupants is a *Contacts* tab, and a further button inside it opens a create-contact modal that mounts in the console's own root `modal` domain, not in any domain nested inside the *Tenants* screen's own zone.
 
