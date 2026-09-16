@@ -516,9 +516,11 @@ export interface EngineProviderInput<TRouteTree = unknown> {
 
 /**
  * The port's own normative contract: a conforming provider is a function
- * from `EngineProviderInput` to a constructed, mounted router (`TRouter`,
- * opaque to this package — the ecosystem's own default provider and any
- * other conforming provider each choose their own concrete shape). Modelled
+ * from `EngineProviderInput` to a constructed router (`TRouter`, opaque to
+ * this package — the ecosystem's own default provider and any other
+ * conforming provider each choose their own concrete shape). Mounting that
+ * router into the microfrontend's own component tree is a separate act the
+ * consumer performs; this port's own contract ends at construction. Modelled
  * as a callable rather than a class/constructor shape because the FEATURE
  * states the contract as "a function that accepts ... and returns ..."
  * (§1.5) — a plain function is the smallest shape satisfying that.
@@ -527,6 +529,11 @@ export interface EngineProviderInput<TRouteTree = unknown> {
  * package's single normative statement of the port; a provider's own
  * adaptation of it is a worked example recorded in that provider's own
  * FEATURE, never a second normative copy.
+ *
+ * Folding the mount step into this port was considered and rejected: it
+ * would widen `TRouter` into a router-plus-element (or a `{router, destroy}`
+ * pair), breaking the very typing this function exists to satisfy, and it
+ * would drag React into this package's engine-free core.
  */
 export type EngineProviderPort<TRouteTree = unknown, TRouter = unknown> = (
   input: EngineProviderInput<TRouteTree>,

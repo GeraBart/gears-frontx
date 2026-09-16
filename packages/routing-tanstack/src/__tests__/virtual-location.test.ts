@@ -70,6 +70,17 @@ describe('projectVirtualLocationToParams', () => {
     ]);
   });
 
+  it('falls back to the raw text for a malformed percent-escape instead of throwing', () => {
+    // Regression coverage for the shared codec's own extraction
+    // (`../search-codec.js`): this guard must keep holding here exactly as
+    // it did before `parseSearchString` moved into its own module.
+    const params = projectVirtualLocationToParams('/x', '?a=%');
+    expect(params).toEqual([
+      { name: 'route', value: 'x' },
+      { name: 'a', value: '%' },
+    ]);
+  });
+
   it('round-trips through projectParamsToVirtualLocation', () => {
     const original = [
       { name: 'route', value: 'contacts' },

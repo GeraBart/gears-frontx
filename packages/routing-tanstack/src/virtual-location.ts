@@ -6,6 +6,7 @@
 // FEATURE (engine-provider) §1.1, §1.5, §3 "History Adaptation To The
 // RouterHistory Contract".
 import type { Param } from '@gears-frontx/routing';
+import { buildSearchString, parseSearchString } from './search-codec.js';
 
 /** The one payload parameter this package's adapter reserves for an
  * occupant's own internal route — this provider's own convention, not a
@@ -89,68 +90,9 @@ export function splitHref(path: string): { pathname: string; search: string; has
   return { pathname, search, hash };
 }
 
-/**
- * Builds a `?a=b&c=d`-shaped search string from a virtual location's own
- * non-`route` parameters, on read. Not the navigation substrate's own
- * grammar codec — that codec encodes the composed-application URL's entry
- * syntax (ADR 0003), a structurally different grammar from TanStack's own
- * query-string surface, which this adapter treats as an opaque string it
- * never re-parses beyond generic `name=value` splitting (FEATURE §3, step
- * 1: "this package's own adapter treats as an opaque string").
- */
-function buildSearchString(params: readonly Param[]): string {
-  if (params.length === 0) {
-    return '';
-  }
-  return `?${params.map((param) => `${encodeURIComponent(param.name)}=${encodeURIComponent(param.value)}`).join('&')}`;
-}
-
-/**
- * `decodeURIComponent` throws `URIError` on a bare `%` or any other
- * malformed percent-escape — a real possibility for a page's own query
- * string, which this adapter never controls (a hand-typed URL, a bookmark
- * from an older version of the app, a third party's own link). Letting that
- * throw escape `parseSearchString` would fail the whole adaptation at
- * construction over one bad pair; falling back to the raw, still-encoded
- * text for that one pair keeps every other pair intact and keeps this
- * adapter's own construction total, mirroring the navigation substrate's
- * own grammar parse, which never throws on a malformed token either — it
- * downgrades to a warning instead (`ParseWarningCode`, 'malformed-entry').
- * This adapter has no warning channel of its own to report through, so it
- * keeps the raw text rather than dropping the pair outright: a raw,
- * still-percent-encoded value is still a usable (if unlovely) string for
- * whatever reads it next, where dropping it would silently lose a
- * parameter the URL visibly still carries.
- *
- * The raw text does not stay raw indefinitely: `buildSearchString` runs
- * every value through `encodeURIComponent` on the next write regardless of
- * where it came from, so a value kept raw here because it failed to decode
- * is re-encoded on that write like any other — a bare `%` becomes `%25`,
- * for instance. The URL's own text changes without this adapter raising a
- * signal of its own (DESIGN §3.3, "Virtual location").
- */
-function decodeComponentOrRaw(value: string): string {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
-}
-
-/** The reverse of `buildSearchString`, applied to whatever search string
- * TanStack's own router handed this adapter back (via `push`/`replace`'s
- * `path` argument, itself built by TanStack's own search serializer) —
- * generic `name=value` splitting, not the grammar's own percent-codec. */
-function parseSearchString(search: string): readonly Param[] {
-  const trimmed = search.startsWith('?') ? search.slice(1) : search;
-  if (trimmed === '') {
-    return [];
-  }
-  return trimmed.split('&').map((pair) => {
-    const eq = pair.indexOf('=');
-    if (eq === -1) {
-      return { name: decodeComponentOrRaw(pair), value: '' };
-    }
-    return { name: decodeComponentOrRaw(pair.slice(0, eq)), value: decodeComponentOrRaw(pair.slice(eq + 1)) };
-  });
-}
+// `buildSearchString`/`parseSearchString` — including the malformed-input
+// guard the latter relies on (`decodeComponentOrRaw`) — now live in
+// `./search-codec.js`, shared with `location-preserving-redirect.ts`'s own
+// redirect-search builder rather than each parsing this string on its own
+// (a second, unguarded copy is what let a lone `%` in a redirect's own
+// search throw before this extraction).

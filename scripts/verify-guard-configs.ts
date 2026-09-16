@@ -477,6 +477,244 @@ function verifyRoutingEngineLeakPattern(): TestResult[] {
 }
 
 /**
+ * Verify `frontx-routing-2-no-intra-ecosystem-dependency` forbids
+ * @gears-frontx/routing from importing its own provider,
+ * @gears-frontx/routing-tanstack. Checked in all three resolved shapes
+ * `pkgTargets` produces (`.dependency-cruiser.cjs`'s own header comment: a
+ * `to` pattern that covers only one of the three is a pattern that silently
+ * never fires for the other two), plus a regression guard over the six
+ * packages the rule already forbade — widening it to also name
+ * routing-tanstack must not be the change that silently narrows it to
+ * *only* routing-tanstack.
+ */
+const ROUTING_TANSTACK_RESOLVED_FORMS = [
+  'packages/routing-tanstack/src/index.ts',
+  'node_modules/@gears-frontx/routing-tanstack/dist/index.js',
+  '@gears-frontx/routing-tanstack',
+];
+const OTHER_INTRA_ECOSYSTEM_FORBIDDEN_PACKAGES = [
+  'mfes',
+  'gts-plugin',
+  'api',
+  'cli',
+  'cyber-pilot-kit-frontx',
+  'ui-kit',
+  'telemetry',
+];
+
+function verifyRoutingCoreProviderIsolation(): TestResult[] {
+  const results: TestResult[] = [];
+
+  try {
+    const rootConfig = require(join(REPO_ROOT, '.dependency-cruiser.cjs'));
+    const rule = (
+      rootConfig.forbidden as Array<{ name: string; to?: { path?: string | string[] } }>
+    ).find((r) => r.name === 'frontx-routing-2-no-intra-ecosystem-dependency');
+
+    if (!rule) {
+      results.push({
+        name: 'frontx-routing-2-no-intra-ecosystem-dependency: Rule present',
+        passed: false,
+        message: 'RULE MISSING - @gears-frontx/routing has no intra-ecosystem-dependency boundary!',
+      });
+      return results;
+    }
+
+    const allPaths = Array.isArray(rule.to?.path)
+      ? rule.to.path
+      : rule.to?.path
+        ? [rule.to.path]
+        : [];
+
+    for (const form of ROUTING_TANSTACK_RESOLVED_FORMS) {
+      const matches = allPaths.some((p) => new RegExp(p).test(form));
+      results.push({
+        name: `frontx-routing-2-no-intra-ecosystem-dependency: blocks the core importing its provider (${form})`,
+        passed: matches,
+        message: matches
+          ? 'Matched'
+          : `PATTERN GAP - @gears-frontx/routing can import routing-tanstack unresolved through this shape: ${form}`,
+      });
+    }
+
+    for (const packageName of OTHER_INTRA_ECOSYSTEM_FORBIDDEN_PACKAGES) {
+      const sample = `packages/${packageName}/src/index.ts`;
+      const matches = allPaths.some((p) => new RegExp(p).test(sample));
+      results.push({
+        name: `frontx-routing-2-no-intra-ecosystem-dependency: still blocks ${packageName}`,
+        passed: matches,
+        message: matches ? 'Matched' : `REGRESSION - ${packageName} no longer blocked (${sample})`,
+      });
+    }
+  } catch (error) {
+    results.push({
+      name: 'frontx-routing-2-no-intra-ecosystem-dependency: Verification',
+      passed: false,
+      message: `Error: ${(error as Error).message}`,
+    });
+  }
+
+  return results;
+}
+
+/**
+ * Verify `frontx-routing-tanstack-3-sole-engine-import` bans a concrete
+ * non-TanStack router engine — `react-router`, `react-router-dom`,
+ * `vue-router`, `@remix-run/router` — ecosystem-wide, not just `@tanstack/*`,
+ * and that its `from` still binds every ecosystem package except the
+ * provider package itself (the entire point of the rule: a concrete engine
+ * is only permitted from *inside* @gears-frontx/routing-tanstack). Mirrors
+ * `verifyRoutingEngineLeakPattern` above for the mirror-image rule.
+ */
+const NON_TANSTACK_ENGINE_PACKAGE_NAMES = [
+  'react-router',
+  'react-router-dom',
+  'vue-router',
+  '@remix-run/router',
+];
+const SOLE_ENGINE_BOUND_PACKAGES = [
+  'mfes',
+  'gts-plugin',
+  'api',
+  'cli',
+  'cyber-pilot-kit-frontx',
+  'ui-kit',
+  'telemetry',
+  'routing',
+];
+
+function verifySoleEngineImportPattern(): TestResult[] {
+  const results: TestResult[] = [];
+
+  try {
+    const rootConfig = require(join(REPO_ROOT, '.dependency-cruiser.cjs'));
+    const rule = (
+      rootConfig.forbidden as Array<{
+        name: string;
+        from?: { path?: string };
+        to?: { path?: string | string[]; pathNot?: string | string[] };
+      }>
+    ).find((r) => r.name === 'frontx-routing-tanstack-3-sole-engine-import');
+
+    if (!rule) {
+      results.push({
+        name: 'frontx-routing-tanstack-3-sole-engine-import: Rule present',
+        passed: false,
+        message: 'RULE MISSING - the sole-engine-import boundary is gone!',
+      });
+      return results;
+    }
+
+    const fromPattern = rule.from?.path ?? '';
+    for (const packageName of SOLE_ENGINE_BOUND_PACKAGES) {
+      const matches = new RegExp(fromPattern).test(`packages/${packageName}/src/index.ts`);
+      results.push({
+        name: `frontx-routing-tanstack-3-sole-engine-import: from binds ${packageName}/src`,
+        passed: matches,
+        message: matches ? 'Matched' : `REGRESSION - ${packageName}/src no longer bound by this rule`,
+      });
+    }
+    const excludesProvider = !new RegExp(fromPattern).test('packages/routing-tanstack/src/index.ts');
+    results.push({
+      name: 'frontx-routing-tanstack-3-sole-engine-import: from excludes the provider package itself',
+      passed: excludesProvider,
+      message: excludesProvider
+        ? 'Excluded, as intended - the provider is the one package allowed a concrete engine'
+        : 'REGRESSION - the rule now forbids the provider its own sole engine',
+    });
+
+    const allPaths = Array.isArray(rule.to?.path) ? rule.to.path : rule.to?.path ? [rule.to.path] : [];
+    const allPathNot = Array.isArray(rule.to?.pathNot)
+      ? rule.to.pathNot
+      : rule.to?.pathNot
+        ? [rule.to.pathNot]
+        : [];
+
+    for (const engineName of NON_TANSTACK_ENGINE_PACKAGE_NAMES) {
+      const matchesBare = allPaths.some((p) => new RegExp(p).test(engineName));
+      const matchesNodeModules = allPaths.some((p) => new RegExp(p).test(`node_modules/${engineName}`));
+      const passed = matchesBare && matchesNodeModules;
+      results.push({
+        name: `frontx-routing-tanstack-3-sole-engine-import: blocks ${engineName} outside the provider package`,
+        passed,
+        message: passed
+          ? 'Matched in both bare-specifier and node_modules forms'
+          : `PATTERN GAP - ${engineName} not caught (bare=${matchesBare}, node_modules=${matchesNodeModules})`,
+      });
+    }
+
+    const reactTableForms = ['@tanstack/react-table', 'node_modules/@tanstack/react-table'];
+    const reactTableAllowed = reactTableForms.every((form) =>
+      allPathNot.some((p) => new RegExp(p).test(form))
+    );
+    results.push({
+      name: 'frontx-routing-tanstack-3-sole-engine-import: still carves out @tanstack/react-table',
+      passed: reactTableAllowed,
+      message: reactTableAllowed
+        ? 'react-table carve-out intact'
+        : 'REGRESSION - @tanstack/react-table is no longer carved out of the ban',
+    });
+  } catch (error) {
+    results.push({
+      name: 'frontx-routing-tanstack-3-sole-engine-import: Verification',
+      passed: false,
+      message: `Error: ${(error as Error).message}`,
+    });
+  }
+
+  return results;
+}
+
+/**
+ * Verify `frontx-telemetry-1-no-template-content` carries the
+ * `couldNotResolve: false` guard the routing "no template content" rules
+ * already carry. Without it, any unresolved bare specifier — an uninstalled
+ * npm package, not just template content — keeps its bare form as `resolved`
+ * and reads as "imports template territory" for the wrong reason (the exact
+ * false-positive this rule's sibling routing rules were already patched
+ * against). A cruise cannot detect this gap by running: an unresolved import
+ * from an uninstalled package DOES trip the rule, just not for the reason
+ * its name claims — the same "passes for the wrong reason" shape every other
+ * check in this file exists to catch.
+ */
+function verifyTelemetryTemplateContentResolutionGuard(): TestResult[] {
+  const results: TestResult[] = [];
+
+  try {
+    const rootConfig = require(join(REPO_ROOT, '.dependency-cruiser.cjs'));
+    const rule = (
+      rootConfig.forbidden as Array<{ name: string; to?: { couldNotResolve?: boolean } }>
+    ).find((r) => r.name === 'frontx-telemetry-1-no-template-content');
+
+    if (!rule) {
+      results.push({
+        name: 'frontx-telemetry-1-no-template-content: Rule present',
+        passed: false,
+        message: 'RULE MISSING - the telemetry template-content boundary is gone!',
+      });
+      return results;
+    }
+
+    const passed = rule.to?.couldNotResolve === false;
+    results.push({
+      name: 'frontx-telemetry-1-no-template-content: guards against unresolved-specifier false positives',
+      passed,
+      message: passed
+        ? 'couldNotResolve: false present - an uninstalled npm package is no longer mistaken for a template-content violation'
+        : 'GUARD MISSING - any unresolved bare specifier (e.g. an uninstalled router package) trips this rule for the wrong reason',
+    });
+  } catch (error) {
+    results.push({
+      name: 'frontx-telemetry-1-no-template-content: Verification',
+      passed: false,
+      message: `Error: ${(error as Error).message}`,
+    });
+  }
+
+  return results;
+}
+
+/**
  * Verify `doNotFollow` bounds `node_modules` at any depth in both depcruise
  * configs that cruise the ecosystem tree.
  *
@@ -1104,6 +1342,22 @@ async function runVerification(): Promise<void> {
     );
   }
 
+  // Core-does-not-import-provider, ecosystem-wide sole-engine import, and the
+  // unresolved-specifier false-positive guard
+  log('\n🔌 Routing Provider & Sole-Engine Boundary', 'blue');
+  const providerIsolationResults = [
+    ...verifyRoutingCoreProviderIsolation(),
+    ...verifySoleEngineImportPattern(),
+    ...verifyTelemetryTemplateContentResolutionGuard(),
+  ];
+  allResults.push(...providerIsolationResults);
+  for (const result of providerIsolationResults) {
+    log(
+      `${result.passed ? '✅' : '❌'} ${result.name}: ${result.message}`,
+      result.passed ? 'green' : 'red'
+    );
+  }
+
   // Summary
   const passed = allResults.filter((r) => r.passed).length;
   const failed = allResults.filter((r) => !r.passed).length;
@@ -1148,4 +1402,7 @@ export {
   memberDebtReasonStatus,
   verifyDoNotFollowPatterns,
   verifyRoutingEngineLeakPattern,
+  verifyRoutingCoreProviderIsolation,
+  verifySoleEngineImportPattern,
+  verifyTelemetryTemplateContentResolutionGuard,
 };

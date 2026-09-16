@@ -180,9 +180,30 @@ export function createObserverBoundTo(history: NavigationHistory): CreateObserve
   // report whose own consumer mutates that same source synchronously — so
   // it needs this same discipline of its own, applied uniformly to every
   // trigger rather than only to the fan-out one.
+  // Declared here, ahead of `reresolveAndReport`, rather than only where
+  // `release` (further below) sets it: both algorithms this file shares
+  // (module doc comment, top) read this same flag, and a round this
+  // reentrancy guard has already queued must stop being deliverable the
+  // instant a callback running inside it calls `release` — not only once
+  // `release` itself returns to its own, separate caller.
+  let released = false;
   let reporting = false;
   let pendingRounds = 0;
   function reresolveAndReport(): void {
+    // A round reached this function only through a still-live subscription
+    // or a round already queued before release — never through a fresh
+    // subscriber call after release, since `release` unsubscribes both
+    // sources before returning. This guard instead closes the narrow window
+    // release does not: while `release` is itself running, its own
+    // `released = true` (below) happens before it unsubscribes either
+    // source, so a source that dispatches its own listeners synchronously
+    // can still reach this same callback, mid-release, before that
+    // source's unsubscribe takes effect. Checked first, before the
+    // `reporting` guard, so it also stops a call that would otherwise only
+    // have queued itself for the drain loop below.
+    if (released) {
+      return;
+    }
     if (reporting) {
       pendingRounds += 1;
       return;
@@ -223,7 +244,16 @@ export function createObserverBoundTo(history: NavigationHistory): CreateObserve
         // would report a drained round's throw while its sibling axes stay
         // silent about theirs, the exact kind of one-sided rule this file
         // keeps closing.
-        while (pendingRounds > 0) {
+        // `&& !released`: a callback drained by an earlier iteration of
+        // this same loop may itself call `release` — the observer is still
+        // live when a round drains, so nothing upstream stops that. Once it
+        // does, every round still behind it in `pendingRounds` must stop
+        // being delivered immediately, not drain to completion first; this
+        // is the release rule (`cpt-frontx-algo-routing-route-ownership-signal-release`)
+        // applied to this queue exactly as it already applies to a fan-out
+        // round's own still-pending slot (FEATURE §3, Observer Release,
+        // Queued-round note).
+        while (pendingRounds > 0 && !released) {
           pendingRounds -= 1;
           try {
             reresolveAndReportRound();
@@ -400,7 +430,8 @@ export function createObserverBoundTo(history: NavigationHistory): CreateObserve
   // @cpt-end:cpt-frontx-flow-routing-route-ownership-signal-deep-link-cold-mount:p1:inst-create-observer
 
   // @cpt-begin:cpt-frontx-algo-routing-route-ownership-signal-release:p2:inst-when-release-called
-  let released = false;
+  // `released` itself is declared earlier in this function (above
+  // `reresolveAndReport`), shared with that algorithm's own queue guard.
   const release: ReleaseFunction = () => {
     if (released) {
       // @cpt-begin:cpt-frontx-algo-routing-route-ownership-signal-release:p2:inst-if-called-again

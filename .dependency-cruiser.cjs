@@ -182,7 +182,19 @@ module.exports = {
       name: 'frontx-telemetry-1-no-template-content',
       severity: 'error',
       from: { path: '^packages/telemetry/src/', pathNot: '__tests__' },
-      to: { path: '^(?!packages/|node_modules/|internal/|scripts/).+' },
+      // Same `couldNotResolve: false` reasoning as the routing rules below
+      // (`frontx-routing-1-no-template-content` /
+      // `frontx-routing-tanstack-1-no-template-content`): without it, ANY
+      // unresolved bare specifier — an uninstalled npm package, not just a
+      // template file — keeps its bare form as `resolved`, which also fails
+      // to start with any of the four known-safe prefixes and so
+      // misdiagnoses "not installed" as "imports template territory". A
+      // genuine template-content import stays caught: a template checked
+      // into this tree resolves on disk (relative/absolute path,
+      // `couldNotResolve: false`) even though it is not an npm workspace —
+      // see this file's own header comment on why templates have no
+      // module-resolution path here at all.
+      to: { path: '^(?!packages/|node_modules/|internal/|scripts/).+', couldNotResolve: false },
       comment:
         'ecosystem-boundaries: @gears-frontx/telemetry is an ecosystem package and must not import template territory at the source level.',
     },
@@ -320,10 +332,14 @@ module.exports = {
       severity: 'error',
       from: { path: '^packages/routing/src/' },
       to: {
-        path: pkgTargets('mfes', 'gts-plugin', 'api', 'cli', 'cyber-pilot-kit-frontx', 'ui-kit', 'telemetry'),
+        // `routing-tanstack` is included here, not just the other five
+        // ecosystem packages: it depends on `routing` (the navigation
+        // substrate), never the reverse — @gears-frontx/routing is the core
+        // and must not import its own provider back.
+        path: pkgTargets('mfes', 'gts-plugin', 'api', 'cli', 'cyber-pilot-kit-frontx', 'ui-kit', 'telemetry', 'routing-tanstack'),
       },
       comment:
-        'cpt-frontx-constraint-routing-no-intra-ecosystem-dependency: @gears-frontx/routing imports no other package in this ecosystem.',
+        'cpt-frontx-constraint-routing-no-intra-ecosystem-dependency: @gears-frontx/routing imports no other package in this ecosystem — in particular, not its own provider, @gears-frontx/routing-tanstack.',
     },
     {
       name: 'frontx-routing-3-no-engine-leak',
@@ -395,8 +411,21 @@ module.exports = {
       to: {
         // Same two resolution shapes as frontx-routing-3-no-engine-leak's
         // `@tanstack/*` branch: in-tree via node_modules, and the bare
-        // specifier an uninstalled or non-workspace package resolves to.
-        path: ['(^|/)node_modules/@tanstack/', '^@tanstack/'],
+        // specifier an uninstalled or non-workspace package resolves to. The
+        // router-name patterns are copied verbatim from
+        // `frontx-routing-3-no-engine-leak` above (same scoped/unscoped-pair
+        // reasoning, same `safe-regex` constraint against combining them) so
+        // a concrete engine — `react-router`, `react-router-dom`,
+        // `vue-router`, `@remix-run/router` — is banned ecosystem-wide, not
+        // just from @gears-frontx/routing itself.
+        path: [
+          '(^|/)node_modules/@tanstack/',
+          '^@tanstack/',
+          '(^|/)node_modules/[^/]*router[^/]*(/|$)',
+          '^[^/]*router[^/]*(/|$)',
+          '(^|/)node_modules/@[^/]+/[^/]*router[^/]*(/|$)',
+          '^@[^/]+/[^/]*router[^/]*(/|$)',
+        ],
         // `@tanstack/*` is a scope, not a router engine — TanStack also
         // publishes unrelated libraries under it (e.g. the headless table
         // library ui-kit's data-table component uses). The constraint this
@@ -406,7 +435,7 @@ module.exports = {
         pathNot: ['(^|/)node_modules/@tanstack/react-table', '^@tanstack/react-table'],
       },
       comment:
-        'cpt-frontx-constraint-routing-tanstack-sole-engine-import: @gears-frontx/routing-tanstack is the only package in this ecosystem permitted to import a concrete router engine; no other ecosystem package may import @tanstack/* (except @tanstack/react-table, which is not a router engine).',
+        'cpt-frontx-constraint-routing-tanstack-sole-engine-import: @gears-frontx/routing-tanstack is the only package in this ecosystem permitted to import a concrete router engine — @tanstack/* (except @tanstack/react-table, which is not a router engine), react-router, react-router-dom, vue-router, or @remix-run/router.',
     },
 
     // ============ TEST-SUPPORT BOUNDARY ENFORCEMENT ============

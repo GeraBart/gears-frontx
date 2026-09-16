@@ -6,6 +6,7 @@
 // location — an index-route redirect is one call site, not the only one
 // (§3, Rationale).
 import { redirect, type RedirectOptions, type RouterHistory } from '@tanstack/react-router';
+import { parseSearchString } from './search-codec.js';
 
 /** @internal Test/consumer seam mirroring this file's own default hash
  * reader: a conforming consumer never passes this except to avoid touching
@@ -23,25 +24,14 @@ function defaultReadPageHash(): string {
 /**
  * Turns a raw `?a=b&c=d`-shaped search string (`RouterHistory#location`'s
  * own `search` member) into the plain key/value object TanStack's own
- * `redirect`/navigate `search` option expects — the identical
- * generic-`name=value` treatment `./virtual-location.ts`'s own
- * `buildSearchString`/`parseSearchString` pair gives TanStack's search
- * string everywhere else in this package: an opaque string this adapter
- * never re-parses beyond that.
+ * `redirect`/navigate `search` option expects, via `./search-codec.js`'s
+ * shared `parseSearchString` — the identical generic-`name=value` parse,
+ * malformed-percent-escape guard included, `./virtual-location.ts` gives
+ * TanStack's search string everywhere else in this package: an opaque
+ * string this adapter never re-parses beyond that.
  */
 function searchStringToRecord(search: string): Record<string, string> {
-  const trimmed = search.startsWith('?') ? search.slice(1) : search;
-  if (trimmed === '') {
-    return {};
-  }
-  return Object.fromEntries(
-    trimmed.split('&').map((pair) => {
-      const eq = pair.indexOf('=');
-      return eq === -1
-        ? [decodeURIComponent(pair), '']
-        : [decodeURIComponent(pair.slice(0, eq)), decodeURIComponent(pair.slice(eq + 1))];
-    }),
-  );
+  return Object.fromEntries(parseSearchString(search).map((param) => [param.name, param.value]));
 }
 
 /**
