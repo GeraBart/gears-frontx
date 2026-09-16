@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { act, StrictMode } from 'react';
+import { act, isValidElement, StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   createMemoryHistory,
@@ -262,6 +262,33 @@ describe('createEngineProviderRouter teardown', () => {
     container.remove();
 
     expect(subscriptions.active()).toBe(0);
+  });
+});
+
+// The engine-provider port's own normative contract (routing DESIGN §3.3,
+// `EngineProviderPort` in `packages/routing/src/types/index.ts`): a
+// conforming provider constructs a router and stops there — mounting it
+// into the microfrontend's own component tree is a separate act the
+// consumer performs, deliberately excluded from this port. That correction
+// was carried as prose across seven files with nothing executable behind
+// it, so nothing stopped a later edit from drifting back to describing this
+// export as mounting. Pinned here as the one property the contract actually
+// states — not, e.g., which fields the returned router carries, which a
+// legitimate refactor is free to change.
+describe('createEngineProviderRouter return contract', () => {
+  it('returns a constructed router, not a mounted React element', () => {
+    resetRealm('/en?screen=dashboard;route=settings/general;orientation=left');
+    const navigationHistory = resolveNavigationHistory();
+    const routeTree = buildRouteTree();
+
+    const router = createEngineProviderRouter({
+      history: navigationHistory,
+      entryAddress: ENTRY_ADDRESS,
+      routeTree,
+    });
+
+    expect(typeof router).toBe('object');
+    expect(isValidElement(router)).toBe(false);
   });
 });
 

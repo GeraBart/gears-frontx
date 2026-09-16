@@ -348,6 +348,102 @@ function verifyCoreCruiseTargets(): TestResult[] {
 }
 
 /**
+ * Verify the ecosystem-wide sole-engine cruise in `scripts/test-architecture.ts`
+ * still scans every `packages/*` directory, not the nine members it happened to
+ * list when it was written.
+ *
+ * `frontx-routing-tanstack-3-sole-engine-import` is deliberately ecosystem-wide —
+ * every package other than `@gears-frontx/routing-tanstack` is where the leak
+ * would show up — but the `npm run arch:check` invocation that actually cruises
+ * it names its source roots literally in that file's own command string
+ * (see the ROUTING-1..3 / ROUTING-TANSTACK-1..3 block), the same way
+ * `arch:deps:core`'s roots are named literally in the root `package.json` script
+ * `verifyCoreCruiseTargets` above pins. A `packages/*` directory added after
+ * that command was written is never passed to dependency-cruiser, so the rule
+ * silently never fires against it — the exact "correct rule, unenforced scope"
+ * gap #495 already proved once for the core cruise, one level up for the
+ * ecosystem-wide one.
+ */
+async function verifyEcosystemCruiseTargets(): Promise<TestResult[]> {
+  const results: TestResult[] = [];
+
+  try {
+    const ecosystemPackagesModule = (await import(
+      pathToFileURL(join(REPO_ROOT, 'scripts', 'ecosystem-packages.mjs')).href
+    )) as { readEcosystemPackages: (rootDir: string) => Array<{ dir: string }> };
+
+    const expected = ecosystemPackagesModule
+      .readEcosystemPackages(REPO_ROOT)
+      .map((pkg) => `packages/${pkg.dir}/src`);
+
+    const testArchitectureSource = readFileSync(
+      join(REPO_ROOT, 'scripts', 'test-architecture.ts'),
+      'utf-8'
+    );
+
+    // The cruise command sits between these marker comments (one instance
+    // covering all four ROUTING-1..3 / ROUTING-TANSTACK-1..3 constraints) —
+    // slicing on them, rather than scanning the whole file, keeps this check
+    // from picking up an unrelated `packages/<name>/src` token from one of the
+    // file's other, narrower dependency-cruiser invocations.
+    const beginMarker =
+      '@cpt-begin:cpt-frontx-constraint-routing-tanstack-sole-engine-import:p2:inst-arch-check';
+    const endMarker =
+      '@cpt-end:cpt-frontx-constraint-routing-tanstack-sole-engine-import:p2:inst-arch-check';
+    const beginIndex = testArchitectureSource.indexOf(beginMarker);
+    const endIndex = testArchitectureSource.indexOf(endMarker);
+
+    if (beginIndex === -1 || endIndex === -1 || endIndex < beginIndex) {
+      return [
+        {
+          name: 'scripts/test-architecture.ts: Ecosystem sole-engine cruise block present',
+          passed: false,
+          message:
+            'RULE MISSING - could not find the ROUTING-TANSTACK-3 sole-engine cruise ' +
+            'block by its cpt markers, so the cruise scope cannot be verified.',
+        },
+      ];
+    }
+
+    const cruiseBlock = testArchitectureSource.slice(beginIndex, endIndex);
+    const cruised = Array.from(
+      new Set(Array.from(cruiseBlock.matchAll(/packages\/[^/'"\s]+\/src/g), (m) => m[0]))
+    );
+
+    const missing = expected.filter((dir) => !cruised.includes(dir));
+    const extra = cruised.filter((dir) => !expected.includes(dir));
+
+    results.push({
+      name: 'scripts/test-architecture.ts: Ecosystem sole-engine cruise scans every packages/* directory',
+      passed: missing.length === 0 && extra.length === 0,
+      message:
+        missing.length === 0 && extra.length === 0
+          ? `All ${expected.length} ecosystem src roots cruised`
+          : [
+              missing.length > 0
+                ? `Not cruised, so unguarded: ${missing.join(', ')}`
+                : undefined,
+              extra.length > 0
+                ? `Cruised but no longer a packages/* directory: ${extra.join(', ')}`
+                : undefined,
+              'Reconcile the ROUTING-TANSTACK-3 cruise command in scripts/test-architecture.ts ' +
+                'with the packages/* directories on disk.',
+            ]
+              .filter(Boolean)
+              .join('. '),
+    });
+  } catch (error) {
+    results.push({
+      name: 'scripts/test-architecture.ts: Ecosystem cruise target verification',
+      passed: false,
+      message: `Error: ${(error as Error).message}`,
+    });
+  }
+
+  return results;
+}
+
+/**
  * Verify `frontx-routing-3-no-engine-leak`'s router-name patterns actually
  * catch a scoped router engine, not just an unscoped one.
  *
@@ -1298,7 +1394,11 @@ async function runVerification(): Promise<void> {
 
   // Guard invocation: rules that exist but are never pointed at anything
   log('\n🎯 Guard Reach', 'blue');
-  const reachResults = [...verifyCoreCruiseTargets(), ...verifyIgnoreFreshness()];
+  const reachResults = [
+    ...verifyCoreCruiseTargets(),
+    ...(await verifyEcosystemCruiseTargets()),
+    ...verifyIgnoreFreshness(),
+  ];
   allResults.push(...reachResults);
   for (const result of reachResults) {
     log(
@@ -1395,6 +1495,7 @@ export {
   verifyDepcruiseConfigs,
   verifyCoreRestrictions,
   verifyCoreCruiseTargets,
+  verifyEcosystemCruiseTargets,
   verifyIgnoreFreshness,
   verifyMemberRegistration,
   verifyMemberRegistrationInRegistry,
