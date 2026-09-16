@@ -100,6 +100,10 @@ Published libraries:
 * `cpt-frontx-adr-shared-dep-dedup-key` — Keys cross-microfrontend shared-dependency reuse to the identity of the producing build.
 * `cpt-frontx-adr-api-surface-organization` — Separates request/response and streaming behind a common protocol surface.
 * `cpt-frontx-adr-api-transport-bypass-and-fetch-sharing` — Provides a plugin short-circuit and a realm-shared fetch cache.
+* `cpt-frontx-routing-adr-occupant-reference-boundary` — Names and carries occupant identity through route resolution and reporting without depending on the runtime's concrete extension type - owned by the routing member tree, `packages/routing/architecture/ADR/`.
+* `cpt-frontx-routing-adr-mount-trigger-ownership` — Assigns every post-boot mount to the addressed-action channel and leaves navigation driving cold load and restoration alone - owned by the routing member tree, `packages/routing/architecture/ADR/`.
+* `cpt-frontx-routing-adr-domain-occupancy-addressing-granularity` — Addresses every domain, at any depth and any occupant count, through one uniform query-string entry grammar, with the pathname reserved to the shell - owned by the routing member tree, `packages/routing/architecture/ADR/`.
+* `cpt-frontx-routing-adr-occupant-identity-stability` — Draws an entry's extension token from the extension's own normalized route identity rather than from its versioned type id, so a redeploy does not break a bookmarked link - owned by the routing member tree, `packages/routing/architecture/ADR/`.
 
 CLI (projects orchestration):
 

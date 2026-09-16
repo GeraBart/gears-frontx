@@ -55,7 +55,7 @@ A composed application's routable domains must resolve the same way regardless o
 - **PRD**: [PRD.md](../../PRD.md)
 - **Design**: [DESIGN.md](../../DESIGN.md)
 - **Use case**: `cpt-frontx-routing-usecase-deep-link-to-microfrontend-screen`
-- **Component**: `cpt-frontx-component-routing-screen-binding`
+- **Component**: `cpt-frontx-component-routing-route-ownership-signal`
 - **Dependencies**: `cpt-frontx-feature-routing-navigation-substrate` — this feature's entry-resolution primitive matches an entry's own extension token against a domain's own registered extensions using the substrate's own name-equality predicate (`cpt-frontx-algo-routing-navigation-substrate-name-validity`); the ordered entry list it resolves against is exactly what the substrate's own grammar codec parses from, and serializes back into, the URL (`cpt-frontx-algo-routing-navigation-substrate-grammar-parse`, `cpt-frontx-algo-routing-navigation-substrate-grammar-serialize`); the observable signal subscribes to the substrate's shared history and fan-out (`cpt-frontx-algo-routing-navigation-substrate-fanout-dispatch`). None of these substrate algorithms is re-implemented here.
 
 **Boundary note**: This feature holds no registry of route owners, executes no mount or unmount, at any domain, and carries no occupancy model of its own — the full boundary is owned by `cpt-frontx-routing-principle-publishes-not-orchestrates` (DESIGN §2.1), not repeated here. This feature's coupling to whichever mount mechanism the consumer runs is expressed only through the plain-argument registered-extensions source and the observable signal's transitions, per domain, never through an injected port and never through an import of the runtime that owns occupancy.
@@ -275,7 +275,7 @@ The system **MUST** resolve, for one domain key, every entry currently carrying 
 - `cpt-frontx-routing-usecase-deep-link-to-microfrontend-screen`
 
 **Touches**:
-- Component: `cpt-frontx-component-routing-screen-binding`
+- Component: `cpt-frontx-component-routing-route-ownership-signal`
 
 ### Observer Release
 
@@ -290,7 +290,7 @@ The system **MUST** return a release function to the consumer when an observer i
 - `cpt-frontx-routing-fr-route-ownership-signal`
 
 **Touches**:
-- Component: `cpt-frontx-component-routing-screen-binding`
+- Component: `cpt-frontx-component-routing-route-ownership-signal`
 
 ### URL Back-Projection Helper
 
@@ -305,7 +305,7 @@ The system **MUST** provide a single helper that reflects a mount, unmount, repl
 - `cpt-frontx-routing-fr-route-ownership-signal`
 
 **Touches**:
-- Component: `cpt-frontx-component-routing-screen-binding`
+- Component: `cpt-frontx-component-routing-route-ownership-signal`
 
 ## 6. Acceptance Criteria
 

@@ -100,7 +100,7 @@ The package's requirements are owned by its own [PRD](./PRD.md).
 |-------------|------------------|
 | `cpt-frontx-routing-fr-single-navigation-substrate` | The Navigation Substrate holds the shared history behind a well-known realm-global, fanning out one browser-history subscription to every subscriber (`cpt-frontx-component-routing-navigation-substrate`). |
 | `cpt-frontx-routing-fr-engine-provider-port` | The Navigation Substrate exposes `NavigationHistory` as the sole contract a router engine reaches the shared history through, together with the entry address (domain key and extension, or its absence in standalone) and an opaque route tree; no component of this package hands that history to a concrete engine, and no concrete engine dependency exists anywhere in this package's own module graph (`cpt-frontx-component-routing-navigation-substrate`, `cpt-frontx-routing-nfr-agnostic-core`). A separately published provider package — the ecosystem's own default — implements the port. |
-| `cpt-frontx-routing-fr-route-ownership-signal` | The Route Ownership Signal component exposes the entry-resolution primitive and an observable transition per domain — an ordered entry list plus a diff — plus a URL back-projection helper the consumer calls after a non-navigation-driven mount; the consumer's own mount mechanism does the actual mounting at every domain, and the two-way agreement between the URL and what is mounted is the consumer's own guarantee, built on this signal (`cpt-frontx-component-routing-screen-binding`, `cpt-frontx-routing-seq-deep-link-cold-mount`). |
+| `cpt-frontx-routing-fr-route-ownership-signal` | The Route Ownership Signal component exposes the entry-resolution primitive and an observable transition per domain — an ordered entry list plus a diff — plus a URL back-projection helper the consumer calls after a non-navigation-driven mount; the consumer's own mount mechanism does the actual mounting at every domain, and the two-way agreement between the URL and what is mounted is the consumer's own guarantee, built on this signal (`cpt-frontx-component-routing-route-ownership-signal`, `cpt-frontx-routing-seq-deep-link-cold-mount`). |
 | `cpt-frontx-routing-fr-imperative-navigation` | The Navigation Substrate exposes `push`/`replace`/`go`/`location`/`subscribe` directly, independent of any mounted router or component tree (`cpt-frontx-component-routing-navigation-substrate`). |
 | `cpt-frontx-routing-fr-concurrent-occupant-projection` | Every domain projects each of its occupants into that occupant's own entry, sharing the domain's own domain key: a domain holding several occupants side by side contributes several entries through the identical grammar a domain holding one occupant uses, with no mode switch between the two (§4, Worked Example: The Reference Link). |
 | `cpt-frontx-routing-fr-per-occupant-addressable-parameters` | Each occupant's own parameters live inside that occupant's own entry as matrix-style `;key=value` pairs — one encoding for every occupant of every domain — keeping two instances of the identical microfrontend entry independently addressable and independently back-projectable, never a namespace shared with a sibling occupant (§4, Worked Example: The Reference Link). |
@@ -240,12 +240,12 @@ Independently bundled units in the same realm need one navigation history to agr
 
 ##### Related components (by ID)
 
-- `cpt-frontx-component-routing-screen-binding` (Route Ownership Signal) — subscribes to the substrate's fan-out to compute and publish ownership-change transitions.
+- `cpt-frontx-component-routing-route-ownership-signal` (Route Ownership Signal) — subscribes to the substrate's fan-out to compute and publish ownership-change transitions.
 - The port this component declares (`cpt-frontx-routing-fr-engine-provider-port`) — implemented by the engine-provider component of whichever separately published provider package satisfies it (named in §3.4); that component is an external consumer of this component's `NavigationHistory` contract, owned entirely by that provider package, not by this one.
 
 #### Route Ownership Signal
 
-- [ ] `p2` - **ID**: `cpt-frontx-component-routing-screen-binding`
+- [ ] `p2` - **ID**: `cpt-frontx-component-routing-route-ownership-signal`
 
 Concrete artifact: `@gears-frontx/routing` (core entry).
 
