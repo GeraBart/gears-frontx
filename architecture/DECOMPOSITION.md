@@ -315,7 +315,7 @@ The installed SDLC kit currently defines feature-entry identifiers only in DECOM
 **Owner**: Member-owned compatibility anchor only; behavior is defined in [FEATURE.md](../packages/routing/architecture/features/route-ownership-signal/FEATURE.md).
 
 **Installed-kit coverage references**:
-- `cpt-frontx-component-routing-screen-binding`
+- `cpt-frontx-component-routing-route-ownership-signal`
 - `cpt-frontx-routing-principle-publishes-not-orchestrates`
 - `cpt-frontx-constraint-routing-no-intra-ecosystem-dependency`
 
