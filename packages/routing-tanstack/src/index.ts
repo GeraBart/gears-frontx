@@ -21,7 +21,12 @@ export { projectParamsToVirtualLocation, projectVirtualLocationToParams, ROUTE_P
 export type { VirtualLocationParts } from './virtual-location.js';
 
 export type { AdaptHistoryOptions, VirtualLocationSource } from './history-adaptation.js';
-export { adaptVirtualLocationHistory } from './history-adaptation.js';
+// `attachAdaptedHistory` is published because an adapted history observes
+// nothing until a mount boundary establishes its registration: a consumer
+// that mounts a raw `RouterProvider` rather than `EngineProvider` needs it,
+// and its counterpart `destroy()` is already a member of the returned
+// `RouterHistory` (FEATURE §3, Teardown On Unmount, step 1).
+export { adaptVirtualLocationHistory, attachAdaptedHistory } from './history-adaptation.js';
 
 export { createComposedVirtualLocationSource, adaptComposedHistory } from './composed-history-source.js';
 export { createStandaloneVirtualLocationSource, adaptStandaloneHistory } from './standalone-history-source.js';
@@ -29,7 +34,7 @@ export { adaptProviderHistory } from './engine-provider-history.js';
 export { locationPreservingRedirect } from './location-preserving-redirect.js';
 
 export { createProviderRouter, createEngineProviderRouter, EngineProvider } from './router-creation.js';
-export type { EngineProviderProps, EngineProviderFromRouterProps } from './router-creation.js';
+export type { EngineProviderProps, EngineProviderFromRouterProps, ProviderRouterOptions } from './router-creation.js';
 
 // DESIGN §3.3, "API Contracts" — the concrete engine's own component-tree
 // hooks and components this package's public surface lists alongside its

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { REENTRANT_ROUND_LIMIT } from '../../diagnostics.js';
 import { resolveNavigationHistory } from '../../history/singleton.js';
 import { RoutingError } from '../../errors.js';
 import { createObserver, expectRoutingError, resetRealm, staticSource, mutableSource } from '../helpers.js';
@@ -825,5 +826,97 @@ describe('createObserver — inert and stale domain keys', () => {
     expect(onTransition).toHaveBeenCalledTimes(1);
     expect(onTransition.mock.calls[0][0].entries).toEqual([]);
     expect(onTransition.mock.calls[0][0].diff.removed).toEqual(['contacts']);
+  });
+});
+
+describe('createObserver — a route owner replaced under an unchanged extension token', () => {
+  it('reports the swap as Resolution-changed and carries the new owner in Entries', () => {
+    // The entry's token and payload are identical across both reports and
+    // it stays resolved throughout, so every other diff category is empty:
+    // the resolution is the only thing that moved, and a consumer has no
+    // other report to learn the new owner from.
+    resetRealm('/en?widgets=chart;range=90d');
+    const onTransition = vi.fn<(transition: Transition<string>) => void>();
+    const source = mutableSource([{ extension: 'chart', routeOwner: 'ChartPlaceholder' }]);
+
+    createObserver('widgets' as DomainKey, source, onTransition);
+    source.set([{ extension: 'chart', routeOwner: 'ChartReal' }]);
+
+    expect(onTransition).toHaveBeenCalledTimes(2);
+    const transition = onTransition.mock.calls[1][0];
+    expect(transition.diff).toEqual({
+      added: [],
+      removed: [],
+      payloadChanged: [],
+      reordered: false,
+      resolutionChanged: ['chart'],
+      unresolved: [],
+    });
+    expect(transition.entries).toEqual([
+      {
+        extension: 'chart',
+        params: [{ name: 'range', value: '90d' }],
+        resolution: { resolved: true, routeOwner: 'ChartReal' },
+      },
+    ]);
+  });
+
+  it('reports nothing when the registered set is replaced with an equal one', () => {
+    resetRealm('/en?widgets=chart;range=90d');
+    const onTransition = vi.fn<(transition: Transition<string>) => void>();
+    const source = mutableSource([{ extension: 'chart', routeOwner: 'ChartReal' }]);
+
+    createObserver('widgets' as DomainKey, source, onTransition);
+    onTransition.mockClear();
+    source.set([{ extension: 'chart', routeOwner: 'ChartReal' }]);
+
+    expect(onTransition).not.toHaveBeenCalled();
+  });
+});
+
+describe('createObserver — bounded deferral', () => {
+  it('stops and reports when a callback mutates the source from every transition it receives', () => {
+    const reported = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    resetRealm('/en?widgets=chart');
+    const source = mutableSource([{ extension: 'chart', routeOwner: 'owner-0' }]);
+    let transitions = 0;
+
+    createObserver('widgets' as DomainKey, source, () => {
+      transitions += 1;
+      // Capped far above the observer's own bound so this test fails by
+      // assertion rather than by never finishing: an unbounded drain serves
+      // every one of these and asks for more.
+      if (transitions < 5000) {
+        source.set([{ extension: 'chart', routeOwner: `owner-${String(transitions)}` }]);
+      }
+    });
+
+    expect(transitions).toBeLessThan(5000);
+    expect(reported).toHaveBeenCalledTimes(1);
+    const cause: unknown = reported.mock.calls[0][1];
+    if (!(cause instanceof RoutingError)) {
+      throw new Error('expected the reported cause to be a RoutingError');
+    }
+    expect(cause.code).toBe('reentrant-round-limit-exceeded');
+    expect(cause.limit).toBe(REENTRANT_ROUND_LIMIT);
+    reported.mockRestore();
+  });
+
+  it('serves a cascade that settles on its own, without reaching the bound', () => {
+    const reported = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    resetRealm('/en?widgets=chart');
+    const source = mutableSource([{ extension: 'chart', routeOwner: 'owner-0' }]);
+    let transitions = 0;
+
+    createObserver('widgets' as DomainKey, source, () => {
+      transitions += 1;
+      if (transitions < 3) {
+        source.set([{ extension: 'chart', routeOwner: `owner-${String(transitions)}` }]);
+      }
+    });
+
+    expect(transitions).toBe(3);
+    expect(reported).not.toHaveBeenCalled();
+    reported.mockRestore();
   });
 });

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { resolveNavigationHistory, type DomainKey, type EntryAddress, type ExtensionToken } from '@gears-frontx/routing';
 import { adaptComposedHistory, createComposedVirtualLocationSource } from '../composed-history-source.js';
+import { attachAdaptedHistory } from '../history-adaptation.js';
 import { resetRealm } from './helpers/index.js';
 
 const SHEET_ENTRY_ADDRESS: EntryAddress = { domainKey: 'sheet' as DomainKey, extension: 'tenant-details' as ExtensionToken };
@@ -46,7 +47,7 @@ describe('createComposedVirtualLocationSource', () => {
 
   // Once this occupant's own entry is no longer in the URL, a write
   // through this source has nothing of its own left to write to (FEATURE
-  // §3, step 7.1 — "no write-back runs, because there is no longer an
+  // §3, step 8.1 — "no write-back runs, because there is no longer an
   // entry of this occupant's own to write to"). Without this guard,
   // `backProjectEntries` still issues one no-op-content write (the
   // unchanged URL, since there is no matching entry to change), which is a
@@ -141,6 +142,11 @@ describe('two routers over one shared history', () => {
       extension: 'dashboard' as ExtensionToken,
     });
     const sheetHistory = adaptComposedHistory(navigationHistory, SHEET_ENTRY_ADDRESS);
+    // An adapted history observes the shared history only once something
+    // attaches it; outside a mounted `EngineProvider` that is the caller's
+    // own act.
+    attachAdaptedHistory(dashboardHistory);
+    attachAdaptedHistory(sheetHistory);
 
     const dashboardReceived: unknown[] = [];
     const sheetReceived: unknown[] = [];

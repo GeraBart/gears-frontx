@@ -25,6 +25,7 @@ describe('@gears-frontx/routing-tanstack entry point', () => {
         'projectParamsToVirtualLocation',
         'projectVirtualLocationToParams',
         'adaptVirtualLocationHistory',
+        'attachAdaptedHistory',
         'createComposedVirtualLocationSource',
         'adaptComposedHistory',
         'createStandaloneVirtualLocationSource',

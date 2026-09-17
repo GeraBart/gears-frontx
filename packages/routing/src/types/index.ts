@@ -547,8 +547,10 @@ export type EngineProviderPort<TRouteTree = unknown, TRouter = unknown> = (
 // ---------------------------------------------------------------------------
 
 /**
- * The ten shapes a thrown `RoutingError` (`../errors.js`) can carry, one
- * per `code`. Documented here as prose, not as exported interfaces: no value
+ * The shapes a thrown `RoutingError` (`../errors.js`) can carry, one per
+ * `code` — the list below is the whole of them, stated without a count so
+ * that adding a code means adding its own bullet and nothing else.
+ * Documented here as prose, not as exported interfaces: no value
  * ever satisfies one of these shapes on its own — `RoutingError` is a
  * single flat runtime class whose static factories populate only the
  * field(s) a given code declares, leaving the rest `undefined` — so a
@@ -598,7 +600,7 @@ export type EngineProviderPort<TRouteTree = unknown, TRouter = unknown> = (
  *   extension tokens that is not exactly the set of this domain key's own
  *   entries surviving the delta's other operations (added, removed,
  *   payload-changed, replaced) — a missing survivor, an extra token, or a
- *   duplicate. None of the other seven codes names this case: it is neither
+ *   duplicate. No other code above names this case: it is neither
  *   a lexical failure (`invalid-*`) nor a serialize-input shape violation
  *   (`duplicate-*`), so it is its own code.
  * - `no-navigation-history-in-realm` — no fields set; `resolveNavigationHistory`
@@ -606,6 +608,17 @@ export type EngineProviderPort<TRouteTree = unknown, TRouter = unknown> = (
  *   realm carrying no `window` at all (an SSR render, most commonly) — the
  *   one code this package throws from resolving the realm-shared singleton
  *   itself, rather than from a grammar/back-projection/observer input.
+ * - `reentrant-round-limit-exceeded` — `limit` (the bound that was reached);
+ *   a re-entrancy drain ran that many consecutive rounds without its queue
+ *   ever emptying, because a callback triggers a fresh round from every
+ *   round it receives (`../diagnostics.js`, `REENTRANT_ROUND_LIMIT`). Raised
+ *   by the navigation fan-out (`../history/fanout-dispatch.js`) and by the
+ *   transition observer (`../signal/observe-change.js`) alike, on the same
+ *   bound. The only code here that reports a failure of a *consumer's* own
+ *   callbacks rather than of a value that consumer passed in — thrown rather
+ *   than reported and swallowed because the drain is a loop, not a
+ *   recursion, so an unbounded one exhausts no stack and surfaces nothing at
+ *   all on its own: the realm simply stops making progress.
  */
 
 // ---------------------------------------------------------------------------

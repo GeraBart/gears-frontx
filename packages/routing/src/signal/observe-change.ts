@@ -10,6 +10,7 @@
  * FEATURE (route-ownership-signal) §3, "Observable Transition Signal" /
  * "Observer Release".
  */
+import { REENTRANT_ROUND_LIMIT, reportRoutingDefect } from '../diagnostics.js';
 import { RoutingError } from '../errors.js';
 import { isValidDomainKey, validateName } from '../grammar/name.js';
 import { parseGrammar } from '../grammar/parse.js';
@@ -71,6 +72,32 @@ function paramsEqual(
 }
 
 /**
+ * Whether two reports resolved the same entry to the same thing — both
+ * unresolved, or both resolved to the identical route owner.
+ *
+ * A route owner is compared by identity, never by value: `TRouteOwner` is
+ * whatever the consumer registered (a component, a lazy factory, a
+ * descriptor object), and this package states nowhere what one is made of —
+ * it only ever carries one from a registration to a transition. Any
+ * structural comparison would have to invent a shape for it, and would
+ * report two separately created owners of identical content as the same
+ * owner, which is exactly the case a consumer needs told apart to re-mount.
+ * Identity also matches what the resolution itself did: entry resolution
+ * hands back the registration's own `routeOwner` reference unchanged, so two
+ * reports differ here precisely when the registered owner was actually
+ * swapped.
+ */
+function resolutionsEqual<TRouteOwner>(
+  a: ResolvedEntry<TRouteOwner>['resolution'],
+  b: ResolvedEntry<TRouteOwner>['resolution'],
+): boolean {
+  if (!a.resolved || !b.resolved) {
+    return a.resolved === b.resolved;
+  }
+  return Object.is(a.routeOwner, b.routeOwner);
+}
+
+/**
  * Computes the diff between a newly resolved ordered list and the
  * previously reported one — FEATURE §3, Observable Transition Signal,
  * step 2.2.
@@ -94,7 +121,15 @@ function computeDiff<TRouteOwner>(
     }
     if (!paramsEqual(before.params, entry.params)) {
       payloadChanged.push(entry.extension);
-    } else if (before.resolution.resolved !== entry.resolution.resolved) {
+    } else if (!resolutionsEqual(before.resolution, entry.resolution)) {
+      // The resolution, not merely the resolved flag: a registration that
+      // swaps one route owner for another under the same extension token
+      // leaves the flag identical while changing the one thing the
+      // transition's own entries carry about it. Compared here rather than
+      // left to the consumer because a consumer never gets the chance —
+      // with the flag alone this diff came out empty, so no transition was
+      // delivered at all and the owner the consumer already held stayed the
+      // only one it would ever see.
       resolutionChanged.push(entry.extension);
     }
   }
@@ -209,6 +244,14 @@ export function createObserverBoundTo(history: NavigationHistory): CreateObserve
       return;
     }
     reporting = true;
+    // Set by the drain below, raised after the whole `try`/`finally` has
+    // unwound rather than from inside it: a `throw` raised inside a
+    // `finally` silently replaces whatever was already propagating out of
+    // the round above, so a consumer callback's own failure — the more
+    // informative of the two, and the one this observer's baseline rule
+    // depends on reaching its axis — would be swallowed by the bound's own
+    // report of a queue that has, by then, already been abandoned anyway.
+    let roundLimitBreached = false;
     try {
       reresolveAndReportRound();
     } finally {
@@ -229,21 +272,21 @@ export function createObserverBoundTo(history: NavigationHistory): CreateObserve
         // would exit the loop before the rounds still behind it in
         // `pendingRounds` ever ran, discarding a transition a *later*
         // consumer queued rather than the one whose callback actually
-        // threw. Swallowed rather than surfaced anywhere, matching this
-        // observer's own two trigger axes, which already swallow an
-        // outer round's throw the identical way — the fan-out axis through
-        // `FanOutDispatcher`'s own per-subscriber `catch`
-        // (`../history/fanout-dispatch.js`, `inst-isolate-error`), the
-        // registration-source axis through the local `catch` a few lines
-        // below this function. This package has no reporting channel of
-        // its own for a consumer callback's throw; the one `reportError`
-        // channel in the ecosystem lives one layer up, in
-        // `@gears-frontx/routing-tanstack`'s provider adapter
-        // (`history-adaptation.ts`), which wraps `history.subscribe`
-        // itself rather than anything in this file — reaching for it here
-        // would report a drained round's throw while its sibling axes stay
-        // silent about theirs, the exact kind of one-sided rule this file
-        // keeps closing.
+        // threw. Isolated but not erased: it is reported through the same
+        // channel this observer's own two trigger axes now report theirs —
+        // the fan-out axis through `FanOutDispatcher`'s own per-subscriber
+        // `catch` (`../history/fanout-dispatch.js`, `inst-isolate-error`),
+        // the registration-source axis through the local `catch` a few
+        // lines below this function — so no axis stays silent about a
+        // failure its siblings report, the exact kind of one-sided rule
+        // this file keeps closing.
+        // The drain is bounded for the same reason the fan-out's own is
+        // (`../diagnostics.js`, `REENTRANT_ROUND_LIMIT`): a consumer
+        // callback that mutates the registered-extensions source every time
+        // it is notified queues a fresh round from each round it is served,
+        // and this loop would otherwise run for as long as the tab is open,
+        // reporting nothing, since it is a loop rather than a recursion and
+        // so never exhausts a stack.
         // `&& !released`: a callback drained by an earlier iteration of
         // this same loop may itself call `release` — the observer is still
         // live when a round drains, so nothing upstream stops that. Once it
@@ -253,12 +296,22 @@ export function createObserverBoundTo(history: NavigationHistory): CreateObserve
         // applied to this queue exactly as it already applies to a fan-out
         // round's own still-pending slot (FEATURE §3, Observer Release,
         // Queued-round note).
+        let drained = 0;
         while (pendingRounds > 0 && !released) {
+          if (drained >= REENTRANT_ROUND_LIMIT) {
+            // The queue is abandoned here, so the next genuine trigger
+            // starts from an empty one rather than inheriting a backlog the
+            // breach already proved untrustworthy.
+            pendingRounds = 0;
+            roundLimitBreached = true;
+            break;
+          }
+          drained += 1;
           pendingRounds -= 1;
           try {
             reresolveAndReportRound();
-          } catch {
-            // Empty on purpose: isolating the error IS not re-throwing it.
+          } catch (error) {
+            reportRoutingDefect('a transition callback threw during a deferred round', error);
           }
         }
       } finally {
@@ -268,6 +321,12 @@ export function createObserverBoundTo(history: NavigationHistory): CreateObserve
         pendingRounds = 0;
         reporting = false;
       }
+    }
+    if (roundLimitBreached) {
+      throw RoutingError.reentrantRoundLimitExceeded(
+        'transition observer re-resolution',
+        REENTRANT_ROUND_LIMIT,
+      );
     }
   }
 
@@ -385,8 +444,11 @@ export function createObserverBoundTo(history: NavigationHistory): CreateObserve
       // the callback never finished processing (`inst-record-navigation-state`).
       try {
         reresolveAndReport();
-      } catch {
-        // Empty on purpose: isolating the error IS not re-throwing it.
+      } catch (error) {
+        reportRoutingDefect(
+          'a transition callback threw while the registered-extensions source was reporting a change',
+          error,
+        );
       }
       // @cpt-end:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-reresolve-on-source-change
       // @cpt-end:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-when-extensions-source-changes

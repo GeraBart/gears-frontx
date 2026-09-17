@@ -199,7 +199,7 @@ describe('EngineProviderPort', () => {
 
 describe('RoutingError', () => {
   // `RoutingError` is a runtime `class extends Error`, not a type-only
-  // tagged union (see `../errors.ts`) — its `code` field is the ten-code
+  // tagged union (see `../errors.ts`) — its `code` field is the
   // discriminant documented in `../types/index.ts`, so these are ordinary
   // runtime assertions rather than `expectTypeOf` compile-time-only ones.
 
@@ -215,6 +215,7 @@ describe('RoutingError', () => {
       | 'duplicate-extension'
       | 'reordered-not-permutation'
       | 'no-navigation-history-in-realm'
+      | 'reentrant-round-limit-exceeded'
     >();
 
     const error = RoutingError.invalidDomainKey('a.b');

@@ -1,3 +1,5 @@
+import { REENTRANT_ROUND_LIMIT, reportRoutingDefect } from '../diagnostics.js';
+import { RoutingError } from '../errors.js';
 import type { HistoryNotification, HistorySubscriber, ReleaseFunction } from '../types/index.js';
 
 // @cpt-algo:cpt-frontx-algo-routing-navigation-substrate-fanout-dispatch:p2
@@ -54,7 +56,10 @@ export class FanOutDispatcher {
    * Dispatches one round for `notification`. A round triggered while another
    * is already in progress — a subscriber that navigates from inside its own
    * callback — is deferred to run after the in-progress round finishes,
-   * never folded into it (step 4.4, reentrant navigation).
+   * never folded into it (step 4.4, reentrant navigation). Deferral is
+   * bounded: a subscriber that queues a fresh round from every round it
+   * receives is a feedback loop, not a cascade, and the drain below stops
+   * and throws rather than serving it forever (step 4.4.2).
    */
   dispatch(notification: HistoryNotification): void {
     if (this.dispatching) {
@@ -74,7 +79,25 @@ export class FanOutDispatcher {
       this.runRound(notification);
       // A round dispatched while this one was running queued itself above
       // instead of interleaving; drain it now as its own, later round.
+      let drained = 0;
       while (this.pending.length > 0) {
+        // @cpt-begin:cpt-frontx-algo-routing-navigation-substrate-fanout-dispatch:p2:inst-reentrant-round-limit
+        // Checked before running the round rather than after, so the bound
+        // counts rounds actually run and the breach costs no further
+        // subscriber invocation. The queue is abandoned first and the throw
+        // raised second: a subscriber feeding this loop has by now queued
+        // work that is, by the fact of the breach, no longer trustworthy,
+        // and leaving it behind would hand the very next legitimate
+        // navigation a queue already primed to breach again.
+        if (drained >= REENTRANT_ROUND_LIMIT) {
+          this.pending.length = 0;
+          throw RoutingError.reentrantRoundLimitExceeded(
+            'navigation fan-out dispatch',
+            REENTRANT_ROUND_LIMIT,
+          );
+        }
+        // @cpt-end:cpt-frontx-algo-routing-navigation-substrate-fanout-dispatch:p2:inst-reentrant-round-limit
+        drained += 1;
         const next = this.pending.shift();
         if (next !== undefined) {
           this.runRound(next);
@@ -104,11 +127,11 @@ export class FanOutDispatcher {
         // @cpt-end:cpt-frontx-algo-routing-navigation-substrate-fanout-dispatch:p2:inst-else-unsubscribed-before-turn
       }
       // A subscriber's own thrown error is isolated by this whole
-      // `try`/`catch` — the empty `catch` clause is what stops it from
+      // `try`/`catch` — not re-throwing it is what stops it from
       // propagating past this one callback's own invocation and out of
       // `runRound`, so it never stops delivery to the remaining callbacks in
       // this same snapshot. `inst-isolate-error` wraps the full statement
-      // (not the empty `catch` body alone) since the kit's marker rule
+      // (not the `catch` body alone) since the kit's marker rule
       // requires a marked block to wrap non-empty code.
       // @cpt-begin:cpt-frontx-algo-routing-navigation-substrate-fanout-dispatch:p2:inst-catch-subscriber-error
       // @cpt-begin:cpt-frontx-algo-routing-navigation-substrate-fanout-dispatch:p2:inst-isolate-error
@@ -116,8 +139,16 @@ export class FanOutDispatcher {
         // @cpt-begin:cpt-frontx-algo-routing-navigation-substrate-fanout-dispatch:p2:inst-invoke-subscriber
         token.callback(notification);
         // @cpt-end:cpt-frontx-algo-routing-navigation-substrate-fanout-dispatch:p2:inst-invoke-subscriber
-      } catch {
-        // Empty on purpose: isolating the error IS not re-throwing it.
+      } catch (error) {
+        // @cpt-begin:cpt-frontx-algo-routing-navigation-substrate-fanout-dispatch:p2:inst-report-subscriber-error
+        // Isolation is what this round owes the remaining subscribers;
+        // silence is not. A subscriber that throws on every navigation used
+        // to be indistinguishable from one quietly doing its job — the
+        // failure never propagated and nothing else recorded it, so the
+        // only visible symptom was whatever that subscriber was supposed to
+        // have updated never updating.
+        reportRoutingDefect('a navigation subscriber threw during a fan-out round', error);
+        // @cpt-end:cpt-frontx-algo-routing-navigation-substrate-fanout-dispatch:p2:inst-report-subscriber-error
       }
       // @cpt-end:cpt-frontx-algo-routing-navigation-substrate-fanout-dispatch:p2:inst-isolate-error
       // @cpt-end:cpt-frontx-algo-routing-navigation-substrate-fanout-dispatch:p2:inst-catch-subscriber-error

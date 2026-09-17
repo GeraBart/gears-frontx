@@ -4,6 +4,7 @@
  * FEATURE (navigation-substrate) §3, "Grammar Parse"; ADR 0003, "URL
  * Grammar" / "Entry" / "Repetition and order".
  */
+import { reportRoutingDefect } from '../diagnostics.js';
 import type {
   DomainKey,
   Entry,
@@ -38,6 +39,37 @@ export const parseGrammar: ParseGrammar = (input) => {
     shellSubroute = input.shellSubroute;
     search = input.search;
     hash = input.hash;
+
+    // @cpt-begin:cpt-frontx-algo-routing-navigation-substrate-grammar-parse:p1:inst-normalize-split-delimiters
+    // The already-split form takes the query string and the fragment, not
+    // the `?` and `#` that introduce them — the string form above consumes
+    // both delimiters, and this branch is specified to receive the halves
+    // that splitting produces. `window.location.search`/`.hash` carry the
+    // delimiter by DOM convention, so a `HistoryAdapter` written against
+    // that convention and passing either value straight through hands one
+    // over. Before this, a `?` arriving here survived the `&` split into
+    // the first raw entry, made its candidate domain key `?screen` fail the
+    // `domain-key` production, and sent the whole segment down the
+    // "plainly foreign" branch below — every route in that query string
+    // lost, no entry, no warning, nothing. Stripped rather than rejected
+    // because parsing never throws (FEATURE §3, Grammar Parse, Output) and
+    // an adapter's own convention mismatch must not blank out a deep link a
+    // person actually opened; reported rather than stripped quietly because
+    // the adapter is genuinely wrong and its author is the only one who can
+    // fix it.
+    if (search.startsWith('?')) {
+      reportRoutingDefect(
+        'a query string was given to the grammar parser with its leading "?" still attached; a HistoryAdapter reports `search` without it (the shape `window.location.search` carries, minus the delimiter). Parsing continued on the stripped value.',
+      );
+      search = search.slice(1);
+    }
+    if (hash?.startsWith('#') === true) {
+      reportRoutingDefect(
+        'a fragment was given to the grammar parser with its leading "#" still attached; a HistoryAdapter reports `hash` without it. Parsing continued on the stripped value.',
+      );
+      hash = hash.slice(1);
+    }
+    // @cpt-end:cpt-frontx-algo-routing-navigation-substrate-grammar-parse:p1:inst-normalize-split-delimiters
   }
 
   // A present-but-empty hash (`Location.hash` is `''`, never `undefined`,

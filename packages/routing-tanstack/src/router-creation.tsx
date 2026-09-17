@@ -17,7 +17,31 @@ import { adaptProviderHistory } from './engine-provider-history.js';
 import { attachAdaptedHistory } from './history-adaptation.js';
 
 /**
- * Calls `createRouter({ routeTree, history })` with the microfrontend's own
+ * Every construction option the engine accepts except the two this package
+ * supplies itself. `routeTree` and `history` are `createProviderRouter`'s
+ * own positional arguments — `history` in particular has to stay the
+ * adapted, virtual one for the constructed router to match nothing but this
+ * occupant's own virtual location — and everything else the engine offers
+ * at construction passes through untouched. `context` is the motivating
+ * member: an application whose route loaders reach an API client, a query
+ * client, or any other consumer-owned dependency states it here, at the one
+ * call site that constructs the router.
+ *
+ * Written as the engine's own constructor-options type minus those two
+ * fields, rather than a hand-listed subset, so an option the engine gains
+ * is available here without an edit and none of them silently diverges from
+ * its own definition. Naming that type is this package's own business: the
+ * engine-provider port (`@gears-frontx/routing`) stays a function of
+ * `{history, entryAddress, routeTree}` alone, so nothing of the engine's
+ * surface reaches the core package through this seam.
+ */
+export type ProviderRouterOptions<TRouteTree extends AnyRoute> = Omit<
+  RouterConstructorOptions<TRouteTree, 'never', false, RouterHistory, Record<string, unknown>>,
+  'routeTree' | 'history'
+>;
+
+/**
+ * Calls `createRouter({ ...options, routeTree, history })` with the microfrontend's own
  * route tree and the adapted, virtual history built by history adaptation
  * (`./history-adaptation.js`, `./composed-history-source.js`,
  * `./standalone-history-source.js`). The resulting router matches only its
@@ -42,23 +66,44 @@ import { attachAdaptedHistory } from './history-adaptation.js';
 // @cpt-dod:cpt-frontx-dod-routing-engine-provider-adaptation-and-creation:p1
 // @cpt-dod:cpt-frontx-dod-routing-engine-provider-redirect-and-standalone:p1
 // @cpt-flow:cpt-frontx-flow-routing-engine-provider-swap-engine:p1
-export function createProviderRouter<TRouteTree extends AnyRoute>(routeTree: TRouteTree, history: RouterHistory) {
+export function createProviderRouter<TRouteTree extends AnyRoute>(
+  routeTree: TRouteTree,
+  history: RouterHistory,
+  options?: ProviderRouterOptions<TRouteTree>,
+) {
   // `RouterConstructorOptions`'s own `context` field is conditionally
   // required, keyed off `TRouteTree`'s own inferred router-context type
   // (`@tanstack/router-core`'s `RouterContextOptions`) — a conditional type
   // TypeScript cannot resolve against a still-generic `TRouteTree`, only
   // against a concrete one. The cast below is the one place that mismatch
-  // is bridged; a route tree actually requiring a router context still
-  // fails at `createRouter`'s own call inside here; this wrapper adds no
-  // context of its own for one this package does not supply.
+  // is bridged. `ProviderRouterOptions` above is that same conditional type
+  // minus the two fields this function supplies, so a call site holding a
+  // concrete route tree does get the requiredness checked; only this
+  // generic body works with it unresolved.
+  //
+  // A route tree that declares a router context and is constructed without
+  // one does not fail here: `createRouter` returns normally and the
+  // router's own `options.context` is `undefined`. The failure arrives
+  // later, inside the first `beforeLoad` or loader that reads a member off
+  // that context, with nothing left at that point to connect it to the
+  // construction that omitted it. The `options` parameter above is the way
+  // out of that: the context is stated where the router is built.
   //
   // @cpt-begin:cpt-frontx-algo-routing-engine-provider-router-creation:p2:inst-scope-to-entry
-  // `history` is passed straight through, unmodified — already scoped to
-  // nothing but this occupant's own virtual location by history adaptation
-  // (`./history-adaptation.js`), never re-scoped or filtered here — which
-  // is what keeps the constructed router matching only that virtual
-  // location, never a sibling occupant's own or another domain's (step 2).
-  const options = { routeTree, history } as RouterConstructorOptions<TRouteTree, 'never', false, RouterHistory, Record<string, unknown>>;
+  // `routeTree` and `history` are written after the spread, so no caller
+  // can displace either. `history` is passed straight through, unmodified —
+  // already scoped to nothing but this occupant's own virtual location by
+  // history adaptation (`./history-adaptation.js`), never re-scoped or
+  // filtered here — which is what keeps the constructed router matching
+  // only that virtual location, never a sibling occupant's own or another
+  // domain's (step 2).
+  const constructorOptions = { ...options, routeTree, history } as RouterConstructorOptions<
+    TRouteTree,
+    'never',
+    false,
+    RouterHistory,
+    Record<string, unknown>
+  >;
   // @cpt-end:cpt-frontx-algo-routing-engine-provider-router-creation:p2:inst-scope-to-entry
   // The construct call itself is the smallest fragment implementing both
   // the swap-engine flow's own "constructs its engine's router" step and
@@ -76,7 +121,7 @@ export function createProviderRouter<TRouteTree extends AnyRoute>(routeTree: TRo
   // @cpt-begin:cpt-frontx-algo-routing-engine-provider-router-creation:p2:inst-call-create-router
   // @cpt-begin:cpt-frontx-algo-routing-engine-provider-router-creation:p2:inst-return-constructed-router
   // @cpt-begin:cpt-frontx-algo-routing-engine-provider-standalone-deployment:p2:inst-return-standalone-router
-  return createRouter(options);
+  return createRouter(constructorOptions);
   // @cpt-end:cpt-frontx-algo-routing-engine-provider-standalone-deployment:p2:inst-return-standalone-router
   // @cpt-end:cpt-frontx-algo-routing-engine-provider-router-creation:p2:inst-return-constructed-router
   // @cpt-end:cpt-frontx-algo-routing-engine-provider-router-creation:p2:inst-call-create-router
@@ -98,16 +143,27 @@ export interface EngineProviderProps<TRouteTree extends AnyRoute> {
    * `history` member. */
   readonly routeTree: TRouteTree;
   readonly history: RouterHistory;
+  /** Forwarded verbatim to `createProviderRouter` above when this component
+   * builds the router itself — the seam a consumer states `context` (and
+   * every other engine construction option) through, since this shape is
+   * the only one of the two that constructs anything. Expected stable for
+   * the lifetime of one mount like the two props above: the `useMemo` below
+   * reads it, so a fresh object literal on every render rebuilds the
+   * router. The `{router}` shape has no counterpart by construction — a
+   * router handed in has already been built with whatever options its
+   * builder chose. */
+  readonly routerOptions?: ProviderRouterOptions<TRouteTree>;
 }
 
 /**
  * `createEngineProviderRouter` below returns only a constructed
  * router — a consumer mounting it directly through `RouterProvider`,
  * bypassing this component, has no lifecycle hook of its own from which to
- * call `router.history.destroy()`, reopening the exact leak §3, Teardown
- * On Unmount, describes on the one export typed against the
- * engine-provider port itself. This overload gives that consumer the same
- * mount boundary and the same symmetric attach/destroy effect below,
+ * attach that router's `history` or to call `router.history.destroy()`, so
+ * it gets an inert history for the life of that mount and, once the mount
+ * ends, the exact leak §3, Teardown On Unmount, describes — both on the one
+ * export typed against the engine-provider port itself. This overload gives
+ * that consumer the same mount boundary and the same symmetric attach/destroy effect below,
  * applied to the already-constructed router's own `history` member (the
  * same adapted `RouterHistory` object either overload ultimately mounts
  * and tears down) instead of a separately supplied `history` prop —
@@ -139,19 +195,32 @@ export interface EngineProviderFromRouterProps<TRouter extends AnyRouter> {
  * Mounting a standalone-adapted history runs through this identical
  * component (FEATURE §3, Standalone Deployment, step 5).
  *
- * FEATURE §3, Teardown On Unmount, step 1 (`inst-when-unmount`): this
- * component is the mount boundary the FEATURE names — its own effect below
- * is the actual "WHEN...unmounted" moment, symmetric with construction
- * rather than a one-way teardown: setup re-establishes the adapted
- * history's own internal `NavigationHistory` registration
- * (`attachAdaptedHistory`, a no-op when it is already active), and cleanup
- * releases it (`history.destroy()`, already documented idempotent). Making
- * the two true inverses of each other is what keeps React's own StrictMode
- * — which double-invokes an effect's setup/cleanup/setup on every
- * development mount — from leaving a still-mounted router's history dead:
- * the second setup re-does exactly what the cleanup undid, so a StrictMode
- * mount still ends with exactly one live subscription, and an actual
- * unmount still ends with zero.
+ * FEATURE §3, Teardown On Unmount, steps 1 and 2 (`inst-when-mount`,
+ * `inst-when-unmount`): this component is the mount boundary the FEATURE
+ * names, and its own effect below is both of those moments. Setup
+ * establishes the adapted history's own internal `NavigationHistory`
+ * registration (`attachAdaptedHistory`, a no-op when it is already active),
+ * and cleanup releases it (`history.destroy()`, already documented
+ * idempotent). The registration belongs to this pair and to nothing else —
+ * an adapted history is not registered by the act of constructing it, so it
+ * observes nothing until some mount boundary attaches it. That is what
+ * makes constructing one safe: a history built for a mount that never
+ * happens, or discarded before it does (React's StrictMode double-invoking
+ * a `useMemo` that builds one is the everyday case), holds no registration
+ * to leak. The two halves being exact inverses is what then keeps
+ * StrictMode — which double-invokes an effect's setup/cleanup/setup on
+ * every development mount — from leaving a still-mounted router's history
+ * dead: the second setup re-does exactly what the cleanup undid, so a
+ * StrictMode mount still ends with exactly one live subscription, and an
+ * actual unmount still ends with zero.
+ *
+ * The consequence for a consumer that does not use this component: a raw
+ * `<RouterProvider router={router} />` mount receives an inert history —
+ * `location` stays at whatever the adaptation projected at construction and
+ * no navigation from outside this occupant ever reaches it — until
+ * something calls `attachAdaptedHistory` (`./history-adaptation.js`,
+ * re-exported from this package's own entry point) on it. Such a consumer
+ * owns both halves: that attach, and the matching `router.history.destroy()`.
  */
 export function EngineProvider<TRouteTree extends AnyRoute>(props: EngineProviderProps<TRouteTree>): ReactElement;
 export function EngineProvider<TRouter extends AnyRouter>(props: EngineProviderFromRouterProps<TRouter>): ReactElement;
@@ -167,6 +236,7 @@ export function EngineProvider(
   const providedRouter = fromRouter ? props.router : undefined;
   const routeTree = fromRouter ? undefined : props.routeTree;
   const providedHistory = fromRouter ? undefined : props.history;
+  const routerOptions = fromRouter ? undefined : props.routerOptions;
 
   // The two overloads above reject a call site missing both prop shapes at
   // compile time; this runtime check only matters for a caller that
@@ -203,16 +273,18 @@ export function EngineProvider(
     // that invariant across the two independently-computed locals, so it
     // is bridged here rather than left as an unreachable `undefined` case
     // `createProviderRouter` would reject at its own call boundary.
-    return createProviderRouter(routeTree as AnyRoute, providedHistory as RouterHistory);
-  }, [providedRouter, routeTree, providedHistory]);
+    return createProviderRouter(routeTree as AnyRoute, providedHistory as RouterHistory, routerOptions);
+  }, [providedRouter, routeTree, providedHistory, routerOptions]);
 
   // @cpt-algo:cpt-frontx-algo-routing-engine-provider-teardown:p2
+  // @cpt-begin:cpt-frontx-algo-routing-engine-provider-teardown:p2:inst-when-mount
   // @cpt-begin:cpt-frontx-algo-routing-engine-provider-teardown:p2:inst-when-unmount
   useEffect(() => {
     attachAdaptedHistory(history);
     return () => history.destroy();
   }, [history]);
   // @cpt-end:cpt-frontx-algo-routing-engine-provider-teardown:p2:inst-when-unmount
+  // @cpt-end:cpt-frontx-algo-routing-engine-provider-teardown:p2:inst-when-mount
 
   // @cpt-begin:cpt-frontx-algo-routing-engine-provider-router-creation:p2:inst-mount-router-provider
   // @cpt-begin:cpt-frontx-algo-routing-engine-provider-standalone-deployment:p2:inst-mount-standalone-router
@@ -237,16 +309,27 @@ export function EngineProvider(
  * instance already names, exposed here as one callable a consumer can pass
  * anywhere the port itself is expected.
  *
- * Teardown: the port's own signature returns a router, not a
+ * Construction options: the port's own input is exactly
+ * `{history, entryAddress, routeTree}` and this function keeps that
+ * signature, so it passes `createProviderRouter` no options at all — the
+ * router it returns carries no `context`. That silence is the point: the
+ * port is declared by the core package, and admitting an engine-shaped
+ * options field into it would put the engine's own construction surface
+ * there. A consumer that needs `context` reaches the seam on this package's
+ * own exports instead — `createProviderRouter`'s third argument, or
+ * `EngineProvider`'s `routerOptions` prop.
+ *
+ * Teardown: the port's own signature likewise returns a router, not a
  * `{router, destroy}` pair — widening it would break the port typing this
  * function exists to satisfy. The returned router's own `history` member
  * (TanStack's `Router#history` field) is the same adapted `RouterHistory`
- * object `EngineProvider` mounts and tears down elsewhere in this file;
- * mount the result through `<EngineProvider router={router} />` (the
- * `EngineProviderFromRouterProps` overload above), rather than a raw
- * `<RouterProvider router={router} />`, to get that same symmetric
- * teardown on unmount. A consumer that mounts the raw `RouterProvider`
- * instead owns calling `router.history.destroy()` itself.
+ * object `EngineProvider` attaches and tears down elsewhere in this file,
+ * and it is unattached when this function returns; mount the result through
+ * `<EngineProvider router={router} />` (the `EngineProviderFromRouterProps`
+ * overload above), rather than a raw `<RouterProvider router={router} />`,
+ * to get that attach on mount and the symmetric teardown on unmount. A
+ * consumer that mounts the raw `RouterProvider` instead owns both:
+ * `attachAdaptedHistory(router.history)` and `router.history.destroy()`.
  */
 export const createEngineProviderRouter: EngineProviderPort<AnyRoute, ReturnType<typeof createProviderRouter>> = ({
   history,

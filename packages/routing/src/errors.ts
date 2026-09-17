@@ -3,17 +3,24 @@
  *
  * ADR 0003 ("Occupant Identity Lexical Rule") and FEATURE
  * (navigation-substrate) §3 (Domain-Key Composition, Grammar Serialize)
- * specify a *thrown* error at a handful of synchronous input paths; FEATURE
- * (route-ownership-signal) §3 (URL Back-Projection Helper) adds a sixth.
- * `resolveNavigationHistory`'s own default adapter adds a seventh, via this
- * file's `noNavigationHistoryInRealm` factory:
+ * specify a *thrown* error at each of several synchronous input paths;
+ * FEATURE (route-ownership-signal) §3 (URL Back-Projection Helper) adds one
+ * of its own. `resolveNavigationHistory`'s own default adapter adds another,
+ * via this file's `noNavigationHistoryInRealm` factory:
  * resolving the realm-shared singleton with no adapter override, in a realm
  * with no `window` at all (an SSR render, most commonly), is a recognized,
  * clearly-named failure rather than a raw `ReferenceError` reaching the
  * caller from deep inside the default `HistoryAdapter`'s own construction.
+ * The re-entrancy bound both round-deferring drains share
+ * (`./diagnostics.js`) adds one more: a drain that has run past that
+ * bound throws rather than continuing, since an unbounded one surfaces
+ * nothing at all on its own.
+ * Stated without counts throughout, so that adding a code stays a matter of
+ * adding its own `RoutingErrorCode` member, its own factory, and its own
+ * bullet in `src/types/index.ts` — never of re-numbering prose elsewhere.
  * This module supplies the single runtime value every one of those `throw`
  * statements constructs — see `RoutingErrorCode`'s own doc comment for the
- * ten shapes, documented in `src/types/index.ts`.
+ * shapes, documented in `src/types/index.ts`.
  *
  * A single `RoutingError` class, not one subclass per code, because every
  * variant is a plain data-carrying error with no behaviour of its own beyond
@@ -29,7 +36,7 @@
 
 import type { DomainKey, Entry, ExtensionToken } from './types/index.js';
 
-/** The eight codes a thrown `RoutingError` carries — see `src/types/index.ts`
+/** The codes a thrown `RoutingError` carries — see `src/types/index.ts`
  * for the field shape each one populates. */
 export type RoutingErrorCode =
   | 'invalid-shell-subroute'
@@ -41,7 +48,8 @@ export type RoutingErrorCode =
   | 'duplicate-param-name'
   | 'duplicate-extension'
   | 'reordered-not-permutation'
-  | 'no-navigation-history-in-realm';
+  | 'no-navigation-history-in-realm'
+  | 'reentrant-round-limit-exceeded';
 
 export class RoutingError extends Error {
   readonly code: RoutingErrorCode;
@@ -59,6 +67,10 @@ export class RoutingError extends Error {
   readonly domainKey?: DomainKey;
   /** Set only for `reordered-not-permutation`. */
   readonly reordered?: readonly ExtensionToken[];
+  /** Set only for `reentrant-round-limit-exceeded` — the bound that was
+   * reached, so a consumer reading this error need not know the constant to
+   * report it. */
+  readonly limit?: number;
 
   private constructor(
     code: RoutingErrorCode,
@@ -69,6 +81,7 @@ export class RoutingError extends Error {
       entries?: readonly [Entry, Entry];
       domainKey?: DomainKey;
       reordered?: readonly ExtensionToken[];
+      limit?: number;
     },
   ) {
     super(message);
@@ -79,6 +92,7 @@ export class RoutingError extends Error {
     this.entries = extra?.entries;
     this.domainKey = extra?.domainKey;
     this.reordered = extra?.reordered;
+    this.limit = extra?.limit;
   }
 
   /**
@@ -211,6 +225,27 @@ export class RoutingError extends Error {
     return new RoutingError(
       'no-navigation-history-in-realm',
       'resolveNavigationHistory() was called with no adapter override in a realm with no `window` — pass an explicit HistoryAdapter (an SSR-safe one, or a test double) instead of relying on the default browser adapter.',
+    );
+  }
+
+  /**
+   * A re-entrancy drain ran `limit` consecutive rounds without the queue
+   * ever emptying — a callback that navigates, or mutates a
+   * registered-extensions source, every single time it is notified, feeding
+   * the drain a fresh round for each one it completes.
+   *
+   * Thrown rather than reported and swallowed, because the alternative is
+   * the behaviour this bound exists to end: the drain is a loop, not a
+   * recursion, so an unbounded one produces no stack overflow and no error
+   * of any kind — the realm simply stops making progress, indefinitely,
+   * with nothing to see. `site` names which drain reached the bound so the
+   * consumer knows which of its own callbacks to look at.
+   */
+  static reentrantRoundLimitExceeded(site: string, limit: number): RoutingError {
+    return new RoutingError(
+      'reentrant-round-limit-exceeded',
+      `${site}: ${String(limit)} consecutive deferred rounds ran without the queue emptying — a callback is triggering a new round every time it is notified. The queue was abandoned to end the loop.`,
+      { limit },
     );
   }
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { resolveNavigationHistory, type DomainKey, type EntryAddress, type ExtensionToken } from '@gears-frontx/routing';
 import { adaptComposedHistory } from '../composed-history-source.js';
+import { attachAdaptedHistory } from '../history-adaptation.js';
 import { resetRealm } from './helpers/index.js';
 
 // FEATURE (engine-provider) §2, Swap The Router Engine Used By One
@@ -48,13 +49,21 @@ describe('swapping to a second provider instance for the same entry', () => {
       };
     };
 
+    // The registration belongs to the attach/destroy pair, not to
+    // construction: a provider swap that builds its replacement before
+    // tearing the outgoing one down still never has two live at once,
+    // because the replacement registers nothing until it is attached.
     const first = adaptComposedHistory(navigationHistory, ENTRY_ADDRESS);
+    expect(activeSubscriptions).toBe(0);
+    attachAdaptedHistory(first);
     expect(activeSubscriptions).toBe(1);
 
     first.destroy();
     expect(activeSubscriptions).toBe(0);
 
     const second = adaptComposedHistory(navigationHistory, ENTRY_ADDRESS);
+    expect(activeSubscriptions).toBe(0);
+    attachAdaptedHistory(second);
     expect(activeSubscriptions).toBe(1);
 
     second.destroy();

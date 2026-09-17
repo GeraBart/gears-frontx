@@ -20,13 +20,16 @@
 import type { HistoryVerb, NavigationHistory, Param } from '@gears-frontx/routing';
 import { projectParamsToVirtualLocation, splitHref } from './virtual-location.js';
 
-// The concrete engine's own `RouterHistory` contract, `@tanstack/history`,
-// re-exports its type (not its own package name) through
-// `@tanstack/react-router` — this package's own single ecosystem-external
-// binding (DESIGN §1.3, §3.5). `SubscriberArgs` and `NavigationBlocker` are
-// *not* re-exported anywhere reachable, so they are derived structurally
-// from `RouterHistory`'s own field types below, rather than imported by
-// name.
+// `RouterHistory` is defined by `@tanstack/history` and re-exported by
+// `@tanstack/react-router`, which is how this file and every other one here
+// reach it. That package is named throughout this file for the contract it
+// defines and for the reference behaviour this adapter reproduces — never
+// as a dependency: it is in no manifest and imported nowhere. This
+// package's declared engine dependencies are `@tanstack/react-router` and
+// `@tanstack/router-core` (DESIGN §1.3, §3.5). `SubscriberArgs` and
+// `NavigationBlocker` are *not* re-exported anywhere reachable, so they are
+// derived structurally from `RouterHistory`'s own field types below, rather
+// than imported by name.
 import type { RouterHistory } from '@tanstack/react-router';
 
 type RouterHistoryLocation = RouterHistory['location'];
@@ -47,7 +50,7 @@ type RouterBlockerAction = RouterBlockerFnArgs['action'];
  */
 export interface VirtualLocationSource {
   /** This occupant's own current parameter list, or `undefined` when its
-   * own entry is absent from the URL right now (FEATURE §3, step 7) — a
+   * own entry is absent from the URL right now (FEATURE §3, step 8) — a
    * state a standalone source never reports, since there is no entry to be
    * absent. */
   readParams(): readonly Param[] | undefined;
@@ -74,32 +77,48 @@ export interface VirtualLocationSource {
 }
 
 /**
- * @internal Not part of the `RouterHistory` contract — a private channel
- * between this module and `./router-creation.js` only, keyed by object
+ * @internal Not part of the `RouterHistory` contract — keyed by object
  * identity rather than by an extra property on the returned `RouterHistory`
  * object itself (which would leak into every consumer's own enumeration of
  * it). Records, for every history this module has itself constructed, the
- * function that (re)establishes its single internal registration against
- * the shared `NavigationHistory` — the same registration `destroy()`
- * releases. `EngineProvider`'s own teardown effect (`router-creation.tsx`)
- * calls `attachAdaptedHistory` in its setup and `destroy()` in its
- * cleanup, making the two true inverses of each other: React's StrictMode
- * double-invoking that effect (setup, cleanup, setup) is then exactly as
- * safe as invoking it once, since the second setup re-does precisely what
- * the cleanup undid, rather than finding nothing left to redo — see
- * `router-creation.tsx`.
+ * function that establishes its single internal registration against the
+ * shared `NavigationHistory` — the same registration `destroy()` releases.
  */
 const attachByHistory = new WeakMap<RouterHistory, () => void>();
 
 /**
- * Re-establishes the internal `NavigationHistory` registration for `history`
- * if `destroy()` had released it (a no-op when it is still active, or when
+ * Establishes the internal `NavigationHistory` registration for `history`,
+ * which is what makes an adapted history actually observe the shared
+ * history: until this runs, `location` holds whatever the adaptation
+ * projected at construction and no navigation from outside this occupant
+ * reaches it. A no-op when the registration is already active, and when
  * `history` was not built by `adaptVirtualLocationHistory` at all — a
- * consumer-supplied test double, say, which owns its own lifecycle).
+ * consumer-supplied test double, say, which owns its own lifecycle.
+ *
+ * An adapted history's lifetime is one occupancy of a domain, so this
+ * registration belongs to a mount boundary rather than to construction:
+ * `EngineProvider` (`./router-creation.js`) calls this in its effect's
+ * setup and `destroy()` in its cleanup, and those two are the whole of it.
+ * Constructing a history therefore costs nothing to discard — a history
+ * built for a mount that never happens, or one of the two React's
+ * StrictMode builds when a `useMemo` constructs it, never registered and so
+ * has nothing to leak. It also makes the two effect halves true inverses:
+ * StrictMode double-invoking that effect (setup, cleanup, setup) is exactly
+ * as safe as invoking it once, since the second setup re-does precisely
+ * what the cleanup undid rather than finding nothing left to redo.
+ *
+ * Exported from this package's own entry point because a consumer that
+ * mounts a raw `RouterProvider` instead of `EngineProvider` has no other
+ * way to establish the registration, and would otherwise hold a history
+ * that never moves.
  */
+// The teardown algorithm's own scope marker for this file sits at `destroy`
+// below, the other half of this pair.
+// @cpt-begin:cpt-frontx-algo-routing-engine-provider-teardown:p2:inst-register-internal-callback
 export function attachAdaptedHistory(history: RouterHistory): void {
   attachByHistory.get(history)?.();
 }
+// @cpt-end:cpt-frontx-algo-routing-engine-provider-teardown:p2:inst-register-internal-callback
 
 /**
  * @internal Default channel for an error this adapter catches rather than
@@ -188,7 +207,7 @@ function buildHistoryLocation(parts: { pathname: string; search: string }, posit
  * third-party addition alike (FEATURE §1.5, "Navigation kind"), so `'GO'`
  * with no real index is the closest of TanStack's own five action names
  * that does not fabricate a direction the substrate's own notification
- * never states (FEATURE §3, step 6: "action is never invented or
+ * never states (FEATURE §3, step 7: "action is never invented or
  * independently inferred by this adapter"). */
 function toSubscriberAction(kind: 'push' | 'replace' | 'history'): RouterSubscriberAction {
   switch (kind) {
@@ -205,7 +224,7 @@ function toSubscriberAction(kind: 'push' | 'replace' | 'history'): RouterSubscri
  * Adapts `navigationHistory` and `source` into a `RouterHistory` object.
  *
  * FEATURE §3, "History Adaptation To The RouterHistory Contract", steps
- * 2-8 (step 1 is `source`'s own concern — see this file's module comment).
+ * 2-9 (step 1 is `source`'s own concern — see this file's module comment).
  */
 // @cpt-algo:cpt-frontx-algo-routing-engine-provider-history-adaptation:p2
 // This constructor, together with `./router-creation.tsx`'s own
@@ -246,15 +265,23 @@ export function adaptVirtualLocationHistory(
 
   // @cpt-begin:cpt-frontx-algo-routing-engine-provider-history-adaptation:p2:inst-adapt-subscribe
   // One internal registration against the shared history for the lifetime
-  // of this constructed `RouterHistory` (DESIGN §3.6, port role summary:
-  // "one subscribe per router with release on unmount") — fanning out to
-  // every external subscriber this object's own `subscribers` set collects,
-  // rather than one shared-history registration per external `subscribe`
-  // call. Wrapped in `attachToNavigationHistory` (below), rather than
-  // called inline, so the same registration this constructor performs
-  // eagerly can also be re-performed later by `attachAdaptedHistory` — the
-  // exact inverse of `destroy()`: the object that constructs this
-  // registration owns re-establishing it, not just tearing it down once.
+  // of one *mount* of this constructed `RouterHistory` (DESIGN §3.6, port
+  // role summary: "one subscribe per router with release on unmount") —
+  // fanning out to every external subscriber this object's own
+  // `subscribers` set collects, rather than one shared-history registration
+  // per external `subscribe` call.
+  //
+  // This constructor deliberately does not perform it. An adapted history's
+  // lifetime is one occupancy of a domain and it already has an explicit
+  // attach/destroy pair, so the registration belongs to that pair: it is
+  // established by `attachAdaptedHistory` (above) — which `EngineProvider`
+  // calls from its mount effect's setup — and released by `destroy()`.
+  // Registering here instead would bind a resource that outlives the realm's
+  // own interest in it to an act that carries no promise the object will
+  // ever be used: a history constructed and then discarded (React's
+  // StrictMode building two from one `useMemo` is the everyday case) would
+  // keep a live registration against a realm-lived shared history, for the
+  // life of the page, with nothing left holding a reference to release it.
   let unsubscribeFromNavigationHistory: (() => void) | undefined;
   function attachToNavigationHistory(): void {
     if (unsubscribeFromNavigationHistory !== undefined) {
@@ -267,9 +294,11 @@ export function adaptVirtualLocationHistory(
     // subscribed to observe: no notification arrived while
     // `unsubscribeFromNavigationHistory` was `undefined`, so
     // `currentLocation` may still hold whatever it projected before
-    // `destroy()` ran. Re-reading `source.readParams()` here — mirroring
-    // this constructor's own initial projection above — brings it back in
-    // sync with the substrate before the new subscription's own first
+    // `destroy()` ran — or, on the very first attach, at construction, which
+    // for a router built well ahead of its own mount is the same kind of
+    // gap. Re-reading `source.readParams()` here — mirroring this
+    // constructor's own initial projection above — brings it back in sync
+    // with the substrate before the new subscription's own first
     // notification (which may not arrive until a later navigation).
     const previousLocation = currentLocation;
     const params = source.readParams();
@@ -299,7 +328,7 @@ export function adaptVirtualLocationHistory(
       if (params === undefined) {
         // @cpt-begin:cpt-frontx-algo-routing-engine-provider-history-adaptation:p2:inst-own-entry-absent-inert
         // The virtual location keeps its own last-projected value; no
-        // subscriber of this round is invoked (FEATURE §3, step 7).
+        // subscriber of this round is invoked (FEATURE §3, step 8).
         return;
         // @cpt-end:cpt-frontx-algo-routing-engine-provider-history-adaptation:p2:inst-own-entry-absent-inert
       }
@@ -314,13 +343,35 @@ export function adaptVirtualLocationHistory(
       dispatchToSubscribers(subscribers, args, reportError);
     });
   }
-  attachToNavigationHistory();
   // @cpt-end:cpt-frontx-algo-routing-engine-provider-history-adaptation:p2:inst-adapt-subscribe
 
   // @cpt-begin:cpt-frontx-algo-routing-engine-provider-history-adaptation:p2:inst-expose-direct-members
   const write = (path: string, verb: HistoryVerb, hash?: string): void => {
     const { pathname, search } = splitHref(path);
-    source.write(pathname, search, verb, hash);
+    try {
+      source.write(pathname, search, verb, hash);
+    } catch (error) {
+      // The shared history can refuse a write: the substrate bounds its own
+      // fan-out drain and raises a `RoutingError` once a subscriber that
+      // navigates from every round it receives has driven that drain past
+      // the bound (`cpt-frontx-algo-routing-navigation-substrate-fanout-dispatch`).
+      // That throw surfaces out of `navigationHistory.push`/`replace`, which
+      // is to say out of this call.
+      //
+      // It is reported, not rethrown, and this is deliberate rather than
+      // incidental. `RouterHistory`'s own `push`/`replace` return `void` and
+      // the engine calls them fire-and-forget, so there is no caller left to
+      // propagate to: before this `catch`, the throw crossed the enclosing
+      // `async tryNavigation` and became an unobserved promise rejection —
+      // the exact failure mode `reportError` already exists to replace for a
+      // throwing blocker or subscriber, and it is routed through the same
+      // channel here. What a consumer observes is what it observes for any
+      // other write that never reached the shared history: no navigation,
+      // the virtual location unchanged, the view where it was, and one
+      // report naming the cause.
+      reportError(error);
+      return;
+    }
     // `length`/`canGoBack` below no longer count this write themselves:
     // `source.write`'s own push, when it
     // actually reaches the shared history, already advances the
@@ -414,9 +465,9 @@ export function adaptVirtualLocationHistory(
     // @cpt-end:cpt-frontx-algo-routing-engine-provider-history-adaptation:p2:inst-derive-missing-members
 
     // @cpt-begin:cpt-frontx-algo-routing-engine-provider-history-adaptation:p2:inst-adapt-subscribe
-    // The other half of step 6 — the internal registration against
+    // The other half of step 7 — the internal registration against
     // `NavigationHistory` lives in `attachToNavigationHistory` above; this is
-    // the public `RouterHistory#subscribe(cb)` member step 6 also names,
+    // the public `RouterHistory#subscribe(cb)` member step 7 also names,
     // collecting `cb` into the same `subscribers` set that internal
     // registration's own callback fans out over.
     subscribe: (callback: RouterSubscribeCallback) => {
@@ -428,12 +479,35 @@ export function adaptVirtualLocationHistory(
     // @cpt-end:cpt-frontx-algo-routing-engine-provider-history-adaptation:p2:inst-adapt-subscribe
 
     // @cpt-begin:cpt-frontx-algo-routing-engine-provider-history-adaptation:p2:inst-expose-direct-members
+    // @cpt-begin:cpt-frontx-algo-routing-engine-provider-history-adaptation:p2:inst-accept-discard-entry-state
+    // `_state` is named with a leading underscore because it is accepted
+    // and dropped, and that is a recognized, degraded adaptation rather than
+    // an oversight (FEATURE §3, step 6). The navigation substrate excludes
+    // caller-owned per-entry state from its contract outright — `push` and
+    // `replace` take a path alone, its `Location` shape has no field for
+    // one, and it owns the browser's own per-entry state exclusively under a
+    // single key of its own, rewriting it on every write
+    // (`cpt-frontx-feature-routing-navigation-substrate` §1.5,
+    // "Entry-carried state — not part of this contract"). So there is
+    // nowhere to put this value that survives what a consumer would expect
+    // it to survive. A map held here in memory would read as a fix and
+    // would be emptied by the first reload and bypassed by the first back
+    // step, which is a worse outcome than not offering the member at all.
+    //
+    // Consumer-visible consequence: `useLocation().state` and
+    // `navigate({ state })` never carry a consumer's own value, and route
+    // masking, which the engine builds on that same per-entry state, does
+    // not work. The `__TSR_index` this adapter does put in `location.state`
+    // is the engine's own housekeeping, derived from the substrate's
+    // `Location.position` (`buildHistoryLocation` above) and never from a
+    // caller.
     push: (path: string, _state?: RouterHistoryState, navigateOpts?: RouterNavigateOptions) => {
       void tryNavigation(path, 'push', navigateOpts);
     },
     replace: (path: string, _state?: RouterHistoryState, navigateOpts?: RouterNavigateOptions) => {
       void tryNavigation(path, 'replace', navigateOpts);
     },
+    // @cpt-end:cpt-frontx-algo-routing-engine-provider-history-adaptation:p2:inst-accept-discard-entry-state
     // No optimistic local adjustment here —
     // `go`/`back`/`forward` simply delegate to the shared
     // history and let its own asynchronous `popstate` observation
@@ -519,7 +593,7 @@ export function adaptVirtualLocationHistory(
   };
 
   // @cpt-begin:cpt-frontx-algo-routing-engine-provider-history-adaptation:p2:inst-return-adapted-history
-  // Step 8 is exactly this: every member above is already derived and
+  // Step 9 is exactly this: every member above is already derived and
   // marked under its own, earlier step; this is only the registration
   // `attachAdaptedHistory` (module-level, above) keys off, and the return
   // of the object those already-derived members were assembled into.

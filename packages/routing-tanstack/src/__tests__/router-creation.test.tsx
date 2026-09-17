@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { act, isValidElement, StrictMode } from 'react';
+import { act, isValidElement, StrictMode, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   createMemoryHistory,
@@ -19,7 +19,8 @@ import {
 } from '@gears-frontx/routing';
 import { adaptComposedHistory } from '../composed-history-source.js';
 import { adaptStandaloneHistory } from '../standalone-history-source.js';
-import { createProviderRouter, createEngineProviderRouter, EngineProvider } from '../router-creation.js';
+import { attachAdaptedHistory } from '../history-adaptation.js';
+import { createProviderRouter, createEngineProviderRouter, EngineProvider, type ProviderRouterOptions } from '../router-creation.js';
 import { resetRealm } from './helpers/index.js';
 
 const ENTRY_ADDRESS: EntryAddress = { domainKey: 'screen' as DomainKey, extension: 'dashboard' as ExtensionToken };
@@ -83,6 +84,81 @@ describe('createProviderRouter', () => {
   });
 });
 
+// The engine-provider port's own input is exactly
+// `{history, entryAddress, routeTree}`, and it stays that way — so the
+// construction options the engine also accepts, `context` above all, are
+// offered on this package's own exports instead. `context` is the
+// motivating one: an application's route loaders reach a consumer-owned
+// dependency, an API client being the usual case, through it.
+describe('construction options seam', () => {
+  it('forwards context to the constructed router, with routeTree and history still this package own', () => {
+    resetRealm('/en?screen=dashboard;route=settings/general;orientation=left');
+    const history = adaptComposedHistory(resolveNavigationHistory(), ENTRY_ADDRESS);
+    const routeTree = buildRouteTree();
+    const apiClient = { get: () => 'payload' };
+
+    const router = createProviderRouter(routeTree, history, { context: { apiClient } });
+
+    expect(router.options.context).toEqual({ apiClient });
+    expect(router.history).toBe(history);
+    expect(router.routeTree).toBe(routeTree);
+  });
+
+  // The two fields this package supplies are written after the caller's own
+  // options, so neither can be displaced. Reachable only past the types —
+  // `ProviderRouterOptions` omits both — which is exactly the caller this
+  // guards against: a plain JavaScript consumer, or an options object built
+  // by spreading something wider.
+  it('cannot have routeTree or history displaced by a caller supplied option', () => {
+    resetRealm('/en?screen=dashboard;route=settings/general;orientation=left');
+    const history = adaptComposedHistory(resolveNavigationHistory(), ENTRY_ADDRESS);
+    const routeTree = buildRouteTree();
+    const foreignHistory = createMemoryHistory({ initialEntries: ['/elsewhere'] });
+    const displacing = { history: foreignHistory, routeTree: buildRouteTree() } as unknown as ProviderRouterOptions<
+      ReturnType<typeof buildRouteTree>
+    >;
+
+    const router = createProviderRouter(routeTree, history, displacing);
+
+    expect(router.history).toBe(history);
+    expect(router.routeTree).toBe(routeTree);
+  });
+
+  // What a consumer supplies has to arrive where route loading actually
+  // reads it, not merely on the router object — so this asserts the context
+  // a route's own `beforeLoad` was handed, the same place a loader reaching
+  // an API client would read it from.
+  it('reaches a route own load-time context through EngineProvider own routerOptions prop', async () => {
+    resetRealm('/en?screen=dashboard;route=settings/general;orientation=left');
+    const history = adaptComposedHistory(resolveNavigationHistory(), ENTRY_ADDRESS);
+    const seen: unknown[] = [];
+    const routeTree = createRootRoute({
+      beforeLoad: ({ context }) => {
+        seen.push(context);
+      },
+      component: () => 'root',
+    });
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        <EngineProvider routeTree={routeTree} history={history} routerOptions={{ context: { label: 'from the consumer' } }} />,
+      );
+    });
+
+    expect(container.textContent).toBe('root');
+    expect(seen[0]).toMatchObject({ label: 'from the consumer' });
+
+    await act(async () => {
+      root.unmount();
+    });
+    container.remove();
+  });
+});
+
 describe('EngineProvider', () => {
   it('mounts the constructed router into the component tree via RouterProvider', async () => {
     resetRealm('/en?screen=dashboard;route=settings/general;orientation=left');
@@ -129,8 +205,10 @@ describe('EngineProvider', () => {
       };
     };
 
+    // Constructing the adapted history registers nothing — the mount
+    // effect below is what establishes the registration this test counts.
     const history = adaptComposedHistory(navigationHistory, ENTRY_ADDRESS);
-    expect(activeSubscriptions).toBe(1);
+    expect(activeSubscriptions).toBe(0);
 
     const routeTree = buildRouteTree();
     const container = document.createElement('div');
@@ -172,7 +250,7 @@ describe('EngineProvider', () => {
     const subscriptions = countSubscriptions(navigationHistory);
 
     const history = adaptComposedHistory(navigationHistory, ENTRY_ADDRESS);
-    expect(subscriptions.active()).toBe(1);
+    expect(subscriptions.active()).toBe(0);
 
     const routeTree = buildRouteTree();
     const container = document.createElement('div');
@@ -203,7 +281,7 @@ describe('EngineProvider', () => {
     const subscriptions = countSubscriptions(navigationHistory);
 
     const history = adaptStandaloneHistory(navigationHistory);
-    expect(subscriptions.active()).toBe(1);
+    expect(subscriptions.active()).toBe(0);
 
     const routeTree = buildRouteTree();
     const container = document.createElement('div');
@@ -219,6 +297,49 @@ describe('EngineProvider', () => {
     });
     expect(subscriptions.active()).toBe(1);
     expect(container.textContent).toBe('root');
+
+    await act(async () => {
+      root.unmount();
+    });
+    container.remove();
+
+    expect(subscriptions.active()).toBe(0);
+  });
+
+  // The history built inside the component that mounts it — a `useMemo` in
+  // a wrapper — is the everyday shape, and StrictMode invokes that memo
+  // twice on a development mount, so two adapted histories exist and only
+  // the second is ever mounted. What this asserts is the count of live
+  // registrations against the shared history, not the number of
+  // notifications delivered: a delivery count cannot see the first history
+  // at all, since nothing renders from it. Were the registration made by
+  // the act of constructing, the discarded history would stay subscribed to
+  // a realm-lived shared history with no reference left to release it
+  // through, for the life of the page.
+  it('leaves nothing registered for a history StrictMode constructed and discarded', async () => {
+    resetRealm('/en?screen=dashboard;route=settings/general;orientation=left');
+    const navigationHistory = resolveNavigationHistory();
+    const subscriptions = countSubscriptions(navigationHistory);
+    const routeTree = buildRouteTree();
+
+    function Microfrontend() {
+      const history = useMemo(() => adaptComposedHistory(navigationHistory, ENTRY_ADDRESS), []);
+      return <EngineProvider routeTree={routeTree} history={history} />;
+    }
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        <StrictMode>
+          <Microfrontend />
+        </StrictMode>,
+      );
+    });
+    expect(container.textContent).toBe('root');
+    expect(subscriptions.active()).toBe(1);
 
     await act(async () => {
       root.unmount();
@@ -244,7 +365,7 @@ describe('createEngineProviderRouter teardown', () => {
     const routeTree = buildRouteTree();
 
     const router = createEngineProviderRouter({ history: navigationHistory, entryAddress: ENTRY_ADDRESS, routeTree });
-    expect(subscriptions.active()).toBe(1);
+    expect(subscriptions.active()).toBe(0);
 
     const container = document.createElement('div');
     document.body.appendChild(container);
@@ -442,6 +563,9 @@ describe('useBlocker end to end through the adapted history', () => {
   it('lets a navigate() through when shouldBlockFn returns false: the write reaches the shared history', async () => {
     const adapter = resetRealm('/en?screen=dashboard;route=settings/general;orientation=left');
     const history = adaptComposedHistory(resolveNavigationHistory(), ENTRY_ADDRESS);
+    // Mounted through a raw `RouterProvider` rather than `EngineProvider`,
+    // so this test owns the attach the provider's own effect would run.
+    attachAdaptedHistory(history);
     const calls: unknown[] = [];
     const router = createProviderRouter(buildBlockableRouteTree(calls, () => false), history);
 

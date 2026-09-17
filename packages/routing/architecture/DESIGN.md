@@ -218,7 +218,7 @@ The vocabulary this design builds on — Zone, Level, Shell subroute, Domain key
 
 #### Navigation Substrate
 
-- [ ] `p2` - **ID**: `cpt-frontx-component-routing-navigation-substrate`
+- [x] `p2` - **ID**: `cpt-frontx-component-routing-navigation-substrate`
 
 Concrete artifact: `@gears-frontx/routing` (core entry).
 
@@ -246,7 +246,7 @@ Independently bundled units in the same realm need one navigation history to agr
 
 #### Route Ownership Signal
 
-- [ ] `p2` - **ID**: `cpt-frontx-component-routing-route-ownership-signal`
+- [x] `p2` - **ID**: `cpt-frontx-component-routing-route-ownership-signal`
 
 Concrete artifact: `@gears-frontx/routing` (core entry).
 
@@ -275,7 +275,7 @@ A consumer's own mount mechanism needs to know, from the URL alone, which declar
 
 ### 3.3 API Contracts
 
-- [ ] `p2` - **ID**: `cpt-frontx-routing-interface-package-entry`
+- [x] `p2` - **ID**: `cpt-frontx-routing-interface-package-entry`
 
 - **Contracts**: the substrate's own `NavigationHistory` contract (`location`, `subscribe`, `push`, `replace`, `go`); the URL grammar codec (parse, serialize); the name-equality predicate a domain's own consumer uses for its own registration-time conflict check, and the extension-token lexical validator published alongside it; the domain-key-composition function; the consumer-supplied registered-extensions source, the per-domain observer's own construction shape, and the route ownership signal's transition shape; the engine-provider port a provider package must satisfy. Field-level shapes for the observer, the transition, and both helpers are owned by the FEATUREs this DESIGN cites by ID — `cpt-frontx-feature-routing-navigation-substrate` and `cpt-frontx-feature-routing-route-ownership-signal` — not restated here; the FEATUREs' own algorithms are `cpt-frontx-algo-routing-navigation-substrate-singleton-resolution`, `cpt-frontx-algo-routing-navigation-substrate-fanout-dispatch`, `cpt-frontx-algo-routing-navigation-substrate-grammar-parse`, `cpt-frontx-algo-routing-navigation-substrate-grammar-serialize`, `cpt-frontx-algo-routing-navigation-substrate-name-validity`, `cpt-frontx-algo-routing-navigation-substrate-domain-key-compose`, `cpt-frontx-algo-routing-route-ownership-signal-entry-resolution`, `cpt-frontx-algo-routing-route-ownership-signal-observe-change`, `cpt-frontx-algo-routing-route-ownership-signal-release`, and `cpt-frontx-algo-routing-route-ownership-signal-url-back-projection`. The engine-provider port's own normative field-level shape is owned by `cpt-frontx-feature-routing-navigation-substrate` §1.5, because this package's own component declares that port rather than merely calling it; a role summary citing that shape is stated immediately beneath the table below, and a conforming provider's own adaptation of it is a worked example the provider carries in its own package tree, not a second normative copy.
 - **Technology**: TypeScript library API, single entry point — this package carries no separate engine-provider entry, because it ships no engine provider of its own at all.

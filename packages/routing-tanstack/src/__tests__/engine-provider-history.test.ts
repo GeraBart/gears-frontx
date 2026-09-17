@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createRootRoute, createRoute } from '@tanstack/react-router';
 import { resolveNavigationHistory, type DomainKey, type EntryAddress, type ExtensionToken } from '@gears-frontx/routing';
 import { adaptProviderHistory } from '../engine-provider-history.js';
+import { attachAdaptedHistory } from '../history-adaptation.js';
 import { createProviderRouter } from '../router-creation.js';
 import { resetRealm } from './helpers/index.js';
 
@@ -64,6 +65,10 @@ describe('router.navigate() writes back through the adapter, in both modes', () 
   it('composed mode: navigate() reaches the occupant own entry', async () => {
     const adapter = resetRealm(COMPOSED_URL);
     const history = adaptProviderHistory(resolveNavigationHistory(), DASHBOARD_ENTRY_ADDRESS);
+    // These two tests drive a router without mounting it through
+    // `EngineProvider`, so they take on the attach that component's own
+    // effect would otherwise perform.
+    attachAdaptedHistory(history);
     const router = createProviderRouter(buildRouteTreeWithTwoRoutes(), history);
     await router.load();
 
@@ -80,6 +85,7 @@ describe('router.navigate() writes back through the adapter, in both modes', () 
   it('standalone mode: navigate() reaches the page own address', async () => {
     const adapter = resetRealm(STANDALONE_URL);
     const history = adaptProviderHistory(resolveNavigationHistory(), undefined);
+    attachAdaptedHistory(history);
     const router = createProviderRouter(buildRouteTreeWithTwoRoutes(), history);
     await router.load();
 

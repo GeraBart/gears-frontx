@@ -43,8 +43,9 @@ export const TANSTACK_RUNTIME_SURFACE = Object.keys(tanstackIndex).filter(
 // `@gears-frontx/routing` (`EngineProviderInput`, `EngineProviderPort`,
 // `EntryAddress`), the virtual-location projection shapes
 // (`VirtualLocationParts`, `VirtualLocationSource`), the shared history-
-// adaptation options (`AdaptHistoryOptions`), and the component prop shapes
-// (`EngineProviderProps`, `EngineProviderFromRouterProps`).
+// adaptation options (`AdaptHistoryOptions`), the component prop shapes
+// (`EngineProviderProps`, `EngineProviderFromRouterProps`), and the
+// construction-options seam (`ProviderRouterOptions`).
 export const TANSTACK_TYPE_ONLY_SURFACE = [
   'EngineProviderInput',
   'EngineProviderPort',
@@ -54,4 +55,5 @@ export const TANSTACK_TYPE_ONLY_SURFACE = [
   'VirtualLocationSource',
   'EngineProviderProps',
   'EngineProviderFromRouterProps',
+  'ProviderRouterOptions',
 ] as const;

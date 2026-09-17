@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { parseGrammar } from '../../grammar/parse.js';
 import { serializeGrammar } from '../../grammar/serialize.js';
 
@@ -307,5 +307,44 @@ describe('parseGrammar — an empty param name violates param-name = 1*(...) and
     const result = parseGrammar('/en?sheet=search;=value');
     expect(result.entries).toEqual([]);
     expect(result.warnings).toEqual([{ code: 'malformed-entry', rawEntry: 'sheet=search;=value' }]);
+  });
+});
+
+describe('parseGrammar — an already-split input still carrying its leading delimiter', () => {
+  // A `HistoryAdapter` is free to read the host's own location object, which
+  // carries `?` on the query string and `#` on the fragment. Passed through
+  // verbatim, the `?` used to ride into the first raw entry string, fail its
+  // candidate domain key, and take every entry in that query string down with
+  // it — no entry, no warning, nothing to see.
+  it('parses the entries a query string holds instead of losing them to the leading "?"', () => {
+    const reported = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const result = parseGrammar({ shellSubroute: '/en', search: '?screen=home', hash: undefined });
+
+    expect(result.entries).toEqual([{ domainKey: 'screen', extension: 'home', params: [] }]);
+    expect(result.foreignSegments).toEqual([]);
+    expect(reported).toHaveBeenCalledTimes(1);
+    reported.mockRestore();
+  });
+
+  it('strips a leading "#" from an already-split fragment on the same terms', () => {
+    const reported = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const result = parseGrammar({ shellSubroute: '/en', search: 'screen=home', hash: '#section-2' });
+
+    expect(result.hash).toBe('section-2');
+    expect(reported).toHaveBeenCalledTimes(1);
+    reported.mockRestore();
+  });
+
+  it('leaves a second "?" in a URL string alone — only the already-split form is normalized', () => {
+    const reported = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const result = parseGrammar('/en??screen=home');
+
+    expect(result.entries).toEqual([]);
+    expect(result.foreignSegments).toEqual(['?screen=home']);
+    expect(reported).not.toHaveBeenCalled();
+    reported.mockRestore();
   });
 });

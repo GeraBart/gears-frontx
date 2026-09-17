@@ -44,7 +44,7 @@ function resolveOwnEntry(navigationHistory: NavigationHistory, entryAddress: Ent
 /**
  * Builds a `VirtualLocationSource` (`./history-adaptation.js`) addressed at
  * one occupant's own entry: reading re-resolves that entry on every call
- * (`undefined` when it is currently absent — FEATURE §3, step 7); writing
+ * (`undefined` when it is currently absent — FEATURE §3, step 8); writing
  * issues exactly one call to the core's own URL back-projection helper,
  * naming this occupant's own entry address and its full new parameter list
  * — never a sibling's entry, another domain's entry, or the shell subroute.
@@ -71,12 +71,12 @@ export function createComposedVirtualLocationSource(
     // the virtual location just navigated to (FEATURE §3, step 2).
     //
     // Once this occupant's own entry is no longer present in the URL
-    // (step 7's own absent-entry case), there is nothing of its own left to
+    // (step 8's own absent-entry case), there is nothing of its own left to
     // write to — issuing `backProjectEntries` anyway would still write
     // *something* (the unchanged URL, since there is no matching entry for
     // `payloadChanged` to touch), a spurious history entry and a spurious
     // fan-out round for every other subscriber over a navigation that
-    // changes nothing (FEATURE §3, step 7.1: "no write-back runs, because
+    // changes nothing (FEATURE §3, step 8.1: "no write-back runs, because
     // there is no longer an entry of this occupant's own to write to").
     //
     // A caller-supplied `hash` is applied to the

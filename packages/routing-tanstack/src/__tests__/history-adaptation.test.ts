@@ -56,6 +56,9 @@ describe('scenario (e) — a virtual push whose search carries a different key e
   it('yields /en?screen=dashboard;route=settings/billing;tab=2, orientation dropped, sibling untouched', () => {
     const adapter = resetRealm(EXAMPLE_7_3_URL);
     const history = adaptComposedHistory(resolveNavigationHistory(), DASHBOARD_ENTRY_ADDRESS);
+    // An adapted history is inert until something attaches it; this test
+    // drives it directly rather than through a mounted `EngineProvider`.
+    attachAdaptedHistory(history);
 
     history.push('/settings/billing?tab=2');
 
@@ -248,6 +251,9 @@ describe('back/forward pop propagation into subscribers', () => {
     resetRealm(EXAMPLE_7_3_URL);
     const navigationHistory = resolveNavigationHistory();
     const history = adaptComposedHistory(navigationHistory, DASHBOARD_ENTRY_ADDRESS);
+    // An adapted history is inert until something attaches it; this test
+    // drives it directly rather than through a mounted `EngineProvider`.
+    attachAdaptedHistory(history);
 
     // Advance the real underlying stack once, through this adapter's own
     // push, so a later `go(-1)` has somewhere to land.
@@ -285,7 +291,7 @@ describe('back/forward pop propagation into subscribers', () => {
   });
 });
 
-describe('own entry absent from the URL (FEATURE §3, step 7)', () => {
+describe('own entry absent from the URL (FEATURE §3, step 8)', () => {
   it('keeps the last-projected virtual location and does not notify subscribers', async () => {
     const adapter = resetRealm(EXAMPLE_7_3_URL);
     const navigationHistory = resolveNavigationHistory();
@@ -445,6 +451,9 @@ describe('block actually enforced on push/replace issued through this same Route
   it('does not gate a bare go() call (no blocker check for back/forward)', async () => {
     resetRealm(EXAMPLE_7_3_URL);
     const history = adaptComposedHistory(resolveNavigationHistory(), DASHBOARD_ENTRY_ADDRESS);
+    // An adapted history is inert until something attaches it; this test
+    // drives it directly rather than through a mounted `EngineProvider`.
+    attachAdaptedHistory(history);
     history.push('/settings/profile?orientation=left');
     await flushMicrotasks();
     expect(history.location.pathname).toBe('/settings/profile');
@@ -540,6 +549,9 @@ describe('subscriber error isolation', () => {
       createComposedVirtualLocationSource(navigationHistory, DASHBOARD_ENTRY_ADDRESS),
       { reportError: (error) => reported.push(error) },
     );
+    // An adapted history is inert until something attaches it; this test
+    // drives it directly rather than through a mounted `EngineProvider`.
+    attachAdaptedHistory(history);
 
     history.subscribe(() => {
       throw new Error('first subscriber exploded');
@@ -560,6 +572,9 @@ describe('subscriber error isolation', () => {
     resetRealm(EXAMPLE_7_3_URL);
     const navigationHistory = resolveNavigationHistory();
     const history = adaptComposedHistory(navigationHistory, DASHBOARD_ENTRY_ADDRESS);
+    // An adapted history is inert until something attaches it; this test
+    // drives it directly rather than through a mounted `EngineProvider`.
+    attachAdaptedHistory(history);
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     history.subscribe(() => {
@@ -771,6 +786,55 @@ describe('substrate-owned position across push/back/forward/go', () => {
 
     history.replace('/settings/b?orientation=left');
     expect(history.length).toBe(2);
+  });
+});
+
+// The shared history can refuse a write — the substrate bounds its own
+// fan-out drain and raises once a subscriber that navigates from every round
+// it receives drives that drain past the bound. `RouterHistory`'s own
+// `push`/`replace` return `void` and the engine calls them fire-and-forget,
+// so there is no caller to propagate to and the throw would otherwise cross
+// the adapter's own async navigation path and become an unobserved promise
+// rejection. It is reported through the same channel a throwing blocker or
+// subscriber already uses.
+describe('a write the shared history refuses', () => {
+  function sourceThatThrowsOnWrite(failure: Error) {
+    return {
+      readParams: () => [{ name: 'route', value: 'settings/general' }] as const,
+      write: () => {
+        throw failure;
+      },
+      createHref: (pathname: string, search: string) => `${pathname}${search}`,
+    };
+  }
+
+  it('reports the failure and leaves the virtual location where it was', async () => {
+    resetRealm(EXAMPLE_7_3_URL);
+    const reported: unknown[] = [];
+    const failure = new Error('the shared history refused this write');
+    const history = adaptVirtualLocationHistory(resolveNavigationHistory(), sourceThatThrowsOnWrite(failure), {
+      reportError: (error) => reported.push(error),
+    });
+
+    history.push('/settings/profile');
+    await flushMicrotasks();
+
+    expect(reported).toEqual([failure]);
+    expect(history.location.pathname).toBe('/settings/general');
+  });
+
+  it('reports a refused replace the same way', async () => {
+    resetRealm(EXAMPLE_7_3_URL);
+    const reported: unknown[] = [];
+    const failure = new Error('the shared history refused this write');
+    const history = adaptVirtualLocationHistory(resolveNavigationHistory(), sourceThatThrowsOnWrite(failure), {
+      reportError: (error) => reported.push(error),
+    });
+
+    history.replace('/settings/profile');
+    await flushMicrotasks();
+
+    expect(reported).toEqual([failure]);
   });
 });
 

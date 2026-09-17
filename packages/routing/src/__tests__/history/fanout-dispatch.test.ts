@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
+import { REENTRANT_ROUND_LIMIT } from '../../diagnostics.js';
 import { FanOutDispatcher } from '../../history/fanout-dispatch.js';
+import { expectRoutingError } from '../helpers.js';
 import type { HistoryNotification } from '../../types/index.js';
 
 // FEATURE (navigation-substrate) §3, Fan-Out Subscription Dispatch, step 4
@@ -26,6 +28,10 @@ describe('FanOutDispatcher — registration order', () => {
 
 describe('FanOutDispatcher — error isolation', () => {
   it('a throwing subscriber does not stop delivery to the rest of the round', () => {
+    // The throw is reported (its own suite, below); silenced here so this
+    // suite's own subject — delivery to the rest of the round — is not
+    // buried in the report it deliberately produces.
+    const reported = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const dispatcher = new FanOutDispatcher();
     const first = vi.fn();
     const third = vi.fn();
@@ -39,6 +45,7 @@ describe('FanOutDispatcher — error isolation', () => {
 
     expect(first).toHaveBeenCalledTimes(1);
     expect(third).toHaveBeenCalledTimes(1);
+    reported.mockRestore();
   });
 });
 
@@ -156,5 +163,79 @@ describe('FanOutDispatcher — release function', () => {
     dispatcher.dispatch(notification);
 
     expect(callback).not.toHaveBeenCalled();
+  });
+});
+
+describe('FanOutDispatcher — bounded deferral', () => {
+  it('stops and throws when a subscriber queues a fresh round from every round it receives', () => {
+    const dispatcher = new FanOutDispatcher();
+    let rounds = 0;
+    dispatcher.subscribe(() => {
+      rounds += 1;
+      // Capped far above the dispatcher's own bound so this test fails by
+      // assertion rather than by running until the process is killed: an
+      // unbounded drain serves every one of these and asks for more.
+      if (rounds < 5000) {
+        dispatcher.dispatch(notification);
+      }
+    });
+
+    const error = expectRoutingError(() => dispatcher.dispatch(notification));
+
+    expect(error.code).toBe('reentrant-round-limit-exceeded');
+    expect(error.limit).toBe(REENTRANT_ROUND_LIMIT);
+    expect(rounds).toBeLessThan(5000);
+  });
+
+  it('serves a cascade that settles on its own, without reaching the bound', () => {
+    const dispatcher = new FanOutDispatcher();
+    let rounds = 0;
+    dispatcher.subscribe(() => {
+      rounds += 1;
+      if (rounds < 3) {
+        dispatcher.dispatch(notification);
+      }
+    });
+
+    expect(() => dispatcher.dispatch(notification)).not.toThrow();
+
+    expect(rounds).toBe(3);
+  });
+
+  it('starts the next dispatch from an empty queue after a breach', () => {
+    const dispatcher = new FanOutDispatcher();
+    let looping = true;
+    let rounds = 0;
+    dispatcher.subscribe(() => {
+      rounds += 1;
+      if (looping && rounds < 5000) {
+        dispatcher.dispatch(notification);
+      }
+    });
+
+    expectRoutingError(() => dispatcher.dispatch(notification));
+    looping = false;
+    rounds = 0;
+
+    expect(() => dispatcher.dispatch(notification)).not.toThrow();
+
+    expect(rounds).toBe(1);
+  });
+});
+
+describe('FanOutDispatcher — a throwing subscriber is reported, not only isolated', () => {
+  it('reports the error the subscriber threw', () => {
+    const reported = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const dispatcher = new FanOutDispatcher();
+    const thrown = new Error('boom');
+    dispatcher.subscribe(() => {
+      throw thrown;
+    });
+
+    dispatcher.dispatch(notification);
+
+    expect(reported).toHaveBeenCalledTimes(1);
+    expect(reported.mock.calls[0][1]).toBe(thrown);
+    reported.mockRestore();
   });
 });

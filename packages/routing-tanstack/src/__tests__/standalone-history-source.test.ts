@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { resolveNavigationHistory } from '@gears-frontx/routing';
+import { attachAdaptedHistory } from '../history-adaptation.js';
 import { adaptStandaloneHistory, createStandaloneVirtualLocationSource } from '../standalone-history-source.js';
 import { resetRealm } from './helpers/index.js';
 
@@ -56,6 +57,10 @@ describe('composed and standalone virtual location round-trip to the identical f
     resetRealm(EXAMPLE_7_4_URL);
     const navigationHistory = resolveNavigationHistory();
     const history = adaptStandaloneHistory(navigationHistory);
+    // Reading `location` back after a write needs the adapted history
+    // attached: the re-projection runs from the shared history's own
+    // notification, which only reaches an attached history.
+    attachAdaptedHistory(history);
 
     history.push('/settings/profile?orientation=right&density=compact');
 

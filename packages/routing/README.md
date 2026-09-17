@@ -15,8 +15,9 @@ Every extension domain, at any depth, is addressed through the same entry gramma
    &widgets=line-b;range=30d&widgets=pie;metric=revenue
 ```
 
-See `architecture/` for the requirements (PRD), structure and constraints (DESIGN), the decisions
-behind the grammar (ADR), and the behavior each FEATURE specifies.
+The requirements (PRD), the structure and constraints (DESIGN), the decisions behind the grammar
+(ADR), and the behavior each FEATURE specifies live in this package's own `architecture/` tree in
+the FrontX repository; they are not part of the published package.
 
 ## Domain keys and extension tokens: what you supply
 
