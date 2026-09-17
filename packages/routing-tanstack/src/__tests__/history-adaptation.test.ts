@@ -11,8 +11,8 @@ import { adaptComposedHistory, createComposedVirtualLocationSource } from '../co
 import { adaptVirtualLocationHistory, attachAdaptedHistory } from '../history-adaptation.js';
 import { resetRealm } from './helpers/index.js';
 
-// FEATURE example 7.3, the acceptance scenario this task's implementation
-// MUST reproduce (engine-provider FEATURE §1.5, §6):
+// FEATURE example 7.3, the acceptance scenario an implementation MUST
+// reproduce (engine-provider FEATURE §1.5, §6):
 //   /en?screen=dashboard;route=settings/general;orientation=left
 //      &sheet=tenant-details;route=contacts;tenantId=456
 const EXAMPLE_7_3_URL =

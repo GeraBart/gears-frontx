@@ -139,11 +139,13 @@ export function createComposedVirtualLocationSource(
 
 /**
  * Convenience composition of `createComposedVirtualLocationSource` and
- * `adaptVirtualLocationHistory` (`./history-adaptation.js`) — this task's
- * own public entry point for the composed case (an entry address is always
- * supplied). The standalone case (no entry address) is a different
- * algorithm this package does not yet implement
- * (`cpt-frontx-algo-routing-engine-provider-standalone-deployment`).
+ * `adaptVirtualLocationHistory` (`./history-adaptation.js`) — the public
+ * entry point for the composed case, where an entry address is always
+ * supplied. The standalone case, where none is, is a separate algorithm
+ * (`cpt-frontx-algo-routing-engine-provider-standalone-deployment`) with its
+ * own entry point, `adaptStandaloneHistory`
+ * (`./standalone-history-source.js`); `adaptProviderHistory`
+ * (`./engine-provider-history.js`) is what chooses between the two.
  *
  * `options` is forwarded straight through to
  * `adaptVirtualLocationHistory` — `reportError` in particular, so a

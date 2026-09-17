@@ -136,6 +136,23 @@ function runBackProjection(
     }
   });
 
+  // @cpt-begin:cpt-frontx-algo-routing-route-ownership-signal-url-back-projection:p2:inst-replaced-old-extension-present-check
+  // Every `replaced` pair must name a token this domain key currently
+  // carries, because a replacement stands its new entry at the old entry's
+  // *own position* and an absent token has no position. Checked here,
+  // before the reorder permutation check below, so that a delta getting
+  // both wrong is refused on the cause the reorder's own survivor set is
+  // derived from. Refusing outright rather than appending: an append
+  // silently demotes the pair to an addition at the end of the full list,
+  // which is the entry order `replaced` exists to avoid.
+  const ownExtensions = new Set(ownIndices.map((index) => parsed.entries[index].extension));
+  for (const oldExtension of replacedByOldExtension.keys()) {
+    if (!ownExtensions.has(oldExtension)) {
+      throw RoutingError.replacedOldExtensionAbsent(domainKey, oldExtension);
+    }
+  }
+  // @cpt-end:cpt-frontx-algo-routing-route-ownership-signal-url-back-projection:p2:inst-replaced-old-extension-present-check
+
   // `null` marks an own-key position removed outright (a plain removal);
   // any other `Entry` is what survives at that same position, unchanged,
   // payload-updated, or replaced.
@@ -169,10 +186,11 @@ function runBackProjection(
 
   // Reorder: reassign the entries surviving the transformations above to
   // the identical set of positions this domain's own entries already
-  // occupy, in the caller's given relative order — keyed by each
-  // survivor's own *current* extension token, since `reordered` never also
-  // renames a token (that is what `replaced` does, as a distinct
-  // operation).
+  // occupy, in the caller's given relative order — keyed by the token each
+  // survivor carries in the *currently parsed* location, so a replaced entry
+  // is named by its `oldExtension` and an added entry is never nameable here
+  // at all (additions land at the end of the full list, below, outside the
+  // positions a reorder may touch).
   if (delta.reordered !== undefined) {
     const survivingIndices = ownIndices.filter((index) => transformedByIndex.get(index) !== null);
     const survivorByCurrentExtension = new Map<ExtensionToken, Entry>();
@@ -188,6 +206,7 @@ function runBackProjection(
       }
     }
 
+    // @cpt-begin:cpt-frontx-algo-routing-route-ownership-signal-url-back-projection:p2:inst-reordered-permutation-check
     // `reordered` must be exactly a permutation of this domain's own
     // surviving tokens (a bijection: same size, no duplicate, nothing
     // outside the surviving set) — otherwise a duplicated or dropped token
@@ -201,6 +220,7 @@ function runBackProjection(
     if (!isPermutation) {
       throw RoutingError.reorderedNotPermutation(domainKey, delta.reordered);
     }
+    // @cpt-end:cpt-frontx-algo-routing-route-ownership-signal-url-back-projection:p2:inst-reordered-permutation-check
 
     // The permutation check just above guarantees every token in
     // `delta.reordered` is a key of `survivorByCurrentExtension`, so this

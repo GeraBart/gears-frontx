@@ -4,11 +4,10 @@
 // involved (FEATURE §3, "Standalone Deployment Of A Single Microfrontend",
 // steps 1, 1.1, 1.2).
 //
-// Design decision (task 10): `readParams` reuses
-// `projectVirtualLocationToParams` — the same pure function
-// `createComposedVirtualLocationSource`'s own write path uses to turn a
-// virtual location back into a parameter list — to build a params array
-// from the page's own current pathname/search. Feeding that array back
+// `readParams` reuses `projectVirtualLocationToParams` — the same pure
+// function `createComposedVirtualLocationSource`'s own write path uses to
+// turn a virtual location back into a parameter list — to build a params
+// array from the page's own current pathname/search. Feeding that array back
 // through `projectParamsToVirtualLocation` (the shared history-adaptation
 // pipeline every `VirtualLocationSource` is read through) round-trips to
 // the identical pathname/search it was built from — proven directly by

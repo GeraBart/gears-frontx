@@ -594,7 +594,14 @@ export type EngineProviderPort<TRouteTree = unknown, TRouter = unknown> = (
  *   Serialize, step 2.3).
  * - `duplicate-extension` — `entries`, a pair; a grammar-serialize input
  *   list carried two entries sharing the identical `domainKey` and
- *   `extension` (FEATURE §3, Grammar Serialize, step 2.4).
+ *   `extension` (FEATURE §3, Grammar Serialize, step 2.4). It also reaches
+ *   a caller of the URL back-projection helper, which composes its entry
+ *   list and serializes it in one step: a delta whose `added` list names a
+ *   token that domain key already carries, or names one token twice, or
+ *   whose `replaced` pair introduces a token another of that domain's own
+ *   entries already holds, surfaces here rather than as a code of its own
+ *   (route-ownership-signal FEATURE §3, Collision note). Nothing is written
+ *   in that case.
  * - `reordered-not-permutation` — `domainKey`, `reordered`; the URL
  *   back-projection helper's own `reordered` delta named a set of
  *   extension tokens that is not exactly the set of this domain key's own
@@ -603,6 +610,18 @@ export type EngineProviderPort<TRouteTree = unknown, TRouter = unknown> = (
  *   duplicate. No other code above names this case: it is neither
  *   a lexical failure (`invalid-*`) nor a serialize-input shape violation
  *   (`duplicate-*`), so it is its own code.
+ * - `replaced-old-extension-absent` — `domainKey`, `value` (the old
+ *   extension token); the URL back-projection helper's own `replaced` pair
+ *   named an `oldExtension` no entry under that domain key currently
+ *   carries, so there is no position to stand the pair's new entry at
+ *   (route-ownership-signal FEATURE §3, step 3.1). Nothing is written, the
+ *   structural reset of that token's own subtree included. Its own code for
+ *   the same reason `reordered-not-permutation` is: the token is lexically
+ *   valid and collides with nothing, it simply names a position the current
+ *   location does not have. Unlike a `removed` or `payloadChanged` entry
+ *   naming an absent token — where the postcondition already holds, or the
+ *   operation is inert, and the call still writes (§3, No-op note) — this
+ *   one cannot be performed at all.
  * - `no-navigation-history-in-realm` — no fields set; `resolveNavigationHistory`
  *   (`../history/singleton.js`) was called with no adapter override in a
  *   realm carrying no `window` at all (an SSR render, most commonly) — the

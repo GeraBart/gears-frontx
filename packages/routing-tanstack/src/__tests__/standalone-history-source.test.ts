@@ -4,8 +4,8 @@ import { attachAdaptedHistory } from '../history-adaptation.js';
 import { adaptStandaloneHistory, createStandaloneVirtualLocationSource } from '../standalone-history-source.js';
 import { resetRealm } from './helpers/index.js';
 
-// FEATURE example 7.4, the acceptance scenario this task's implementation
-// MUST reproduce (engine-provider FEATURE §6): the same microfrontend served
+// FEATURE example 7.4, the acceptance scenario an implementation MUST
+// reproduce (engine-provider FEATURE §6): the same microfrontend served
 // standalone, virtual location projected onto the page's own address:
 //   /settings/general?orientation=left
 const EXAMPLE_7_4_URL = '/settings/general?orientation=left';

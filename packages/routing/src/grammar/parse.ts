@@ -189,13 +189,16 @@ export const parseGrammar: ParseGrammar = (input) => {
     // @cpt-end:cpt-frontx-algo-routing-navigation-substrate-grammar-parse:p1:inst-if-duplicate-extension
 
     const params: Param[] = [];
-    let malformedEscape = false;
+    // Set by either abandonment rule in the param loop below — a broken
+    // escape or a name that decoded to nothing; both abandon this entry
+    // whole, and both report it the same way.
+    let entryAbandoned = false;
     // Snapshot of `warnings` before this entry's own param loop runs, so an
     // abandonment below can roll back any per-param warning (duplicate-
-    // parameter) this same entry already recorded — step 5.5.4's "abandoning
-    // whatever params of this entry were already collected" applies to a
-    // warning already emitted for this entry exactly as it applies to a
-    // collected param.
+    // parameter) this same entry already recorded — "abandoning whatever
+    // params of this entry were already collected" applies to a warning
+    // already emitted for this entry exactly as it applies to a collected
+    // param.
     const warningsBeforeThisEntry = warnings.length;
 
     // @cpt-begin:cpt-frontx-algo-routing-navigation-substrate-grammar-parse:p1:inst-foreach-param-segment
@@ -211,17 +214,35 @@ export const parseGrammar: ParseGrammar = (input) => {
       // @cpt-end:cpt-frontx-algo-routing-navigation-substrate-grammar-parse:p1:inst-keyed-param
       // @cpt-end:cpt-frontx-algo-routing-navigation-substrate-grammar-parse:p1:inst-bare-param
 
-      // decode-once (step 5.5.3-5.5.4) lives in decodePercent; malformed
-      // escape or invalid UTF-8 abandons this whole entry, per step 5.5.4.
-      // An empty decoded name (e.g. `;;` or a bare `;=x`) also abandons the
-      // entry: the grammar's `param-name = 1*(...)` production (ADR 0003)
-      // requires at least one character.
+      // decode-once (`inst-decode-once`) lives in decodePercent.
       const decodedName = decodePercent(rawName);
       const decodedValue = decodePercent(rawValue);
-      if (decodedName === null || decodedValue === null || decodedName === '') {
+
+      // Two independent rules abandon the whole entry at the same point and
+      // by the same means, so they share one flag and one `break`: a
+      // malformed escape or invalid UTF-8 on either side
+      // (`inst-if-malformed-escape`), and a name that decoded to nothing
+      // (`inst-if-empty-param-name`). Each keeps its own marker pair around
+      // the condition it owns.
+      // @cpt-begin:cpt-frontx-algo-routing-navigation-substrate-grammar-parse:p1:inst-if-malformed-escape
+      const escapeBroken = decodedName === null || decodedValue === null;
+      // @cpt-end:cpt-frontx-algo-routing-navigation-substrate-grammar-parse:p1:inst-if-malformed-escape
+
+      // @cpt-begin:cpt-frontx-algo-routing-navigation-substrate-grammar-parse:p1:inst-if-empty-param-name
+      // `param-name = 1*( pchar-safe | pct-encoded )` requires at least one
+      // character, while the otherwise identical `param-value` production
+      // admits the empty string (ADR 0003, "Tokens") — which is why `;k` and
+      // `;k=` are both well-formed while `;;`, a trailing `;`, and `;=x` are
+      // not.
+      const nameEmpty = decodedName === '';
+      // @cpt-end:cpt-frontx-algo-routing-navigation-substrate-grammar-parse:p1:inst-if-empty-param-name
+
+      if (escapeBroken || nameEmpty) {
         // @cpt-begin:cpt-frontx-algo-routing-navigation-substrate-grammar-parse:p1:inst-drop-entry-malformed-escape
-        malformedEscape = true;
+        // @cpt-begin:cpt-frontx-algo-routing-navigation-substrate-grammar-parse:p1:inst-drop-entry-empty-param-name
+        entryAbandoned = true;
         break;
+        // @cpt-end:cpt-frontx-algo-routing-navigation-substrate-grammar-parse:p1:inst-drop-entry-empty-param-name
         // @cpt-end:cpt-frontx-algo-routing-navigation-substrate-grammar-parse:p1:inst-drop-entry-malformed-escape
       }
 
@@ -242,11 +263,12 @@ export const parseGrammar: ParseGrammar = (input) => {
     // @cpt-end:cpt-frontx-algo-routing-navigation-substrate-grammar-parse:p1:inst-foreach-param-segment
 
     // @cpt-begin:cpt-frontx-algo-routing-navigation-substrate-grammar-parse:p1:inst-drop-entry-malformed-escape
-    if (malformedEscape) {
+    // @cpt-begin:cpt-frontx-algo-routing-navigation-substrate-grammar-parse:p1:inst-drop-entry-empty-param-name
+    if (entryAbandoned) {
       // Roll back any per-param warning already recorded for this entry
       // before reporting the single "malformed entry" warning that replaces
-      // them — the actual drop this instruction names, not merely the
-      // flag+break above that detects the condition.
+      // them — the actual drop both instructions name, not merely the
+      // flag+break above that detects either condition.
       warnings.length = warningsBeforeThisEntry;
       warnings.push({ code: 'malformed-entry', rawEntry });
       // This entry's own head looked valid but a param broke the entry
@@ -256,6 +278,7 @@ export const parseGrammar: ParseGrammar = (input) => {
       foreignSegments.push(rawEntry);
       continue;
     }
+    // @cpt-end:cpt-frontx-algo-routing-navigation-substrate-grammar-parse:p1:inst-drop-entry-empty-param-name
     // @cpt-end:cpt-frontx-algo-routing-navigation-substrate-grammar-parse:p1:inst-drop-entry-malformed-escape
 
     // @cpt-begin:cpt-frontx-algo-routing-navigation-substrate-grammar-parse:p1:inst-append-entry

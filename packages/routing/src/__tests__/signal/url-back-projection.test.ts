@@ -381,6 +381,41 @@ describe('url-back-projection — reordered must be a permutation of the survivi
     expect(error.code).toBe('reordered-not-permutation');
   });
 
+  it('names a replaced entry by the token the current location carries, not by the one the same delta introduces', () => {
+    const adapter = resetRealm('/en?widgets=line-a;range=7d&widgets=line-b;range=30d');
+
+    // `reordered` orders positions; `replaced` decides what stands in them.
+    // Naming the incoming token here would be naming an entry the current
+    // location does not carry.
+    backProjectEntries(
+      'widgets' as DomainKey,
+      {
+        replaced: [
+          { oldExtension: 'line-a' as ExtensionToken, entry: { extension: 'pie' as ExtensionToken, params: [] } },
+        ],
+        reordered: ['line-b' as ExtensionToken, 'line-a' as ExtensionToken],
+      },
+      'push',
+    );
+
+    expect(adapter.lastWrite).toBe('/en?widgets=line-b;range=30d&widgets=pie');
+
+    resetRealm('/en?widgets=line-a;range=7d&widgets=line-b;range=30d');
+    const error = expectRoutingError(() =>
+      backProjectEntries(
+        'widgets' as DomainKey,
+        {
+          replaced: [
+            { oldExtension: 'line-a' as ExtensionToken, entry: { extension: 'pie' as ExtensionToken, params: [] } },
+          ],
+          reordered: ['line-b' as ExtensionToken, 'pie' as ExtensionToken],
+        },
+        'push',
+      ),
+    );
+    expect(error.code).toBe('reordered-not-permutation');
+  });
+
   it('does NOT throw when reordered is exactly a permutation of the surviving own entries', () => {
     const adapter = resetRealm('/en?widgets=line-a;range=7d&widgets=line-b;range=30d&widgets=line-c;range=1d');
 
@@ -391,6 +426,131 @@ describe('url-back-projection — reordered must be a permutation of the survivi
     );
 
     expect(adapter.lastWrite).toBe('/en?widgets=line-c;range=1d&widgets=line-a;range=7d&widgets=line-b;range=30d');
+  });
+});
+
+// A `replaced` pair exists to stand a new entry at an old entry's own
+// position (FEATURE §3, step 3.1). When the current location carries no
+// entry under the named `oldExtension`, there is no such position, so the
+// operation the pair asks for cannot be performed at all.
+describe('url-back-projection — replaced must name an entry this domain key currently carries', () => {
+  it('throws RoutingError(replaced-old-extension-absent) and writes nothing when oldExtension is absent', () => {
+    const adapter = resetRealm('/en?w.a.x=q&z=1');
+
+    const error = expectRoutingError(() =>
+      backProjectEntries(
+        'w' as DomainKey,
+        {
+          replaced: [
+            { oldExtension: 'a' as ExtensionToken, entry: { extension: 'b' as ExtensionToken, params: [] } },
+          ],
+        },
+        'push',
+      ),
+    );
+    expect(error.code).toBe('replaced-old-extension-absent');
+
+    expect(adapter.lastWrite).toBeUndefined();
+    expect(currentUrl(adapter)).toBe('/en?w.a.x=q&z=1');
+  });
+
+  it('leaves the subtree of the absent token in place — no structural reset runs', () => {
+    // The reset triggers only when an entry is removed or its own token
+    // changes (ADR 0003, "Structural reset"). Nothing changed here, so
+    // `w.a.x=q` must survive the refusal intact.
+    const adapter = resetRealm('/en?w=c&w.a.x=q&w.c.y=r');
+
+    expectRoutingError(() =>
+      backProjectEntries(
+        'w' as DomainKey,
+        {
+          replaced: [
+            { oldExtension: 'a' as ExtensionToken, entry: { extension: 'b' as ExtensionToken, params: [] } },
+          ],
+        },
+        'push',
+      ),
+    );
+
+    expect(adapter.lastWrite).toBeUndefined();
+    expect(currentUrl(adapter)).toBe('/en?w=c&w.a.x=q&w.c.y=r');
+  });
+
+  it('writes nothing at all when one replaced pair matches and another does not', () => {
+    // The refusal is atomic: the matching pair is not written on its own,
+    // partially applying a delta the caller gave as one unit.
+    const adapter = resetRealm('/en?w=c&w=d&w.c.y=r');
+
+    const error = expectRoutingError(() =>
+      backProjectEntries(
+        'w' as DomainKey,
+        {
+          replaced: [
+            { oldExtension: 'c' as ExtensionToken, entry: { extension: 'e' as ExtensionToken, params: [] } },
+            { oldExtension: 'a' as ExtensionToken, entry: { extension: 'b' as ExtensionToken, params: [] } },
+          ],
+        },
+        'push',
+      ),
+    );
+    expect(error.code).toBe('replaced-old-extension-absent');
+
+    expect(adapter.lastWrite).toBeUndefined();
+    expect(currentUrl(adapter)).toBe('/en?w=c&w=d&w.c.y=r');
+  });
+
+  it('names the absent position ahead of a reordered list that is also not a permutation', () => {
+    // Both are wrong; the absent position is the primary cause, since a
+    // reorder is defined over the survivors the replacement would produce.
+    resetRealm('/en?w=c&w=d');
+
+    const error = expectRoutingError(() =>
+      backProjectEntries(
+        'w' as DomainKey,
+        {
+          replaced: [
+            { oldExtension: 'a' as ExtensionToken, entry: { extension: 'b' as ExtensionToken, params: [] } },
+          ],
+          reordered: ['c' as ExtensionToken],
+        },
+        'push',
+      ),
+    );
+    expect(error.code).toBe('replaced-old-extension-absent');
+  });
+
+  it('carries the domain key and the absent old extension token, so a consumer can recompute its delta', () => {
+    resetRealm('/en?w=c');
+
+    const error = expectRoutingError(() =>
+      backProjectEntries(
+        'w' as DomainKey,
+        {
+          replaced: [
+            { oldExtension: 'a' as ExtensionToken, entry: { extension: 'b' as ExtensionToken, params: [] } },
+          ],
+        },
+        'push',
+      ),
+    );
+    expect(error.domainKey).toBe('w');
+    expect(error.value).toBe('a');
+  });
+
+  it('leaves the tolerance for a removed or payload-changed token this domain key does not carry unchanged', () => {
+    // FEATURE §3, No-op note: those two name an operation that is already
+    // satisfied or inert, so they still write. Only `replaced` refuses.
+    const adapter = resetRealm('/en?w=c');
+
+    backProjectEntries('w' as DomainKey, { removed: ['a' as ExtensionToken] }, 'push');
+    expect(adapter.lastWrite).toBe('/en?w=c');
+
+    backProjectEntries(
+      'w' as DomainKey,
+      { payloadChanged: [{ extension: 'a' as ExtensionToken, params: [{ name: 'p', value: '1' }] }] },
+      'push',
+    );
+    expect(adapter.lastWrite).toBe('/en?w=c');
   });
 });
 
@@ -449,5 +609,76 @@ describe('url-back-projection — optional pageHash parameter', () => {
     );
 
     expect(adapter.lastWrite).toBe('/en?screen=dashboard#fresh-hash');
+  });
+});
+
+describe('url-back-projection — a delta the current location cannot accommodate', () => {
+  it('refuses to write when an added token is already present under that domain key', () => {
+    const adapter = resetRealm('/en?widgets=line-a;range=7d');
+
+    const error = expectRoutingError(() =>
+      backProjectEntries(
+        'widgets' as DomainKey,
+        { added: [{ extension: 'line-a' as ExtensionToken, params: [{ name: 'range', value: '1d' }] }] },
+        'push',
+      ),
+    );
+
+    expect(error.code).toBe('duplicate-extension');
+    expect(adapter.lastWrite).toBeUndefined();
+  });
+
+  it('accepts the same token removed and added in one delta — the removal clears its position first', () => {
+    const adapter = resetRealm('/en?widgets=line-a;range=7d&widgets=line-b;range=30d');
+
+    backProjectEntries(
+      'widgets' as DomainKey,
+      {
+        removed: ['line-a' as ExtensionToken],
+        added: [{ extension: 'line-a' as ExtensionToken, params: [{ name: 'range', value: '1d' }] }],
+      },
+      'push',
+    );
+
+    expect(adapter.lastWrite).toBe('/en?widgets=line-b;range=30d&widgets=line-a;range=1d');
+  });
+});
+
+describe('url-back-projection — what one call always does', () => {
+  it('writes on every call, so two consecutive empty deltas each push a history entry', () => {
+    const adapter = resetRealm('/en?widgets=line-a;range=7d');
+    const pushed: string[] = [];
+    const pushState = adapter.pushState.bind(adapter);
+    vi.spyOn(adapter, 'pushState').mockImplementation((path: string, state?: unknown) => {
+      pushed.push(path);
+      pushState(path, state);
+    });
+
+    backProjectEntries('widgets' as DomainKey, {}, 'push');
+    backProjectEntries('widgets' as DomainKey, {}, 'push');
+
+    // Nothing compares the composed URL against the current one: an empty
+    // delta is also how a caller writes a page hash and nothing else, and
+    // the consumer is the side that knows whether anything changed.
+    expect(pushed).toEqual([
+      '/en?widgets=line-a;range=7d',
+      '/en?widgets=line-a;range=7d',
+    ]);
+  });
+
+  it('carries an entry under another domain key through in canonical encoding, and a foreign segment byte for byte', () => {
+    const adapter = resetRealm('/en?other=x;q=%41;r=a%20b&code=4%2F0AX&widgets=line-a;range=7d');
+
+    backProjectEntries(
+      'widgets' as DomainKey,
+      { payloadChanged: [{ extension: 'line-a' as ExtensionToken, params: [{ name: 'range', value: '1d' }] }] },
+      'push',
+    );
+
+    // `%41` covers a character the encoder does not escape, so it comes back
+    // decoded; `%20` covers one it does, so it keeps its escape. `code=…`
+    // never parsed as an entry at all and survives byte for byte, re-emitted
+    // after the entries.
+    expect(adapter.lastWrite).toBe('/en?other=x;q=A;r=a%20b&widgets=line-a;range=1d&code=4%2F0AX');
   });
 });

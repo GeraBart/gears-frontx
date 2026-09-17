@@ -204,11 +204,30 @@ describe('parseGrammar — duplicate parameter', () => {
     ]);
   });
 
-  it('a bare param-name and an explicit empty value both parse to the identical empty string', () => {
-    const bare = parseGrammar('/en?sheet=tenant-details');
+});
+
+describe('parseGrammar — a param name with no value', () => {
+  it('parses `;k` and `;k=` to the identical param, so a bare name and an explicit empty value mean one thing', () => {
+    const bare = parseGrammar('/en?sheet=tenant-details;k');
     const explicit = parseGrammar('/en?sheet=tenant-details;k=');
-    expect(bare.entries[0].params).toEqual([]);
-    expect(explicit.entries[0].params).toEqual([{ name: 'k', value: '' }]);
+
+    expect(bare.entries[0].params).toEqual([{ name: 'k', value: '' }]);
+    expect(explicit.entries[0].params).toEqual(bare.entries[0].params);
+  });
+
+  it('writes both back as the bare form, so the two spellings converge on one round trip', () => {
+    const roundTrip = (url: string): string => {
+      const parsed = parseGrammar(url);
+      return serializeGrammar({
+        shellSubroute: parsed.shellSubroute,
+        hash: parsed.hash,
+        entries: parsed.entries,
+        foreignSegments: parsed.foreignSegments,
+      });
+    };
+
+    expect(roundTrip('/en?sheet=tenant-details;k')).toBe('/en?sheet=tenant-details;k');
+    expect(roundTrip('/en?sheet=tenant-details;k=')).toBe('/en?sheet=tenant-details;k');
   });
 });
 
@@ -297,16 +316,30 @@ describe('parseGrammar — abandonment drops this entry\'s own already-recorded 
 });
 
 describe('parseGrammar — an empty param name violates param-name = 1*(...) and drops the whole entry', () => {
-  it('drops the whole entry when two consecutive ";" leave an empty param segment', () => {
-    const result = parseGrammar('/en?sheet=search;q=x;;a=y');
+  // The rule reaches three spellings of "a segment carrying no name": an
+  // empty segment between two ";", a trailing ";", and a segment that is
+  // only a value. Each drops the entry whole, keeps its raw text as a
+  // foreign segment, and abandons every param already collected for that
+  // entry — including a duplicate-parameter warning it had already raised.
+  it.each([
+    ['two consecutive ";" leave an empty param segment', 'sheet=search;q=x;;a=y'],
+    ['a trailing ";" leaves an empty param segment', 'sheet=search;q=x;'],
+    ['a param segment is a bare "=value" with nothing before the "="', 'sheet=search;=value'],
+  ])('drops the whole entry when %s', (_label, rawEntry) => {
+    const result = parseGrammar(`/en?${rawEntry}`);
+
     expect(result.entries).toEqual([]);
-    expect(result.warnings).toEqual([{ code: 'malformed-entry', rawEntry: 'sheet=search;q=x;;a=y' }]);
+    expect(result.warnings).toEqual([{ code: 'malformed-entry', rawEntry }]);
+    expect(result.foreignSegments).toEqual([rawEntry]);
   });
 
-  it('drops the whole entry when a param segment is a bare "=value" with nothing before the "="', () => {
-    const result = parseGrammar('/en?sheet=search;=value');
+  it('rolls back a duplicate-parameter warning the abandoned entry had already raised', () => {
+    const result = parseGrammar('/en?sheet=search;q=1;q=2;=value');
+
     expect(result.entries).toEqual([]);
-    expect(result.warnings).toEqual([{ code: 'malformed-entry', rawEntry: 'sheet=search;=value' }]);
+    expect(result.warnings).toEqual([
+      { code: 'malformed-entry', rawEntry: 'sheet=search;q=1;q=2;=value' },
+    ]);
   });
 });
 

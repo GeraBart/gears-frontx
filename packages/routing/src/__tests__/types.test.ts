@@ -214,6 +214,7 @@ describe('RoutingError', () => {
       | 'duplicate-param-name'
       | 'duplicate-extension'
       | 'reordered-not-permutation'
+      | 'replaced-old-extension-absent'
       | 'no-navigation-history-in-realm'
       | 'reentrant-round-limit-exceeded'
     >();

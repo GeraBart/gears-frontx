@@ -44,8 +44,13 @@ export const TANSTACK_RUNTIME_SURFACE = Object.keys(tanstackIndex).filter(
 // `EntryAddress`), the virtual-location projection shapes
 // (`VirtualLocationParts`, `VirtualLocationSource`), the shared history-
 // adaptation options (`AdaptHistoryOptions`), the component prop shapes
-// (`EngineProviderProps`, `EngineProviderFromRouterProps`), and the
-// construction-options seam (`ProviderRouterOptions`).
+// (`EngineProviderProps`, `EngineProviderFromRouterProps`), the
+// construction-options seam (`ProviderRouterOptions`), and the engine's own
+// type names this package forwards so a consumer can name what its own
+// signatures return and constrain (`RouterHistory`, `AnyRoute`,
+// `AnyRouter`) — these last three are pinned here, unlike their runtime
+// pass-through counterparts above, precisely because a consumer inside this
+// ecosystem has no other permitted route to them.
 export const TANSTACK_TYPE_ONLY_SURFACE = [
   'EngineProviderInput',
   'EngineProviderPort',
@@ -56,4 +61,7 @@ export const TANSTACK_TYPE_ONLY_SURFACE = [
   'EngineProviderProps',
   'EngineProviderFromRouterProps',
   'ProviderRouterOptions',
+  'RouterHistory',
+  'AnyRoute',
+  'AnyRouter',
 ] as const;

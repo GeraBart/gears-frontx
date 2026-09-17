@@ -56,3 +56,16 @@ export {
   redirect,
   notFound,
 } from '@tanstack/react-router';
+
+// The engine's own type names that appear in this package's own exported
+// signatures, forwarded for the same reason as the values above: the
+// ecosystem guard forbidding a direct `@tanstack/*` import bites
+// `import type` exactly as it bites a value import, so without these a
+// consumer inside this ecosystem can call `adaptComposedHistory` but cannot
+// name what it returns, and can pass a route tree to `EngineProviderProps`
+// but cannot name the constraint it satisfies. `RouterHistory` is the return
+// type of every history-adaptation entry point and the parameter type of
+// `attachAdaptedHistory` and `locationPreservingRedirect`; `AnyRoute` and
+// `AnyRouter` are the constraints on `ProviderRouterOptions`,
+// `EngineProviderProps`, and `EngineProviderFromRouterProps`.
+export type { AnyRoute, AnyRouter, RouterHistory } from '@tanstack/react-router';

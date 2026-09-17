@@ -48,13 +48,16 @@ export type RoutingErrorCode =
   | 'duplicate-param-name'
   | 'duplicate-extension'
   | 'reordered-not-permutation'
+  | 'replaced-old-extension-absent'
   | 'no-navigation-history-in-realm'
   | 'reentrant-round-limit-exceeded';
 
 export class RoutingError extends Error {
   readonly code: RoutingErrorCode;
   /** Set only for `invalid-shell-subroute` / `invalid-foreign-segment` /
-   * `invalid-domain-key` / `invalid-extension-token` / `invalid-name`. */
+   * `invalid-domain-key` / `invalid-extension-token` / `invalid-name`, and
+   * for `replaced-old-extension-absent`, where it is the old extension
+   * token no entry under `domainKey` carries. */
   readonly value?: string;
   /** Set for `invalid-param-name` / `duplicate-param-name`, and for
    * `invalid-domain-key` / `invalid-extension-token` only when thrown by
@@ -63,7 +66,8 @@ export class RoutingError extends Error {
   readonly entry?: Entry;
   /** Set only for `duplicate-extension`. */
   readonly entries?: readonly [Entry, Entry];
-  /** Set only for `reordered-not-permutation`. */
+  /** Set for `reordered-not-permutation` and
+   * `replaced-old-extension-absent`. */
   readonly domainKey?: DomainKey;
   /** Set only for `reordered-not-permutation`. */
   readonly reordered?: readonly ExtensionToken[];
@@ -186,7 +190,12 @@ export class RoutingError extends Error {
     );
   }
 
-  /** A serialize-input list carried two entries sharing the identical `domainKey` and `extension`. */
+  /**
+   * A serialize-input list carried two entries sharing the identical
+   * `domainKey` and `extension` — reached either by a caller building that
+   * list directly, or by the URL back-projection helper, whose delta named
+   * a token the current location already carries under that domain key.
+   */
   static duplicateExtension(entries: readonly [Entry, Entry]): RoutingError {
     return new RoutingError(
       'duplicate-extension',
@@ -209,6 +218,32 @@ export class RoutingError extends Error {
       'reordered-not-permutation',
       `"${domainKey}" back-projection reordered list is not a permutation of its surviving entries: [${reordered.join(', ')}]`,
       { domainKey, reordered },
+    );
+  }
+
+  /**
+   * A back-projection call's own `replaced` pair named an `oldExtension`
+   * that no entry under `domainKey` currently carries. `replaced` exists to
+   * stand a new entry at an old entry's *own position*; with no such entry
+   * there is no such position, so the operation the pair asks for cannot be
+   * performed at all. Appending the new entry instead would silently turn
+   * the pair into an `added` and put it at the end of the full list — the
+   * entry order `replaced` was introduced to stop producing.
+   *
+   * `domainKey` and `value` together say exactly what is missing: there is
+   * no entry `value` under `domainKey`. That is what a consumer acts on —
+   * re-read the live entry list, recompute the delta against it, and call
+   * again naming the operation that list actually admits (an `added` for a
+   * position that does not yet exist).
+   */
+  static replacedOldExtensionAbsent(
+    domainKey: DomainKey,
+    oldExtension: ExtensionToken,
+  ): RoutingError {
+    return new RoutingError(
+      'replaced-old-extension-absent',
+      `"${domainKey}" back-projection replaced pair names old extension "${oldExtension}", which no entry under that domain key currently carries — there is no position to stand the new entry at`,
+      { domainKey, value: oldExtension },
     );
   }
 
