@@ -25,9 +25,10 @@
   - [2.19 Ecosystem Layer-Partition Governance - MEDIUM](#219-ecosystem-layer-partition-governance---medium)
   - [2.20 Telemetry SDK Compatibility Anchor - MEDIUM](#220-telemetry-sdk-compatibility-anchor---medium)
   - [2.21 AI-Driven Project Scaffolding from Intent - HIGH](#221-ai-driven-project-scaffolding-from-intent---high)
-  - [2.22 Routing Navigation Substrate - MEDIUM](#222-routing-navigation-substrate---medium)
-  - [2.23 Routing Route Ownership Signal - MEDIUM](#223-routing-route-ownership-signal---medium)
-  - [2.24 Routing Engine Provider - MEDIUM](#224-routing-engine-provider---medium)
+  - [2.22 UI Kit Compatibility Anchor - MEDIUM](#222-ui-kit-compatibility-anchor---medium)
+  - [2.23 Routing Navigation Substrate - MEDIUM](#223-routing-navigation-substrate---medium)
+  - [2.24 Routing Route Ownership Signal - MEDIUM](#224-routing-route-ownership-signal---medium)
+  - [2.25 Routing Engine Provider - MEDIUM](#225-routing-engine-provider---medium)
 - [3. Feature Dependencies](#3-feature-dependencies)
 - [4. Known Validator Debt](#4-known-validator-debt)
 
@@ -296,7 +297,26 @@ The installed SDLC kit currently defines feature-entry identifiers only in DECOM
 
 **Owner**: Member-owned compatibility anchor only; behavior is defined in [FEATURE.md](../packages/cyber-pilot-kit-frontx/architecture/features/ai-project-scaffolding/FEATURE.md).
 
-### 2.22 [Routing Navigation Substrate](../packages/routing/architecture/features/navigation-substrate/) - MEDIUM
+### 2.22 [UI Kit Compatibility Anchor](../packages/ui-kit/architecture/) - MEDIUM
+
+**Owner**: Member-owned compatibility anchor only; behavior is defined in [DESIGN.md](../packages/ui-kit/architecture/DESIGN.md) and the member FEATURE file.
+
+**Installed-kit coverage references**:
+- `cpt-frontx-ui-kit-component-component-surface`
+- `cpt-frontx-ui-kit-component-token-system`
+- `cpt-frontx-ui-kit-component-package-build`
+- `cpt-frontx-ui-kit-component-agent-documentation`
+- `cpt-frontx-ui-kit-component-contract-harness`
+- `cpt-frontx-ui-kit-component-consumer-acceptance`
+- `cpt-frontx-ui-kit-constraint-overlay-meaning-only`
+- `cpt-frontx-ui-kit-constraint-token-seam`
+- `cpt-frontx-ui-kit-constraint-ui-committed-member`
+- `cpt-frontx-ui-kit-constraint-contracts-repository-only`
+- `cpt-frontx-ui-kit-principle-code-is-the-fact-owner`
+- `cpt-frontx-ui-kit-principle-styling-through-tokens`
+- `cpt-frontx-ui-kit-principle-scoped-enforcement`
+
+### 2.23 [Routing Navigation Substrate](../packages/routing/architecture/features/navigation-substrate/) - MEDIUM
 
 - [x] `p2` - **ID**: `cpt-frontx-feature-routing-navigation-substrate`
 
@@ -308,7 +328,7 @@ The installed SDLC kit currently defines feature-entry identifiers only in DECOM
 - `cpt-frontx-constraint-routing-no-intra-ecosystem-dependency`
 - `cpt-frontx-constraint-routing-no-engine-leak`
 
-### 2.23 [Routing Route Ownership Signal](../packages/routing/architecture/features/route-ownership-signal/) - MEDIUM
+### 2.24 [Routing Route Ownership Signal](../packages/routing/architecture/features/route-ownership-signal/) - MEDIUM
 
 - [ ] `p2` - **ID**: `cpt-frontx-feature-routing-route-ownership-signal`
 
@@ -319,7 +339,7 @@ The installed SDLC kit currently defines feature-entry identifiers only in DECOM
 - `cpt-frontx-routing-principle-publishes-not-orchestrates`
 - `cpt-frontx-constraint-routing-no-intra-ecosystem-dependency`
 
-### 2.24 [Routing Engine Provider](../packages/routing-tanstack/architecture/features/engine-provider/) - MEDIUM
+### 2.25 [Routing Engine Provider](../packages/routing-tanstack/architecture/features/engine-provider/) - MEDIUM
 
 - [ ] `p2` - **ID**: `cpt-frontx-feature-routing-engine-provider`
 
