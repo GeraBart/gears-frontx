@@ -51,9 +51,9 @@ vi.mock('../mf-dynamic-module-ops', async (importOriginal) => {
 });
 
 import { MfeHandlerMF, LruCache } from '../MfeHandlerMF';
-import { MfeLoadError } from '../../errors';
-import type { MfeEntryMF } from '../../types/mfe-entry-mf';
-import type { MfManifest, MfManifestShared } from '../../manifest/mf-manifest';
+import { MfeLoadError } from '../../../errors';
+import type { MfeEntryMF } from '../../../types/mfe-entry-mf';
+import type { MfManifest, MfManifestShared } from '../../../manifest/mf-manifest';
 
 // The shared-dependency source-text cache is REALM-shared since issue #627
 // (`getRealmSharedDepTextCache`, `realm-shared-dep-text-cache.ts`) — every

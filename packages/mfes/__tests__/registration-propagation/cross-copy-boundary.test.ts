@@ -147,7 +147,7 @@ async function loadCopy() {
   ] = await Promise.all([
     import('../../src/runtime/DefaultMfeRegistry'),
     import('../../src/handler/types'),
-    import('../../src/handler/mfe-bridge-factory-default'),
+    import('../../src/bridge/mfe-bridge-factory-default'),
     import('../../src/runtime/ExtensionDomainImplementation'),
     import('../../src/runtime/ExtensionDomainImplementationFactory'),
     import('../../src/runtime/mount-strategies'),
