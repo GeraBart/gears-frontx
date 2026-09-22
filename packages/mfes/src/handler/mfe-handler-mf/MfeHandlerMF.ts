@@ -460,7 +460,7 @@ const SHARED_DEP_ADOPTION_NOTICE_CACHE_CAPACITY = 64;
  * `MfeHandlerMF.fetchSourceText` publishes its in-flight fetch promise in
  * the handler-level, URL-keyed `sourceTextCache` (a copy-local `LruCache`),
  * and `fetchSharedDepSources` does the same in the two-tier-keyed
- * `sharedDepTextCache` — since issue #627, a reference to the REALM-SHARED
+ * `sharedDepTextCache` — a reference to the REALM-SHARED
  * cache `getRealmSharedDepTextCache()` returns (or, if that copy fell back,
  * a cache local to this copy — see `realm-shared-dep-text-cache.ts`). Either
  * way the entry is evicted only when the promise it names REJECTS. A fetch
@@ -650,8 +650,8 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
   );
 
   /**
-   * Reference to the realm-wide shared-dependency source-text cache
-   * (issue #627), obtained through the internal rendezvous accessor
+   * Reference to the realm-wide shared-dependency source-text cache,
+   * obtained through the internal rendezvous accessor
    * {@link getRealmSharedDepTextCache} rather than constructed here. The
    * FIELD is instance-held — every `MfeHandlerMF` instance calls the
    * accessor once, at construction — but the CACHE it names is shared
