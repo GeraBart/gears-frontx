@@ -21,7 +21,7 @@
  * the DoD `cpt-frontx-dod-mfe-isolation-realm-shared-dep-text-cache`, the
  * DESIGN constraint `cpt-frontx-constraint-mfes-realm-shared-dep-cache`
  * (MFES-7), and the decision recorded in
- * `cpt-frontx-adr-realm-shared-dep-source-text-cache` (ADR-0035).
+ * `cpt-frontx-adr-shared-dep-cache-reach` (ADR-0035).
  *
  * NOT exported from the package's public barrel (`src/index.ts`) — reachable
  * only from other files inside this package, same discipline as
@@ -212,7 +212,7 @@ export function getRealmSharedDepTextCache(): SharedDepTextCache {
     // identity, and no class identity. The version and structural checks
     // above guard against ACCIDENTAL incompatibility only — they are not,
     // and must not be presented as, publisher authentication
-    // (`cpt-frontx-adr-realm-shared-dep-source-text-cache` records this as
+    // (`cpt-frontx-adr-shared-dep-cache-reach` records this as
     // an accepted consequence).
     // @cpt-begin:cpt-frontx-algo-mfe-isolation-realm-shared-dep-cache-rendezvous:p1:inst-rsdc-return-cache
     return existing.cache;

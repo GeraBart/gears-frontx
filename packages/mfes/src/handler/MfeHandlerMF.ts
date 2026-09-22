@@ -680,7 +680,7 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
    * The rendezvous this cache is reached through is TRUSTED same-realm
    * coordination state, not an authenticity or confidentiality boundary: a
    * structurally conforming entry is adopted whichever same-realm code
-   * published it (`cpt-frontx-adr-realm-shared-dep-source-text-cache`
+   * published it (`cpt-frontx-adr-shared-dep-cache-reach`
    * records this as an accepted consequence, not a gap to close).
    */
   // @cpt-dod:cpt-frontx-dod-mfe-isolation-realm-shared-dep-text-cache:p1

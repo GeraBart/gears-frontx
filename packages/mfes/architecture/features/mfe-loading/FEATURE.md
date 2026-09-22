@@ -51,7 +51,7 @@ The MFE Runtime must locate a microfrontend's chunks without parsing bundler-emi
 
 - **PRD**: [PRD.md](../../../../../architecture/PRD.md)
 - **Design**: [DESIGN.md](../../DESIGN.md)
-- **ADRs**: `cpt-frontx-adr-mfe-asset-discovery`, `cpt-frontx-adr-lazy-import-resolution`, `cpt-frontx-adr-realm-shared-dep-source-text-cache`
+- **ADRs**: `cpt-frontx-adr-mfe-asset-discovery`, `cpt-frontx-adr-lazy-import-resolution`, `cpt-frontx-adr-shared-dep-cache-reach`
 - **Component**: `cpt-frontx-component-mfe-runtime` (shared with F4, F6, F7, F8)
 - **Dependencies**: `cpt-frontx-feature-mfe-registry` (F4)
 
