@@ -1,21 +1,23 @@
 /**
  * Realm-shared shared-dependency source-text cache across TWO independently
- * loaded copies of this package (issue #627).
+ * loaded copies of this package.
  *
- * `MfeHandlerMF.sharedDepTextCache` used to be constructed per handler
- * instance, so a nested extension host that constructs its own
- * `MfeHandlerMF` from its own independently loaded copy of
- * `@gears-frontx/mfes` (per `cpt-frontx-adr-mfe-load-isolation`) fetched and
- * cached shared-dependency source text separately from its host, even when
- * both loads' deduplication keys agreed they reuse the same emitted build.
- * `getRealmSharedDepTextCache()` (`realm-shared-dep-text-cache.ts`) fixes
- * this by rendezvousing on a `globalThis`-anchored, version-namespaced slot
- * — the exact pattern `inbound-bridge-link.ts`'s mount-context rendezvous
- * already uses, and the exact `vi.resetModules()` + dynamic `import()`
- * technique `registration-propagation/cross-copy-boundary.test.ts` uses to
- * obtain two GENUINELY SEPARATE module instances, since a shared import
- * would trivially "pass" even a module-scoped cache that is fundamentally
- * broken across copies.
+ * `MfeHandlerMF.sharedDepTextCache` is obtained from
+ * `getRealmSharedDepTextCache()` (`realm-shared-dep-text-cache.ts`) rather
+ * than constructed per handler instance, so a nested extension host that
+ * constructs its own `MfeHandlerMF` from its own independently loaded copy
+ * of `@gears-frontx/mfes` (per `cpt-frontx-adr-mfe-load-isolation`)
+ * converges on the same cache as its host and fetches shared-dependency
+ * source text once rather than once per copy, whenever both loads'
+ * deduplication keys agree they reuse the same emitted build. This suite
+ * proves that convergence by rendezvousing on a `globalThis`-anchored,
+ * version-namespaced slot — the exact pattern `inbound-bridge-link.ts`'s
+ * mount-context rendezvous already uses, and the exact `vi.resetModules()`
+ * + dynamic `import()` technique
+ * `registration-propagation/cross-copy-boundary.test.ts` uses to obtain two
+ * GENUINELY SEPARATE module instances, since a shared import would
+ * trivially "pass" even a module-scoped cache that is fundamentally broken
+ * across copies.
  *
  * Most cases drive `fetchSharedDepSources` / `buildSharedDepBlobUrls`
  * directly via reflection (both are `private`), following this package's

@@ -55,9 +55,9 @@ import { MfeLoadError } from '../../../errors';
 import type { MfeEntryMF } from '../../../types/mfe-entry-mf';
 import type { MfManifest, MfManifestShared } from '../../../manifest/mf-manifest';
 
-// The shared-dependency source-text cache is REALM-shared since issue #627
+// The shared-dependency source-text cache is REALM-shared
 // (`getRealmSharedDepTextCache`, `realm-shared-dep-text-cache.ts`) — every
-// `new MfeHandlerMF(...)` in this file, no matter the test, now resolves to
+// `new MfeHandlerMF(...)` in this file, no matter the test, resolves to
 // the SAME cache slot on `globalThis`, rather than each getting its own
 // fresh `LruCache`. Without this reset, an earlier test's cached shared-dep
 // source text (or fetch call) would leak into a later test that declares
