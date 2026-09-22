@@ -46,9 +46,9 @@ import type { MfeEntryMF } from '../../src/types/mfe-entry-mf';
  */
 const blobModuleStub = vi.hoisted(() => ({ current: undefined as unknown }));
 
-vi.mock('../../src/handler/mf-dynamic-module-ops', async (importOriginal) => {
+vi.mock('../../src/handler/mfe-handler-mf/mf-dynamic-module-ops', async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import('../../src/handler/mf-dynamic-module-ops')>();
+    await importOriginal<typeof import('../../src/handler/mfe-handler-mf/mf-dynamic-module-ops')>();
   return {
     ...actual,
     importBlobModule: (blobUrl: string): Promise<unknown> =>
@@ -95,7 +95,7 @@ afterEach(() => {
  * depends on.
  */
 async function loadCopy() {
-  const handlerModule = await import('../../src/handler/MfeHandlerMF');
+  const handlerModule = await import('../../src/handler/mfe-handler-mf/MfeHandlerMF');
   return { MfeHandlerMF: handlerModule.MfeHandlerMF };
 }
 

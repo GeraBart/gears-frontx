@@ -27,7 +27,7 @@ import {
   ParentMfeBridge,
   type MfeEntryLifecycle,
 } from '../../src/handler/types';
-import { MfeBridgeFactoryDefault } from '../../src/handler/mfe-bridge-factory-default';
+import { MfeBridgeFactoryDefault } from '../../src/bridge/mfe-bridge-factory-default';
 import { ExtensionDomainImplementation } from '../../src/runtime/ExtensionDomainImplementation';
 import { ExtensionDomainImplementationFactory } from '../../src/runtime/ExtensionDomainImplementationFactory';
 import type { DomainContext } from '../../src/runtime/DomainContext';
