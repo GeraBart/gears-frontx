@@ -98,6 +98,7 @@ Published libraries:
 * `cpt-frontx-adr-lazy-import-resolution` — Separates the runtime ABI from the template-bound build through lazy import.
 * `cpt-frontx-adr-mfe-asset-discovery` — Discovers microfrontends through their manifest contract.
 * `cpt-frontx-adr-shared-dep-dedup-key` — Keys cross-microfrontend shared-dependency reuse to the identity of the producing build.
+* `cpt-frontx-adr-realm-shared-dep-source-text-cache` — Extends that reuse to one bounded, version-namespaced source-text cache per realm, shared by compatible independently loaded copies of the runtime without sharing module graphs.
 * `cpt-frontx-adr-api-surface-organization` — Separates request/response and streaming behind a common protocol surface.
 * `cpt-frontx-adr-api-transport-bypass-and-fetch-sharing` — Provides a plugin short-circuit and a realm-shared fetch cache.
 * `cpt-frontx-routing-adr-occupant-reference-boundary` — Names and carries occupant identity through route resolution and reporting without depending on the runtime's concrete extension type - owned by the routing member tree, `packages/routing/architecture/ADR/`.
