@@ -57,7 +57,7 @@ Everything downstream of that boundary follows the same discipline. Extension-do
 
 | NFR ID | NFR Summary | Allocated To | Design Response | Verification Approach |
 |--------|-------------|--------------|-----------------|-----------------------|
-| `cpt-frontx-nfr-runtime-performance` | Runtime response-time and throughput targets | `cpt-frontx-component-mfe-runtime` | The lazy-import ABI resolver defers a chunk's fetch and evaluation until it is first exercised rather than eagerly at parent-load time, and shared-dependency source text is deduplicated across MFE loads through a cross-MFE LRU cache keyed by an identifier for the producing build — a declared content hash of the emitted chunk when available, otherwise the resolved absolute chunk URL, which confines reuse to loads of the same microfrontend — so an already-loaded build is not refetched, keeping the eager working set small without duplicating a singleton dependency. | Load-time benchmarks asserting the runtime's share of the PRD's p95 registration and on-demand-load thresholds, and that a lazy chunk is fetched only on first exercise. |
+| `cpt-frontx-nfr-runtime-performance` | Runtime response-time and throughput targets | `cpt-frontx-component-mfe-runtime` | The lazy-import ABI resolver defers a chunk's fetch and evaluation until it is first exercised rather than eagerly at parent-load time, and shared-dependency source text is deduplicated across MFE loads through a cross-MFE LRU cache keyed by an identifier for the producing build — a declared content hash of the emitted chunk when available, otherwise the resolved absolute chunk URL, which confines reuse to loads of the same microfrontend — in one bounded cache per realm that compatible independently loaded copies of the package converge on (`cpt-frontx-constraint-mfes-realm-shared-dep-cache`), so an already-loaded build is not refetched by any copy, keeping the eager working set small without duplicating a singleton dependency. | Load-time benchmarks asserting the runtime's share of the PRD's p95 registration and on-demand-load thresholds, and that a lazy chunk is fetched only on first exercise. |
 | `cpt-frontx-nfr-security` | Default-deny posture; validated admission | `cpt-frontx-component-mfe-runtime` | Every extension is denied admission until subset-rule contract matching and cardinality validation both succeed; every loaded unit evaluates inside its own module graph behind an audited trust-kernel file whose dynamic-import primitive rejects any URL that is not `blob:` or `data:`, confined there by a custom lint rule. | Admission audit asserting no extension is mounted without passing the full admission sequence, and a CI boundary check confirming dynamic-code primitives appear only in the trust-kernel file. |
 
 **ADR coverage references:**
@@ -74,6 +74,7 @@ Everything downstream of that boundary follows the same discipline. Extension-do
 - `cpt-frontx-adr-lazy-import-resolution`
 - `cpt-frontx-adr-mfe-asset-discovery`
 - `cpt-frontx-adr-shared-dep-dedup-key`
+- `cpt-frontx-adr-realm-shared-dep-source-text-cache`
 
 ### 1.3 Architecture Layers
 
@@ -179,6 +180,14 @@ When a mounted extension is itself a host of a further `MfeRegistry`, dispatch a
 
 **ADRs**: [Host–MFE Action Dispatch and Chaining](../../../architecture/ADR/0007-action-dispatch-and-chaining.md), [Child MFE Access to the Host](../../../architecture/ADR/0008-child-mfe-host-access.md)
 
+#### MFES-7 — Realm-shared dependency source-text reuse
+
+- [x] `p2` - **ID**: `cpt-frontx-constraint-mfes-realm-shared-dep-cache`
+
+Compatible independently loaded copies of this package coexisting in one JavaScript realm converge on a single versioned, bounded shared-dependency source-text cache, so that two loads whose deduplication key already establishes them as reusing the same emitted build (`cpt-frontx-adr-shared-dep-dedup-key`) fetch that build's source text once for the realm rather than once per copy (`cpt-frontx-adr-realm-shared-dep-source-text-cache`). What the copies share is inert source text and nothing else: no module record crosses the boundary, and every load continues to construct its own isolated module graph over that text, so the per-instance isolation `cpt-frontx-adr-mfe-load-isolation` guarantees holds unchanged and the load cache holding evaluated graphs stays scoped to one evaluated copy. Convergence introduces zero growth to the package's public surface — no exported symbol, no capability method on any type in the §3.3 API Contracts table, and no constructor argument — and it is not carried by the mount-context rendezvous or by the parent–child bridge: the rendezvous entry MFES-6 describes is scoped to one synchronous handoff window and retains nothing afterwards, while the bridge carries participation in dispatch, not loading. The cache is therefore reached only through a rendezvous of its own, namespaced by an explicit protocol version so that a copy meeting a version it does not recognize leaves that state untouched and falls back to a bounded cache local to itself rather than operating on semantics it cannot establish. That rendezvous is trusted same-realm coordination state and authenticates no publisher: a structurally conforming protocol entry is adopted whichever same-realm code published it, and the version and structural checks guard against accidental incompatibility rather than against a same-realm publisher observing or substituting cached source text (`cpt-frontx-adr-realm-shared-dep-source-text-cache` records why that is accepted). Its capacity bounds the realm rather than each handler, and bounds the number of resident mappings rather than the bytes they retain — no byte ceiling is claimed, because a single source response is not itself size-limited here. Its lifetime is the realm's: a resident fulfilled value stays strongly reachable, no holder count governs it, and no handler, registry or extension teardown clears it.
+
+**ADRs**: [How Far Should the Shared-Dependency Source-Text Cache Reach?](../../../architecture/ADR/0035-realm-shared-dependency-source-text-cache.md), [What Identity Should the Cross-MFE Shared-Dependency Source-Text Cache Key On?](../../../architecture/ADR/0034-shared-dep-dedup-key.md)
+
 ## 3. Technical Architecture
 
 ### 3.1 Domain Model
@@ -212,6 +221,7 @@ Applications need to gain user-facing functionality from independently developed
 - Owns the actions-chains mediator that routes communication between microfrontends and the host, and the narrow parent–child capability bridge.
 - Owns the opaque type-substrate port: it reasons about type identifiers as opaque strings and delegates all schema, validation, and hierarchy operations to an injected type-system provider, reading only a schema's identifier.
 - Owns runtime isolation of loaded units.
+- Owns realm-scoped deduplication of shared-dependency source text: compatible independently loaded copies of the package in one realm reuse one bounded source-text cache, while each load still evaluates its own isolated module graph (`cpt-frontx-constraint-mfes-realm-shared-dep-cache`).
 - Supports recursive composition: a mounted extension may itself hold and host a further `MfeRegistry` instance, and the mediator and bridge mechanisms remain reachable transitively across any resulting nesting depth, with no change to the public surface (`cpt-frontx-constraint-mfes-cross-nesting-reachability`).
 
 ##### Responsibility boundaries
