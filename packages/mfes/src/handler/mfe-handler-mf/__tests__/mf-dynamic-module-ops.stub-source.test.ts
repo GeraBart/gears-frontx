@@ -1,27 +1,26 @@
 /**
  * `buildLazyLoaderStubSource` — byte-identity + runtime-guard tests.
  *
- * This function was extracted out of `MfeHandlerMF.ensureLazyLoaderUrl()`
- * into the audited trust kernel (`mf-dynamic-module-ops.ts`) so the kernel
- * stays the sole site that ever writes dynamic-`import()` text (see
- * ADR-0011 / cpt-frontx-adr-mfe-load-isolation). The byte-identity test pins
- * the exact generated string so a future edit that alters the generated
- * source (whitespace, quoting, statement order) fails loudly here instead of
- * only manifesting as a runtime lazy-import bug.
+ * This function lives in the audited trust kernel
+ * (`mf-dynamic-module-ops.ts`), not on `MfeHandlerMF`, so the kernel stays
+ * the sole site that ever writes dynamic-`import()` text (see ADR-0011 /
+ * cpt-frontx-adr-mfe-load-isolation). The byte-identity test pins the exact
+ * generated string so a future edit that alters the generated source
+ * (whitespace, quoting, statement order) fails loudly here instead of only
+ * manifesting as a runtime lazy-import bug.
  *
  * The scheme-check clause specifically (`u.startsWith(...)||...`) is NOT
  * hand-hardcoded in the expected string: it is built the same way
  * `buildLazyLoaderStubSource` itself builds it, from
- * `inlineContentSchemes()`. This is deliberate, not an oversight — an
- * earlier version of this test DID hardcode `"blob:"`/`"data:"` directly
- * in its expectation while a comment on the second test below claimed a
- * scheme-list change "needs no separate test update," which was false for
- * THIS test even though it was true for that one; deriving the clause here
- * too closes that gap so the claim is accurate for both tests. Every other
+ * `inlineContentSchemes()`. This is deliberate, not an oversight: deriving
+ * the clause from `inlineContentSchemes()` rather than hardcoding
+ * `"blob:"`/`"data:"` literals means a change to the scheme list cannot
+ * leave this test's expectation stale, because both the production code
+ * and this test draw the clause from the same source of truth. Every other
  * part of the generated string (the `__id` assignment, the `export const
  * __frontx_lazy=...` wrapper, the trailing `import(u)`) has no shared
- * source of truth to derive from, so it stays hardcoded — that is a
- * deliberate pin, not the same gap.
+ * source of truth to derive from, so it stays hardcoded — a deliberate
+ * pin, not the same category of risk.
  */
 import { describe, expect, it } from 'vitest';
 import { buildLazyLoaderStubSource, inlineContentSchemes } from '../mf-dynamic-module-ops';

@@ -1,13 +1,15 @@
 /**
- * Realm-shared shared-dependency source-text cache rendezvous (issue #627).
+ * Realm-shared shared-dependency source-text cache rendezvous.
  *
- * `MfeHandlerMF`'s `sharedDepTextCache` field used to be constructed
- * per-handler-instance, so two independently loaded copies of this package
- * — e.g. a host application and a nested extension host that constructs its
- * own `MfeHandlerMF`, per `cpt-frontx-adr-mfe-load-isolation` — each fetched
- * and cached the same shared-dependency source text separately, even when
- * their deduplication keys (`cpt-frontx-adr-shared-dep-dedup-key`) already
- * agree that the two loads reuse the same emitted build.
+ * `MfeHandlerMF`'s `sharedDepTextCache` field is obtained through
+ * {@link getRealmSharedDepTextCache} rather than constructed per-handler-
+ * instance, so two independently loaded copies of this package — e.g. a
+ * host application and a nested extension host that constructs its own
+ * `MfeHandlerMF`, per `cpt-frontx-adr-mfe-load-isolation` — converge on one
+ * cache for the same shared-dependency source text instead of each
+ * fetching and caching it separately, matching what their deduplication
+ * keys (`cpt-frontx-adr-shared-dep-dedup-key`) already agree: the two loads
+ * reuse the same emitted build.
  *
  * This module is the rendezvous that lets every COMPATIBLE, independently
  * loaded copy of this package converge on one bounded cache for that source
@@ -63,15 +65,16 @@ const SHARED_DEP_TEXT_CACHE_KEY = Symbol.for(
 );
 
 /**
- * Realm-wide bound, not per-handler and not per-copy: the number of
- * compatible copies coexisting in a realm, and the number of handlers each
- * constructs, no longer multiplies this cache's footprint. Bounds resident
+ * Realm-wide bound, not per-handler and not per-copy: neither the number of
+ * compatible copies coexisting in a realm, nor the number of handlers each
+ * constructs, multiplies this cache's footprint. Bounds resident
  * MAPPINGS, not retained bytes — a single source response is not
  * size-limited here, and no byte ceiling is claimed on this cache's behalf.
- * 128 is a fixed policy constant carried over from the prior per-handler
- * bound (see the superseded rationale this replaced in `MfeHandlerMF.ts`),
- * not a demonstrated optimum for every production composition; sustained
- * eviction churn is the trigger for revisiting it
+ * 128 is a fixed policy constant, sized to the same per-scope capacity
+ * `MfeHandlerMF.ts` documents its own scope-local bound at, and applied
+ * once per realm rather than once per handler; it is not a demonstrated
+ * optimum for every production composition, and sustained eviction churn
+ * is the trigger for revisiting it
  * (`cpt-frontx-dod-mfe-isolation-realm-shared-dep-text-cache`).
  */
 const SHARED_DEP_TEXT_CACHE_CAPACITY = 128;

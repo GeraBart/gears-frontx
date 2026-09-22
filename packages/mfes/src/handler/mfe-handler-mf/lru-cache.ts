@@ -3,8 +3,7 @@
  * of `Map`: each `get` re-inserts the key (moving it to the end, i.e. "most
  * recent"), and `set` evicts the oldest key when capacity would be exceeded.
  *
- * Extracted to its own module (rather than living inline in
- * `MfeHandlerMF.ts`, where it originated) so that
+ * Held in its own module, separate from `MfeHandlerMF.ts`, so that
  * `realm-shared-dep-text-cache.ts` can construct one for the realm-shared
  * shared-dependency source-text cache without importing `MfeHandlerMF.ts`
  * itself — that direction would be circular, since `MfeHandlerMF.ts` in
@@ -12,8 +11,7 @@
  * `getRealmSharedDepTextCache()`.
  *
  * We use this for source-text caches to prevent unbounded growth on
- * long-running hosts that accumulate many distinct chunk URLs over time
- * (a partial miss on issue #253).
+ * long-running hosts that accumulate many distinct chunk URLs over time.
  *
  * @internal Exported for unit testing; not part of the public API.
  */
