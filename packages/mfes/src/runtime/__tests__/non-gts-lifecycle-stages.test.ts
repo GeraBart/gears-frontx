@@ -32,7 +32,7 @@ import {
   type ChildMfeBridge,
   type MfeEntryLifecycle,
 } from '../../handler/types';
-import { MfeBridgeFactoryDefault } from '../../handler/mfe-bridge-factory-default';
+import { MfeBridgeFactoryDefault } from '../../bridge/mfe-bridge-factory-default';
 import { ExtensionDomainImplementation } from '../ExtensionDomainImplementation';
 import { ExtensionDomainImplementationFactory } from '../ExtensionDomainImplementationFactory';
 import type { DomainContext } from '../DomainContext';

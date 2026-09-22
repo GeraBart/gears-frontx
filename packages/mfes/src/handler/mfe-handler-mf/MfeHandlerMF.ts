@@ -33,22 +33,23 @@
 // @cpt-state:cpt-frontx-state-mfe-isolation-module-lifecycle:p1
 // @cpt-state:cpt-frontx-state-mfe-loading-load-lifecycle:p1
 
-import type { MfeEntryMF } from '../types/mfe-entry-mf';
-import type { MfManifest } from '../manifest/mf-manifest';
-import { LazyLoaderRegistry } from '../lazy-loader/lazy-loader-registry';
+import type { MfeEntryMF } from '../../types/mfe-entry-mf';
+import type { MfManifest } from '../../manifest/mf-manifest';
+import { LazyLoaderRegistry } from '../../lazy-loader/lazy-loader-registry';
 import {
   MfeHandler,
   ChildMfeBridge,
   MfeEntryLifecycle,
-} from './types';
-import { MfeLoadError } from '../errors';
+} from '../types';
+import { MfeLoadError } from '../../errors';
 import { RetryHandler } from './retry-handler';
-import { MfeBridgeFactoryDefault } from './mfe-bridge-factory-default';
+import { MfeBridgeFactoryDefault } from '../../bridge/mfe-bridge-factory-default';
 import {
   sourceImports,
   rewriteBareSpecifier,
   findSurvivingDeclaredSharedDepSpecifier,
   importBlobModule,
+  buildLazyLoaderStubSource,
 } from './mf-dynamic-module-ops';
 import { findUndeclaredWellFormedSpecifiers } from './mf-shared-dep-specifier-scan';
 import { LruCache } from './lru-cache';
@@ -2158,13 +2159,11 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
     // {@link LazyLoaderRegistry}) to reach the host-side resolver. Returning
     // a `Promise<Module>` mirrors the original `import()` semantic so the
     // caller's transformed code (`__frontx_lazy('./X').then(m => m.X)`) keeps
-    // working unchanged.
-    const stubSource =
-      `const __id=${JSON.stringify(loaderId)};\n` +
-      `export const __frontx_lazy=async(p)=>{` +
-      `const u=await globalThis.__FRONTX_LAZY__.resolve(__id,p);` +
-      `return import(u);` +
-      `};\n`;
+    // working unchanged. Source-text construction lives in the audited trust
+    // kernel ({@link buildLazyLoaderStubSource} in `mf-dynamic-module-ops.ts`)
+    // rather than here, so it stays the sole site that writes dynamic-import
+    // text — see that function's doc comment for why.
+    const stubSource = buildLazyLoaderStubSource(loaderId);
 
     const blob = new Blob([stubSource], { type: 'text/javascript' });
     const url = URL.createObjectURL(blob);

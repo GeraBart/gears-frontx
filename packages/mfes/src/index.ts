@@ -129,14 +129,14 @@ export { RuntimeBridgeFactory } from './runtime/runtime-bridge-factory';
 // MFE Isolation — handler, trust kernel, types (Phase 8)
 // MfeHandlerMF is sanctioned surface — do not remove in a barrel cleanup.
 // Rationale/table: packages/mfes/architecture/DESIGN.md, public-surface table.
-export { MfeHandlerMF, LruCache } from './handler/MfeHandlerMF';
-export { RetryHandler } from './handler/retry-handler';
+export { MfeHandlerMF, LruCache } from './handler/mfe-handler-mf/MfeHandlerMF';
+export { RetryHandler } from './handler/mfe-handler-mf/retry-handler';
 export type { MfeEntryMF } from './types/mfe-entry-mf';
 export {
   sourceImports,
   rewriteBareSpecifier,
   importBlobModule,
-} from './handler/mf-dynamic-module-ops';
+} from './handler/mfe-handler-mf/mf-dynamic-module-ops';
 
 // Only the creation function crosses the barrel: the concrete registry and
 // factory stay internal so no consumer can build a rival registry past the
