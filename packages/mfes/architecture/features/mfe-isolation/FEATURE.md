@@ -54,7 +54,7 @@ A registered microfrontend must evaluate as its own module instance so distinct 
 
 - **PRD**: [PRD.md](../../../../../architecture/PRD.md)
 - **Design**: [DESIGN.md](../../DESIGN.md)
-- **ADR**: `cpt-frontx-adr-mfe-load-isolation`, `cpt-frontx-adr-shared-dep-dedup-key`, `cpt-frontx-adr-realm-shared-dep-source-text-cache`
+- **ADR**: `cpt-frontx-adr-mfe-load-isolation`, `cpt-frontx-adr-shared-dep-dedup-key`, `cpt-frontx-adr-shared-dep-cache-reach`
 - **Component**: `cpt-frontx-component-mfe-runtime` (shared with F4, F5, F6, F7)
 - **Dependencies**: `cpt-frontx-feature-mfe-registry` (F4), `cpt-frontx-feature-mfe-loading` (F5)
 
@@ -212,7 +212,7 @@ Internal system functions that implement the isolation mechanism.
    1. [x] - `p1` - Create the bounded cache and publish the version-tagged entry into the slot synchronously, before returning it, so two copies initializing in one realm cannot each end up holding a cache of their own - `inst-rsdc-publish`
 3. [x] - `p1` - **ELSE IF** the entry carries the protocol version this copy speaks - `inst-rsdc-if-version-known`
    1. [x] - `p1` - Adopt the cache the entry carries, recognizing it by the operations the loading path needs of it rather than by class identity, which cannot be relied upon across independently evaluated copies - `inst-rsdc-adopt`
-   2. [x] - `p1` - Adopt a structurally conforming entry whichever same-realm code published it: the slot is trusted same-realm coordination state, not an authenticity or confidentiality boundary, so the version and structural checks guard against accidental incompatibility and neither establish publisher identity nor prevent a same-realm publisher from observing or substituting cached source text (`cpt-frontx-adr-realm-shared-dep-source-text-cache` records that acceptance); no cross-copy authentication is attempted, because independently loaded copies share no prior secret, no unforgeable common object identity and no class identity - `inst-rsdc-trusted-coordination`
+   2. [x] - `p1` - Adopt a structurally conforming entry whichever same-realm code published it: the slot is trusted same-realm coordination state, not an authenticity or confidentiality boundary, so the version and structural checks guard against accidental incompatibility and neither establish publisher identity nor prevent a same-realm publisher from observing or substituting cached source text (`cpt-frontx-adr-shared-dep-cache-reach` records that acceptance); no cross-copy authentication is attempted, because independently loaded copies share no prior secret, no unforgeable common object identity and no class identity - `inst-rsdc-trusted-coordination`
 4. [x] - `p1` - **ELSE** the entry is malformed, or carries a protocol version this copy does not recognize - `inst-rsdc-else-version-unknown`
    1. [x] - `p1` - Treat the slot as absent, emit a diagnostic naming the unrecognized entry, and neither read, mutate, replace nor delete it — a copy that cannot establish the entry's semantics must not act on them, and an incompatible future protocol occupies a slot of its own rather than contending for this one - `inst-rsdc-leave-unknown`
    2. [x] - `p1` - Fall back to a bounded cache local to this evaluated copy, so reuse degrades to copy scope rather than failing the load - `inst-rsdc-fallback-local`
@@ -310,7 +310,7 @@ Its lifetime **MUST** be the realm's. The system **MUST NOT** count retainers on
 
 On meeting a realm entry that is malformed or carries a protocol version it does not recognize, a copy **MUST** treat the entry as absent, emit a diagnostic, leave the entry unread, unmutated, unreplaced and undeleted, and serve that copy's loads from a bounded cache local to itself; an incompatible future protocol **MUST** occupy a rendezvous slot of its own rather than this one.
 
-A structurally conforming protocol entry **MUST** be adopted whichever same-realm code published it. The rendezvous is trusted same-realm coordination state, not an authenticity or confidentiality boundary: the version and structural checks guard against accidental incompatibility and **MUST NOT** be presented as publisher authentication or as preventing a same-realm publisher from observing or substituting cached source text, which `cpt-frontx-adr-realm-shared-dep-source-text-cache` records as an accepted consequence.
+A structurally conforming protocol entry **MUST** be adopted whichever same-realm code published it. The rendezvous is trusted same-realm coordination state, not an authenticity or confidentiality boundary: the version and structural checks guard against accidental incompatibility and **MUST NOT** be presented as publisher authentication or as preventing a same-realm publisher from observing or substituting cached source text, which `cpt-frontx-adr-shared-dep-cache-reach` records as an accepted consequence.
 
 **Implements**:
 - `cpt-frontx-flow-mfe-isolation-load`

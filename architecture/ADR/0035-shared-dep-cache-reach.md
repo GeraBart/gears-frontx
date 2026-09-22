@@ -25,7 +25,7 @@ date: 2026-09-21
 
 <!-- /toc -->
 
-**ID**: `cpt-frontx-adr-realm-shared-dep-source-text-cache`
+**ID**: `cpt-frontx-adr-shared-dep-cache-reach`
 
 ## Context and Problem Statement
 
