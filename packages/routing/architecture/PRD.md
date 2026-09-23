@@ -138,7 +138,7 @@ The same microfrontend runs under two deployment modes without a change to its r
 
 #### Single navigation substrate shared across independently bundled units
 
-- [ ] `p1` - **ID**: `cpt-frontx-routing-fr-single-navigation-substrate`
+- [x] `p1` - **ID**: `cpt-frontx-routing-fr-single-navigation-substrate`
 
 The system **MUST** expose exactly one navigation-history instance per realm, reachable by the host and by every independently bundled microfrontend, and **MUST** fan out one underlying browser-history subscription to every listener that subscribes to it.
 
@@ -150,7 +150,7 @@ The system **MUST** expose exactly one navigation-history instance per realm, re
 
 - [ ] `p1` - **ID**: `cpt-frontx-routing-fr-engine-provider-port`
 
-The system **MUST** expose the shared navigation history to a router engine only through a pluggable engine-provider port, satisfied by a separately published provider package, and **MUST** let a microfrontend replace its provider package with a different one without changing the navigation substrate, the URL grammar, the host, or any sibling microfrontend. The port describes only what a provider **MUST** accept from the substrate — the shared `NavigationHistory` instance, the entry address this occupant was mounted at (its own domain key and extension token), or its absence when the occupant runs standalone, and an opaque route tree — and that a provider is responsible for producing a constructed, mounted router from them; it names no concrete engine.
+The system **MUST** expose the shared navigation history to a router engine only through a pluggable engine-provider port, satisfied by a separately published provider package, and **MUST** let a microfrontend replace its provider package with a different one without changing the navigation substrate, the URL grammar, the host, or any sibling microfrontend. The port describes only what a provider **MUST** accept from the substrate — the shared `NavigationHistory` instance, the entry address this occupant was mounted at (its own domain key and extension token), or its absence when the occupant runs standalone, and an opaque route tree — and that a provider is responsible for producing a constructed router from them, which the consumer mounts; it names no concrete engine.
 
 **Rationale**: Concrete router engines evolve independently of the substrate; confining engine choice to a swappable, separately published provider package is what keeps that evolution from reaching outside the microfrontend that made the choice, and what keeps the substrate itself free of any concrete engine dependency.
 
@@ -158,7 +158,7 @@ The system **MUST** expose the shared navigation history to a router engine only
 
 #### Route ownership signal
 
-- [ ] `p1` - **ID**: `cpt-frontx-routing-fr-route-ownership-signal`
+- [x] `p1` - **ID**: `cpt-frontx-routing-fr-route-ownership-signal`
 
 The system **MUST** resolve, at each domain independently, every entry currently carrying that domain's own domain key to that domain's own declared route owner by matching the entry's own extension token against the domain's own registered routable extensions — a nested domain's own domain key composed by this package from the enclosing entry's own domain key, the enclosing entry's own extension token, and the nested domain's own locally-chosen name, never from a segment of the shell subroute — and **MUST** publish an observable signal, per domain, reporting every ownership-relevant transition at that domain to a consumer that supplies its own set of declared registered extensions for that domain as a plain argument: an owner appearing, disappearing, changing, its own payload changing, or the entry order changing. The system **MUST** also provide a URL back-projection helper the consumer calls to reflect a mount that was not driven by navigation back into the URL under that domain's own entries — rewriting only the entries the caller's own delta names as added, removed, payload-changed, replaced, or reordered, leaving every entry under that domain key the delta does not name in its existing position, and removing every entry whose own domain key begins with a removed or replaced entry's domain key extended by its own (or, for a replaced entry, its prior) extension and a further path segment (structural reset) — with the history verb left to the caller: opening an occupant outside navigation is projected with `push`, closing one with `replace`; when the mount being reflected changes one domain's own occupancy, that reflection **MUST NOT** silently discard any sibling domain's own entries already projected in the URL. Two-way agreement between the URL and which unit is actually mounted, at any level, is the consumer's own guarantee, built on top of this signal and this helper — not a guarantee this library makes on its own (§11).
 
@@ -168,7 +168,7 @@ The system **MUST** resolve, at each domain independently, every entry currently
 
 #### Imperative navigation outside the UI tree
 
-- [ ] `p2` - **ID**: `cpt-frontx-routing-fr-imperative-navigation`
+- [x] `p2` - **ID**: `cpt-frontx-routing-fr-imperative-navigation`
 
 The system **MUST** expose `push`, `replace`, `go`, `location`, and `subscribe` against the shared navigation history for use outside any UI component tree.
 
@@ -239,7 +239,7 @@ The system **MUST** import no other package in this ecosystem, and **MUST** call
 
 #### Agnostic Navigation Core
 
-- [ ] `p1` - **ID**: `cpt-frontx-routing-nfr-agnostic-core`
+- [x] `p1` - **ID**: `cpt-frontx-routing-nfr-agnostic-core`
 
 The navigation substrate **MUST** carry no dependency on any router engine or UI framework whatsoever; every dependency on a concrete engine **MUST** live in a separately published engine-provider package that implements the engine-provider port, never inside this package.
 
@@ -289,7 +289,7 @@ None owned here. The package is distributed under the root PRD's package-registr
 
 ## 9. Acceptance Criteria
 
-- [ ] A single navigation-history instance answers `push`/`replace`/`go`/`location`/`subscribe` for the host and for every independently bundled microfrontend registered in the same realm, and every one of those five members is callable by a caller with no mounted router or UI-framework component tree in its call path — verifiable via `cpt-frontx-routing-fr-single-navigation-substrate` and `cpt-frontx-routing-fr-imperative-navigation`.
+- [x] A single navigation-history instance answers `push`/`replace`/`go`/`location`/`subscribe` for the host and for every independently bundled microfrontend registered in the same realm, and every one of those five members is callable by a caller with no mounted router or UI-framework component tree in its call path — verifiable via `cpt-frontx-routing-fr-single-navigation-substrate` and `cpt-frontx-routing-fr-imperative-navigation`.
 - [ ] Replacing the engine-provider package used by one microfrontend changes no file outside that microfrontend's own route tree, search-parameter handling, and its own imports of its provider package — verifiable via `cpt-frontx-routing-fr-engine-provider-port`.
 - [ ] A cold load, a reload, and a back/forward step all resolve the same declared route owner from a domain's own entries through the same resolution path, at every domain a consumer holds an observer for, reported as an observable transition to that domain's own consumer — verifiable via `cpt-frontx-routing-fr-route-ownership-signal`.
 - [ ] For a domain whose own occupancy strategy admits more than one occupant at once, every concurrently mounted occupant is projected into the URL and its own transition is reported independently through the route ownership signal — verifiable via `cpt-frontx-routing-fr-concurrent-occupant-projection`.

@@ -348,6 +348,469 @@ function verifyCoreCruiseTargets(): TestResult[] {
 }
 
 /**
+ * Verify the ecosystem-wide sole-engine cruise in `scripts/test-architecture.ts`
+ * still scans every `packages/*` directory, not the nine members it happened to
+ * list when it was written.
+ *
+ * `frontx-routing-tanstack-3-sole-engine-import` is deliberately ecosystem-wide —
+ * every package other than `@gears-frontx/routing-tanstack` is where the leak
+ * would show up — but the `npm run arch:check` invocation that actually cruises
+ * it names its source roots literally in that file's own command string
+ * (see the ROUTING-1..3 / ROUTING-TANSTACK-1..3 block), the same way
+ * `arch:deps:core`'s roots are named literally in the root `package.json` script
+ * `verifyCoreCruiseTargets` above pins. A `packages/*` directory added after
+ * that command was written is never passed to dependency-cruiser, so the rule
+ * silently never fires against it — the exact "correct rule, unenforced scope"
+ * gap #495 already proved once for the core cruise, one level up for the
+ * ecosystem-wide one.
+ */
+async function verifyEcosystemCruiseTargets(): Promise<TestResult[]> {
+  const results: TestResult[] = [];
+
+  try {
+    const ecosystemPackagesModule = (await import(
+      pathToFileURL(join(REPO_ROOT, 'scripts', 'ecosystem-packages.mjs')).href
+    )) as { readEcosystemPackages: (rootDir: string) => Array<{ dir: string }> };
+
+    const expected = ecosystemPackagesModule
+      .readEcosystemPackages(REPO_ROOT)
+      .map((pkg) => `packages/${pkg.dir}/src`);
+
+    const testArchitectureSource = readFileSync(
+      join(REPO_ROOT, 'scripts', 'test-architecture.ts'),
+      'utf-8'
+    );
+
+    // The cruise command sits between these marker comments (one instance
+    // covering all four ROUTING-1..3 / ROUTING-TANSTACK-1..3 constraints) —
+    // slicing on them, rather than scanning the whole file, keeps this check
+    // from picking up an unrelated `packages/<name>/src` token from one of the
+    // file's other, narrower dependency-cruiser invocations.
+    const beginMarker =
+      '@cpt-begin:cpt-frontx-constraint-routing-tanstack-sole-engine-import:p2:inst-arch-check';
+    const endMarker =
+      '@cpt-end:cpt-frontx-constraint-routing-tanstack-sole-engine-import:p2:inst-arch-check';
+    const beginIndex = testArchitectureSource.indexOf(beginMarker);
+    const endIndex = testArchitectureSource.indexOf(endMarker);
+
+    if (beginIndex === -1 || endIndex === -1 || endIndex < beginIndex) {
+      return [
+        {
+          name: 'scripts/test-architecture.ts: Ecosystem sole-engine cruise block present',
+          passed: false,
+          message:
+            'RULE MISSING - could not find the ROUTING-TANSTACK-3 sole-engine cruise ' +
+            'block by its cpt markers, so the cruise scope cannot be verified.',
+        },
+      ];
+    }
+
+    const cruiseBlock = testArchitectureSource.slice(beginIndex, endIndex);
+    const cruised = Array.from(
+      new Set(Array.from(cruiseBlock.matchAll(/packages\/[^/'"\s]+\/src/g), (m) => m[0]))
+    );
+
+    const missing = expected.filter((dir) => !cruised.includes(dir));
+    const extra = cruised.filter((dir) => !expected.includes(dir));
+
+    results.push({
+      name: 'scripts/test-architecture.ts: Ecosystem sole-engine cruise scans every packages/* directory',
+      passed: missing.length === 0 && extra.length === 0,
+      message:
+        missing.length === 0 && extra.length === 0
+          ? `All ${expected.length} ecosystem src roots cruised`
+          : [
+              missing.length > 0
+                ? `Not cruised, so unguarded: ${missing.join(', ')}`
+                : undefined,
+              extra.length > 0
+                ? `Cruised but no longer a packages/* directory: ${extra.join(', ')}`
+                : undefined,
+              'Reconcile the ROUTING-TANSTACK-3 cruise command in scripts/test-architecture.ts ' +
+                'with the packages/* directories on disk.',
+            ]
+              .filter(Boolean)
+              .join('. '),
+    });
+  } catch (error) {
+    results.push({
+      name: 'scripts/test-architecture.ts: Ecosystem cruise target verification',
+      passed: false,
+      message: `Error: ${(error as Error).message}`,
+    });
+  }
+
+  return results;
+}
+
+/**
+ * Verify `frontx-routing-3-no-engine-leak`'s router-name patterns actually
+ * catch a scoped router engine, not just an unscoped one.
+ *
+ * `[^/]*router[^/]*` alone only ever tests a bare specifier's first path
+ * segment, so for a scoped package (`@remix-run/router`) that segment is the
+ * npm scope, not the package name — "router" never appears there, so the
+ * unscoped pattern silently let every scoped engine through while the rule's
+ * own comment named `@remix-run/router` as covered. Running the cruise
+ * cannot surface that gap: an unmatched import produces no violation, only
+ * silence, the same failure shape this script exists to catch elsewhere
+ * (#476, #523). Checked against the bare-specifier and `node_modules`-
+ * relative forms dependency-cruiser resolves an import to (the same two
+ * forms the rule's own patterns test), and against names that must keep
+ * passing through unmatched — a router-name pattern has no business
+ * touching an unrelated TanStack or third-party package.
+ */
+const ROUTER_ENGINE_PACKAGE_NAMES = [
+  'react-router',
+  '@remix-run/router',
+  '@tanstack/react-router',
+  '@tanstack/router-core',
+];
+// Every name below must not be caught by the router-name patterns — but the
+// rule also carries a separate blanket ban on the entire `@tanstack/` scope
+// (`.dependency-cruiser.cjs`, same rule, two additional `path` entries), so
+// the two `@tanstack/*` names here are still blocked by the rule as a whole,
+// just not by the router-name patterns this script isolates above. Only
+// `lodash` and `react` are unblocked by every part of the rule.
+const NON_ROUTER_PACKAGE_NAMES = ['@tanstack/react-table', '@tanstack/react-query', 'lodash', 'react'];
+const TANSTACK_SCOPE_PACKAGE_NAMES = ['@tanstack/react-table', '@tanstack/react-query'];
+const RULE_UNBLOCKED_PACKAGE_NAMES = ['lodash', 'react'];
+
+function verifyRoutingEngineLeakPattern(): TestResult[] {
+  const results: TestResult[] = [];
+
+  try {
+    const rootConfig = require(join(REPO_ROOT, '.dependency-cruiser.cjs'));
+    const rule = (
+      rootConfig.forbidden as Array<{ name: string; to?: { path?: string | string[] } }>
+    ).find((r) => r.name === 'frontx-routing-3-no-engine-leak');
+
+    if (!rule) {
+      results.push({
+        name: 'frontx-routing-3-no-engine-leak: Rule present',
+        passed: false,
+        message: 'RULE MISSING - the no-engine-leak boundary is gone!',
+      });
+      return results;
+    }
+
+    const allPaths = Array.isArray(rule.to?.path)
+      ? rule.to.path
+      : rule.to?.path
+        ? [rule.to.path]
+        : [];
+    // Isolate the router-name patterns from the rule's separate blanket
+    // `@tanstack/` ban: only the former claims to catch "any package whose
+    // name contains router", so only the former is asserted below to not
+    // over-match. Neither blanket-ban entry contains the substring "router".
+    const routerNamePatterns = allPaths.filter((p) => p.includes('router'));
+    const blanketTanstackBanPatterns = allPaths.filter((p) => !p.includes('router'));
+
+    for (const engineName of ROUTER_ENGINE_PACKAGE_NAMES) {
+      const matchesBare = routerNamePatterns.some((p) => new RegExp(p).test(engineName));
+      const matchesNodeModules = routerNamePatterns.some((p) =>
+        new RegExp(p).test(`node_modules/${engineName}`)
+      );
+      const passed = matchesBare && matchesNodeModules;
+      results.push({
+        name: `frontx-routing-3-no-engine-leak: catches ${engineName}`,
+        passed,
+        message: passed
+          ? 'Matched in both bare-specifier and node_modules forms'
+          : `PATTERN GAP - ${engineName} not caught (bare=${matchesBare}, node_modules=${matchesNodeModules})`,
+      });
+    }
+
+    for (const packageName of NON_ROUTER_PACKAGE_NAMES) {
+      const matches = routerNamePatterns.some((p) => new RegExp(p).test(packageName));
+      results.push({
+        name: `frontx-routing-3-no-engine-leak: router-name patterns do not match ${packageName}`,
+        passed: !matches,
+        message: matches
+          ? `OVER-MATCH - ${packageName} incorrectly caught by the router-name pattern`
+          : 'Not matched',
+      });
+    }
+
+    // The two `@tanstack/*` names above pass the assertion above for the
+    // wrong reason if the blanket ban were ever removed — assert separately
+    // that the rule as a whole still blocks them, via that other pattern
+    // pair, not the router-name one.
+    for (const packageName of TANSTACK_SCOPE_PACKAGE_NAMES) {
+      const matchesBare = blanketTanstackBanPatterns.some((p) => new RegExp(p).test(packageName));
+      const matchesNodeModules = blanketTanstackBanPatterns.some((p) =>
+        new RegExp(p).test(`node_modules/${packageName}`),
+      );
+      const passed = matchesBare && matchesNodeModules;
+      results.push({
+        name: `frontx-routing-3-no-engine-leak: the blanket @tanstack/ ban still blocks ${packageName}`,
+        passed,
+        message: passed
+          ? 'Matched in both bare-specifier and node_modules forms'
+          : `PATTERN GAP - ${packageName} not blocked by the blanket @tanstack/ ban (bare=${matchesBare}, node_modules=${matchesNodeModules})`,
+      });
+    }
+
+    // `lodash` and `react` sit outside both the router-name patterns and the
+    // `@tanstack/` scope — nothing in this rule should match them.
+    for (const packageName of RULE_UNBLOCKED_PACKAGE_NAMES) {
+      const matches = allPaths.some((p) => new RegExp(p).test(packageName));
+      results.push({
+        name: `frontx-routing-3-no-engine-leak: no part of the rule blocks ${packageName}`,
+        passed: !matches,
+        message: matches ? `OVER-MATCH - ${packageName} incorrectly caught by the rule` : 'Not matched',
+      });
+    }
+  } catch (error) {
+    results.push({
+      name: 'frontx-routing-3-no-engine-leak: Verification',
+      passed: false,
+      message: `Error: ${(error as Error).message}`,
+    });
+  }
+
+  return results;
+}
+
+/**
+ * Verify `frontx-routing-2-no-intra-ecosystem-dependency` forbids
+ * @gears-frontx/routing from importing its own provider,
+ * @gears-frontx/routing-tanstack. Checked in all three resolved shapes
+ * `pkgTargets` produces (`.dependency-cruiser.cjs`'s own header comment: a
+ * `to` pattern that covers only one of the three is a pattern that silently
+ * never fires for the other two), plus a regression guard over the six
+ * packages the rule already forbade — widening it to also name
+ * routing-tanstack must not be the change that silently narrows it to
+ * *only* routing-tanstack.
+ */
+const ROUTING_TANSTACK_RESOLVED_FORMS = [
+  'packages/routing-tanstack/src/index.ts',
+  'node_modules/@gears-frontx/routing-tanstack/dist/index.js',
+  '@gears-frontx/routing-tanstack',
+];
+const OTHER_INTRA_ECOSYSTEM_FORBIDDEN_PACKAGES = [
+  'mfes',
+  'gts-plugin',
+  'api',
+  'cli',
+  'cyber-pilot-kit-frontx',
+  'ui-kit',
+  'telemetry',
+];
+
+function verifyRoutingCoreProviderIsolation(): TestResult[] {
+  const results: TestResult[] = [];
+
+  try {
+    const rootConfig = require(join(REPO_ROOT, '.dependency-cruiser.cjs'));
+    const rule = (
+      rootConfig.forbidden as Array<{ name: string; to?: { path?: string | string[] } }>
+    ).find((r) => r.name === 'frontx-routing-2-no-intra-ecosystem-dependency');
+
+    if (!rule) {
+      results.push({
+        name: 'frontx-routing-2-no-intra-ecosystem-dependency: Rule present',
+        passed: false,
+        message: 'RULE MISSING - @gears-frontx/routing has no intra-ecosystem-dependency boundary!',
+      });
+      return results;
+    }
+
+    const allPaths = Array.isArray(rule.to?.path)
+      ? rule.to.path
+      : rule.to?.path
+        ? [rule.to.path]
+        : [];
+
+    for (const form of ROUTING_TANSTACK_RESOLVED_FORMS) {
+      const matches = allPaths.some((p) => new RegExp(p).test(form));
+      results.push({
+        name: `frontx-routing-2-no-intra-ecosystem-dependency: blocks the core importing its provider (${form})`,
+        passed: matches,
+        message: matches
+          ? 'Matched'
+          : `PATTERN GAP - @gears-frontx/routing can import routing-tanstack unresolved through this shape: ${form}`,
+      });
+    }
+
+    for (const packageName of OTHER_INTRA_ECOSYSTEM_FORBIDDEN_PACKAGES) {
+      const sample = `packages/${packageName}/src/index.ts`;
+      const matches = allPaths.some((p) => new RegExp(p).test(sample));
+      results.push({
+        name: `frontx-routing-2-no-intra-ecosystem-dependency: still blocks ${packageName}`,
+        passed: matches,
+        message: matches ? 'Matched' : `REGRESSION - ${packageName} no longer blocked (${sample})`,
+      });
+    }
+  } catch (error) {
+    results.push({
+      name: 'frontx-routing-2-no-intra-ecosystem-dependency: Verification',
+      passed: false,
+      message: `Error: ${(error as Error).message}`,
+    });
+  }
+
+  return results;
+}
+
+/**
+ * Verify `frontx-routing-tanstack-3-sole-engine-import` bans a concrete
+ * non-TanStack router engine — `react-router`, `react-router-dom`,
+ * `vue-router`, `@remix-run/router` — ecosystem-wide, not just `@tanstack/*`,
+ * and that its `from` still binds every ecosystem package except the
+ * provider package itself (the entire point of the rule: a concrete engine
+ * is only permitted from *inside* @gears-frontx/routing-tanstack). Mirrors
+ * `verifyRoutingEngineLeakPattern` above for the mirror-image rule.
+ */
+const NON_TANSTACK_ENGINE_PACKAGE_NAMES = [
+  'react-router',
+  'react-router-dom',
+  'vue-router',
+  '@remix-run/router',
+];
+const SOLE_ENGINE_BOUND_PACKAGES = [
+  'mfes',
+  'gts-plugin',
+  'api',
+  'cli',
+  'cyber-pilot-kit-frontx',
+  'ui-kit',
+  'telemetry',
+  'routing',
+];
+
+function verifySoleEngineImportPattern(): TestResult[] {
+  const results: TestResult[] = [];
+
+  try {
+    const rootConfig = require(join(REPO_ROOT, '.dependency-cruiser.cjs'));
+    const rule = (
+      rootConfig.forbidden as Array<{
+        name: string;
+        from?: { path?: string };
+        to?: { path?: string | string[]; pathNot?: string | string[] };
+      }>
+    ).find((r) => r.name === 'frontx-routing-tanstack-3-sole-engine-import');
+
+    if (!rule) {
+      results.push({
+        name: 'frontx-routing-tanstack-3-sole-engine-import: Rule present',
+        passed: false,
+        message: 'RULE MISSING - the sole-engine-import boundary is gone!',
+      });
+      return results;
+    }
+
+    const fromPattern = rule.from?.path ?? '';
+    for (const packageName of SOLE_ENGINE_BOUND_PACKAGES) {
+      const matches = new RegExp(fromPattern).test(`packages/${packageName}/src/index.ts`);
+      results.push({
+        name: `frontx-routing-tanstack-3-sole-engine-import: from binds ${packageName}/src`,
+        passed: matches,
+        message: matches ? 'Matched' : `REGRESSION - ${packageName}/src no longer bound by this rule`,
+      });
+    }
+    const excludesProvider = !new RegExp(fromPattern).test('packages/routing-tanstack/src/index.ts');
+    results.push({
+      name: 'frontx-routing-tanstack-3-sole-engine-import: from excludes the provider package itself',
+      passed: excludesProvider,
+      message: excludesProvider
+        ? 'Excluded, as intended - the provider is the one package allowed a concrete engine'
+        : 'REGRESSION - the rule now forbids the provider its own sole engine',
+    });
+
+    const allPaths = Array.isArray(rule.to?.path) ? rule.to.path : rule.to?.path ? [rule.to.path] : [];
+    const allPathNot = Array.isArray(rule.to?.pathNot)
+      ? rule.to.pathNot
+      : rule.to?.pathNot
+        ? [rule.to.pathNot]
+        : [];
+
+    for (const engineName of NON_TANSTACK_ENGINE_PACKAGE_NAMES) {
+      const matchesBare = allPaths.some((p) => new RegExp(p).test(engineName));
+      const matchesNodeModules = allPaths.some((p) => new RegExp(p).test(`node_modules/${engineName}`));
+      const passed = matchesBare && matchesNodeModules;
+      results.push({
+        name: `frontx-routing-tanstack-3-sole-engine-import: blocks ${engineName} outside the provider package`,
+        passed,
+        message: passed
+          ? 'Matched in both bare-specifier and node_modules forms'
+          : `PATTERN GAP - ${engineName} not caught (bare=${matchesBare}, node_modules=${matchesNodeModules})`,
+      });
+    }
+
+    const reactTableForms = ['@tanstack/react-table', 'node_modules/@tanstack/react-table'];
+    const reactTableAllowed = reactTableForms.every((form) =>
+      allPathNot.some((p) => new RegExp(p).test(form))
+    );
+    results.push({
+      name: 'frontx-routing-tanstack-3-sole-engine-import: still carves out @tanstack/react-table',
+      passed: reactTableAllowed,
+      message: reactTableAllowed
+        ? 'react-table carve-out intact'
+        : 'REGRESSION - @tanstack/react-table is no longer carved out of the ban',
+    });
+  } catch (error) {
+    results.push({
+      name: 'frontx-routing-tanstack-3-sole-engine-import: Verification',
+      passed: false,
+      message: `Error: ${(error as Error).message}`,
+    });
+  }
+
+  return results;
+}
+
+/**
+ * Verify `frontx-telemetry-1-no-template-content` carries the
+ * `couldNotResolve: false` guard the routing "no template content" rules
+ * already carry. Without it, any unresolved bare specifier — an uninstalled
+ * npm package, not just template content — keeps its bare form as `resolved`
+ * and reads as "imports template territory" for the wrong reason (the exact
+ * false-positive this rule's sibling routing rules were already patched
+ * against). A cruise cannot detect this gap by running: an unresolved import
+ * from an uninstalled package DOES trip the rule, just not for the reason
+ * its name claims — the same "passes for the wrong reason" shape every other
+ * check in this file exists to catch.
+ */
+function verifyTelemetryTemplateContentResolutionGuard(): TestResult[] {
+  const results: TestResult[] = [];
+
+  try {
+    const rootConfig = require(join(REPO_ROOT, '.dependency-cruiser.cjs'));
+    const rule = (
+      rootConfig.forbidden as Array<{ name: string; to?: { couldNotResolve?: boolean } }>
+    ).find((r) => r.name === 'frontx-telemetry-1-no-template-content');
+
+    if (!rule) {
+      results.push({
+        name: 'frontx-telemetry-1-no-template-content: Rule present',
+        passed: false,
+        message: 'RULE MISSING - the telemetry template-content boundary is gone!',
+      });
+      return results;
+    }
+
+    const passed = rule.to?.couldNotResolve === false;
+    results.push({
+      name: 'frontx-telemetry-1-no-template-content: guards against unresolved-specifier false positives',
+      passed,
+      message: passed
+        ? 'couldNotResolve: false present - an uninstalled npm package is no longer mistaken for a template-content violation'
+        : 'GUARD MISSING - any unresolved bare specifier (e.g. an uninstalled router package) trips this rule for the wrong reason',
+    });
+  } catch (error) {
+    results.push({
+      name: 'frontx-telemetry-1-no-template-content: Verification',
+      passed: false,
+      message: `Error: ${(error as Error).message}`,
+    });
+  }
+
+  return results;
+}
+
+/**
  * Verify `doNotFollow` bounds `node_modules` at any depth in both depcruise
  * configs that cruise the ecosystem tree.
  *
@@ -931,7 +1394,11 @@ async function runVerification(): Promise<void> {
 
   // Guard invocation: rules that exist but are never pointed at anything
   log('\n🎯 Guard Reach', 'blue');
-  const reachResults = [...verifyCoreCruiseTargets(), ...verifyIgnoreFreshness()];
+  const reachResults = [
+    ...verifyCoreCruiseTargets(),
+    ...(await verifyEcosystemCruiseTargets()),
+    ...verifyIgnoreFreshness(),
+  ];
   allResults.push(...reachResults);
   for (const result of reachResults) {
     log(
@@ -958,6 +1425,33 @@ async function runVerification(): Promise<void> {
   const doNotFollowResults = verifyDoNotFollowPatterns();
   allResults.push(...doNotFollowResults);
   for (const result of doNotFollowResults) {
+    log(
+      `${result.passed ? '✅' : '❌'} ${result.name}: ${result.message}`,
+      result.passed ? 'green' : 'red'
+    );
+  }
+
+  // Routing engine-leak pattern coverage
+  log('\n🚦 Routing Engine-Leak Pattern', 'blue');
+  const engineLeakResults = verifyRoutingEngineLeakPattern();
+  allResults.push(...engineLeakResults);
+  for (const result of engineLeakResults) {
+    log(
+      `${result.passed ? '✅' : '❌'} ${result.name}: ${result.message}`,
+      result.passed ? 'green' : 'red'
+    );
+  }
+
+  // Core-does-not-import-provider, ecosystem-wide sole-engine import, and the
+  // unresolved-specifier false-positive guard
+  log('\n🔌 Routing Provider & Sole-Engine Boundary', 'blue');
+  const providerIsolationResults = [
+    ...verifyRoutingCoreProviderIsolation(),
+    ...verifySoleEngineImportPattern(),
+    ...verifyTelemetryTemplateContentResolutionGuard(),
+  ];
+  allResults.push(...providerIsolationResults);
+  for (const result of providerIsolationResults) {
     log(
       `${result.passed ? '✅' : '❌'} ${result.name}: ${result.message}`,
       result.passed ? 'green' : 'red'
@@ -1001,10 +1495,15 @@ export {
   verifyDepcruiseConfigs,
   verifyCoreRestrictions,
   verifyCoreCruiseTargets,
+  verifyEcosystemCruiseTargets,
   verifyIgnoreFreshness,
   verifyMemberRegistration,
   verifyMemberRegistrationInRegistry,
   ignoreEntries,
   memberDebtReasonStatus,
   verifyDoNotFollowPatterns,
+  verifyRoutingEngineLeakPattern,
+  verifyRoutingCoreProviderIsolation,
+  verifySoleEngineImportPattern,
+  verifyTelemetryTemplateContentResolutionGuard,
 };

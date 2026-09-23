@@ -137,6 +137,11 @@ function getMonorepoPostChecks(): ArchCheck[] {
  *   cpt-frontx-constraint-gts-plugin-excludes-solution-schemas (GTS-PLUGIN-2) — dep-cruiser
  *   cpt-frontx-constraint-api-no-solution-content           (API-1) — dep-cruiser
  *   cpt-frontx-constraint-cli-template-independence         (CLI-1) — dep-cruiser + grep check below
+ *   cpt-frontx-constraint-routing-no-intra-ecosystem-dependency,
+ *   cpt-frontx-constraint-routing-no-engine-leak,
+ *   cpt-frontx-routing-tanstack-nfr-single-ecosystem-edge,
+ *   cpt-frontx-constraint-routing-tanstack-sole-engine-import
+ *                                                (ROUTING-1..3 / ROUTING-TANSTACK-1..3) — dep-cruiser
  */
 function getEcosystemBoundaryChecks(): ArchCheck[] {
   return [
@@ -202,6 +207,43 @@ function getEcosystemBoundaryChecks(): ArchCheck[] {
         'CLI-1 (cpt-frontx-constraint-cli-template-independence): cli sources contain no hardcoded template package names (excluding auto-generated version registry)',
     },
     // @cpt-end:cpt-frontx-constraint-cli-template-independence:p17:inst-hardcoded-name-check
+    // One dep-cruiser invocation enforces all four ROUTING-1..3 /
+    // ROUTING-TANSTACK-1..3 constraints at once (`.dependency-cruiser.cjs`
+    // rules `frontx-routing-2`, `frontx-routing-3`, `frontx-routing-tanstack-2`,
+    // `frontx-routing-tanstack-3`) — each DESIGN's own constraint gets its
+    // own marker pair over this identical block, at `p2` to match its own
+    // declaration (`packages/routing/architecture/DESIGN.md` §2.2,
+    // `packages/routing-tanstack/architecture/DESIGN.md` §2.1), rather than
+    // one marker standing in for all four.
+    //
+    // The source-root list is every ecosystem package's `src/`, not just
+    // routing and routing-tanstack: `frontx-routing-tanstack-3-sole-engine-import`'s
+    // `from` is ecosystem-wide (mfes|gts-plugin|api|cli|cyber-pilot-kit-frontx|
+    // ui-kit|telemetry|routing) by design — it is the only package allowed
+    // to import a concrete router engine, so every OTHER package is where
+    // the violation would actually appear. A cruise scoped to routing and
+    // routing-tanstack alone never looks at those other packages' files, so
+    // it would report zero violations regardless of what they import — the
+    // same "correct rule, unenforced scope" gap `verifyCoreCruiseTargets`
+    // above exists to catch for the core rules.
+    // @cpt-begin:cpt-frontx-constraint-routing-no-intra-ecosystem-dependency:p2:inst-arch-check
+    // @cpt-begin:cpt-frontx-constraint-routing-no-engine-leak:p2:inst-arch-check
+    // @cpt-begin:cpt-frontx-constraint-routing-tanstack-sole-engine-import:p2:inst-arch-check
+    {
+      command:
+        'npx dependency-cruiser packages/mfes/src packages/gts-plugin/src packages/api/src ' +
+        'packages/cli/src packages/cyber-pilot-kit-frontx/src packages/ui-kit/src packages/telemetry/src ' +
+        'packages/routing/src packages/routing-tanstack/src --config .dependency-cruiser.cjs --output-type err-long',
+      description:
+        'ROUTING-1..3 / ROUTING-TANSTACK-1..3 (cpt-frontx-constraint-routing-no-intra-ecosystem-dependency, ' +
+        'cpt-frontx-constraint-routing-no-engine-leak, cpt-frontx-routing-tanstack-nfr-single-ecosystem-edge, ' +
+        'cpt-frontx-constraint-routing-tanstack-sole-engine-import): routing & routing-tanstack boundary — no ' +
+        'template content, no intra-ecosystem dependency, no engine leak, single ecosystem edge, sole engine ' +
+        'import — cruised across every ecosystem package src/, since the sole-engine rule binds all of them',
+    },
+    // @cpt-end:cpt-frontx-constraint-routing-tanstack-sole-engine-import:p2:inst-arch-check
+    // @cpt-end:cpt-frontx-constraint-routing-no-engine-leak:p2:inst-arch-check
+    // @cpt-end:cpt-frontx-constraint-routing-no-intra-ecosystem-dependency:p2:inst-arch-check
   ];
 }
 
