@@ -16,11 +16,12 @@ import type { ChildMfeBridge, MfeHandler, MfeMountContext, ParentMfeBridge } fro
 import type { TypeSystemPlugin } from '../type-substrate';
 import type { RuntimeCoordinator } from './coordination/types';
 import type { ActionHandler } from '../mediator/types';
+import type { CrossHopRoute } from '../mediator/cross-hop-route';
 import type { ActionsChain } from '../types';
 import { DefaultExtensionManager } from './default-extension-manager';
 import type { MfeRegistry } from '../registry/MfeRegistry';
 import { MountManager } from './mount-manager';
-import type { ActionChainExecutor, LifecycleTrigger } from './mount-manager';
+import type { ActionsChainDispatcher, LifecycleTrigger } from './mount-manager';
 import { RuntimeBridgeFactory } from './runtime-bridge-factory';
 import { createShadowRoot } from '../shadow';
 import {
@@ -39,9 +40,15 @@ export class DefaultMountManager extends MountManager {
   private readonly coordinator: RuntimeCoordinator;
   private readonly typeSystem: TypeSystemPlugin;
   private readonly triggerLifecycle: LifecycleTrigger;
-  private readonly executeActionsChain: ActionChainExecutor;
+  /**
+   * The public, acceptance-only chain dispatcher — wired to the child
+   * bridge's public capability (`dispatchActionsChain` param of
+   * `acquireBridge`). Nothing awaitable ever crosses that bridge
+   * (`cpt-frontx-adr-mfe-runtime-public-surface`).
+   */
+  private readonly dispatchActionsChain: ActionsChainDispatcher;
   private readonly hostRuntime: MfeRegistry;
-  private readonly registerCatchAllActionHandler: (domainId: string, handler: ActionHandler) => void;
+  private readonly registerCatchAllRoute: (domainId: string, route: CrossHopRoute) => void;
   private readonly unregisterCatchAllActionHandler: (domainId: string) => void;
   private readonly registerExtensionActionHandler: (extensionId: string, actionTypeId: string, handler: ActionHandler, domainId: string) => void;
   private readonly unregisterExtensionActionHandler: (extensionId: string) => void;
@@ -104,9 +111,9 @@ export class DefaultMountManager extends MountManager {
     coordinator: RuntimeCoordinator;
     typeSystem: TypeSystemPlugin;
     triggerLifecycle: LifecycleTrigger;
-    executeActionsChain: ActionChainExecutor;
+    dispatchActionsChain: ActionsChainDispatcher;
     hostRuntime: MfeRegistry;
-    registerCatchAllActionHandler: (domainId: string, handler: ActionHandler) => void;
+    registerCatchAllRoute: (domainId: string, route: CrossHopRoute) => void;
     unregisterCatchAllActionHandler: (domainId: string) => void;
     registerExtensionActionHandler: (extensionId: string, actionTypeId: string, handler: ActionHandler, domainId: string) => void;
     unregisterExtensionActionHandler: (extensionId: string) => void;
@@ -124,9 +131,9 @@ export class DefaultMountManager extends MountManager {
     this.coordinator = config.coordinator;
     this.typeSystem = config.typeSystem;
     this.triggerLifecycle = config.triggerLifecycle;
-    this.executeActionsChain = config.executeActionsChain;
+    this.dispatchActionsChain = config.dispatchActionsChain;
     this.hostRuntime = config.hostRuntime;
-    this.registerCatchAllActionHandler = config.registerCatchAllActionHandler;
+    this.registerCatchAllRoute = config.registerCatchAllRoute;
     this.unregisterCatchAllActionHandler = config.unregisterCatchAllActionHandler;
     this.registerExtensionActionHandler = config.registerExtensionActionHandler;
     this.unregisterExtensionActionHandler = config.unregisterExtensionActionHandler;
@@ -263,8 +270,8 @@ export class DefaultMountManager extends MountManager {
           extensionState.entry.id,
           entryDomainActions,
           existing,
-          (chain: ActionsChain) => this.executeActionsChain(chain),
-          (domainId, handler) => this.registerCatchAllActionHandler(domainId, handler),
+          (chain: ActionsChain) => this.dispatchActionsChain(chain),
+          (domainId, route) => this.registerCatchAllRoute(domainId, route),
           (domainId) => this.unregisterCatchAllActionHandler(domainId),
           (extId, actionTypeId, handler, domainId) => this.registerExtensionActionHandler(extId, actionTypeId, handler, domainId),
           (extId) => this.unregisterExtensionActionHandler(extId)
@@ -349,12 +356,31 @@ export class DefaultMountManager extends MountManager {
         await mountInvocation;
 
         extensionState.container = container;
+        // @cpt-begin:cpt-frontx-state-extension-domain-governance-admission:p1:inst-adm-t8
+        // ADMITTED -> MOUNTED is decided HERE, by the strategy's own mount
+        // execution completing without error — nothing about a triggered
+        // stage's chain (which has not even been dispatched yet at this
+        // line) participates in this decision. The mirror image is
+        // `inst-adm-t6` above/below: ADMITTED -> REJECTED is decided by
+        // this SAME mount execution failing, never by a chain outcome.
         extensionState.mountState = 'mounted';
+        // @cpt-end:cpt-frontx-state-extension-domain-governance-admission:p1:inst-adm-t8
 
-        await this.triggerLifecycle(
+        // @cpt-begin:cpt-frontx-algo-mfe-registry-lifecycle-stage-triggering:p1:inst-algo-lst-sites
+        // @cpt-begin:cpt-frontx-state-extension-domain-governance-admission:p1:inst-adm-t7
+        // Non-blocking: the `activated` stage is triggered alongside mount
+        // completion — a notification the mount happened, not a phase the
+        // mount waits on. `mountState` is already 'mounted' and the bridge
+        // already returned to the caller below, regardless of whether any
+        // `activated` hook's chain has settled. This call is never awaited
+        // and this method offers its triggered chain(s) no window and no
+        // ordering guarantee relative to this transition's own completion.
+        this.triggerLifecycle(
           extensionId,
           this.typeSystem.resolveLifecycleStageActivatedId()
         );
+        // @cpt-end:cpt-frontx-state-extension-domain-governance-admission:p1:inst-adm-t7
+        // @cpt-end:cpt-frontx-algo-mfe-registry-lifecycle-stage-triggering:p1:inst-algo-lst-sites
 
         return parentBridge;
       } catch (error) {
@@ -392,70 +418,55 @@ export class DefaultMountManager extends MountManager {
       return;
     }
 
-    let teardownError: unknown;
-    let hasTeardownError = false;
-    const captureTeardownError = async (operation: () => Promise<void>): Promise<void> => {
-      try {
-        await operation();
-      } catch (error) {
-        if (!hasTeardownError) {
-          teardownError = error;
-          hasTeardownError = true;
-        }
-      }
-    };
-
-    await captureTeardownError(() => this.triggerLifecycle(
+    // @cpt-begin:cpt-frontx-algo-mfe-registry-lifecycle-stage-triggering:p1:inst-algo-lst-sites
+    // Non-blocking: the `deactivated` stage is triggered alongside unmount
+    // — a notification the unmount is happening, not a phase it waits on.
+    // The unmount work below proceeds independently of any `deactivated`
+    // hook's chain settlement.
+    this.triggerLifecycle(
       extensionId,
       this.typeSystem.resolveLifecycleStageDeactivatedId()
-    ));
+    );
+    // @cpt-end:cpt-frontx-algo-mfe-registry-lifecycle-stage-triggering:p1:inst-algo-lst-sites
 
-    const lifecycle = extensionState.lifecycle;
-    const container = extensionState.container;
-    if (lifecycle && container) {
-      const unmountTarget = extensionState.shadowRoot ?? container;
-      await captureTeardownError(async () => {
+    try {
+      const lifecycle = extensionState.lifecycle;
+      const container = extensionState.container;
+      if (lifecycle && container) {
+        const unmountTarget = extensionState.shadowRoot ?? container;
         await lifecycle.unmount(unmountTarget);
-      });
-    }
+      }
 
-    // Deactivate (not destroy) the bridge: every advertisement propagated
-    // through it stays recorded, and every action-delivery path through it
-    // now rejects explicitly until the next mount reactivates it
-    // (`inst-bridge-deactivation`). Handler registrations and property
-    // subscriptions made through the bridge are untouched.
-    // @cpt-begin:cpt-frontx-algo-mfe-host-communication-bridge-delegation:p1:inst-bridge-deactivation
-    if (extensionState.bridge) {
-      try {
+      // Deactivate (not destroy) the bridge: every advertisement propagated
+      // through it stays recorded, and every action-delivery path through it
+      // now rejects explicitly until the next mount reactivates it
+      // (`inst-bridge-deactivation`). Handler registrations and property
+      // subscriptions made through the bridge are untouched.
+      // @cpt-begin:cpt-frontx-algo-mfe-host-communication-bridge-delegation:p1:inst-bridge-deactivation
+      if (extensionState.bridge) {
         this.bridgeFactory.deactivateBridge(extensionState.bridge);
-      } catch (error) {
-        if (!hasTeardownError) {
-          teardownError = error;
-          hasTeardownError = true;
+      }
+      // @cpt-end:cpt-frontx-algo-mfe-host-communication-bridge-delegation:p1:inst-bridge-deactivation
+
+      if (container) {
+        const connection = this.coordinator.get(container);
+        if (connection) {
+          connection.bridges.delete(extensionId);
+          if (connection.bridges.size === 0) {
+            this.coordinator.unregister(container);
+          }
         }
       }
-    }
-    // @cpt-end:cpt-frontx-algo-mfe-host-communication-bridge-delegation:p1:inst-bridge-deactivation
 
-    if (container) {
-      const connection = this.coordinator.get(container);
-      if (connection) {
-        connection.bridges.delete(extensionId);
-        if (connection.bridges.size === 0) {
-          this.coordinator.unregister(container);
-        }
-      }
-    }
-
-    extensionState.container = null;
-    extensionState.shadowRoot = undefined;
-    if (hasTeardownError) {
+      extensionState.container = null;
+      extensionState.mountState = 'unmounted';
+      extensionState.error = undefined;
+      extensionState.shadowRoot = undefined;
+    } catch (error) {
       extensionState.mountState = 'error';
-      extensionState.error = teardownError instanceof Error ? teardownError : new Error(String(teardownError));
-      throw teardownError;
+      extensionState.error = error instanceof Error ? error : new Error(String(error));
+      throw error;
     }
-    extensionState.mountState = 'unmounted';
-    extensionState.error = undefined;
   }
 
   // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-retract-advertisements
