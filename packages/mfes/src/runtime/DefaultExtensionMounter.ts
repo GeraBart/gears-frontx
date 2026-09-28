@@ -16,7 +16,6 @@
 
 import { ExtensionMounter } from './ExtensionMounter';
 import type { MountManager } from './mount-manager';
-import type { ContainerHooks } from './mount-strategy';
 import type { MountSetObserver } from './config';
 
 /**
@@ -47,14 +46,25 @@ export class DefaultExtensionMounter extends ExtensionMounter {
    */
   private readonly inFlightMountsByExtension = new Map<string, { promise: Promise<void>; container: Element }>();
 
+  /**
+   * The settlement promise of an extension currently being unmounted through
+   * this mounter, keyed by extension id — populated for the whole duration of
+   * `unmount()`, whether that call originates from the domain's explicit
+   * `unmount_ext` action handler or from a mount strategy's own eviction or
+   * displacement of a sibling. The mount-ext prologue (`wrapMountExtHandler`,
+   * `cpt-frontx-algo-extension-domain-governance-mount-execution` `inst-me-await-unmount-settle`)
+   * consults this map for the extension it is about to mount, before any
+   * strategy runs, so a mount request arriving while that same extension is
+   * being unmounted waits for the unmount to settle instead of racing it.
+   */
+  private readonly unmountInFlightByExtension = new Map<string, Promise<void>>();
+
   constructor(
     private readonly domainId: string,
     private readonly mountManager: MountManager,
     private readonly addMountedExtension: (domainId: string, extensionId: string) => void,
     private readonly removeMountedExtension: (domainId: string, extensionId: string) => void,
     private readonly getMountedExtensions: (domainId: string) => readonly string[],
-    // hooks is used in detach() to destroy containers for each extension
-    private readonly hooks: ContainerHooks,
     // Construction-time mount-set observer, if the host supplied one via
     // `MfeRegistryConfig.mountSetObserver` — `undefined` when none was
     // supplied. Notified from the commit itself (`mount`/`unmount`/`detach`
@@ -70,21 +80,19 @@ export class DefaultExtensionMounter extends ExtensionMounter {
 
   async detach(): Promise<void> {
     // Mass-unmount every currently-mounted extension so the registry and
-    // any framework slice stay consistent.
+    // any framework slice stay consistent. Routed through the inherited
+    // `release()` — not `unmount()` or `mountManager.unmountExtension`
+    // directly — so a mount request racing this detach observes each
+    // extension's unmount as in flight (`getUnmountInFlight`) and waits for
+    // it instead of racing it, AND a strategy's own explicit release of the
+    // same extension racing this detach still runs its real `destroy`
+    // exactly once. This call deliberately supplies no `destroy` of its own
+    // — by detach time the domain's strategy (and its real container hooks)
+    // has already been invalidated, so this call must never claim the
+    // destroy slot ahead of a genuine one still in flight.
     const mounted = Array.from(this.getMountedExtensions(this.domainId));
     for (const extId of mounted) {
-      await this.mountManager.unmountExtension(extId);
-      this.hooks.destroy(extId);
-      this.containers.delete(extId);
-      // Every committed change must be observable (per
-      // `cpt-frontx-adr-action-dispatch-and-chaining`), so the mount-set
-      // change is propagated to observers via the removal hook.
-      this.removeMountedExtension(this.domainId, extId);
-      this.mountSetObserver?.onMountSetChanged({
-        domainId: this.domainId,
-        entered: [],
-        left: [extId],
-      });
+      await this.release(extId);
     }
     this.attachedRoot = null;
   }
@@ -154,23 +162,79 @@ export class DefaultExtensionMounter extends ExtensionMounter {
     }
   }
 
+  // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-await-unmount-settle
+  /**
+   * @param extensionId - ID of the extension being unmounted.
+   */
   async unmount(extensionId: string): Promise<void> {
-    await this.mountManager.unmountExtension(extensionId);
+    // Coalesce a second concurrent unmount request for the SAME extension:
+    // join the already-tracked settlement rather than running a second
+    // physical unmount and racing the first for the same map entry (each
+    // call's cleanup would otherwise delete whichever entry the map holds
+    // at that moment, including the other call's).
+    const inFlight = this.unmountInFlightByExtension.get(extensionId);
+    if (inFlight) {
+      return inFlight;
+    }
 
-    // Remove the container from the attached root if still present.
-    const container = this.containers.get(extensionId);
-    if (container && this.attachedRoot) {
-      if (this.attachedRoot.contains(container)) {
-        this.attachedRoot.removeChild(container);
+    // A placeholder settlement is published in `unmountInFlightByExtension`
+    // BEFORE `mountManager.unmountExtension` is ever invoked — not after —
+    // so a call that re-enters `unmount` for the SAME extension id
+    // synchronously (from that call's own synchronous prefix, e.g. a
+    // `deactivated` hook or the lifecycle `unmount` itself dispatching a
+    // fresh mount before its first `await`) finds this entry already in
+    // flight and joins it instead of racing an untracked physical unmount.
+    let settlePlaceholder!: () => void;
+    let rejectPlaceholder!: (error: unknown) => void;
+    const placeholder = new Promise<void>((resolve, reject) => {
+      settlePlaceholder = resolve;
+      rejectPlaceholder = reject;
+    });
+    this.unmountInFlightByExtension.set(extensionId, placeholder);
+
+    const unmountWork = (async (): Promise<void> => {
+      await this.mountManager.unmountExtension(extensionId);
+
+      // Remove the container from the attached root if still present.
+      const container = this.containers.get(extensionId);
+      if (container && this.attachedRoot) {
+        if (this.attachedRoot.contains(container)) {
+          this.attachedRoot.removeChild(container);
+        }
+      }
+      this.containers.delete(extensionId);
+
+      this.removeMountedExtension(this.domainId, extensionId);
+      this.mountSetObserver?.onMountSetChanged({
+        domainId: this.domainId,
+        entered: [],
+        left: [extensionId],
+      });
+    })();
+
+    unmountWork.then(settlePlaceholder, rejectPlaceholder);
+
+    try {
+      await placeholder;
+    } finally {
+      // Identity-checked cleanup: remove this call's own entry only, never a
+      // later call's, so a settling earlier call can never delete a
+      // still-in-flight later one's tracking.
+      if (this.unmountInFlightByExtension.get(extensionId) === placeholder) {
+        this.unmountInFlightByExtension.delete(extensionId);
       }
     }
-    this.containers.delete(extensionId);
+  }
+  // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-await-unmount-settle
 
-    this.removeMountedExtension(this.domainId, extensionId);
-    this.mountSetObserver?.onMountSetChanged({
-      domainId: this.domainId,
-      entered: [],
-      left: [extensionId],
-    });
+  /**
+   * The settlement promise of an unmount currently in flight for
+   * `extensionId` through this mounter, or `undefined` if none is in
+   * progress. Consulted by the mount-ext prologue — never by a strategy —
+   * so the check runs strategy-agnostically, above every strategy's own
+   * mount body.
+   */
+  getUnmountInFlight(extensionId: string): Promise<void> | undefined {
+    return this.unmountInFlightByExtension.get(extensionId);
   }
 }

@@ -46,6 +46,8 @@ import { LoadExtHandler } from './extension-lifecycle-action-handler';
 import { EntryTypeNotHandledError, ActionsChainRefusalError } from '../errors';
 import { extractGtsPackage } from '../gts/extract-package';
 import { DefaultExtensionMounter } from './DefaultExtensionMounter';
+import { wrapMountExtHandler, wrapUnmountExtHandler } from './mount-ext-prologue';
+import { DomainOccupancyCoordinator } from './domain-occupancy-coordinator';
 import { DefaultDomainLifecycleTrigger } from './DefaultDomainLifecycleTrigger';
 import { ConsoleDiagnosticSink } from './default-diagnostic-sink';
 import type { MfeDiagnosticSink, MountSetObserver } from './config';
@@ -834,15 +836,6 @@ export class DefaultMfeRegistry extends MfeRegistry {
       (domainId, extId) => this.extensionManager.addMountedExtension(domainId, extId),
       (domainId, extId) => this.extensionManager.removeMountedExtension(domainId, extId),
       (domainId) => this.extensionManager.getMountedExtensions(domainId),
-      // Hooks passed to detach — strategies create their own hooks; the mounter uses them
-      // only for mass-unmount in detach(), so we supply a no-op here and let each
-      // strategy handle its own hooks during normal unmount. Detach delegates to
-      // mountManager.unmountExtension directly without hooks.destroy since by detach
-      // time the strategy has already been invalidated.
-      {
-        create: (_extId: string) => { throw new Error('DefaultExtensionMounter: create called on detach hooks'); },
-        destroy: (_extId: string) => { /* no-op: strategy handles destroy during normal unmount */ },
-      },
       // Construction-time mount-set observer, if the host supplied one —
       // notified from the commit (this mounter's own bookkeeping calls
       // above), never from a lifecycle stage (MFES-8, `cpt-frontx-adr-action-dispatch-and-chaining`).
@@ -878,8 +871,9 @@ export class DefaultMfeRegistry extends MfeRegistry {
     // Step 5: Cross-validate handlers vs declaration AND strategy/cardinality matrix.
     // @cpt-begin:cpt-frontx-flow-extension-domain-governance-admission:p1:inst-cardinality-check
     // @cpt-begin:cpt-frontx-state-extension-domain-governance-cardinality:p2:inst-card-t1
+    const mountStrategies = implementation._getMountStrategiesInternal();
     try {
-      this.crossValidateHandlers(declaration, implementation._getMountStrategiesInternal(), ctx);
+      this.crossValidateHandlers(declaration, mountStrategies, ctx);
     } catch (error) {
       // @cpt-begin:cpt-frontx-flow-extension-domain-governance-admission:p1:inst-cardinality-fail-check
       // @cpt-begin:cpt-frontx-state-extension-domain-governance-cardinality:p2:inst-card-t2
@@ -897,9 +891,51 @@ export class DefaultMfeRegistry extends MfeRegistry {
 
     // @cpt-begin:cpt-frontx-flow-extension-domain-governance-admission:p1:inst-domain-registered
     // @cpt-begin:cpt-frontx-state-extension-domain-governance-cardinality:p2:inst-card-t3
-    // Step 6: Persist handlers to mediator.
+    // Step 6: Persist handlers to mediator. The domain's `mount_ext` handler
+    // (or a type derived from it) is wrapped with the strategy-agnostic
+    // mount-execution prologue first, so eligibility, the already-mounted
+    // short-circuit, in-progress-mount joining, and in-progress-unmount
+    // waiting run above every strategy — identically whichever strategy the
+    // domain composed (`cpt-frontx-algo-extension-domain-governance-mount-execution`).
+    //
+    // One occupancy coordinator is constructed per domain and shared by
+    // every `mount_ext`-derived action type the domain registers below
+    // (`inst-me-join-in-progress-mount`, `inst-me-no-rerun-eviction`), so
+    // same-extension joining and cross-extension ordering hold across
+    // derived action types. Optional and Exclusive strategies read the
+    // domain's mount set and may evict a sibling as part of mounting, so
+    // different extensions' fresh mounts in those domains are ordered
+    // against one another; a Concurrent domain never evicts a sibling, so
+    // its different extensions' fresh mounts run without that ordering
+    // (cross-validation above already rejected a domain with zero
+    // strategies and mixed-strategy domains are not supported, so the first
+    // strategy is representative of the whole domain).
+    const coordinator = new DomainOccupancyCoordinator(
+      !(mountStrategies[0] instanceof ConcurrentMountStrategy)
+    );
+    const mountExtActionId = this.typeSystem.resolveMountExtActionId();
+    const unmountExtActionId = this.typeSystem.resolveUnmountExtActionId();
     for (const [actionType, handler] of ctx.getCollectedHandlers()) {
-      this.mediator.registerHandler(declaration.id, actionType, handler);
+      let wrapped = handler;
+      if (this.typeSystem.isTypeOf(actionType, mountExtActionId)) {
+        wrapped = wrapMountExtHandler(handler, {
+          domainId: declaration.id,
+          getExtensionDomain: (extensionId) =>
+            this.extensionManager.getExtensionState(extensionId)?.extension.domain,
+          isMounted: (extensionId) =>
+            this.extensionManager.getMountedExtensions(declaration.id).includes(extensionId),
+          getUnmountInFlight: (extensionId) => mounter.getUnmountInFlight(extensionId),
+          coordinator,
+        });
+      } else if (this.typeSystem.isTypeOf(actionType, unmountExtActionId)) {
+        // Orders this explicit unmount_ext's occupancy mutation on the SAME
+        // coordinator a fresh mount's own eviction is ordered on, so the
+        // two never interleave in a domain built with cross-extension
+        // ordering (`cpt-frontx-algo-extension-domain-governance-mount-execution`
+        // `inst-me-no-rerun-eviction`).
+        wrapped = wrapUnmountExtHandler(handler, { coordinator });
+      }
+      this.mediator.registerHandler(declaration.id, actionType, wrapped);
     }
 
     // Step 7: Persist domain implementation references.

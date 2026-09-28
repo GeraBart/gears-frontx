@@ -785,12 +785,12 @@ describe('Cross-nesting reachability: registration propagation, escalation, retr
 
     // Primary action is unresolvable anywhere (same as test (f)), forcing
     // registry2 to escalate all the way to the shell and fail there with no
-    // handler. If the escalation route's `send` (backed by
-    // `executeActionsChainOrThrow`) silently resolved instead of rejecting —
-    // the bug this test guards against — `executeAction` at registry2 would
-    // never throw, `executeChainRecursive` would never reach its `fallback`
-    // branch, and `rootCounter` would stay at 0 even though the primary
-    // action never actually ran anywhere.
+    // handler. The escalation route's `send` (backed by
+    // `executeActionsChainOrThrow`) must reject rather than silently
+    // resolving, so that `executeAction` at registry2 throws,
+    // `executeChainRecursive` reaches its `fallback` branch, and
+    // `rootCounter` is incremented even though the primary action never
+    // actually ran anywhere.
     const chain: ActionsChain = {
       action: { type: ACTION_UNRESOLVABLE, target: D2, payload: {} },
       fallback: actionChain(ACTION_ROOT, D0),
@@ -1591,13 +1591,13 @@ describe('Cross-nesting reachability: registration propagation, escalation, retr
     );
     expect(retryRegistry).toBeUndefined();
 
-    // Second mount attempt, on a fresh (unpoisoned) container: succeeds all
-    // the way through, including the link-mint step. Under the bug, the
-    // mint step's gate (`!existing`, derived from `extensionState.bridge` /
-    // `childBridge` already being set from the FIRST attempt) sees a
-    // falsely "already minted" bridge pair and skips minting forever, so
-    // `retryRegistry`'s advertisement is propagated locally but never
-    // reaches the shell.
+    // Second mount attempt, on a fresh (unpoisoned) container: must succeed
+    // all the way through, including the link-mint step. The mint step's
+    // gate (`!existing`, derived from `extensionState.bridge` /
+    // `childBridge`) must not treat state left over from the FIRST, failed
+    // attempt as an "already minted" bridge pair — otherwise minting is
+    // skipped forever and `retryRegistry`'s advertisement is propagated
+    // locally but never reaches the shell.
     await mounter0.mount(RETRY_EXT, document.createElement('div'));
     expect(retryRegistry).toBeDefined();
 

@@ -204,6 +204,13 @@ export class DefaultMountManager extends MountManager {
   }
 
   // @cpt-begin:cpt-frontx-state-extension-domain-governance-admission:p1:inst-adm-t5
+  // @cpt-begin:cpt-frontx-state-extension-domain-governance-admission:p1:inst-adm-t11
+  // A fresh mount that reaches this method — because the mount-ext prologue
+  // (`wrapMountExtHandler`) found the extension neither already mounted nor
+  // in-flight, including one that proceeded after an in-progress unmount
+  // just settled — is an ordinary ADMITTED -> MOUNTED transition through
+  // this same method: it re-enters MOUNTED under `inst-adm-t5` below and
+  // triggers `activated` again (`inst-me-activated-once`).
   async mountExtension(
     extensionId: string,
     container: Element
@@ -368,6 +375,7 @@ export class DefaultMountManager extends MountManager {
 
         // @cpt-begin:cpt-frontx-algo-mfe-registry-lifecycle-stage-triggering:p1:inst-algo-lst-sites
         // @cpt-begin:cpt-frontx-state-extension-domain-governance-admission:p1:inst-adm-t7
+        // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-activated-once
         // Non-blocking: the `activated` stage is triggered alongside mount
         // completion — a notification the mount happened, not a phase the
         // mount waits on. `mountState` is already 'mounted' and the bridge
@@ -375,10 +383,18 @@ export class DefaultMountManager extends MountManager {
         // `activated` hook's chain has settled. This call is never awaited
         // and this method offers its triggered chain(s) no window and no
         // ordering guarantee relative to this transition's own completion.
+        // This line runs at most once per physical mount: the mount-ext
+        // prologue (`wrapMountExtHandler`) never reaches a strategy's mount
+        // body — and therefore never reaches this method — for an
+        // already-mounted or joined request, so it is never reached twice
+        // for the same physical mount. A fresh mount that proceeds after an
+        // in-progress unmount settled runs this method again from the top,
+        // so `activated` fires again for that new physical mount.
         this.triggerLifecycle(
           extensionId,
           this.typeSystem.resolveLifecycleStageActivatedId()
         );
+        // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-activated-once
         // @cpt-end:cpt-frontx-state-extension-domain-governance-admission:p1:inst-adm-t7
         // @cpt-end:cpt-frontx-algo-mfe-registry-lifecycle-stage-triggering:p1:inst-algo-lst-sites
 
@@ -407,13 +423,28 @@ export class DefaultMountManager extends MountManager {
     return mountPromise;
   }
   // @cpt-end:cpt-frontx-state-extension-domain-governance-admission:p1:inst-adm-t5
+  // @cpt-end:cpt-frontx-state-extension-domain-governance-admission:p1:inst-adm-t11
 
+  // @cpt-begin:cpt-frontx-state-extension-domain-governance-admission:p1:inst-adm-t10
   async unmountExtension(extensionId: string): Promise<void> {
     const extensionState = this.extensionManager.getExtensionState(extensionId);
     if (!extensionState) {
       return;
     }
 
+    // Every unmount_ext reaches this method only after any in-progress mount
+    // of the same extension has settled (inst-um-await-mount-settle), so
+    // mountState is never 'mounting' here through the ordered path. This
+    // guarantee is enforced by `wrapUnmountExtHandler`
+    // (`cpt-frontx-algo-extension-domain-governance-mount-execution`
+    // `inst-um-await-mount-settle`), which awaits the domain-occupancy
+    // coordinator's in-flight mount for this same extension id BEFORE
+    // calling into the strategy's `unmount` body that ultimately reaches
+    // this method. By the time this method runs, that mount has already
+    // settled to 'mounted' (normal unmount below) or to 'error' (this early
+    // return, correctly reporting nothing to unmount). A caller that bypasses
+    // the prologue and invokes this method directly while a mount is still in
+    // flight is outside that guarantee.
     if (extensionState.mountState !== 'mounted') {
       return;
     }
@@ -458,6 +489,11 @@ export class DefaultMountManager extends MountManager {
         }
       }
 
+      // MOUNTED -> ADMITTED: the extension stays admitted/registered
+      // (`extensionState` is untouched otherwise), it is simply no longer
+      // mounted. Whether this unmount was an explicit `unmount_ext`, an
+      // OptionalMountStrategy displacement, or an ExclusiveMountStrategy
+      // eviction makes no difference to this transition.
       extensionState.container = null;
       extensionState.mountState = 'unmounted';
       extensionState.error = undefined;
@@ -468,6 +504,7 @@ export class DefaultMountManager extends MountManager {
       throw error;
     }
   }
+  // @cpt-end:cpt-frontx-state-extension-domain-governance-admission:p1:inst-adm-t10
 
   // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-retract-advertisements
   releaseExtension(extensionId: string): void {

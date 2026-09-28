@@ -6,12 +6,12 @@
  * finished loading (`default-mount-manager.ts`'s own `mountExtension`, line
  * ~200, awaits `loadExtension` unconditionally when `loadState !== 'loaded'`
  * -- it is not serialized the way the public `load_ext` action is via
- * `OperationSerializer`). Before the fix, the second concurrent caller's
- * `loadExtension` call returned immediately on seeing `loadState ===
- * 'loading'`, instead of awaiting the in-flight load -- letting the second
- * `mountExtension` proceed to mount before the handler's `load()` had
- * actually cached a lifecycle, which could throw "loadExtension should have
- * cached the lifecycle" or otherwise observe a half-loaded extension.
+ * `OperationSerializer`). A second concurrent caller's `loadExtension` call
+ * must await the in-flight load rather than returning immediately on seeing
+ * `loadState === 'loading'`, so the second `mountExtension` never proceeds to
+ * mount before the handler's `load()` has actually cached a lifecycle --
+ * otherwise it could throw "loadExtension should have cached the lifecycle"
+ * or otherwise observe a half-loaded extension.
  *
  * All races below drive both concurrent `mounter.mount()` calls with the
  * SAME container object. `DefaultExtensionMounter.mount()` hard-throws when
@@ -433,14 +433,10 @@ describe('DefaultMountManager.mountExtension concurrency', () => {
   });
 });
 
-// The former "appends exactly one container ... when two mounts race" test
-// here modeled two DIFFERENT containers racing for the same never-mounted
-// extension and asserted the second was silently discarded in favor of the
-// first. That premise is now itself the bug B fixes: a second concurrent
-// `mount()` call for the same extension id with a different container is a
-// hard invariant violation (see `DefaultExtensionMounter.mount`), not a
-// coalescing race. The equivalent throw-behavior coverage lives in
+// A second concurrent `mount()` call for the same extension id with a
+// different container is a hard invariant violation (see
+// `DefaultExtensionMounter.mount`), not a coalescing race, so it is not
+// modeled here. The throw-behavior coverage for that case lives in
 // `packages/mfes/src/runtime/__tests__/ExtensionMounter.test.ts` under
 // "different containers: the second overlapping mount() call throws a hard
-// invariant error" -- no replacement test is added here to avoid duplicating
-// it.
+// invariant error".

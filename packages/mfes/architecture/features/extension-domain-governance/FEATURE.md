@@ -174,21 +174,32 @@ Internal system functions and procedures that do not interact with actors direct
 
 - [x] `p2` - **ID**: `cpt-frontx-algo-extension-domain-governance-mount-execution`
 
-**Input**: An admitted extension identifier, the target domain's strategy instance, and the domain's container hooks and mount-set state from the MFE Registry.
+**Input**: The extension identifier and domain a mount request addresses — the extension is not presumed admitted to that domain — the addressed domain's strategy instance, and the domain's container hooks and mount-set state from the MFE Registry.
 
-**Output**: The extension is physically mounted into its container according to the domain's occupancy behavior, or an error is returned if mounting fails.
+**Output**: One of: the request completed successfully immediately (the extension was already mounted); the request joined an in-progress mount and settled with its outcome; a fresh mount proceeded after an in-progress unmount settled; the extension was physically mounted by the strategy; or the request failed (the extension is not admitted to the addressed domain, the awaited unmount failed, or the mount itself failed).
 
 **Steps**:
-1. [x] - `p1` - Retrieve the current set of mounted extensions for the target domain from the registry - `inst-me-get-mounted`
-2. [x] - `p1` - **MATCH** the domain's strategy - `inst-me-match-strategy`
-   1. [x] - `p1` - **CASE** ConcurrentMountStrategy: if a mount for the same extension is already live or in flight in this strategy instance, join that mount and return its outcome; otherwise create a new container for the extension and mount it; if mounting fails, destroy the container and propagate the error - `inst-me-concurrent`
+1. [x] - `p1` - **IF** the mount request names an extension that is not admitted to the addressed domain (the extension belongs to another domain, or no domain admits it under that name), **RETURN** the request as failed - `inst-me-eligibility-check`
+2. [x] - `p1` - **IF** the extension is currently being unmounted (an extension being unmounted may still be listed as mounted until that unmount settles, so this check runs first), the mount request neither completes successfully nor joins that unmount: wait for the unmount to settle, then re-evaluate - `inst-me-await-unmount-settle`
+   1. [x] - `p1` - **IF** the unmount completed, proceed with a fresh mount - `inst-me-fresh-mount-after-unmount`
+   2. [x] - `p1` - **IF** the unmount failed, **RETURN** the mount request as failed - `inst-me-fail-after-unmount-failure`
+3. [x] - `p1` - **Unmount Ordering (prologue)**: **IF** an unmount request for the extension in the addressed domain is issued while a mount of that extension in that domain is in progress, wait for that mount to settle before proceeding - `inst-um-await-mount-settle`
+   1. [x] - `p1` - **IF** the mount succeeded, proceed with the unmount (physical unmount, container released exactly once, extension no longer mounted) - `inst-um-after-mount-success`
+   2. [x] - `p1` - **IF** the mount failed, the extension is not mounted; the unmount request completes without action - `inst-um-after-mount-failure`
+4. [x] - `p1` - **IF** the extension is already mounted in the addressed domain, **RETURN** the request as completed successfully immediately — checked by the extension's identity before container creation, eviction, or any strategy runs - `inst-me-already-mounted-complete`
+5. [x] - `p1` - **ELSE IF** a mount of the extension in the addressed domain is in progress: join that mount and settle with its outcome: succeed when it finishes; **IF** that mount fails, fail with the same cause, and each requesting chain follows its own declared fallback - `inst-me-join-in-progress-mount`
+6. [x] - `p1` - An already-mounted or joined request (steps 4–5) never re-runs Optional/Exclusive eviction; a fresh mount follows the normal strategy behavior below. Occupancy mutations within a domain are ordered so that a mount request arriving during an eviction is evaluated only after that mutation completes - `inst-me-no-rerun-eviction`
+7. [x] - `p1` - The `activated` lifecycle stage is triggered exactly once, for the underlying physical mount only: it is never triggered for an already-mounted success (step 4) nor for a joined request (step 5); a fresh mount following a completed unmount (step 2.1) may trigger it again - `inst-me-activated-once`
+8. [x] - `p1` - Retrieve the current set of mounted extensions for the target domain from the registry - `inst-me-get-mounted`
+9. [x] - `p1` - **MATCH** the domain's strategy - `inst-me-match-strategy`
+   1. [x] - `p1` - **CASE** ConcurrentMountStrategy: create a new container for the extension and mount it; if mounting fails, destroy the container and propagate the error - `inst-me-concurrent`
    2. [x] - `p1` - **CASE** OptionalMountStrategy: **IF** a different extension is already mounted, unmount it and destroy its container before proceeding - `inst-me-optional-displace`
-      1. [x] - `p1` - **IF** the extension is already mounted in this domain, return without action - `inst-me-optional-idempotent`
+      1. [x] - `p1` - Already-mounted and in-progress-mount cases are handled by the prologue (`inst-me-already-mounted-complete`, `inst-me-join-in-progress-mount`); this branch is reached only for a fresh mount - `inst-me-optional-idempotent`
       2. [x] - `p1` - Create a new container and mount the extension; if mounting fails, destroy the container and propagate the error - `inst-me-optional-mount`
    3. [x] - `p1` - **CASE** ExclusiveMountStrategy: **FOR EACH** extension currently mounted in this domain that is not the incoming extension, unmount and destroy its container (eviction) - `inst-me-exclusive-evict`
-      1. [x] - `p1` - **IF** the incoming extension is already the sole mounted extension, return without action - `inst-me-exclusive-idempotent`
+      1. [x] - `p1` - Already-mounted and in-progress-mount cases are handled by the prologue (`inst-me-already-mounted-complete`, `inst-me-join-in-progress-mount`); this branch is reached only for a fresh mount - `inst-me-exclusive-idempotent`
       2. [x] - `p1` - Create a new container and mount the extension; if mounting fails, destroy the container and propagate the error - `inst-me-exclusive-mount`
-3. [x] - `p1` - **RETURN** mount outcome - `inst-me-return`
+10. [x] - `p1` - **RETURN** mount outcome - `inst-me-return`
 
 ### Route Identity: Validity, Declared Route, and Token Derivation
 
@@ -225,6 +236,9 @@ Internal system functions and procedures that do not interact with actors direct
 6. [x] - `p1` - **FROM** ADMITTED **TO** REJECTED **WHEN** the strategy mount execution fails (error from mounter or container hooks) - `inst-adm-t6`
 7. [x] - `p1` - A stage's chains being still in flight at the moment its accompanying transition completes is expected, not a race: each accepted chain is origin-invariant (`cpt-frontx-constraint-mfes-origin-invariant-chain-execution`), so its actions resolve on their merits; a delivery refused across a hop is the current action's failure and is answered by the delivering runtime dispatching that action's declared `fallback`, whereas a dispatch refused synchronously at the call accepts no execution — a transition owes a stage's chain no window and no ordering guarantee relative to itself - `inst-adm-t7`
 8. [x] - `p1` - Failure of a stage's chain never moves this state machine; only the strategy's own mount execution outcome decides ADMITTED → MOUNTED versus ADMITTED → REJECTED - `inst-adm-t8`
+9. [x] - `p1` - A mount request that completes successfully immediately because the extension is already mounted, or that joins an in-progress mount, shares that mount's underlying ADMITTED→MOUNTED (or ADMITTED→REJECTED) transition and its `activated` trigger; it produces no additional transition and no additional `activated` trigger of its own. A fresh mount that proceeds after an in-progress unmount settles is not covered by this item: it is an ordinary ADMITTED→MOUNTED transition (`inst-adm-t5`) and triggers `activated` again - `inst-adm-t9`
+10. [x] - `p1` - **FROM** MOUNTED **TO** ADMITTED **WHEN** the extension is unmounted (displaced by OptionalMountStrategy, evicted by ExclusiveMountStrategy, or otherwise unmounted): the extension stays admitted/registered, it is no longer mounted - `inst-adm-t10`
+11. [x] - `p1` - A fresh mount issued from ADMITTED after such an unmount re-enters MOUNTED under the same ADMITTED→MOUNTED transition (`inst-adm-t5`), so the `activated` lifecycle stage may fire again - `inst-adm-t11`
 
 ### Extension Domain Cardinality Lifecycle
 
@@ -327,3 +341,5 @@ The system **MUST** reject a domain registration whose declared route is not a v
 - [x] An extension whose declared route is not routable (fails the route-name check once stripped, or is absent) is admitted without a route token; it is never rejected for this reason alone.
 - [x] Registering two extensions with the same route token in the same domain is rejected at registration time, naming both extension ids, the domain id, and the token; the same token is allowed across two different domains.
 - [x] Unregistering an extension frees its route token: a subsequent extension may register the same token in that domain.
+- [x] A mount request for an extension already mounted in the addressed domain completes successfully immediately, without eviction, container creation, or an additional `activated` trigger; a mount request for an extension whose mount is already in progress joins that mount and settles with its outcome; a mount request naming a domain the extension is not admitted to fails; a mount request arriving while the extension is being unmounted waits for that unmount to settle before re-evaluating.
+- [x] An unmount request arriving while the extension's mount is in progress waits for that mount to settle, then unmounts it, leaving it absent.
