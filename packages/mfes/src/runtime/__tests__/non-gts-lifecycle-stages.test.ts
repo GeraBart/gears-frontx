@@ -31,19 +31,17 @@ import { describe, it, expect, vi } from 'vitest';
 import { DefaultMfeRegistry } from '../DefaultMfeRegistry';
 import type { TypeSystemPlugin } from '../../type-substrate';
 import type { ActionsChain, Extension, ExtensionDomain, LifecycleHook, MfeEntry } from '../../types';
-import {
-  MfeHandler,
-  type ChildMfeBridge,
-  type MfeEntryLifecycle,
-} from '../../handler/types';
-import { MfeBridgeFactoryDefault } from '../../bridge/mfe-bridge-factory-default';
+import { MfeHandler, type MfeEntryLifecycle } from '../../handler/MfeHandler';
+import type { ChildMfeBridge } from '../../handler/ChildMfeBridge';
+import { MfeBridgeFactoryDefault } from '../../bridge/MfeBridgeFactoryDefault';
 import { ExtensionDomainImplementation } from '../ExtensionDomainImplementation';
 import { ExtensionDomainImplementationFactory } from '../ExtensionDomainImplementationFactory';
 import type { DomainContext } from '../DomainContext';
-import { ConcurrentMountStrategy } from '../mount-strategies';
-import type { ContainerHooks } from '../mount-strategy';
-import { ActionHandler } from '../../mediator/types';
-import type { LifecycleDispatchRefusalDiagnostic, MfeDiagnosticSink } from '../config';
+import { ConcurrentMountStrategy } from '../ConcurrentMountStrategy';
+import type { ContainerHooks } from '../MountStrategy';
+import { ActionHandler } from '../../mediator/ActionHandler';
+import type { ChainNodeFailureDiagnostic, LifecycleDispatchRefusalDiagnostic, MfeDiagnosticSink } from '../config';
+import { ActionsChainRefusalError } from '../../errors';
 
 // Fake non-GTS notation for the four lifecycle stages. Deliberately NOT in
 // the GTS namespace - if the runtime resolved any stage through a literal
@@ -718,6 +716,54 @@ describe('non-blocking lifecycle stage triggering: refusal containment (inst-alg
   );
 
   it(
+    'two registries reporting to ONE diagnostic sink report distinct correlation identities ' +
+      "for their lifecycle hooks' dispatch refusals",
+    () => {
+      const diagnostics: LifecycleDispatchRefusalDiagnostic[] = [];
+      const sharedSink: MfeDiagnosticSink = {
+        reportLifecycleDispatchRefusal(diagnostic) {
+          diagnostics.push(diagnostic);
+        },
+        reportChainNodeFailure() {},
+      };
+
+      const registerDomainWithRefusedHook = (registry: DefaultMfeRegistry): void => {
+        const refusedChain: ActionsChain = {
+          action: {
+            type: FAKE_ACTION_STAGE_PROBE,
+            target: DOMAIN_ID,
+            payload: { subject: 'refused' },
+            timeout: -1,
+          },
+        };
+        const domain = makeDomain([FAKE_STAGE_INIT, FAKE_STAGE_DESTROYED]);
+        domain.lifecycle = [{ stage: FAKE_STAGE_INIT, actions_chain: refusedChain }];
+        registry.registerDomain(domain, new ConcurrentDomainFactory([], []));
+      };
+
+      const registryOne = new DefaultMfeRegistry({
+        typeSystem: createNonGtsPlugin(),
+        diagnosticSink: sharedSink,
+      });
+      const registryTwo = new DefaultMfeRegistry({
+        typeSystem: createNonGtsPlugin(),
+        diagnosticSink: sharedSink,
+      });
+
+      // Each registry's FIRST refusal — the case where two per-instance
+      // counters would coincide.
+      registerDomainWithRefusedHook(registryOne);
+      registerDomainWithRefusedHook(registryTwo);
+
+      expect(diagnostics).toHaveLength(2);
+      const [fromRegistryOne, fromRegistryTwo] = diagnostics;
+      expect(fromRegistryOne!.refusalClass).toBe('invalid_action_timeout');
+      expect(fromRegistryTwo!.refusalClass).toBe('invalid_action_timeout');
+      expect(fromRegistryOne!.correlationId).not.toEqual(fromRegistryTwo!.correlationId);
+    }
+  );
+
+  it(
     'a diagnostic sink that itself THROWS while reporting a hook refusal must not abort the ' +
       "transition — the second hook still dispatches, and registerDomain still does not throw",
     async () => {
@@ -760,6 +806,334 @@ describe('non-blocking lifecycle stage triggering: refusal containment (inst-alg
       // (and, having no gate, completed) despite the sink throwing while
       // reporting the FIRST hook's refusal.
       expect(completionLog).toEqual(['ok']);
+    }
+  );
+});
+
+// ─── Origin tag scoped to its own dispatch (DispatchOriginStore.take/untag) ──
+
+describe('dispatch-origin tagging is scoped to the ONE dispatch that needed it visible', () => {
+  it(
+    'reports a synchronous refusal for a hook action object dispatched a SECOND time, directly ' +
+      "(outside any lifecycle stage), after the hook's own lifecycle-triggered dispatch already " +
+      'completed — the stale origin tag must not survive past the dispatch that needed it',
+    () => {
+      const plugin = createNonGtsPlugin();
+      const dispatchOrderLog: string[] = [];
+      const completionLog: string[] = [];
+      const chainNodeFailures: ChainNodeFailureDiagnostic[] = [];
+      const diagnosticSink: MfeDiagnosticSink = {
+        reportLifecycleDispatchRefusal() {
+          // Not under test here — no hook is refused BY the lifecycle trigger
+          // in this test; the SECOND dispatch below is ordinary application
+          // code, not a lifecycle-triggered one.
+        },
+        reportChainNodeFailure(diagnostic) {
+          chainNodeFailures.push(diagnostic);
+        },
+      };
+
+      const registry = new DefaultMfeRegistry({ typeSystem: plugin, diagnosticSink });
+
+      // A single, ordinary, well-formed init hook — reused, unchanged, as
+      // the manifest itself would reuse it across every future `init`
+      // trigger (there is only one here, but the SAME `Action` object is
+      // what this test dispatches a second time below).
+      const domain = makeDomain([FAKE_STAGE_INIT, FAKE_STAGE_DESTROYED]);
+      const hookChain = stageProbeChain(FAKE_STAGE_INIT, 'ok');
+      domain.lifecycle = [{ stage: FAKE_STAGE_INIT, actions_chain: hookChain }];
+
+      // registerDomain triggers the init hook synchronously; the probe
+      // handler has no internal `await`, so dispatch AND completion happen
+      // in the same synchronous turn — the hook's own dispatch is done, and
+      // its accepted execution already consumed its origin tag at capture.
+      registry.registerDomain(domain, new ConcurrentDomainFactory(dispatchOrderLog, completionLog));
+      expect(completionLog).toEqual(['ok']);
+
+      // Dispatch the SAME action OBJECT a second time, directly — ordinary
+      // application code, no lifecycle stage involved — wrapped so the
+      // envelope validator refuses it SYNCHRONOUSLY (a malformed `next`),
+      // independent of whatever the hook's own action would otherwise do.
+      const secondDispatch: ActionsChain = {
+        action: hookChain.action,
+        next: 'not-a-conforming-chain-object' as unknown as ActionsChain,
+      };
+
+      expect(() => registry.executeActionsChain(secondDispatch)).toThrow(ActionsChainRefusalError);
+
+      // The hook's accepted execution consumed its origin tag at capture, so
+      // `DiagnosticReporter.reportSynchronousChainRefusal` finds
+      // no origin on this SAME action object and reports this second,
+      // unrelated refusal like any other untagged one, rather than
+      // suppressing it as the lifecycle trigger's own already-reported
+      // refusal.
+      expect(chainNodeFailures).toHaveLength(1);
+      const failure = chainNodeFailures[0]!;
+      expect(failure.classification).toBe('chain-node-failure');
+      expect(failure.path).toEqual([]);
+      expect(failure.target).toBe(hookChain.action.target);
+      expect(failure.failureClass).toBe('malformed_continuation');
+    }
+  );
+
+  it(
+    'a lifecycle-triggered chain node failure still carries its origin, even though the tag is ' +
+      "consumed at capture, before the hook's own (synchronous) dispatch call returns",
+    async () => {
+      const plugin = createNonGtsPlugin();
+      const dispatchOrderLog: string[] = [];
+      const completionLog: string[] = [];
+      const chainNodeFailures: ChainNodeFailureDiagnostic[] = [];
+      let resolveFirstFailure!: (diagnostic: ChainNodeFailureDiagnostic) => void;
+      const firstFailure = new Promise<ChainNodeFailureDiagnostic>((resolve) => {
+        resolveFirstFailure = resolve;
+      });
+      const diagnosticSink: MfeDiagnosticSink = {
+        reportLifecycleDispatchRefusal() {},
+        reportChainNodeFailure(diagnostic) {
+          chainNodeFailures.push(diagnostic);
+          resolveFirstFailure(diagnostic);
+        },
+      };
+
+      const registry = new DefaultMfeRegistry({ typeSystem: plugin, diagnosticSink });
+
+      // A hook whose action targets an id with NO registered handler: this
+      // is accepted synchronously (well-formed envelope), and the accepted
+      // execution consumes the tag when it captures the origin into its own
+      // diagnostic context — the node failure (missing handler) is
+      // discovered inside the executor's own recursion, which still carries
+      // the origin it captured at acceptance.
+      const domain = makeDomain([FAKE_STAGE_INIT, FAKE_STAGE_DESTROYED]);
+      const hookChain: ActionsChain = {
+        action: { type: FAKE_ACTION_STAGE_PROBE, target: 'cti.example.target~no-handler.v1' },
+      };
+      domain.lifecycle = [{ stage: FAKE_STAGE_INIT, actions_chain: hookChain }];
+
+      registry.registerDomain(domain, new ConcurrentDomainFactory(dispatchOrderLog, completionLog));
+
+      // The missing-handler failure is discovered asynchronously inside the
+      // executor's own recursion; the test waits for the sink to receive it.
+      const failure = await firstFailure;
+
+      expect(chainNodeFailures).toHaveLength(1);
+      expect(failure.classification).toBe('chain-node-failure');
+      expect(failure.failureClass).toBe('missing-handler');
+      expect(failure.originEntityKind).toBe('domain');
+      expect(failure.originEntityId).toBe(DOMAIN_ID);
+      expect(failure.originStageId).toBe(FAKE_STAGE_INIT);
+    }
+  );
+});
+
+// ─── A handler-started root dispatch never inherits the lifecycle origin ──
+
+/**
+ * Domain implementation whose stage-probe handler runs a test-supplied
+ * callback synchronously, at the first line of the handler — the point
+ * where a handler of the hook's own accepted execution can start a NEW root
+ * dispatch while the lifecycle trigger's own `executeActionsChain` call is
+ * still on the stack.
+ */
+class ReentrantProbeDomainImpl extends ExtensionDomainImplementation {
+  private readonly strategy: ConcurrentMountStrategy;
+
+  constructor(ctx: DomainContext, onProbe: () => void) {
+    super();
+    this.strategy = new ConcurrentMountStrategy(ctx.mounter, new TestHooks());
+    ctx.registerHandler(
+      FAKE_ACTION_MOUNT_EXT,
+      ActionHandler.fromFunction(() => this.strategy.mount({ subject: 'stub' }))
+    );
+    ctx.registerHandler(
+      FAKE_ACTION_UNMOUNT_EXT,
+      ActionHandler.fromFunction(() => this.strategy.unmount({ subject: 'stub' }))
+    );
+    ctx.registerHandler(
+      FAKE_ACTION_STAGE_PROBE,
+      ActionHandler.fromFunction(async () => {
+        onProbe();
+      })
+    );
+  }
+
+  protected getMountStrategies() {
+    return [this.strategy];
+  }
+}
+
+class ReentrantProbeDomainFactory extends ExtensionDomainImplementationFactory {
+  constructor(private readonly onProbe: () => void) {
+    super();
+  }
+
+  build(ctx: DomainContext): ReentrantProbeDomainImpl {
+    return new ReentrantProbeDomainImpl(ctx, this.onProbe);
+  }
+}
+
+describe('a root dispatch started by a hook handler is a new root execution (inst-new-root-execution)', () => {
+  it(
+    "reports the synchronous refusal of a new root chain a hook's handler dispatches with the SAME " +
+      'action object, without any lifecycle origin',
+    async () => {
+      const plugin = createNonGtsPlugin();
+      const lifecycleRefusals: LifecycleDispatchRefusalDiagnostic[] = [];
+      const chainNodeFailures: ChainNodeFailureDiagnostic[] = [];
+      let resolveFirstFailure!: (diagnostic: ChainNodeFailureDiagnostic) => void;
+      const firstFailure = new Promise<ChainNodeFailureDiagnostic>((resolve) => {
+        resolveFirstFailure = resolve;
+      });
+      const diagnosticSink: MfeDiagnosticSink = {
+        reportLifecycleDispatchRefusal(diagnostic) {
+          lifecycleRefusals.push(diagnostic);
+        },
+        reportChainNodeFailure(diagnostic) {
+          chainNodeFailures.push(diagnostic);
+          resolveFirstFailure(diagnostic);
+        },
+      };
+
+      const registry = new DefaultMfeRegistry({ typeSystem: plugin, diagnosticSink });
+
+      const domain = makeDomain([FAKE_STAGE_INIT, FAKE_STAGE_DESTROYED]);
+      const hookChain = stageProbeChain(FAKE_STAGE_INIT, 'hook');
+      domain.lifecycle = [{ stage: FAKE_STAGE_INIT, actions_chain: hookChain }];
+
+      // The handler of the hook's own accepted execution synchronously
+      // dispatches a NEW root chain whose root is the hook's SAME action
+      // object, with a malformed `next` the envelope validator refuses.
+      const handlerDispatchErrors: unknown[] = [];
+      const onProbe = (): void => {
+        try {
+          registry.executeActionsChain({
+            action: hookChain.action,
+            next: 'not-a-conforming-chain-object' as unknown as ActionsChain,
+          });
+        } catch (error) {
+          handlerDispatchErrors.push(error);
+        }
+      };
+
+      registry.registerDomain(domain, new ReentrantProbeDomainFactory(onProbe));
+
+      const failure = await firstFailure;
+
+      expect(handlerDispatchErrors).toHaveLength(1);
+      expect(handlerDispatchErrors[0]).toBeInstanceOf(ActionsChainRefusalError);
+      expect(chainNodeFailures).toHaveLength(1);
+      expect(failure.classification).toBe('chain-node-failure');
+      expect(failure.path).toEqual([]);
+      expect(failure.target).toBe(hookChain.action.target);
+      expect(failure.failureClass).toBe('malformed_continuation');
+      expect(failure.originEntityKind).toBeUndefined();
+      expect(failure.originEntityId).toBeUndefined();
+      expect(failure.originStageId).toBeUndefined();
+      // The hook itself was accepted, so the lifecycle trigger reports nothing.
+      expect(lifecycleRefusals).toHaveLength(0);
+    }
+  );
+
+  it(
+    "reports a node failure of an accepted new root chain a hook's handler dispatches with the SAME " +
+      'action object, without any lifecycle origin',
+    async () => {
+      const plugin = createNonGtsPlugin();
+      const lifecycleRefusals: LifecycleDispatchRefusalDiagnostic[] = [];
+      const chainNodeFailures: ChainNodeFailureDiagnostic[] = [];
+      let resolveFirstFailure!: (diagnostic: ChainNodeFailureDiagnostic) => void;
+      const firstFailure = new Promise<ChainNodeFailureDiagnostic>((resolve) => {
+        resolveFirstFailure = resolve;
+      });
+      const diagnosticSink: MfeDiagnosticSink = {
+        reportLifecycleDispatchRefusal(diagnostic) {
+          lifecycleRefusals.push(diagnostic);
+        },
+        reportChainNodeFailure(diagnostic) {
+          chainNodeFailures.push(diagnostic);
+          resolveFirstFailure(diagnostic);
+        },
+      };
+
+      const registry = new DefaultMfeRegistry({ typeSystem: plugin, diagnosticSink });
+
+      const domain = makeDomain([FAKE_STAGE_INIT, FAKE_STAGE_DESTROYED]);
+      const hookChain = stageProbeChain(FAKE_STAGE_INIT, 'hook');
+      domain.lifecycle = [{ stage: FAKE_STAGE_INIT, actions_chain: hookChain }];
+
+      // The handler of the hook's own accepted execution synchronously
+      // dispatches a NEW, well-formed root chain whose root is the hook's
+      // SAME action object and whose `next` targets an id with no handler.
+      // Only the first probe invocation dispatches: the new chain's root
+      // invokes this same handler again.
+      let dispatched = false;
+      const onProbe = (): void => {
+        if (dispatched) {
+          return;
+        }
+        dispatched = true;
+        registry.executeActionsChain({
+          action: hookChain.action,
+          next: {
+            action: { type: FAKE_ACTION_STAGE_PROBE, target: 'cti.example.target~no-handler.v1' },
+          },
+        });
+      };
+
+      registry.registerDomain(domain, new ReentrantProbeDomainFactory(onProbe));
+
+      const failure = await firstFailure;
+
+      expect(chainNodeFailures).toHaveLength(1);
+      expect(failure.classification).toBe('chain-node-failure');
+      expect(failure.failureClass).toBe('missing-handler');
+      expect(failure.target).toBe('cti.example.target~no-handler.v1');
+      expect(failure.originEntityKind).toBeUndefined();
+      expect(failure.originEntityId).toBeUndefined();
+      expect(failure.originStageId).toBeUndefined();
+      expect(lifecycleRefusals).toHaveLength(0);
+    }
+  );
+
+  it(
+    "reports a hook's own synchronous refusal once, through the lifecycle refusal shape only",
+    () => {
+      const plugin = createNonGtsPlugin();
+      const lifecycleRefusals: LifecycleDispatchRefusalDiagnostic[] = [];
+      const chainNodeFailures: ChainNodeFailureDiagnostic[] = [];
+      const diagnosticSink: MfeDiagnosticSink = {
+        reportLifecycleDispatchRefusal(diagnostic) {
+          lifecycleRefusals.push(diagnostic);
+        },
+        reportChainNodeFailure(diagnostic) {
+          chainNodeFailures.push(diagnostic);
+        },
+      };
+
+      const registry = new DefaultMfeRegistry({ typeSystem: plugin, diagnosticSink });
+
+      const domain = makeDomain([FAKE_STAGE_INIT, FAKE_STAGE_DESTROYED]);
+      domain.lifecycle = [
+        {
+          stage: FAKE_STAGE_INIT,
+          actions_chain: {
+            action: {
+              type: FAKE_ACTION_STAGE_PROBE,
+              target: DOMAIN_ID,
+              payload: { subject: 'refused' },
+              timeout: -1,
+            },
+          },
+        },
+      ];
+
+      registry.registerDomain(domain, new ConcurrentDomainFactory([], []));
+
+      // Refusal happens before any accepted execution consumes the tag, so
+      // the generic refusal report defers to the lifecycle trigger's own.
+      expect(lifecycleRefusals).toHaveLength(1);
+      expect(lifecycleRefusals[0]!.refusalClass).toBe('invalid_action_timeout');
+      expect(chainNodeFailures).toHaveLength(0);
     }
   );
 });
@@ -807,7 +1181,7 @@ describe('deferred target retirement: a destroyed hook targeting the entity bein
   it(
     'the mediator this registry holds still shows the retiring target\'s handler registrations ' +
       'in place while its reservation is pending — physical removal on drain itself is pinned ' +
-      'deterministically at the mediator level (see actions-chains-mediator.test.ts)',
+      'deterministically at the mediator level (see DefaultActionsChainsMediator.test.ts)',
     async () => {
       const plugin = createNonGtsPlugin();
       const dispatchOrderLog: string[] = [];

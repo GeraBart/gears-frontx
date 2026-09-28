@@ -16,7 +16,7 @@
 // @cpt-state:cpt-frontx-state-mfe-registry-entry-lifecycle:p2
 
 import type { TypeSystemPlugin } from '../type-substrate';
-import type { ParentMfeBridge } from '../handler/types';
+import type { ParentMfeBridge } from '../handler/ParentMfeBridge';
 import type {
   ExtensionDomain,
   Extension,

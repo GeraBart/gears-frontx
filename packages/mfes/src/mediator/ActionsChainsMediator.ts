@@ -1,0 +1,108 @@
+import type { TypeSystemPlugin } from '../type-substrate';
+import type { ActionsChain } from '../types';
+import type { ActionHandler } from './ActionHandler';
+
+/**
+ * Abstract mediator for action chain execution.
+ *
+ * This is the exportable abstraction that defines the contract for
+ * action chain mediation. Concrete implementations encapsulate the
+ * actual execution logic, handler registration, and timeout handling.
+ *
+ * Handlers are registered per (targetId, actionTypeId) pair using registerHandler().
+ * Both domain-side lifecycle handlers and extension-side custom handlers use the
+ * same registration path.
+ *
+ * Key Responsibilities:
+ * - Execute action chains with success/failure branching
+ * - Validate actions against target contracts
+ * - Manage action handlers (unified per-action-type registration)
+ * - Handle timeouts with fallback execution
+ *
+ * Key Benefits:
+ * - Dependency Inversion: MfeRegistry depends on abstraction, not concrete implementation
+ * - Testability: Can inject mock mediators for testing
+ * - Encapsulation: Execution logic is hidden in concrete class
+ */
+export abstract class ActionsChainsMediator {
+  /**
+   * The Type System plugin used by this mediator.
+   */
+  abstract readonly typeSystem: TypeSystemPlugin;
+
+  /**
+   * Accept (or synchronously refuse) an action chain for execution.
+   *
+   * Acceptance-only per `cpt-frontx-adr-action-dispatch-and-chaining`: this
+   * call either accepts the chain — validating its envelope, creating the
+   * executor's own path/diagnostic state, and reserving what the
+   * first executable node needs, all before returning — or throws
+   * `ActionsChainRefusalError` synchronously. It never returns a value and
+   * never yields a promise an emitter could await for the chain's own
+   * execution; settlement observation (branch selection on `next`/`fallback`)
+   * stays entirely inside the executor. The completion-bearing "observed
+   * execution" operation this drives is deliberately NOT part of this
+   * abstract, exported contract — it is a concrete-mediator-only member, so
+   * an emitter holding only this abstraction has no way to reach it.
+   *
+   * @param chain - The actions chain to accept
+   * @throws {ActionsChainRefusalError} synchronously if the chain (or its
+   *   declared per-action timeout) is invalid.
+   */
+  abstract executeActionsChain(chain: ActionsChain): void;
+
+  /**
+   * Register a handler for a specific (targetId, actionTypeId) pair.
+   *
+   * Both domain-side and extension-side handlers use this method.
+   * For extension targets, pass domainId so the mediator can resolve
+   * the domain's defaultActionTimeout when the action has no explicit timeout.
+   *
+   * @param targetId - ID of the target (domain or extension)
+   * @param actionTypeId - The action type this handler handles
+   * @param handler - ActionHandler instance to invoke
+   * @param domainId - Optional domain ID (required for extension targets)
+   */
+  abstract registerHandler(
+    targetId: string,
+    actionTypeId: string,
+    handler: ActionHandler,
+    domainId?: string
+  ): void;
+
+  /**
+   * Unregister a handler for a specific (targetId, actionTypeId) pair.
+   *
+   * @param targetId - ID of the target
+   * @param actionTypeId - The action type to unregister
+   */
+  abstract unregisterHandler(targetId: string, actionTypeId: string): void;
+
+  /**
+   * Unregister all handlers for a target.
+   * Used during dispose (e.g., when an extension is unmounted).
+   *
+   * @param targetId - ID of the target
+   */
+  abstract unregisterAllHandlers(targetId: string): void;
+
+  /**
+   * Register a catch-all handler for a target.
+   * The catch-all handler is invoked for any action type when no specific handler
+   * is registered for the (targetId, actionTypeId) pair.
+   *
+   * Used exclusively for child domain forwarding via bridge transport — the parent
+   * mediator cannot know the child's action types at registration time.
+   *
+   * @param targetId - ID of the target
+   * @param handler - Handler to invoke for any unmatched action type
+   */
+  abstract registerCatchAllHandler(targetId: string, handler: ActionHandler): void;
+
+  /**
+   * Unregister a catch-all handler for a target.
+   *
+   * @param targetId - ID of the target
+   */
+  abstract unregisterCatchAllHandler(targetId: string): void;
+}

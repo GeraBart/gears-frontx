@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 // @internal — colocated test, direct relative import is permitted.
-import { DefaultExtensionManager } from '../default-extension-manager';
+import { DefaultExtensionManager } from '../DefaultExtensionManager';
 import type { TypeSystemPlugin } from '../../type-substrate';
 import type { ExtensionDomain, Extension, MfeEntry } from '../../types';
 import {

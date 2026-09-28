@@ -81,7 +81,7 @@ describe('isConcreteImplementationName', () => {
     try {
       expect(isConcreteImplementationName('OperationSerializer')).toBe(true);
       expect(
-        findBarrelViolations("export { OperationSerializer } from './runtime/operation-serializer';"),
+        findBarrelViolations("export { OperationSerializer } from './runtime/OperationSerializer';"),
       ).toEqual([{ file: MFES_BARREL_RELATIVE_PATH, kind: 'barrel-export', detail: 'OperationSerializer' }]);
       const sites = findMfesImportSites(
         "import { OperationSerializer } from '@gears-frontx/mfes'",
@@ -556,7 +556,7 @@ describe('runCli', () => {
     await writeSource(
       root,
       'packages/mfes/src/runtime/wiring.ts',
-      "import { DefaultLifecycleManager } from './default-lifecycle-manager'\n",
+      "import { DefaultLifecycleManager } from './DefaultLifecycleManager'\n",
     );
     await writeSource(
       root,

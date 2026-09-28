@@ -17,7 +17,7 @@ import {
   registerInboundBridgeLink,
   type InboundBridgeLink,
 } from '../inbound-bridge-link';
-import type { ChildMfeBridge } from '../../handler/types';
+import type { ChildMfeBridge } from '../../handler/ChildMfeBridge';
 
 /** An opaque stand-in bridge — the rendezvous never inspects its shape. */
 function makeStubBridge(): ChildMfeBridge {

@@ -2,7 +2,7 @@
  * Cross-Runtime Action Chain Routing Tests
  *
  * Tests for Phase 22: Cross-Runtime Action Chain Routing
- * Verifies ChildDomainForwardingHandler, child domain registration, and cleanup.
+ * Verifies ChildDomainForwardingRouteFactory, child domain registration, and cleanup.
  *
  * Domain and action IDs here are a mock notation rather than the real GTS
  * strings: the bridge treats them as opaque routing keys, and MFES-1 forbids
@@ -10,10 +10,10 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { ChildMfeBridgeImpl } from '../../src/bridge/ChildMfeBridge';
-import { ParentMfeBridgeImpl } from '../../src/bridge/ParentMfeBridge';
-import { createChildDomainForwardingRoute } from '../../src/bridge/ChildDomainForwardingHandler';
-import { CROSS_HOP_PROTOCOL_VERSION, CrossHopRoute } from '../../src/mediator/cross-hop-route';
+import { ChildMfeBridgeImpl } from '../../src/bridge/ChildMfeBridgeImpl';
+import { ParentMfeBridgeImpl } from '../../src/bridge/ParentMfeBridgeImpl';
+import { ChildDomainForwardingRouteFactory } from '../../src/bridge/ChildDomainForwardingRouteFactory';
+import { CROSS_HOP_PROTOCOL_VERSION, CrossHopRoute } from '../../src/mediator/CrossHopRoute';
 
 describe('Cross-Runtime Action Chain Routing', () => {
   let childBridge: ChildMfeBridgeImpl;
@@ -31,14 +31,14 @@ describe('Cross-Runtime Action Chain Routing', () => {
     childBridge.activate();
   });
 
-  describe('createChildDomainForwardingRoute', () => {
+  describe('ChildDomainForwardingRouteFactory.create', () => {
     it('resolves to a CrossHopRoute (never a plain ActionHandler) and hands the envelope to the child domain via sendCrossHopEnvelope, synchronously', () => {
       // Setup: Mock the parent bridge's cross-hop transport as accepting
       // (returning normally — synchronous and binary).
       vi.spyOn(parentBridge, 'sendCrossHopEnvelope').mockImplementation(() => {});
 
       // Build the cross-hop route the catch-all tier resolves to.
-      const route = createChildDomainForwardingRoute(
+      const route = new ChildDomainForwardingRouteFactory().create(
         parentBridge,
         'mock.ext.domain.v1~child.domain.v1'
       );
@@ -84,7 +84,7 @@ describe('Cross-Runtime Action Chain Routing', () => {
         throw testError;
       });
 
-      const route = createChildDomainForwardingRoute(
+      const route = new ChildDomainForwardingRouteFactory().create(
         parentBridge,
         'mock.ext.domain.v1~child.domain.v1'
       );
@@ -230,7 +230,7 @@ describe('Cross-Runtime Action Chain Routing', () => {
       // Create register callback that creates the forwarding route
       const routes = new Map<string, CrossHopRoute>();
       const registerCallback = (domainId: string) => {
-        const route = createChildDomainForwardingRoute(parentBridge, domainId);
+        const route = new ChildDomainForwardingRouteFactory().create(parentBridge, domainId);
         routes.set(domainId, route);
       };
       const unregisterCallback = (domainId: string) => {
@@ -282,7 +282,7 @@ describe('Cross-Runtime Action Chain Routing', () => {
       // Setup: Register domain with callbacks
       const routes = new Map<string, CrossHopRoute>();
       const registerCallback = (domainId: string) => {
-        const route = createChildDomainForwardingRoute(parentBridge, domainId);
+        const route = new ChildDomainForwardingRouteFactory().create(parentBridge, domainId);
         routes.set(domainId, route);
       };
       const unregisterCallback = (domainId: string) => {
@@ -330,13 +330,13 @@ describe('Cross-Runtime Action Chain Routing', () => {
     });
   });
 
-  describe('createChildDomainForwardingRoute — deactivation refuses new deliveries only (inst-bridge-deactivation)', () => {
+  describe('ChildDomainForwardingRouteFactory.create — deactivation refuses new deliveries only (inst-bridge-deactivation)', () => {
     it(
       'refuses a delivery attempted AFTER the bridge deactivates with a target-inactive cause, ' +
         'while a delivery already accepted before deactivation is untouched by it',
       () => {
         const childDomainId = 'mock.ext.domain.v1~child.domain.v1';
-        const route = createChildDomainForwardingRoute(parentBridge, childDomainId);
+        const route = new ChildDomainForwardingRouteFactory().create(parentBridge, childDomainId);
 
         // Accepted BEFORE deactivation: the far side has already taken the
         // node — this call returns normally.

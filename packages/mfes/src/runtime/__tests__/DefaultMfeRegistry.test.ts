@@ -8,17 +8,15 @@ import type { ExtensionDomain, ActionsChain } from '../../types';
 import type { DomainContext } from '../DomainContext';
 import { ExtensionDomainImplementation } from '../ExtensionDomainImplementation';
 import { ExtensionDomainImplementationFactory } from '../ExtensionDomainImplementationFactory';
-import {
-  ConcurrentMountStrategy,
-  OptionalMountStrategy,
-  ExclusiveMountStrategy,
-} from '../mount-strategies';
-import type { ContainerHooks, ActionPayload, MountStrategy } from '../mount-strategy';
-import { ActionHandler } from '../../mediator/types';
+import { ConcurrentMountStrategy } from '../ConcurrentMountStrategy';
+import { OptionalMountStrategy } from '../OptionalMountStrategy';
+import { ExclusiveMountStrategy } from '../ExclusiveMountStrategy';
+import type { ContainerHooks, ActionPayload, MountStrategy } from '../MountStrategy';
+import { ActionHandler } from '../../mediator/ActionHandler';
 import type {
   DefaultActionsChainsMediator,
   ChainSettlement,
-} from '../../mediator/actions-chains-mediator';
+} from '../../mediator/DefaultActionsChainsMediator';
 import { ExtensionMounter } from '../ExtensionMounter';
 
 // Mock-plugin-local stand-ins for the framework's well-known lifecycle action

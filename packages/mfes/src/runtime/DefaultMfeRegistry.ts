@@ -17,41 +17,46 @@
 import type { TypeSystemPlugin } from '../type-substrate';
 import { MfeRegistry } from '../registry/MfeRegistry';
 import type { MfeRegistryConfig } from './config';
-import type { ChildMfeBridge, MfeHandler, ParentMfeBridge } from '../handler/types';
+import type { ChildMfeBridge } from '../handler/ChildMfeBridge';
+import type { MfeHandler } from '../handler/MfeHandler';
+import type { ParentMfeBridge } from '../handler/ParentMfeBridge';
 import type { ExtensionDomain, Extension, ActionsChain } from '../types';
 import type { ExtensionDomainImplementationFactory } from './ExtensionDomainImplementationFactory';
 import type { ExtensionMounter } from './ExtensionMounter';
-import { DefaultActionsChainsMediator } from '../mediator/actions-chains-mediator';
-import { validateChainEnvelope } from '../mediator/chain-envelope-validator';
-import { fromEnvelopeDiagnostics, reportSynchronousChainRefusal } from '../mediator/dispatch-diagnostics';
-import {
-  CROSS_HOP_PROTOCOL_VERSION,
-  CrossHopUnavailableError,
-  CrossHopRoute,
-  type CrossHopEnvelope,
-} from '../mediator/cross-hop-route';
-import { RuntimeCoordinator } from './coordination/types';
-import { InvalidatableDomainContext } from './DomainContext';
-import { ConcurrentMountStrategy, OptionalMountStrategy, ExclusiveMountStrategy } from './mount-strategies';
-import { WeakMapRuntimeCoordinator } from './coordination/weak-map-runtime-coordinator';
-import { type ExtensionDomainState } from './extension-manager';
-import { DefaultExtensionManager } from './default-extension-manager';
-import { DefaultLifecycleManager } from './default-lifecycle-manager';
-import { MountManager } from './mount-manager';
-import { DefaultMountManager } from './default-mount-manager';
-import { OperationSerializer } from './operation-serializer';
-import { RuntimeBridgeFactory } from './runtime-bridge-factory';
-import { DefaultRuntimeBridgeFactory } from './default-runtime-bridge-factory';
-import { LoadExtHandler } from './extension-lifecycle-action-handler';
+import { DefaultActionsChainsMediator } from '../mediator/DefaultActionsChainsMediator';
+import { ChainEnvelopeValidator } from '../mediator/ChainEnvelopeValidator';
+import { DiagnosticReporter } from '../mediator/DiagnosticReporter';
+import { DispatchCorrelationIdGenerator } from '../mediator/DispatchCorrelationIdGenerator';
+import { DispatchOriginStore } from '../mediator/DispatchOriginStore';
+import { EnvelopeDiagnosticsMapper } from '../mediator/EnvelopeDiagnosticsMapper';
+import { CROSS_HOP_PROTOCOL_VERSION, CrossHopRoute, type CrossHopEnvelope } from '../mediator/CrossHopRoute';
+import { CrossHopUnavailableError } from '../mediator/CrossHopUnavailableError';
+import { RuntimeCoordinator } from './coordination/RuntimeCoordinator';
+import { InvalidatableDomainContext } from './InvalidatableDomainContext';
+import { ConcurrentMountStrategy } from './ConcurrentMountStrategy';
+import { OptionalMountStrategy } from './OptionalMountStrategy';
+import { ExclusiveMountStrategy } from './ExclusiveMountStrategy';
+import { WeakMapRuntimeCoordinator } from './coordination/WeakMapRuntimeCoordinator';
+import { type ExtensionDomainState } from './ExtensionManager';
+import { DefaultExtensionManager } from './DefaultExtensionManager';
+import { DefaultLifecycleManager } from './DefaultLifecycleManager';
+import { MountManager } from './MountManager';
+import { DefaultMountManager } from './DefaultMountManager';
+import { OperationSerializer } from './OperationSerializer';
+import { RuntimeBridgeFactory } from './RuntimeBridgeFactory';
+import { DefaultRuntimeBridgeFactory } from './DefaultRuntimeBridgeFactory';
+import { ChildDomainForwardingRouteFactory } from '../bridge/ChildDomainForwardingRouteFactory';
+import { LoadExtHandler } from './LoadExtHandler';
 import { EntryTypeNotHandledError, ActionsChainRefusalError } from '../errors';
 import { extractGtsPackage } from '../gts/extract-package';
 import { DefaultExtensionMounter } from './DefaultExtensionMounter';
-import { wrapMountExtHandler, wrapUnmountExtHandler } from './mount-ext-prologue';
-import { DomainOccupancyCoordinator } from './domain-occupancy-coordinator';
+import { MountExtActionHandler } from './MountExtActionHandler';
+import { UnmountExtActionHandler } from './UnmountExtActionHandler';
+import { DomainOccupancyCoordinator } from './DomainOccupancyCoordinator';
 import { DefaultDomainLifecycleTrigger } from './DefaultDomainLifecycleTrigger';
-import { ConsoleDiagnosticSink } from './default-diagnostic-sink';
+import { ConsoleDiagnosticSink } from './ConsoleDiagnosticSink';
 import type { MfeDiagnosticSink, MountSetObserver } from './config';
-import { ParentMfeBridgeImpl } from '../bridge/ParentMfeBridge';
+import { ParentMfeBridgeImpl } from '../bridge/ParentMfeBridgeImpl';
 import { BridgeInactiveError } from '../bridge/errors';
 import {
   adoptAmbientInboundBridgeLink,
@@ -100,18 +105,6 @@ interface CrossHopEnvelopeReceivingBridge extends ChildMfeBridge {
 }
 
 /**
- * Structural (duck-typed) check for `onCrossHopEnvelope`, deliberately NOT
- * `instanceof ChildMfeBridgeImpl`: the bridge adopted from the ambient
- * mounting-bridge rendezvous may have been constructed by a different,
- * independently loaded copy of this package than the one running this
- * check (`cpt-frontx-adr-mfe-load-isolation`), so the two sides cannot rely
- * on sharing a class definition — only on the bridge object's own shape.
- */
-function hasOnCrossHopEnvelopeMethod(bridge: ChildMfeBridge): bridge is CrossHopEnvelopeReceivingBridge {
-  return typeof (bridge as unknown as { onCrossHopEnvelope?: unknown }).onCrossHopEnvelope === 'function';
-}
-
-/**
  * Structural (duck-typed) check for the bridge's own internal `isActive()`,
  * for the same cross-copy reason as `hasOnCrossHopEnvelopeMethod` above: the
  * bridge escalating through this link may belong to a different,
@@ -141,6 +134,22 @@ function isActiveBridge(bridge: ChildMfeBridge): boolean {
  */
 
 export class DefaultMfeRegistry extends MfeRegistry {
+  /**
+   * Structural (duck-typed) check for `onCrossHopEnvelope`, deliberately NOT
+   * `instanceof ChildMfeBridgeImpl`: the bridge adopted from the ambient
+   * mounting-bridge rendezvous may have been constructed by a different,
+   * independently loaded copy of this package than the one running this
+   * check (`cpt-frontx-adr-mfe-load-isolation`), so the two sides cannot rely
+   * on sharing a class definition — only on the bridge object's own shape.
+   * Pure and stateless — no substitution is ever needed for this
+   * recognition — so it is a private static method.
+   */
+  private static hasOnCrossHopEnvelopeMethod(
+    bridge: ChildMfeBridge
+  ): bridge is CrossHopEnvelopeReceivingBridge {
+    return typeof (bridge as unknown as { onCrossHopEnvelope?: unknown }).onCrossHopEnvelope === 'function';
+  }
+
   /**
    * Type System plugin instance.
    * All type validation and schema operations go through this plugin.
@@ -184,6 +193,47 @@ export class DefaultMfeRegistry extends MfeRegistry {
    * it, so holding the concrete type here adds no new exported contract.
    */
   private readonly mediator: DefaultActionsChainsMediator;
+
+  /**
+   * Validates a chain envelope before this registry's own
+   * `executeAndAwaitChain` awaits it (`inst-validate-envelope`) — the SAME
+   * instance injected into `this.mediator`, constructed once, here, at the
+   * composition root.
+   */
+  private readonly chainEnvelopeValidator: ChainEnvelopeValidator;
+
+  /**
+   * Converts a `DiagnosticContext` to and from the plain record shape
+   * carried across a hop (`inst-diagnostic-record`) — the SAME instance
+   * injected into `this.mediator`, constructed once, here, at the
+   * composition root; also used directly by `receiveCrossHopNode` to
+   * reconstruct the sending side's context from a received envelope.
+   */
+  private readonly envelopeDiagnosticsMapper: EnvelopeDiagnosticsMapper;
+
+  /**
+   * Identity-keyed lifecycle-origin tags a hook's root action carries
+   * (`inst-diagnostic-record`) — constructed once, here, at the composition
+   * root, and injected into BOTH `this.lifecycleManager` (the write side)
+   * and `this.mediator` (the read side), so the two observe the SAME store
+   * without depending on a module-level singleton.
+   */
+  private readonly dispatchOriginStore: DispatchOriginStore;
+
+  /**
+   * Mints this registry's own per-accepted-chain correlation identity —
+   * constructed once, here, and injected into `this.mediator` and the
+   * `DiagnosticReporter` below.
+   */
+  private readonly dispatchCorrelationIdGenerator: DispatchCorrelationIdGenerator;
+
+  /**
+   * Reports a synchronous chain refusal, and contains a diagnostic sink's
+   * own failure — constructed once, here, wired to this registry's own
+   * `dispatchOriginStore`/`dispatchCorrelationIdGenerator`, and injected
+   * into BOTH `this.mediator` and `this.lifecycleManager`.
+   */
+  private readonly diagnosticReporter: DiagnosticReporter;
 
   /**
    * Operation serializer for per-entity concurrency control.
@@ -294,7 +344,24 @@ export class DefaultMfeRegistry extends MfeRegistry {
 
     this.operationSerializer = new OperationSerializer();
     this.coordinator = new WeakMapRuntimeCoordinator();
-    this.bridgeFactory = new DefaultRuntimeBridgeFactory();
+    // Composition-root-owned (DIP): constructed here rather than left to
+    // `DefaultRuntimeBridgeFactory`'s own hard-coded default, so this
+    // registry is the one place substituting the route factory would
+    // happen.
+    this.bridgeFactory = new DefaultRuntimeBridgeFactory(new ChildDomainForwardingRouteFactory());
+
+    // Composition-root-owned collaborators (DIP): constructed exactly once,
+    // here, and injected into both `this.mediator` and `this.lifecycleManager`
+    // below rather than reached for as module-level singletons
+    // (`inst-diagnostic-record`).
+    this.chainEnvelopeValidator = new ChainEnvelopeValidator();
+    this.envelopeDiagnosticsMapper = new EnvelopeDiagnosticsMapper();
+    this.dispatchOriginStore = new DispatchOriginStore();
+    this.dispatchCorrelationIdGenerator = new DispatchCorrelationIdGenerator();
+    this.diagnosticReporter = new DiagnosticReporter(
+      this.dispatchOriginStore,
+      this.dispatchCorrelationIdGenerator
+    );
 
     this.mediator = new DefaultActionsChainsMediator({
       typeSystem: this.typeSystem,
@@ -308,6 +375,11 @@ export class DefaultMfeRegistry extends MfeRegistry {
       // dispatch refusal through — one config-supplied (or defaulted)
       // instance shared by both, per `inst-diagnostic-record`.
       diagnosticSink: this.diagnosticSink,
+      chainEnvelopeValidator: this.chainEnvelopeValidator,
+      envelopeDiagnosticsMapper: this.envelopeDiagnosticsMapper,
+      dispatchOriginStore: this.dispatchOriginStore,
+      dispatchCorrelationIdGenerator: this.dispatchCorrelationIdGenerator,
+      diagnosticReporter: this.diagnosticReporter,
     });
 
     this.extensionManager = new DefaultExtensionManager({
@@ -336,7 +408,16 @@ export class DefaultMfeRegistry extends MfeRegistry {
     this.lifecycleManager = new DefaultLifecycleManager(
       this.extensionManager,
       (chain) => this.executeActionsChain(chain),
-      this.diagnosticSink
+      this.diagnosticSink,
+      // Same `DispatchOriginStore`/`DiagnosticReporter`/
+      // `DispatchCorrelationIdGenerator` instances injected into
+      // `this.mediator` above, so the tag this class writes is the one
+      // `DefaultActionsChainsMediator.runAcceptedChain` reads back, and a
+      // hook's refusal carries an identity from this registry's one
+      // namespace (`inst-diagnostic-record`).
+      this.dispatchOriginStore,
+      this.diagnosticReporter,
+      this.dispatchCorrelationIdGenerator
     );
 
     this.mountManager = new DefaultMountManager({
@@ -432,7 +513,7 @@ export class DefaultMfeRegistry extends MfeRegistry {
     // mounting this registry may be a nested MFE, itself evaluating its own
     // copy) — the two sides need not, and generally will not, share a class
     // definition, so identity can only be established structurally.
-    if (hasOnCrossHopEnvelopeMethod(link.edge)) {
+    if (DefaultMfeRegistry.hasOnCrossHopEnvelopeMethod(link.edge)) {
       // Automatic downward delivery: a versioned cross-hop envelope
       // forwarded down to this registry through its inbound bridge lands
       // directly on this registry's own single-node executor, with no
@@ -477,7 +558,7 @@ export class DefaultMfeRegistry extends MfeRegistry {
    *
    * `inst-inbound-bridge-internal` is a surface-shape claim about the
    * abstract `ChildMfeBridge` contract, marked at its declaration in
-   * `handler/types.ts` rather than here.
+   * `handler/ChildMfeBridge.ts` rather than here.
    */
   private buildInboundBridgeLinkFor(
     extensionId: string,
@@ -918,22 +999,27 @@ export class DefaultMfeRegistry extends MfeRegistry {
     for (const [actionType, handler] of ctx.getCollectedHandlers()) {
       let wrapped = handler;
       if (this.typeSystem.isTypeOf(actionType, mountExtActionId)) {
-        wrapped = wrapMountExtHandler(handler, {
-          domainId: declaration.id,
-          getExtensionDomain: (extensionId) =>
-            this.extensionManager.getExtensionState(extensionId)?.extension.domain,
-          isMounted: (extensionId) =>
-            this.extensionManager.getMountedExtensions(declaration.id).includes(extensionId),
-          getUnmountInFlight: (extensionId) => mounter.getUnmountInFlight(extensionId),
-          coordinator,
-        });
+        wrapped = new MountExtActionHandler(
+          handler,
+          declaration.id,
+          {
+            domainOf: (extensionId) =>
+              this.extensionManager.getExtensionState(extensionId)?.extension.domain,
+          },
+          {
+            isMounted: (extensionId) =>
+              this.extensionManager.getMountedExtensions(declaration.id).includes(extensionId),
+          },
+          { inFlight: (extensionId) => mounter.getUnmountInFlight(extensionId) },
+          coordinator
+        );
       } else if (this.typeSystem.isTypeOf(actionType, unmountExtActionId)) {
         // Orders this explicit unmount_ext's occupancy mutation on the SAME
         // coordinator a fresh mount's own eviction is ordered on, so the
         // two never interleave in a domain built with cross-extension
         // ordering (`cpt-frontx-algo-extension-domain-governance-mount-execution`
         // `inst-me-no-rerun-eviction`).
-        wrapped = wrapUnmountExtHandler(handler, { coordinator });
+        wrapped = new UnmountExtActionHandler(handler, coordinator);
       }
       this.mediator.registerHandler(declaration.id, actionType, wrapped);
     }
@@ -983,7 +1069,7 @@ export class DefaultMfeRegistry extends MfeRegistry {
   // @cpt-begin:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-identify-strategy
   private crossValidateHandlers(
     declaration: ExtensionDomain,
-    strategies: import('./mount-strategy').MountStrategy[],
+    strategies: import('./MountStrategy').MountStrategy[],
     ctx: InvalidatableDomainContext
   ): void {
     // @cpt-begin:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-no-strategy-reject
@@ -1179,15 +1265,15 @@ export class DefaultMfeRegistry extends MfeRegistry {
       // (`inst-diagnostic-record`: "for a refusal and for every node failure
       // alike"), reported BEFORE the throw below — the throw itself, the
       // contract with this call's caller, is unchanged.
-      reportSynchronousChainRefusal(this.diagnosticSink, chain, refusal);
+      this.diagnosticReporter.reportSynchronousChainRefusal(this.diagnosticSink, chain, refusal);
       throw refusal;
       // @cpt-end:cpt-frontx-flow-mfe-host-communication-dispatch-chain:p1:inst-refuse-at-call
     }
     // @cpt-end:cpt-frontx-flow-mfe-host-communication-dispatch-chain:p1:inst-refusal-branch
     try {
-      validateChainEnvelope(chain);
+      this.chainEnvelopeValidator.validate(chain);
     } catch (error) {
-      reportSynchronousChainRefusal(this.diagnosticSink, chain, error);
+      this.diagnosticReporter.reportSynchronousChainRefusal(this.diagnosticSink, chain, error);
       throw error;
     }
 
@@ -1234,12 +1320,12 @@ export class DefaultMfeRegistry extends MfeRegistry {
   // @cpt-begin:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-accept-yields-nothing
   private async executeAndAwaitChain(chain: ActionsChain): Promise<void> {
     try {
-      validateChainEnvelope(chain);
+      this.chainEnvelopeValidator.validate(chain);
     } catch (error) {
       // `executeActionsChain` already validated and reported before
       // calling this method, so a refusal reaching this call never
       // re-reports: the same pure validation simply passes again.
-      reportSynchronousChainRefusal(this.diagnosticSink, chain, error);
+      this.diagnosticReporter.reportSynchronousChainRefusal(this.diagnosticSink, chain, error);
       throw error;
     }
     // This registry-level console log is `DefaultMfeRegistry`'s own, coarse
@@ -1338,7 +1424,7 @@ export class DefaultMfeRegistry extends MfeRegistry {
     // will itself execute it, all before it returns; the node's actual
     // invocation is scheduled strictly after, so no handler code runs on
     // this call stack.
-    this.mediator.acceptSingleNodeForHop(envelope.node, fromEnvelopeDiagnostics(envelope.diagnostics));
+    this.mediator.acceptSingleNodeForHop(envelope.node, this.envelopeDiagnosticsMapper.fromEnvelope(envelope.diagnostics));
   }
   // @cpt-end:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-receive-hand-over
 

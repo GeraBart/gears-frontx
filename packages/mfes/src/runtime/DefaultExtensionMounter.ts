@@ -15,8 +15,9 @@
  */
 
 import { ExtensionMounter } from './ExtensionMounter';
-import type { MountManager } from './mount-manager';
+import type { MountManager } from './MountManager';
 import type { MountSetObserver } from './config';
+import { ExtensionReleaserProvider } from './ExtensionReleaserProvider';
 
 /**
  * @internal
@@ -51,13 +52,22 @@ export class DefaultExtensionMounter extends ExtensionMounter {
    * this mounter, keyed by extension id — populated for the whole duration of
    * `unmount()`, whether that call originates from the domain's explicit
    * `unmount_ext` action handler or from a mount strategy's own eviction or
-   * displacement of a sibling. The mount-ext prologue (`wrapMountExtHandler`,
+   * displacement of a sibling. The mount-ext prologue (`MountExtActionHandler`,
    * `cpt-frontx-algo-extension-domain-governance-mount-execution` `inst-me-await-unmount-settle`)
    * consults this map for the extension it is about to mount, before any
    * strategy runs, so a mount request arriving while that same extension is
    * being unmounted waits for the unmount to settle instead of racing it.
    */
   private readonly unmountInFlightByExtension = new Map<string, Promise<void>>();
+
+  /**
+   * The SAME releaser `ExtensionReleaserProvider.for(this)` resolves for
+   * every caller targeting this mounter — strategies (`ConcurrentMountStrategy.ts`, `OptionalMountStrategy.ts`, `ExclusiveMountStrategy.ts`)
+   * resolve it independently through the same provider, so this mounter
+   * never owns a releaser of its own distinct from the one they reach.
+   * Resolved once, after `super()`, and reused for every `detach()` call.
+   */
+  private readonly releaser: ReturnType<typeof ExtensionReleaserProvider.for>;
 
   constructor(
     private readonly domainId: string,
@@ -72,6 +82,7 @@ export class DefaultExtensionMounter extends ExtensionMounter {
     private readonly mountSetObserver?: MountSetObserver
   ) {
     super();
+    this.releaser = ExtensionReleaserProvider.for(this);
   }
 
   attach(root: Element): void {
@@ -80,19 +91,19 @@ export class DefaultExtensionMounter extends ExtensionMounter {
 
   async detach(): Promise<void> {
     // Mass-unmount every currently-mounted extension so the registry and
-    // any framework slice stay consistent. Routed through the inherited
-    // `release()` — not `unmount()` or `mountManager.unmountExtension`
-    // directly — so a mount request racing this detach observes each
-    // extension's unmount as in flight (`getUnmountInFlight`) and waits for
-    // it instead of racing it, AND a strategy's own explicit release of the
-    // same extension racing this detach still runs its real `destroy`
-    // exactly once. This call deliberately supplies no `destroy` of its own
-    // — by detach time the domain's strategy (and its real container hooks)
-    // has already been invalidated, so this call must never claim the
-    // destroy slot ahead of a genuine one still in flight.
+    // any framework slice stay consistent. Routed through `this.releaser`
+    // — not `unmount()` or `mountManager.unmountExtension` directly — so a
+    // mount request racing this detach observes each extension's unmount as
+    // in flight (`getUnmountInFlight`) and waits for it instead of racing
+    // it, AND a strategy's own explicit release of the same extension
+    // racing this detach still runs its real `destroy` exactly once. This
+    // call deliberately supplies no `destroy` of its own — by detach time
+    // the domain's strategy (and its real container hooks) has already
+    // been invalidated, so this call must never claim the destroy slot
+    // ahead of a genuine one still in flight.
     const mounted = Array.from(this.getMountedExtensions(this.domainId));
     for (const extId of mounted) {
-      await this.release(extId);
+      await this.releaser.release(extId);
     }
     this.attachedRoot = null;
   }

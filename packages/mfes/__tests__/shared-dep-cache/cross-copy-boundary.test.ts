@@ -3,7 +3,7 @@
  * loaded copies of this package.
  *
  * `MfeHandlerMF.sharedDepTextCache` is obtained from
- * `getRealmSharedDepTextCache()` (`realm-shared-dep-text-cache.ts`) rather
+ * `RealmSharedDepTextCacheProvider.getCache()` (`RealmSharedDepTextCacheProvider.ts`) rather
  * than constructed per handler instance, so a nested extension host that
  * constructs its own `MfeHandlerMF` from its own independently loaded copy
  * of `@gears-frontx/mfes` (per `cpt-frontx-adr-mfe-load-isolation`)
@@ -63,7 +63,7 @@ vi.mock('../../src/handler/mfe-handler-mf/mf-dynamic-module-ops', async (importO
 // ─── Realm rendezvous symbol — page-lifetime state that must not leak ─────
 
 /**
- * Mirrors the literal in `realm-shared-dep-text-cache.ts` exactly (a test
+ * Mirrors the literal in `RealmSharedDepTextCacheProvider.ts` exactly (a test
  * double for the protocol string, not an import of production code's
  * constant, so a change to that literal without a matching test update
  * surfaces as a cross-copy-adoption failure here rather than silently

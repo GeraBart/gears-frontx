@@ -38,9 +38,9 @@
  * @internal
  */
 
-import type { ChildMfeBridge } from '../handler/types';
+import type { ChildMfeBridge } from '../handler/ChildMfeBridge';
 import type { Action } from '../types';
-import type { CrossHopEnvelope } from '../mediator/cross-hop-route';
+import type { CrossHopEnvelope } from '../mediator/CrossHopRoute';
 
 // ─── Realm-global mounting-bridge rendezvous ───────────────────────────────
 // @cpt-algo:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2
@@ -89,7 +89,7 @@ interface RendezvousEntry {
  * loaded copy of this package resolves to the exact same global symbol
  * registry key, and therefore the exact same backing array on `globalThis`,
  * regardless of which copy's module instance is executing. This mirrors the
- * existing `globalThis.__FRONTX_LAZY__` pattern (`lazy-loader-registry.ts`)
+ * existing `globalThis.__FRONTX_LAZY__` pattern (`LazyLoaderRegistry.ts`)
  * used for the identical reason.
  */
 const RENDEZVOUS_KEY = Symbol.for('@gears-frontx/mfes:mount-context:1');
