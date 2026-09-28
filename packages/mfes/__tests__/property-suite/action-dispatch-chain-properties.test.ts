@@ -399,7 +399,7 @@ describe('P1 — Non-awaitable surface', () => {
   });
 
   it("ChainResult and ChainExecutionOptions are not importable from the package root", () => {
-    // Static, source-level regression guard: the public barrel
+    // Static, source-level guard: the public barrel
     // (`src/index.ts`) must never (re-)export either identifier. A runtime
     // `import()` check would be misleading here, since `export type` erases
     // at compile time regardless of whether the barrel still names it — the

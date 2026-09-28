@@ -96,8 +96,8 @@ function makeMediator(getExtensionEntry: (id: string) => MfeEntry | undefined = 
 /**
  * Variant of `makeMediator` that also accepts a `diagnosticSink` and a
  * `resolveForwardingEntry` callback — the two extra construction hooks the
- * defect-1/defect-2 regression tests below need (a capturing sink, and a
- * cross-hop route resolution for the defect-2 remote-node scenario).
+ * tests below need (a capturing sink, and a cross-hop route resolution for
+ * the remote-node scenario).
  */
 function makeMediatorWithConfig(config: {
   getExtensionEntry?: (id: string) => MfeEntry | undefined;
@@ -124,9 +124,9 @@ function createDeferred(): { promise: Promise<void>; resolve: () => void } {
 
 /**
  * Like `createDeferred`, but also exposes `reject` — needed by the
- * never-settles regression test, which must later reject the SAME promise
- * a torn-down attempt already stopped waiting on, to prove that rejection
- * is still consumed safely rather than surfacing as an unhandled rejection.
+ * never-settles test, which must later reject the SAME promise a torn-down
+ * attempt already stopped waiting on, to prove that rejection is still
+ * consumed safely rather than surfacing as an unhandled rejection.
  */
 function createRejectableDeferred(): {
   promise: Promise<void>;

@@ -548,6 +548,24 @@ describe('DefaultMfeRegistry', () => {
       const factory = new FlagHandlerFactory(reg);
       reg.registerDomain(makeExclusiveDerivedDomain(), factory);
 
+      // The mount-ext prologue's eligibility check
+      // (`inst-me-eligibility-check`) requires 'ext-1' to actually be
+      // admitted to the addressed domain before its mount_ext dispatch
+      // reaches this test's flag handler.
+      const entryId = 'mock.entry.v1~derived-dispatch.v1';
+      (reg.typeSystem as unknown as { registerSchema: (s: unknown) => void }).registerSchema({
+        $id: entryId,
+        id: entryId,
+        requiredProperties: [],
+        actions: [],
+        domainActions: [],
+      });
+      await reg.registerExtension({
+        id: 'ext-1',
+        domain: DOMAIN_EXCL_DERIVED_ID,
+        entry: entryId,
+      });
+
       reg.executeActionsChain({
         action: {
           type: FRONTX_ACTION_MOUNT_EXT,

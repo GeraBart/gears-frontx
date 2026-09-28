@@ -2200,7 +2200,7 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
    * detect a cycle between two lazy chunks triggered concurrently and
    * cross-referencing each other — the same shape of deadlock the
    * class-level doc comment on {@link createBlobUrlChain} describes for the
-   * static-import case, reachable here too because this no longer starts a
+   * static-import case, reachable here too because this does not start a
    * disconnected, empty lineage against the load's shared `inFlight` map.
    */
   private async resolveLazyChunk(
@@ -2479,9 +2479,9 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
    * for the blobUrlMap lookup.
    *
    * A dependency missing from `blobUrlMap` has no sanctioned reading: it is
-   * a chunk that was never built, and there is no longer any case (a
-   * detected dependency cycle used to be one) in which an absence is
-   * deliberate, because a cycle fails the build where it is detected.
+   * a chunk that was never built, and no case exists in which an absence is
+   * deliberate, because a detected dependency cycle fails the build where
+   * it is detected.
    * Emitting an origin URL for an absent dependency would silently hand
    * back a module that evaluates outside the load's isolated graph with its
    * own bare specifiers unrewritten — a far worse outcome than a
@@ -2537,9 +2537,9 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
     // calls through `resolveLazyChunk`, which mints per-load blob URLs that
     // inherit the parent load's `sharedDepBlobUrls`. Eagerly rewriting
     // `import(...)` here would either bypass that path (loading lazy chunks
-    // from origin with unrewritten bare specifiers — the bug ADR-0022
-    // fixes) or eagerly resolve every lazy chunk into the static chain
-    // (defeating lazy semantics).
+    // from origin with unrewritten bare specifiers — the failure mode
+    // ADR-0022 prevents) or eagerly resolve every lazy chunk into the
+    // static chain (defeating lazy semantics).
 
     return result;
   }

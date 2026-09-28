@@ -41,6 +41,40 @@ class FakeMounter extends ExtensionMounter {
   }
 }
 
+/**
+ * A mounter implementing only the `unmount(extensionId)` signature — no
+ * coalescing of its own, and no way to be handed a `destroy` callback
+ * directly. The exactly-once container-release guarantee for a strategy's
+ * `release()` calls must hold for a mounter shaped exactly like this one,
+ * since it is what `ExtensionMounter` itself, as a public abstract
+ * contract, requires.
+ */
+class OldSignatureFakeMounter extends ExtensionMounter {
+  readonly unmountCalls: string[] = [];
+  private releaseGate: Promise<void> = Promise.resolve();
+  private releaseGateResolve: (() => void) | undefined;
+
+  attach(_root: Element): void {}
+  async detach(): Promise<void> {}
+  async mount(_extensionId: string, _container: Element): Promise<void> {}
+
+  /** Holds every `unmount()` call open until `settle()` is called. */
+  gate(): void {
+    this.releaseGate = new Promise((resolve) => {
+      this.releaseGateResolve = resolve;
+    });
+  }
+
+  settle(): void {
+    this.releaseGateResolve?.();
+  }
+
+  async unmount(extensionId: string): Promise<void> {
+    this.unmountCalls.push(extensionId);
+    await this.releaseGate;
+  }
+}
+
 class ThrowingFakeMounter extends ExtensionMounter {
   attach(_root: Element): void {}
   async detach(): Promise<void> {}
@@ -198,10 +232,15 @@ describe('OptionalMountStrategy', () => {
     strategy = new OptionalMountStrategy(mounter, hooks, registry, DOMAIN);
   });
 
-  it('mount is idempotent when subject is already mounted', async () => {
+  it('returns without action on a direct mount of an already-mounted subject (already-mounted handling is normally done by the mount-ext prologue)', async () => {
     registry.setMounted(DOMAIN, ['ext-a']);
 
-    await strategy.mount(makePayload('ext-a'));
+    // Through the mediator, the registry's mount-ext prologue
+    // (`wrapMountExtHandler`) short-circuits an already-mounted request
+    // before this strategy body ever runs. A direct call bypasses that
+    // prologue, so this defensive check returns successfully without
+    // mounting 'ext-a' a second time, rather than throwing.
+    await expect(strategy.mount(makePayload('ext-a'))).resolves.toBeUndefined();
 
     expect(mounter.mountCalls).toHaveLength(0);
     expect(hooks.created).toHaveLength(0);
@@ -332,10 +371,15 @@ describe('ExclusiveMountStrategy', () => {
     strategy = new ExclusiveMountStrategy(mounter, hooks, registry, DOMAIN);
   });
 
-  it('mount is idempotent when single mount-set entry equals subject', async () => {
+  it('returns without action on a direct mount of the sole already-mounted subject (already-mounted handling is normally done by the mount-ext prologue)', async () => {
     registry.setMounted(DOMAIN, ['ext-a']);
 
-    await strategy.mount(makePayload('ext-a'));
+    // Through the mediator, the registry's mount-ext prologue
+    // (`wrapMountExtHandler`) short-circuits an already-mounted request
+    // before this strategy body ever runs. A direct call bypasses that
+    // prologue, so this defensive check returns successfully without
+    // mounting 'ext-a' a second time, rather than throwing.
+    await expect(strategy.mount(makePayload('ext-a'))).resolves.toBeUndefined();
 
     expect(mounter.mountCalls).toHaveLength(0);
     expect(mounter.unmountCalls).toHaveLength(0);
@@ -426,5 +470,111 @@ describe('ExclusiveMountStrategy', () => {
     // ExclusiveMountStrategy intentionally does NOT implement unmount.
     expect((strategy as MountStrategy).unmount).toBeUndefined();
     expect('unmount' in strategy).toBe(false);
+  });
+});
+
+// ─── Exactly-once release, independent of the mounter implementation ───────
+
+describe('ExtensionMounter.release() — exactly-once, even with a mounter that only implements the unmount(extensionId) signature', () => {
+  it('two overlapping OptionalMountStrategy.unmount() calls for the same extension physically unmount once and destroy its container exactly once', async () => {
+    const DOMAIN = 'old-sig-optional-domain';
+    const mounter = new OldSignatureFakeMounter();
+    const hooks = new FakeContainerHooks();
+    const registry = new FakeRegistry();
+    registry.setMounted(DOMAIN, ['ext-a']);
+    const strategy = new OptionalMountStrategy(mounter, hooks, registry, DOMAIN);
+
+    mounter.gate();
+    const first = strategy.unmount!(makePayload('ext-a'));
+    const second = strategy.unmount!(makePayload('ext-a'));
+    mounter.settle();
+    await Promise.all([first, second]);
+
+    expect(mounter.unmountCalls).toEqual(['ext-a']);
+    expect(hooks.destroyed).toEqual(['ext-a']);
+  });
+
+  it('two concurrent ExclusiveMountStrategy mounts of different extensions that each evict the same prior sibling physically unmount it once and destroy its container exactly once', async () => {
+    const DOMAIN = 'old-sig-exclusive-domain';
+    const mounter = new OldSignatureFakeMounter();
+    const hooks = new FakeContainerHooks();
+    const registry = new FakeRegistry();
+    registry.setMounted(DOMAIN, ['ext-a']);
+    const strategy = new ExclusiveMountStrategy(mounter, hooks, registry, DOMAIN);
+
+    mounter.gate();
+    const first = strategy.mount(makePayload('ext-b'));
+    const second = strategy.mount(makePayload('ext-c'));
+    mounter.settle();
+    await Promise.all([first, second]);
+
+    expect(mounter.unmountCalls).toEqual(['ext-a']);
+    expect(hooks.destroyed).toEqual(['ext-a']);
+  });
+});
+
+// ─── release() publishes its in-flight entry before invoking unmount() ─────
+
+/**
+ * A mounter whose `unmount()` synchronously calls back into
+ * `this.release()` for the SAME extension id, in its own synchronous
+ * prefix — the window a `deactivated` lifecycle callback reached from
+ * inside a physical unmount could reach back into the mounter through.
+ */
+class SyncReentrantFakeMounter extends ExtensionMounter {
+  readonly unmountCalls: string[] = [];
+  reentrantRelease: Promise<void> | undefined;
+  onUnmount: ((extensionId: string) => void) | undefined;
+
+  attach(_root: Element): void {}
+  async detach(): Promise<void> {}
+  async mount(_extensionId: string, _container: Element): Promise<void> {}
+
+  async unmount(extensionId: string): Promise<void> {
+    this.unmountCalls.push(extensionId);
+    this.onUnmount?.(extensionId);
+  }
+}
+
+/** A mounter whose `unmount()` throws synchronously instead of returning a rejected promise. */
+class SyncThrowingUnmountMounter extends ExtensionMounter {
+  unmountCallCount = 0;
+
+  attach(_root: Element): void {}
+  async detach(): Promise<void> {}
+  async mount(_extensionId: string, _container: Element): Promise<void> {}
+
+  unmount(_extensionId: string): Promise<void> {
+    this.unmountCallCount += 1;
+    throw new Error('sync unmount failure');
+  }
+}
+
+describe('ExtensionMounter.release() — in-flight entry published before unmount() is invoked', () => {
+  it('a synchronous re-entrant release() call for the SAME extension id, made from inside unmount(), joins the one physical unmount and both calls settle with the first destroy chosen', async () => {
+    const mounter = new SyncReentrantFakeMounter();
+    const destroyedBy: string[] = [];
+    const destroyA = (): void => { destroyedBy.push('A'); };
+    const destroyB = (): void => { destroyedBy.push('B'); };
+
+    mounter.onUnmount = (extensionId) => {
+      mounter.reentrantRelease = mounter.release(extensionId, destroyB);
+    };
+
+    const first = mounter.release('ext-1', destroyA);
+    await Promise.all([first, mounter.reentrantRelease]);
+
+    expect(mounter.unmountCalls).toEqual(['ext-1']);
+    expect(destroyedBy).toEqual(['A']);
+  });
+
+  it('a synchronously throwing unmount() rejects release(), and a later release() call for the same extension starts a fresh physical unmount', async () => {
+    const mounter = new SyncThrowingUnmountMounter();
+
+    await expect(mounter.release('ext-1')).rejects.toThrow('sync unmount failure');
+    expect(mounter.unmountCallCount).toBe(1);
+
+    await expect(mounter.release('ext-1')).rejects.toThrow('sync unmount failure');
+    expect(mounter.unmountCallCount).toBe(2);
   });
 });

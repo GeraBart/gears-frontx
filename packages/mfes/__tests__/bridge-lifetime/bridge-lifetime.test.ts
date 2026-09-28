@@ -283,7 +283,7 @@ describe('Bridge lifetime: one pair per extension, reactivated (not recreated) a
     );
   });
 
-  it('(4) regression lock: unmount never calls unregisterAllHandlers; unregisterExtension calls it exactly once', async () => {
+  it('(4) unmount never calls unregisterAllHandlers; unregisterExtension calls it exactly once', async () => {
     const { registry, mounter } = await setupHost({
       onMount: (bridge) => {
         bridge.registerActionHandler(ACTION_PING, ActionHandler.fromFunction(async () => {}));
