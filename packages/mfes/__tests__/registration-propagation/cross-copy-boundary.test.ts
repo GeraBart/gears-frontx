@@ -31,12 +31,10 @@ import type {
   ExtensionDomain,
   MfeEntry,
 } from '../../src/types';
-import type {
-  ChildMfeBridge,
-  MfeEntryLifecycle,
-} from '../../src/handler/types';
+import type { ChildMfeBridge } from '../../src/handler/ChildMfeBridge';
+import type { MfeEntryLifecycle } from '../../src/handler/MfeHandler';
 import type { DomainContext } from '../../src/runtime/DomainContext';
-import type { ContainerHooks, ActionPayload } from '../../src/runtime/mount-strategy';
+import type { ContainerHooks, ActionPayload } from '../../src/runtime/MountStrategy';
 
 // ─── Mock-notation well-known action ids (never real GTS strings — MFES-1) ──
 
@@ -121,7 +119,7 @@ function actionChain(type: string, target: string): ActionsChain {
  * `import()` calls) — so within one call to `loadCopy()`, every import below
  * resolves against one internally-consistent module graph, including
  * whatever `DefaultMfeRegistry.ts` itself transitively imports (e.g.
- * `ConcurrentMountStrategy` from `./mount-strategies`, the realm-global
+ * `ConcurrentMountStrategy` from `./ConcurrentMountStrategy`, the realm-global
  * rendezvous helpers from `./inbound-bridge-link`).
  *
  * Calling this twice, with `vi.resetModules()` in between, is what makes the
@@ -177,13 +175,13 @@ async function loadCopy() {
     bridgeErrorsModule,
   ] = await Promise.all([
     import('../../src/runtime/DefaultMfeRegistry'),
-    import('../../src/handler/types'),
-    import('../../src/bridge/mfe-bridge-factory-default'),
+    import('../../src/handler/MfeHandler'),
+    import('../../src/bridge/MfeBridgeFactoryDefault'),
     import('../../src/runtime/ExtensionDomainImplementation'),
     import('../../src/runtime/ExtensionDomainImplementationFactory'),
-    import('../../src/runtime/mount-strategies'),
-    import('../../src/mediator/types'),
-    import('../../src/bridge/ParentMfeBridge'),
+    import('../../src/runtime/ConcurrentMountStrategy'),
+    import('../../src/mediator/ActionHandler'),
+    import('../../src/bridge/ParentMfeBridgeImpl'),
     import('../../src/bridge/errors'),
   ]);
 

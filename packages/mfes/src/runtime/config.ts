@@ -8,8 +8,8 @@
  */
 
 import type { TypeSystemPlugin } from '../type-substrate';
-import type { MfeHandler } from '../handler/types';
-import type { RuntimeCoordinator } from './coordination/types';
+import type { MfeHandler } from '../handler/MfeHandler';
+import type { RuntimeCoordinator } from './coordination/RuntimeCoordinator';
 
 /**
  * The one refusal a non-blocking lifecycle-stage trigger can encounter:

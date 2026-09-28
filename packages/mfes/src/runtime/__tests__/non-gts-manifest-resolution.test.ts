@@ -27,9 +27,9 @@ import type { MfManifest } from '../../manifest/mf-manifest';
 import { ExtensionDomainImplementation } from '../ExtensionDomainImplementation';
 import { ExtensionDomainImplementationFactory } from '../ExtensionDomainImplementationFactory';
 import type { DomainContext } from '../DomainContext';
-import { ConcurrentMountStrategy } from '../mount-strategies';
-import type { ActionPayload } from '../mount-strategy';
-import { ActionHandler } from '../../mediator/types';
+import { ConcurrentMountStrategy } from '../ConcurrentMountStrategy';
+import type { ActionPayload } from '../MountStrategy';
+import { ActionHandler } from '../../mediator/ActionHandler';
 
 // Deliberately NOT the GTS notation: a consumer whose ids live elsewhere is
 // exactly the case a literal in the runtime would silently fail.

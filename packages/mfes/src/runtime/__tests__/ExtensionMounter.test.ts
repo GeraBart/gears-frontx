@@ -1,8 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
 import { DefaultExtensionMounter } from '../DefaultExtensionMounter';
 import { ExtensionMounter } from '../ExtensionMounter';
-import { MountManager } from '../mount-manager';
-import type { ParentMfeBridge } from '../../handler/types';
+import { MountManager } from '../MountManager';
+import { ExtensionReleaserProvider } from '../ExtensionReleaserProvider';
+import * as barrel from '../../index';
+import type { ParentMfeBridge } from '../../handler/ParentMfeBridge';
 import type { MountSetChange, MountSetObserver } from '../config';
 
 // ─── Fakes ───────────────────────────────────────────────────────────────────
@@ -469,7 +471,7 @@ describe('DefaultExtensionMounter', () => {
     });
   });
 
-  describe('release()', () => {
+  describe('ExtensionReleaserProvider.for(mounter).release()', () => {
     it('a destroy callback that throws rejects release() with that error, cleans up, and a later release for the same id starts fresh and succeeds', async () => {
       const mountManager = new FakeMountManager();
       const { mounter, root } = makeFixture({ mountManager });
@@ -479,11 +481,11 @@ describe('DefaultExtensionMounter', () => {
       const throwingDestroy = (): void => {
         throw new Error('destroy boom');
       };
-      await expect(mounter.release('ext-1', throwingDestroy)).rejects.toThrow('destroy boom');
+      await expect(ExtensionReleaserProvider.for(mounter).release('ext-1', throwingDestroy)).rejects.toThrow('destroy boom');
       expect(mountManager.unmountCalls).toEqual(['ext-1']);
 
       const normalDestroy = vi.fn();
-      await expect(mounter.release('ext-1', normalDestroy)).resolves.toBeUndefined();
+      await expect(ExtensionReleaserProvider.for(mounter).release('ext-1', normalDestroy)).resolves.toBeUndefined();
       expect(normalDestroy).toHaveBeenCalledTimes(1);
       // A fresh physical unmount ran for the second call — it did not join
       // a stale entry left behind by the first, failed call.
@@ -517,7 +519,7 @@ describe('DefaultExtensionMounter', () => {
       mounter.attach(root);
       await mounter.mount('ext-1', document.createElement('div'));
 
-      const retried = mounter.release('ext-1').catch(() => mounter.release('ext-1'));
+      const retried = ExtensionReleaserProvider.for(mounter).release('ext-1').catch(() => ExtensionReleaserProvider.for(mounter).release('ext-1'));
 
       await expect(retried).resolves.toBeUndefined();
       expect(mountManager.unmountCalls).toBe(2);
@@ -529,7 +531,7 @@ describe('DefaultExtensionMounter', () => {
       mounter.attach(root);
       await mounter.mount('ext-1', document.createElement('div'));
 
-      const followUp = mounter.release('ext-1').then(() => mounter.release('ext-1'));
+      const followUp = ExtensionReleaserProvider.for(mounter).release('ext-1').then(() => ExtensionReleaserProvider.for(mounter).release('ext-1'));
 
       await expect(followUp).resolves.toBeUndefined();
       // Both the outer release and the follow-up release ran their own
@@ -556,15 +558,15 @@ describe('DefaultExtensionMounter', () => {
       const mounter = new ControllableMounter();
       const destroy = vi.fn();
 
-      const first = mounter.release('ext-1');
+      const first = ExtensionReleaserProvider.for(mounter).release('ext-1');
       let second!: Promise<void>;
       // A reaction registered directly on the SAME promise `unmount()`
       // returned, above — it joins the in-flight release from the exact
-      // microtask gap between release()'s own read of `chosenDestroy` and
-      // its cleanup + settlement, contributing a `destroy` that must still
-      // run exactly once.
+      // microtask gap between release()'s own read of
+      // `chosenDestroy` and its cleanup + settlement, contributing a
+      // `destroy` that must still run exactly once.
       unmountPromise.then(() => {
-        second = mounter.release('ext-1', destroy);
+        second = ExtensionReleaserProvider.for(mounter).release('ext-1', destroy);
       });
 
       resolveUnmount();
@@ -572,6 +574,47 @@ describe('DefaultExtensionMounter', () => {
       await second;
 
       expect(destroy).toHaveBeenCalledTimes(1);
+    });
+
+    it('overlapping releases for two DIFFERENT mounters and the same extension id do not coalesce with each other', async () => {
+      let resolveFirst!: () => void;
+      let resolveSecond!: () => void;
+      const firstUnmount = new Promise<void>((resolve) => {
+        resolveFirst = resolve;
+      });
+      const secondUnmount = new Promise<void>((resolve) => {
+        resolveSecond = resolve;
+      });
+
+      class ControllableMounter extends ExtensionMounter {
+        constructor(private readonly gate: Promise<void>) {
+          super();
+        }
+        attach(_root: Element): void {}
+        async detach(): Promise<void> {}
+        async mount(_extensionId: string, _container: Element): Promise<void> {}
+        unmount(_extensionId: string): Promise<void> {
+          return this.gate;
+        }
+      }
+
+      const mounterA = new ControllableMounter(firstUnmount);
+      const mounterB = new ControllableMounter(secondUnmount);
+
+      const destroyA = vi.fn();
+      const destroyB = vi.fn();
+
+      const releaseA = ExtensionReleaserProvider.for(mounterA).release('ext-1', destroyA);
+      const releaseB = ExtensionReleaserProvider.for(mounterB).release('ext-1', destroyB);
+
+      resolveFirst();
+      await releaseA;
+      expect(destroyA).toHaveBeenCalledTimes(1);
+      expect(destroyB).not.toHaveBeenCalled();
+
+      resolveSecond();
+      await releaseB;
+      expect(destroyB).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -581,6 +624,17 @@ describe('DefaultExtensionMounter', () => {
       // The abstract base ExtensionMounter defines only attach, detach, mount, unmount.
       const base = mounter as ExtensionMounter;
       expect('getMounted' in base).toBe(false);
+    });
+
+    it('release is not exposed on the ExtensionMounter prototype', () => {
+      expect('release' in ExtensionMounter.prototype).toBe(false);
+    });
+  });
+
+  describe('public barrel', () => {
+    it('does not export ExtensionReleaser or ExtensionReleaserProvider', () => {
+      expect('ExtensionReleaser' in (barrel as Record<string, unknown>)).toBe(false);
+      expect('ExtensionReleaserProvider' in (barrel as Record<string, unknown>)).toBe(false);
     });
   });
 });

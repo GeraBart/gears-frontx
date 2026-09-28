@@ -9,8 +9,8 @@ export type {
 } from './manifest/mf-manifest';
 
 // Lazy-import ABI runtime registry (Phase 5)
-export { LazyLoaderRegistry } from './lazy-loader/lazy-loader-registry';
-export type { LazyResolver } from './lazy-loader/lazy-loader-registry';
+export { LazyLoaderRegistry } from './lazy-loader/LazyLoaderRegistry';
+export type { LazyResolver } from './lazy-loader/LazyLoaderRegistry';
 
 // Type substrate port (Phase 2)
 export type {
@@ -40,11 +40,15 @@ export type {
 // Mediator types (Phase 3)
 // The public surface carries no completion-bearing result type and
 // no per-call execution-options type (`cpt-frontx-adr-mfe-runtime-public-surface`).
-export { ActionHandler, ActionsChainsMediator } from './mediator/types';
+export { ActionHandler } from './mediator/ActionHandler';
+export { ActionsChainsMediator } from './mediator/ActionsChainsMediator';
 
 // Handler type contracts (Phase 3)
-export { ParentMfeBridge, ChildMfeBridge, MfeBridgeFactory, MfeHandler } from './handler/types';
-export type { MfeEntryLifecycle, MfeMountContext } from './handler/types';
+export { ParentMfeBridge } from './handler/ParentMfeBridge';
+export { ChildMfeBridge } from './handler/ChildMfeBridge';
+export { MfeBridgeFactory } from './handler/MfeBridgeFactory';
+export { MfeHandler } from './handler/MfeHandler';
+export type { MfeEntryLifecycle, MfeMountContext } from './handler/MfeHandler';
 
 // Registry contracts (Phase 3)
 export { MfeRegistry } from './registry/MfeRegistry';
@@ -58,22 +62,24 @@ export type {
 } from './runtime/config';
 
 // Runtime abstractions (Phase 3)
-export { MountStrategy } from './runtime/mount-strategy';
-export type { ActionPayload, ContainerHooks } from './runtime/mount-strategy';
-export { ConcurrentMountStrategy, OptionalMountStrategy, ExclusiveMountStrategy } from './runtime/mount-strategies';
+export { MountStrategy } from './runtime/MountStrategy';
+export type { ActionPayload, ContainerHooks } from './runtime/MountStrategy';
+export { ConcurrentMountStrategy } from './runtime/ConcurrentMountStrategy';
+export { OptionalMountStrategy } from './runtime/OptionalMountStrategy';
+export { ExclusiveMountStrategy } from './runtime/ExclusiveMountStrategy';
 export { ExtensionDomainImplementation } from './runtime/ExtensionDomainImplementation';
 export { ExtensionDomainImplementationFactory } from './runtime/ExtensionDomainImplementationFactory';
 export { ExtensionMounter } from './runtime/ExtensionMounter';
 export { DomainLifecycleTrigger } from './runtime/DomainLifecycleTrigger';
 export type { DomainContext } from './runtime/DomainContext';
-export { InvalidatableDomainContext } from './runtime/DomainContext';
+export { InvalidatableDomainContext } from './runtime/InvalidatableDomainContext';
 
 // Coordination types (Phase 3)
-export { RuntimeCoordinator } from './runtime/coordination/types';
-export type { RuntimeConnection } from './runtime/coordination/types';
+export { RuntimeCoordinator } from './runtime/coordination/RuntimeCoordinator';
+export type { RuntimeConnection } from './runtime/coordination/RuntimeCoordinator';
 
 // Mediator error surface (Phase 6) — the concrete mediator stays internal (ADR-0003)
-export { NoHandlerForActionTargetError } from './mediator/actions-chains-mediator';
+export { NoHandlerForActionTargetError } from './mediator/NoHandlerForActionTargetError';
 
 // Bridge error classes (Phase 6)
 export { NoActionsChainHandlerError, BridgeDisposedError, BridgeInactiveError } from './bridge/errors';
@@ -120,26 +126,27 @@ export {
 export { validateExtensionType } from './validation/extension-type';
 
 // Extension manager (Phase 7)
-export { ExtensionManager } from './runtime/extension-manager';
+export { ExtensionManager } from './runtime/ExtensionManager';
 export type {
   ExtensionDomainState,
   ExtensionState,
   LifecycleTriggerCallback,
   DomainLifecycleTriggerCallback,
-} from './runtime/extension-manager';
+} from './runtime/ExtensionManager';
 
 // Mount manager (Phase 7)
-export { MountManager } from './runtime/mount-manager';
-export type { ActionsChainDispatcher, LifecycleTrigger } from './runtime/mount-manager';
+export { MountManager } from './runtime/MountManager';
+export type { ActionsChainDispatcher, LifecycleTrigger } from './runtime/MountManager';
 
 // Runtime bridge factory (Phase 7)
-export { RuntimeBridgeFactory } from './runtime/runtime-bridge-factory';
+export { RuntimeBridgeFactory } from './runtime/RuntimeBridgeFactory';
 
 // MFE Isolation — handler, trust kernel, types (Phase 8)
 // MfeHandlerMF is sanctioned surface — do not remove in a barrel cleanup.
 // Rationale/table: packages/mfes/architecture/DESIGN.md, public-surface table.
-export { MfeHandlerMF, LruCache } from './handler/mfe-handler-mf/MfeHandlerMF';
-export { RetryHandler } from './handler/mfe-handler-mf/retry-handler';
+export { MfeHandlerMF } from './handler/mfe-handler-mf/MfeHandlerMF';
+export { LruCache } from './handler/mfe-handler-mf/LruCache';
+export { RetryHandler } from './handler/mfe-handler-mf/RetryHandler';
 export type { MfeEntryMF } from './types/mfe-entry-mf';
 export {
   sourceImports,
@@ -153,18 +160,18 @@ export {
 export { createMfeRegistryFactory } from './runtime/DefaultMfeRegistryFactory';
 
 // Lifecycle manager — abstract contract; the default implementation stays internal (ADR-0003)
-export { LifecycleManager } from './runtime/lifecycle-manager';
-export type { ActionChainExecutor as LifecycleActionChainExecutor } from './runtime/lifecycle-manager';
+export { LifecycleManager } from './runtime/LifecycleManager';
+export type { ActionChainExecutor as LifecycleActionChainExecutor } from './runtime/LifecycleManager';
 
 // Operation serializer — concurrency control for registry operations
-export { OperationSerializer } from './runtime/operation-serializer';
+export { OperationSerializer } from './runtime/OperationSerializer';
 
 // Extension lifecycle action handler — load_ext handler wiring
-export { LoadExtHandler } from './runtime/extension-lifecycle-action-handler';
-export type { LifecycleActionPayload } from './runtime/extension-lifecycle-action-handler';
+export { LoadExtHandler } from './runtime/LoadExtHandler';
+export type { LifecycleActionPayload } from './runtime/LoadExtHandler';
 
 // Runtime coordination — default WeakMap-based implementation
-export { WeakMapRuntimeCoordinator } from './runtime/coordination/weak-map-runtime-coordinator';
+export { WeakMapRuntimeCoordinator } from './runtime/coordination/WeakMapRuntimeCoordinator';
 
 // MFE state container — abstract contract; the default implementation stays internal (ADR-0003)
 export { MfeStateContainer } from './state';

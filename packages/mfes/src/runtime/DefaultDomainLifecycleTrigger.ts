@@ -10,7 +10,7 @@
  */
 
 import { DomainLifecycleTrigger } from './DomainLifecycleTrigger';
-import type { DefaultLifecycleManager } from './default-lifecycle-manager';
+import type { DefaultLifecycleManager } from './DefaultLifecycleManager';
 
 /**
  * @internal

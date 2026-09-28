@@ -21,24 +21,21 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { DefaultMfeRegistry } from '../../src/runtime/DefaultMfeRegistry';
 import type { TypeSystemPlugin } from '../../src/type-substrate';
 import type { ActionsChain, Extension, ExtensionDomain, MfeEntry } from '../../src/types';
-import {
-  MfeHandler,
-  ChildMfeBridge,
-  ParentMfeBridge,
-  type MfeEntryLifecycle,
-} from '../../src/handler/types';
-import { MfeBridgeFactoryDefault } from '../../src/bridge/mfe-bridge-factory-default';
+import { MfeHandler, type MfeEntryLifecycle } from '../../src/handler/MfeHandler';
+import { ChildMfeBridge } from '../../src/handler/ChildMfeBridge';
+import { ParentMfeBridge } from '../../src/handler/ParentMfeBridge';
+import { MfeBridgeFactoryDefault } from '../../src/bridge/MfeBridgeFactoryDefault';
 import { ExtensionDomainImplementation } from '../../src/runtime/ExtensionDomainImplementation';
 import { ExtensionDomainImplementationFactory } from '../../src/runtime/ExtensionDomainImplementationFactory';
 import type { DomainContext } from '../../src/runtime/DomainContext';
-import { ConcurrentMountStrategy } from '../../src/runtime/mount-strategies';
-import type { ContainerHooks, ActionPayload } from '../../src/runtime/mount-strategy';
-import { ActionHandler } from '../../src/mediator/types';
+import { ConcurrentMountStrategy } from '../../src/runtime/ConcurrentMountStrategy';
+import type { ContainerHooks, ActionPayload } from '../../src/runtime/MountStrategy';
+import { ActionHandler } from '../../src/mediator/ActionHandler';
 import type { InboundBridgeLink } from '../../src/runtime/inbound-bridge-link';
-import { ParentMfeBridgeImpl } from '../../src/bridge/ParentMfeBridge';
+import { ParentMfeBridgeImpl } from '../../src/bridge/ParentMfeBridgeImpl';
 import { BridgeInactiveError } from '../../src/bridge/errors';
-import { CROSS_HOP_PROTOCOL_VERSION } from '../../src/mediator/cross-hop-route';
-import type { CrossHopEnvelope } from '../../src/mediator/cross-hop-route';
+import { CROSS_HOP_PROTOCOL_VERSION } from '../../src/mediator/CrossHopRoute';
+import type { CrossHopEnvelope } from '../../src/mediator/CrossHopRoute';
 import type { ChainNodeFailureDiagnostic, MfeDiagnosticSink } from '../../src/runtime/config';
 
 // Global symbol registry key mirrored from `inbound-bridge-link.ts`'s own

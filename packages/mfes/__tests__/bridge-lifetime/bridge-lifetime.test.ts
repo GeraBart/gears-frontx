@@ -15,22 +15,19 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { DefaultMfeRegistry } from '../../src/runtime/DefaultMfeRegistry';
-import type { ActionsChainsMediator } from '../../src/mediator/types';
-import type { DefaultActionsChainsMediator } from '../../src/mediator/actions-chains-mediator';
+import type { ActionsChainsMediator } from '../../src/mediator/ActionsChainsMediator';
+import type { DefaultActionsChainsMediator } from '../../src/mediator/DefaultActionsChainsMediator';
 import type { TypeSystemPlugin } from '../../src/type-substrate';
 import type { ActionsChain, Extension, ExtensionDomain, MfeEntry } from '../../src/types';
-import {
-  MfeHandler,
-  ChildMfeBridge,
-  type MfeEntryLifecycle,
-} from '../../src/handler/types';
-import { MfeBridgeFactoryDefault } from '../../src/bridge/mfe-bridge-factory-default';
+import { MfeHandler, type MfeEntryLifecycle } from '../../src/handler/MfeHandler';
+import { ChildMfeBridge } from '../../src/handler/ChildMfeBridge';
+import { MfeBridgeFactoryDefault } from '../../src/bridge/MfeBridgeFactoryDefault';
 import { ExtensionDomainImplementation } from '../../src/runtime/ExtensionDomainImplementation';
 import { ExtensionDomainImplementationFactory } from '../../src/runtime/ExtensionDomainImplementationFactory';
 import type { DomainContext } from '../../src/runtime/DomainContext';
-import { ConcurrentMountStrategy } from '../../src/runtime/mount-strategies';
-import type { ContainerHooks, ActionPayload } from '../../src/runtime/mount-strategy';
-import { ActionHandler } from '../../src/mediator/types';
+import { ConcurrentMountStrategy } from '../../src/runtime/ConcurrentMountStrategy';
+import type { ContainerHooks, ActionPayload } from '../../src/runtime/MountStrategy';
+import { ActionHandler } from '../../src/mediator/ActionHandler';
 
 // ─── Mock-notation well-known action/domain/entry ids ──────────────────────
 

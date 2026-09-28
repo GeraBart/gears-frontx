@@ -4,7 +4,7 @@
  * instructions) running through the real `DefaultMfeRegistry`, the real
  * `DefaultMountManager` pipeline, and each of the three shipped mount
  * strategies. Complements the isolated wrapper unit tests in
- * `mount-ext-prologue.test.ts`.
+ * `MountExtActionHandler.test.ts`.
  *
  * Every case uses an explicit settlement signal — a controlled deferred the
  * test resolves itself from a domain-local probe handler bound to a chain's
@@ -17,16 +17,19 @@ import type { DefaultExtensionMounter } from '../DefaultExtensionMounter';
 import type { MfeRegistryConfig } from '../config';
 import type { TypeSystemPlugin } from '../../type-substrate';
 import type { ExtensionDomain, Extension, MfeEntry } from '../../types';
-import { MfeHandler, type ChildMfeBridge, type MfeEntryLifecycle } from '../../handler/types';
-import { MfeBridgeFactoryDefault } from '../../bridge/mfe-bridge-factory-default';
+import { MfeHandler, type MfeEntryLifecycle } from '../../handler/MfeHandler';
+import type { ChildMfeBridge } from '../../handler/ChildMfeBridge';
+import { MfeBridgeFactoryDefault } from '../../bridge/MfeBridgeFactoryDefault';
 import { ExtensionDomainImplementation } from '../ExtensionDomainImplementation';
 import { ExtensionDomainImplementationFactory } from '../ExtensionDomainImplementationFactory';
 import type { DomainContext } from '../DomainContext';
-import { ConcurrentMountStrategy, OptionalMountStrategy, ExclusiveMountStrategy } from '../mount-strategies';
-import type { ContainerHooks, MountStrategy } from '../mount-strategy';
-import { ActionHandler } from '../../mediator/types';
+import { ConcurrentMountStrategy } from '../ConcurrentMountStrategy';
+import { OptionalMountStrategy } from '../OptionalMountStrategy';
+import { ExclusiveMountStrategy } from '../ExclusiveMountStrategy';
+import type { ContainerHooks, MountStrategy } from '../MountStrategy';
+import { ActionHandler } from '../../mediator/ActionHandler';
 import type { MfeRegistry } from '../../registry/MfeRegistry';
-import type { DefaultActionsChainsMediator } from '../../mediator/actions-chains-mediator';
+import type { DefaultActionsChainsMediator } from '../../mediator/DefaultActionsChainsMediator';
 
 // ─── Mock type-system plugin (hierarchy-agnostic, own notation) ─────────────
 

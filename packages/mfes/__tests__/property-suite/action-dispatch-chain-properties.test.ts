@@ -28,30 +28,29 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { DefaultMfeRegistry } from '../../src/runtime/DefaultMfeRegistry';
-import { DefaultActionsChainsMediator } from '../../src/mediator/actions-chains-mediator';
+import { DefaultActionsChainsMediator } from '../../src/mediator/DefaultActionsChainsMediator';
 const LARGE_BOUND_MS = 15000;
-import { ActionHandler } from '../../src/mediator/types';
-import { ChildMfeBridgeImpl } from '../../src/bridge/ChildMfeBridge';
+import { ActionHandler } from '../../src/mediator/ActionHandler';
+import { ChildMfeBridgeImpl } from '../../src/bridge/ChildMfeBridgeImpl';
 import { BridgeDisposedError, BridgeInactiveError } from '../../src/bridge/errors';
-import { CrossHopRoute } from '../../src/mediator/cross-hop-route';
-import type { CrossHopEnvelope } from '../../src/mediator/cross-hop-route';
-import { fromEnvelopeDiagnostics } from '../../src/mediator/dispatch-diagnostics';
+import { CrossHopRoute } from '../../src/mediator/CrossHopRoute';
+import type { CrossHopEnvelope } from '../../src/mediator/CrossHopRoute';
+import { EnvelopeDiagnosticsMapper } from '../../src/mediator/EnvelopeDiagnosticsMapper';
+
+const envelopeDiagnosticsMapper = new EnvelopeDiagnosticsMapper();
 import type { TypeSystemPlugin } from '../../src/type-substrate';
 import type { ActionsChain, Extension, ExtensionDomain, MfeEntry } from '../../src/types';
-import {
-  MfeHandler,
-  ChildMfeBridge,
-  type MfeEntryLifecycle,
-} from '../../src/handler/types';
-import { MfeBridgeFactoryDefault } from '../../src/bridge/mfe-bridge-factory-default';
+import { MfeHandler, type MfeEntryLifecycle } from '../../src/handler/MfeHandler';
+import { ChildMfeBridge } from '../../src/handler/ChildMfeBridge';
+import { MfeBridgeFactoryDefault } from '../../src/bridge/MfeBridgeFactoryDefault';
 import { ExtensionDomainImplementation } from '../../src/runtime/ExtensionDomainImplementation';
 import { ExtensionDomainImplementationFactory } from '../../src/runtime/ExtensionDomainImplementationFactory';
 import type { DomainContext } from '../../src/runtime/DomainContext';
-import { ConcurrentMountStrategy } from '../../src/runtime/mount-strategies';
-import type { ContainerHooks, ActionPayload } from '../../src/runtime/mount-strategy';
-import type { ExtensionDomainState } from '../../src/runtime/extension-manager';
+import { ConcurrentMountStrategy } from '../../src/runtime/ConcurrentMountStrategy';
+import type { ContainerHooks, ActionPayload } from '../../src/runtime/MountStrategy';
+import type { ExtensionDomainState } from '../../src/runtime/ExtensionManager';
 import { ActionsChainRefusalError } from '../../src/errors';
-import type { DefaultLifecycleManager } from '../../src/runtime/default-lifecycle-manager';
+import type { DefaultLifecycleManager } from '../../src/runtime/DefaultLifecycleManager';
 import type { ChainNodeFailureDiagnostic, MfeDiagnosticSink } from '../../src/runtime/config';
 
 // ─── Mock-notation well-known ids ──────────────────────────────────────────
@@ -306,7 +305,7 @@ function makeAuthoritativeHopRoute(farMediator: DefaultActionsChainsMediator, ho
     // SYNCHRONOUSLY here — this call is done the instant it returns, and the
     // node's completion, once it executes, is bounded only at the registry
     // authoritative for the target.
-    target.acceptSingleNodeForHop(envelope.node, fromEnvelopeDiagnostics(envelope.diagnostics));
+    target.acceptSingleNodeForHop(envelope.node, envelopeDiagnosticsMapper.fromEnvelope(envelope.diagnostics));
   };
 
   let downstream = farMediator;
@@ -426,8 +425,8 @@ describe('P1 — Non-awaitable surface', () => {
       'and no exported function/class carries a completion-bearing sendActionsChain() method',
     async () => {
       const publicApi: Record<string, unknown> = await import('../../src/index');
-      const { ChildMfeBridgeImpl } = await import('../../src/bridge/ChildMfeBridge');
-      const { ParentMfeBridgeImpl } = await import('../../src/bridge/ParentMfeBridge');
+      const { ChildMfeBridgeImpl } = await import('../../src/bridge/ChildMfeBridgeImpl');
+      const { ParentMfeBridgeImpl } = await import('../../src/bridge/ParentMfeBridgeImpl');
 
       const exportedValues = Object.values(publicApi);
       // Neither concrete implementation is reachable BY VALUE from the
@@ -460,7 +459,7 @@ describe('P1 — Non-awaitable surface', () => {
 // entry exists BEFORE the handler is invoked, for both a local node and a
 // cross-hop node — is pinned exhaustively, by direct inspection of the
 // mediator's own `pendingActions`/`actionHandlers` state, in
-// `actions-chains-mediator.test.ts`'s "deferred target retirement" and
+// `DefaultActionsChainsMediator.test.ts`'s "deferred target retirement" and
 // "cross-hop reservation ordering" suites. The tests below deliberately do
 // NOT re-claim that property (a test proving only synchronous INVOCATION
 // timing would still pass with `trackPendingAction` deleted entirely) —
@@ -468,11 +467,11 @@ describe('P1 — Non-awaitable surface', () => {
 // call's own synchronous prefix has already invoked the handler (not
 // merely resolved it) before returning.
 
-describe('P2 — Immediate acceptance (synchronous invocation timing; see the reservation-ordering suites in actions-chains-mediator.test.ts for the reservation itself)', () => {
+describe('P2 — Immediate acceptance (synchronous invocation timing; see the reservation-ordering suites in DefaultActionsChainsMediator.test.ts for the reservation itself)', () => {
   it(
     'a direct dispatch: the dispatching call has already returned, and the handler has already been ' +
       'INVOKED (not settled) — synchronous invocation timing only, NOT proof that an in-flight ' +
-      'reservation exists (that is pinned directly in actions-chains-mediator.test.ts)',
+      'reservation exists (that is pinned directly in DefaultActionsChainsMediator.test.ts)',
     () => {
       const mediator = makeMediator();
       const gate = createDeferred();
@@ -498,7 +497,7 @@ describe('P2 — Immediate acceptance (synchronous invocation timing; see the re
       // reaches the handler call before this method returns). This alone
       // does not prove an in-flight RESERVATION exists — it would hold
       // identically with `trackPendingAction` deleted — see the
-      // reservation-ordering suites in `actions-chains-mediator.test.ts`
+      // reservation-ordering suites in `DefaultActionsChainsMediator.test.ts`
       // for that distinct property.
       expect(invokedCount).toBe(1);
       expect(settledCount).toBe(0);

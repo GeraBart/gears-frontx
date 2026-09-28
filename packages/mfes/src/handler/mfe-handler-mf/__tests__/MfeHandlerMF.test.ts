@@ -50,13 +50,14 @@ vi.mock('../mf-dynamic-module-ops', async (importOriginal) => {
   };
 });
 
-import { MfeHandlerMF, LruCache } from '../MfeHandlerMF';
+import { MfeHandlerMF } from '../MfeHandlerMF';
+import { LruCache } from '../LruCache';
 import { MfeLoadError } from '../../../errors';
 import type { MfeEntryMF } from '../../../types/mfe-entry-mf';
 import type { MfManifest, MfManifestShared } from '../../../manifest/mf-manifest';
 
 // The shared-dependency source-text cache is REALM-shared
-// (`getRealmSharedDepTextCache`, `realm-shared-dep-text-cache.ts`) — every
+// (`RealmSharedDepTextCacheProvider.getCache`, `RealmSharedDepTextCacheProvider.ts`) — every
 // `new MfeHandlerMF(...)` in this file, no matter the test, resolves to
 // the SAME cache slot on `globalThis`, rather than each getting its own
 // fresh `LruCache`. Without this reset, an earlier test's cached shared-dep

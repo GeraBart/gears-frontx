@@ -27,18 +27,13 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import { DefaultActionsChainsMediator } from '../../src/mediator/actions-chains-mediator';
-import {
-  CROSS_HOP_PROTOCOL_VERSION,
-  CrossHopRoute,
-  CrossHopUnavailableError,
-  type CrossHopEnvelope,
-  type CrossHopUnavailabilityCause,
-} from '../../src/mediator/cross-hop-route';
-import { ActionHandler } from '../../src/mediator/types';
+import { DefaultActionsChainsMediator } from '../../src/mediator/DefaultActionsChainsMediator';
+import { CROSS_HOP_PROTOCOL_VERSION, CrossHopRoute, type CrossHopEnvelope, type CrossHopUnavailabilityCause } from '../../src/mediator/CrossHopRoute';
+import { CrossHopUnavailableError } from '../../src/mediator/CrossHopUnavailableError';
+import { ActionHandler } from '../../src/mediator/ActionHandler';
 import type { TypeSystemPlugin } from '../../src/type-substrate';
 import type { ActionsChain } from '../../src/types';
-import type { ExtensionDomainState } from '../../src/runtime/extension-manager';
+import type { ExtensionDomainState } from '../../src/runtime/ExtensionManager';
 import type { ChainNodeFailureDiagnostic, MfeDiagnosticSink } from '../../src/runtime/config';
 
 const REMOTE = 'domain.remote.v1';

@@ -3,7 +3,7 @@
  *
  * Two concurrent mounts of the same never-mounted extension both observe
  * `mountState !== 'mounted'` and both call `loadExtension` before either has
- * finished loading (`default-mount-manager.ts`'s own `mountExtension`, line
+ * finished loading (`DefaultMountManager.ts`'s own `mountExtension`, line
  * ~200, awaits `loadExtension` unconditionally when `loadState !== 'loaded'`
  * -- it is not serialized the way the public `load_ext` action is via
  * `OperationSerializer`). A second concurrent caller's `loadExtension` call
@@ -32,17 +32,18 @@
  */
 import { describe, it, expect } from 'vitest';
 import { DefaultMfeRegistry } from '../../src/runtime/DefaultMfeRegistry';
-import type { DefaultMountManager } from '../../src/runtime/default-mount-manager';
+import type { DefaultMountManager } from '../../src/runtime/DefaultMountManager';
 import type { TypeSystemPlugin } from '../../src/type-substrate';
 import type { Extension, ExtensionDomain, MfeEntry } from '../../src/types';
-import { MfeHandler, ChildMfeBridge, type MfeEntryLifecycle } from '../../src/handler/types';
-import { MfeBridgeFactoryDefault } from '../../src/bridge/mfe-bridge-factory-default';
+import { MfeHandler, type MfeEntryLifecycle } from '../../src/handler/MfeHandler';
+import { ChildMfeBridge } from '../../src/handler/ChildMfeBridge';
+import { MfeBridgeFactoryDefault } from '../../src/bridge/MfeBridgeFactoryDefault';
 import { ExtensionDomainImplementation } from '../../src/runtime/ExtensionDomainImplementation';
 import { ExtensionDomainImplementationFactory } from '../../src/runtime/ExtensionDomainImplementationFactory';
 import type { DomainContext } from '../../src/runtime/DomainContext';
-import { ConcurrentMountStrategy } from '../../src/runtime/mount-strategies';
-import type { ContainerHooks, ActionPayload } from '../../src/runtime/mount-strategy';
-import { ActionHandler } from '../../src/mediator/types';
+import { ConcurrentMountStrategy } from '../../src/runtime/ConcurrentMountStrategy';
+import type { ContainerHooks, ActionPayload } from '../../src/runtime/MountStrategy';
+import { ActionHandler } from '../../src/mediator/ActionHandler';
 
 const LOAD_EXT = 'mock.action.v1~load_ext.v1~';
 const MOUNT_EXT = 'mock.action.v1~mount_ext.v1~';
