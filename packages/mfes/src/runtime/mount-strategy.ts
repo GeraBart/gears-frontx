@@ -42,12 +42,16 @@ export interface ContainerHooks {
   create(extensionId: string): Element;
 
   /**
-   * Release the host element produced by the matching `create` call.
-   * Invoked by strategies during unmount and on mount-failure cleanup.
+   * Release the host element produced by the matching `create` call. The
+   * mounter invokes this through the cleanup callback registered by a
+   * strategy, including when a slot detaches.
    *
    * @param extensionId - ID of the extension whose container is being released.
+   * @param container - The exact container returned by `create`. Implementations
+   * may use this to avoid a stale mount cleaning up a newer container for the
+   * same extension id. Optional for backwards compatibility with existing hooks.
    */
-  destroy(extensionId: string): void;
+  destroy(extensionId: string, container?: Element): void;
 }
 
 /**
