@@ -392,49 +392,70 @@ export class DefaultMountManager extends MountManager {
       return;
     }
 
-    await this.triggerLifecycle(
-      extensionId,
-      this.typeSystem.resolveLifecycleStageDeactivatedId()
-    );
-
-    try {
-      const lifecycle = extensionState.lifecycle;
-      const container = extensionState.container;
-      if (lifecycle && container) {
-        const unmountTarget = extensionState.shadowRoot ?? container;
-        await lifecycle.unmount(unmountTarget);
-      }
-
-      // Deactivate (not destroy) the bridge: every advertisement propagated
-      // through it stays recorded, and every action-delivery path through it
-      // now rejects explicitly until the next mount reactivates it
-      // (`inst-bridge-deactivation`). Handler registrations and property
-      // subscriptions made through the bridge are untouched.
-      // @cpt-begin:cpt-frontx-algo-mfe-host-communication-bridge-delegation:p1:inst-bridge-deactivation
-      if (extensionState.bridge) {
-        this.bridgeFactory.deactivateBridge(extensionState.bridge);
-      }
-      // @cpt-end:cpt-frontx-algo-mfe-host-communication-bridge-delegation:p1:inst-bridge-deactivation
-
-      if (container) {
-        const connection = this.coordinator.get(container);
-        if (connection) {
-          connection.bridges.delete(extensionId);
-          if (connection.bridges.size === 0) {
-            this.coordinator.unregister(container);
-          }
+    let teardownError: unknown;
+    let hasTeardownError = false;
+    const captureTeardownError = async (operation: () => Promise<void>): Promise<void> => {
+      try {
+        await operation();
+      } catch (error) {
+        if (!hasTeardownError) {
+          teardownError = error;
+          hasTeardownError = true;
         }
       }
+    };
 
-      extensionState.container = null;
-      extensionState.mountState = 'unmounted';
-      extensionState.error = undefined;
-      extensionState.shadowRoot = undefined;
-    } catch (error) {
-      extensionState.mountState = 'error';
-      extensionState.error = error instanceof Error ? error : new Error(String(error));
-      throw error;
+    await captureTeardownError(() => this.triggerLifecycle(
+      extensionId,
+      this.typeSystem.resolveLifecycleStageDeactivatedId()
+    ));
+
+    const lifecycle = extensionState.lifecycle;
+    const container = extensionState.container;
+    if (lifecycle && container) {
+      const unmountTarget = extensionState.shadowRoot ?? container;
+      await captureTeardownError(async () => {
+        await lifecycle.unmount(unmountTarget);
+      });
     }
+
+    // Deactivate (not destroy) the bridge: every advertisement propagated
+    // through it stays recorded, and every action-delivery path through it
+    // now rejects explicitly until the next mount reactivates it
+    // (`inst-bridge-deactivation`). Handler registrations and property
+    // subscriptions made through the bridge are untouched.
+    // @cpt-begin:cpt-frontx-algo-mfe-host-communication-bridge-delegation:p1:inst-bridge-deactivation
+    if (extensionState.bridge) {
+      try {
+        this.bridgeFactory.deactivateBridge(extensionState.bridge);
+      } catch (error) {
+        if (!hasTeardownError) {
+          teardownError = error;
+          hasTeardownError = true;
+        }
+      }
+    }
+    // @cpt-end:cpt-frontx-algo-mfe-host-communication-bridge-delegation:p1:inst-bridge-deactivation
+
+    if (container) {
+      const connection = this.coordinator.get(container);
+      if (connection) {
+        connection.bridges.delete(extensionId);
+        if (connection.bridges.size === 0) {
+          this.coordinator.unregister(container);
+        }
+      }
+    }
+
+    extensionState.container = null;
+    extensionState.shadowRoot = undefined;
+    if (hasTeardownError) {
+      extensionState.mountState = 'error';
+      extensionState.error = teardownError instanceof Error ? teardownError : new Error(String(teardownError));
+      throw teardownError;
+    }
+    extensionState.mountState = 'unmounted';
+    extensionState.error = undefined;
   }
 
   // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-retract-advertisements

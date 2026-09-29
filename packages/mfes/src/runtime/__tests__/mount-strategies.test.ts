@@ -17,16 +17,27 @@ function makePayload(subject: string): ActionPayload {
 class FakeMounter extends ExtensionMounter {
   readonly mountCalls: Array<{ extensionId: string; container: Element }> = [];
   readonly unmountCalls: string[] = [];
+  unmountError: Error | undefined;
+  mountGate: Promise<void> | undefined;
+  staleRelease: ((extensionId: string) => Promise<void>) | undefined;
 
   attach(_root: Element): void {}
   async detach(): Promise<void> {}
 
   async mount(extensionId: string, container: Element): Promise<void> {
     this.mountCalls.push({ extensionId, container });
+    await this.mountGate;
   }
 
   async unmount(extensionId: string): Promise<void> {
     this.unmountCalls.push(extensionId);
+    if (this.unmountError) {
+      throw this.unmountError;
+    }
+  }
+
+  override getStaleContainerRelease(extensionId: string): Promise<void> | undefined {
+    return this.staleRelease?.(extensionId);
   }
 }
 
@@ -105,6 +116,37 @@ describe('ConcurrentMountStrategy', () => {
     expect(hooks.created).toEqual(['ext-a', 'ext-b']);
   });
 
+  it('coalesces overlapping mounts of the same extension before creating a second container', async () => {
+    let releaseMount: (() => void) | undefined;
+    mounter.mountGate = new Promise<void>((resolve) => {
+      releaseMount = resolve;
+    });
+
+    const first = strategy.mount(makePayload('ext-a'));
+    const second = strategy.mount(makePayload('ext-a'));
+
+    expect(hooks.created).toEqual(['ext-a']);
+    expect(mounter.mountCalls.map(call => call.extensionId)).toEqual(['ext-a']);
+
+    releaseMount?.();
+    await expect(first).resolves.toBeUndefined();
+    await expect(second).resolves.toBeUndefined();
+  });
+
+  it('waits for the stale-root barrier before creating a container', async () => {
+    let releaseStaleRoot: (() => void) | undefined;
+    mounter.staleRelease = () => new Promise<void>((resolve) => {
+      releaseStaleRoot = resolve;
+    });
+
+    const mounting = strategy.mount(makePayload('ext-a'));
+
+    expect(hooks.created).toEqual([]);
+    releaseStaleRoot?.();
+    await expect(mounting).resolves.toBeUndefined();
+    expect(hooks.created).toEqual(['ext-a']);
+  });
+
   it('unmount calls mounter.unmount then hooks.destroy for the named extension', async () => {
     // Mount both first (so containers exist conceptually)
     await strategy.mount(makePayload('ext-a'));
@@ -116,6 +158,16 @@ describe('ConcurrentMountStrategy', () => {
     expect(hooks.destroyed).toEqual(['ext-a']);
     // ext-b is untouched
     expect(mounter.mountCalls.some(c => c.extensionId === 'ext-b')).toBe(true);
+  });
+
+  it('destroys hook-owned state while preserving a rejected unmount', async () => {
+    await strategy.mount(makePayload('ext-a'));
+    const unmountError = new Error('unmount failed');
+    mounter.unmountError = unmountError;
+
+    await expect(strategy.unmount!(makePayload('ext-a'))).rejects.toBe(unmountError);
+
+    expect(hooks.destroyed).toEqual(['ext-a']);
   });
 
   it('mount rethrows after hooks.destroy when mounter.mount throws (cleanup orphan)', async () => {
@@ -155,7 +207,30 @@ describe('OptionalMountStrategy', () => {
     expect(hooks.created).toHaveLength(0);
   });
 
+  it('does not retain an idempotent mount after an externally mounted subject is released', async () => {
+    registry.setMounted(DOMAIN, ['ext-a']);
+
+    await strategy.mount(makePayload('ext-a'));
+    registry.setMounted(DOMAIN, []);
+    await strategy.mount(makePayload('ext-a'));
+
+    expect(mounter.mountCalls.map(call => call.extensionId)).toEqual(['ext-a']);
+  });
+
+  it('waits for stale teardown before testing idempotency', async () => {
+    registry.setMounted(DOMAIN, ['ext-a']);
+    mounter.staleRelease = async (extensionId) => {
+      expect(extensionId).toBe('ext-a');
+      registry.setMounted(DOMAIN, []);
+    };
+
+    await strategy.mount(makePayload('ext-a'));
+
+    expect(mounter.mountCalls.map(call => call.extensionId)).toEqual(['ext-a']);
+  });
+
   it('mount displaces prior single extension before mounting new one', async () => {
+    await strategy.mount(makePayload('ext-a'));
     registry.setMounted(DOMAIN, ['ext-a']);
 
     await strategy.mount(makePayload('ext-b'));
@@ -165,6 +240,38 @@ describe('OptionalMountStrategy', () => {
     expect(hooks.destroyed).toContain('ext-a');
     // New extension mounted
     expect(mounter.mountCalls.map(c => c.extensionId)).toContain('ext-b');
+  });
+
+  it('waits for a stale displaced extension before mounting the new subject', async () => {
+    registry.setMounted(DOMAIN, ['ext-a']);
+    mounter.unmountError = new Error('stale teardown failed');
+    mounter.staleRelease = async (extensionId) => {
+      if (extensionId === 'ext-a') {
+        registry.setMounted(DOMAIN, []);
+      }
+    };
+
+    await expect(strategy.mount(makePayload('ext-b'))).resolves.toBeUndefined();
+
+    expect(mounter.unmountCalls).toEqual([]);
+    expect(mounter.mountCalls.map(call => call.extensionId)).toEqual(['ext-b']);
+  });
+
+  it('coalesces overlapping mounts of the same extension before creating a second container', async () => {
+    let releaseMount: (() => void) | undefined;
+    mounter.mountGate = new Promise<void>((resolve) => {
+      releaseMount = resolve;
+    });
+
+    const first = strategy.mount(makePayload('ext-a'));
+    const second = strategy.mount(makePayload('ext-a'));
+
+    expect(hooks.created).toEqual(['ext-a']);
+    expect(mounter.mountCalls.map(call => call.extensionId)).toEqual(['ext-a']);
+
+    releaseMount?.();
+    await expect(first).resolves.toBeUndefined();
+    await expect(second).resolves.toBeUndefined();
   });
 
   it('unmount is idempotent when subject is not in mount-set', async () => {
@@ -177,12 +284,35 @@ describe('OptionalMountStrategy', () => {
   });
 
   it('unmount removes the named extension when it is in mount-set', async () => {
+    await strategy.mount(makePayload('ext-a'));
     registry.setMounted(DOMAIN, ['ext-a']);
 
     await strategy.unmount!(makePayload('ext-a'));
 
     expect(mounter.unmountCalls).toContain('ext-a');
     expect(hooks.destroyed).toContain('ext-a');
+  });
+
+  it('destroys hook-owned state while preserving a rejected explicit unmount', async () => {
+    await strategy.mount(makePayload('ext-a'));
+    registry.setMounted(DOMAIN, ['ext-a']);
+    const unmountError = new Error('unmount failed');
+    mounter.unmountError = unmountError;
+
+    await expect(strategy.unmount!(makePayload('ext-a'))).rejects.toBe(unmountError);
+
+    expect(hooks.destroyed).toEqual(['ext-a']);
+  });
+
+  it('destroys the displaced hook state when its unmount rejects', async () => {
+    await strategy.mount(makePayload('ext-a'));
+    registry.setMounted(DOMAIN, ['ext-a']);
+    const unmountError = new Error('unmount failed');
+    mounter.unmountError = unmountError;
+
+    await expect(strategy.mount(makePayload('ext-b'))).rejects.toBe(unmountError);
+
+    expect(hooks.destroyed).toEqual(['ext-a']);
   });
 });
 
@@ -211,7 +341,31 @@ describe('ExclusiveMountStrategy', () => {
     expect(mounter.unmountCalls).toHaveLength(0);
   });
 
+  it('does not retain an idempotent mount after an externally mounted subject is released', async () => {
+    registry.setMounted(DOMAIN, ['ext-a']);
+
+    await strategy.mount(makePayload('ext-a'));
+    registry.setMounted(DOMAIN, []);
+    await strategy.mount(makePayload('ext-a'));
+
+    expect(mounter.mountCalls.map(call => call.extensionId)).toEqual(['ext-a']);
+  });
+
+  it('waits for stale teardown before testing idempotency', async () => {
+    registry.setMounted(DOMAIN, ['ext-a']);
+    mounter.staleRelease = async (extensionId) => {
+      expect(extensionId).toBe('ext-a');
+      registry.setMounted(DOMAIN, []);
+    };
+
+    await strategy.mount(makePayload('ext-a'));
+
+    expect(mounter.mountCalls.map(call => call.extensionId)).toEqual(['ext-a']);
+  });
+
   it('mount evicts siblings and mounts the new extension', async () => {
+    await strategy.mount(makePayload('ext-a'));
+    await strategy.mount(makePayload('ext-b'));
     registry.setMounted(DOMAIN, ['ext-a', 'ext-b']);
 
     await strategy.mount(makePayload('ext-c'));
@@ -223,6 +377,49 @@ describe('ExclusiveMountStrategy', () => {
     expect(hooks.destroyed).toContain('ext-b');
     // New extension mounted
     expect(mounter.mountCalls.map(c => c.extensionId)).toContain('ext-c');
+  });
+
+  it('waits for a stale evicted extension before mounting the new subject', async () => {
+    registry.setMounted(DOMAIN, ['ext-a']);
+    mounter.unmountError = new Error('stale teardown failed');
+    mounter.staleRelease = async (extensionId) => {
+      if (extensionId === 'ext-a') {
+        registry.setMounted(DOMAIN, []);
+      }
+    };
+
+    await expect(strategy.mount(makePayload('ext-b'))).resolves.toBeUndefined();
+
+    expect(mounter.unmountCalls).toEqual([]);
+    expect(mounter.mountCalls.map(call => call.extensionId)).toEqual(['ext-b']);
+  });
+
+  it('coalesces overlapping mounts of the same extension before creating a second container', async () => {
+    let releaseMount: (() => void) | undefined;
+    mounter.mountGate = new Promise<void>((resolve) => {
+      releaseMount = resolve;
+    });
+
+    const first = strategy.mount(makePayload('ext-a'));
+    const second = strategy.mount(makePayload('ext-a'));
+
+    expect(hooks.created).toEqual(['ext-a']);
+    expect(mounter.mountCalls.map(call => call.extensionId)).toEqual(['ext-a']);
+
+    releaseMount?.();
+    await expect(first).resolves.toBeUndefined();
+    await expect(second).resolves.toBeUndefined();
+  });
+
+  it('destroys an evicted hook state when its unmount rejects', async () => {
+    await strategy.mount(makePayload('ext-a'));
+    registry.setMounted(DOMAIN, ['ext-a']);
+    const unmountError = new Error('unmount failed');
+    mounter.unmountError = unmountError;
+
+    await expect(strategy.mount(makePayload('ext-b'))).rejects.toBe(unmountError);
+
+    expect(hooks.destroyed).toEqual(['ext-a']);
   });
 
   it('has no unmount method (structural opt-in proof)', () => {

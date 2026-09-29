@@ -784,16 +784,7 @@ export class DefaultMfeRegistry extends MfeRegistry {
       this.mountManager,
       (domainId, extId) => this.extensionManager.addMountedExtension(domainId, extId),
       (domainId, extId) => this.extensionManager.removeMountedExtension(domainId, extId),
-      (domainId) => this.extensionManager.getMountedExtensions(domainId),
-      // Hooks passed to detach — strategies create their own hooks; the mounter uses them
-      // only for mass-unmount in detach(), so we supply a no-op here and let each
-      // strategy handle its own hooks during normal unmount. Detach delegates to
-      // mountManager.unmountExtension directly without hooks.destroy since by detach
-      // time the strategy has already been invalidated.
-      {
-        create: (_extId) => { throw new Error('DefaultExtensionMounter: create called on detach hooks'); },
-        destroy: (_extId) => { /* no-op: strategy handles destroy during normal unmount */ },
-      }
+      (domainId) => this.extensionManager.getMountedExtensions(domainId)
     );
     const lifecycleTrigger = new DefaultDomainLifecycleTrigger(declaration.id, this.lifecycleManager);
 
