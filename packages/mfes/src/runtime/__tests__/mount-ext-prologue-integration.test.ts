@@ -2008,15 +2008,10 @@ describe('domain occupancy queue — two-slot semantics (Optional/Exclusive)', (
           fallback: { action: { type: 'disp-b-fallback', target: probeDomainId, payload: {} } },
         });
 
-        // `DefaultActionsChainsMediator.executeActionsChain` defers invoking
-        // a chain's own handler to a microtask (never synchronously within
-        // the dispatch call itself) — so awaiting A's own entered signal,
-        // the first genuinely asynchronous gap after both dispatches above,
-        // is also the first point at which B's own dispatch is guaranteed to
-        // have reached the queue and been admitted as the pending entry,
-        // with its own caller timer armed: both invocations were queued as
-        // microtasks in dispatch order and drain in that same order before
-        // this awaited continuation runs.
+        // Awaiting A's own entered signal — the first asynchronous gap after
+        // both dispatches above — is also a point at which B's own dispatch
+        // has reached the queue and been admitted as the pending entry, with
+        // its own caller timer armed.
         await entered.promise;
 
         // Running entry A entered: A started before dispose was called.
@@ -2028,8 +2023,8 @@ describe('domain occupancy queue — two-slot semantics (Optional/Exclusive)', (
         // (`OccupancyCaller.armTimer`, armed by `DomainOccupancyCoordinator`'s
         // own `admit`, for the running entry as much as for the pending one)
         // AND the mediator's own identical per-action bound
-        // (`DefaultActionsChainsMediator.executeLocalNode`'s own
-        // `executeWithTimeout`) — four timers over the pre-dispatch baseline.
+        // (`DefaultActionsChainsMediator.invokeWithinTimeout`) — four timers
+        // over the pre-dispatch baseline.
         expect(vi.getTimerCount()).toBe(baselineTimers + 4);
 
         registry.dispose();
@@ -2037,17 +2032,14 @@ describe('domain occupancy queue — two-slot semantics (Optional/Exclusive)', (
         // Pending entry B never entered: B was queued and never started.
         expect(factory.impl.entries.has('ext-b')).toBe(false);
 
-        // `registry.dispose()` disposes the mediator FIRST, which ends every
-        // attempt currently in flight — both A's and B's — synchronously,
-        // clearing each one's own mediator-level per-action timer in that
-        // same call (`inst-executor-teardown-ends`: disarmed the instant
-        // `dispose()` runs, never one microtask later). It then fails the
-        // pending entry, which clears B's own queue-level caller timer too.
-        // Only A's own queue-level caller timer survives: the running entry
-        // is never replaced, removed, or interrupted by disposal
-        // (`inst-me-queue-running-never-interrupted`) — exactly one timer
-        // over the pre-dispatch baseline remains armed.
-        expect(vi.getTimerCount()).toBe(baselineTimers + 1);
+        // `registry.dispose()` fails the pending entry, which clears B's own
+        // queue-level caller timer synchronously. A's queue-level caller
+        // timer survives: the running entry is never replaced, removed, or
+        // interrupted by disposal (`inst-me-queue-running-never-interrupted`).
+        // Each action's own per-action timer in the mediator stays armed
+        // until that action settles — three timers over the pre-dispatch
+        // baseline remain armed at this point.
+        expect(vi.getTimerCount()).toBe(baselineTimers + 3);
 
         // Release the gate so A's own inner physically finishes even though
         // the registry that dispatched it has already been disposed — its

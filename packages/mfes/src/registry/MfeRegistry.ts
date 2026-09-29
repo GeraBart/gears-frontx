@@ -133,22 +133,12 @@ export abstract class MfeRegistry {
   // --- Action Chains ---
 
   /**
-   * Accept (or synchronously refuse) an actions chain for execution.
+   * Execute an actions chain: the action, then `next` recursively on
+   * success or `fallback` recursively on failure
+   * (`cpt-frontx-adr-action-dispatch-and-chaining`). Takes only the chain
+   * and returns nothing awaitable (`cpt-frontx-adr-mfe-runtime-public-surface`).
    *
-   * Acceptance-only per `cpt-frontx-adr-mfe-runtime-public-surface`: this
-   * call takes the chain and nothing else — no per-call execution options
-   * and no timeout argument — validates its envelope and this registry's
-   * own dispatch capability, and either accepts it (handing it to the
-   * mediator's own acceptance operation, hidden behind this facade) or
-   * throws `ActionsChainRefusalError` synchronously. It never returns a
-   * value and never yields a promise a caller could await for the chain's
-   * own execution; settlement is observed entirely by the runtime's own
-   * internals, never by an emitter.
-   *
-   * @param chain - Actions chain to accept.
-   * @throws {ActionsChainRefusalError} synchronously on a malformed chain,
-   *   an invalid declared per-action timeout, or an unusable dispatch
-   *   capability (for example a disposed registry).
+   * @param chain - Actions chain to execute.
    */
   abstract executeActionsChain(chain: ActionsChain): void;
 

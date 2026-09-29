@@ -34,8 +34,8 @@ export abstract class RuntimeBridgeFactory {
     entryTypeId: string,
     domainActions: readonly string[],
     existing: { parentBridge: ParentMfeBridge; childBridge: ChildMfeBridge } | undefined,
-    // The public, acceptance-only chain dispatcher (void, synchronously-
-    // refusing) — wired to the child bridge's public capability ONLY.
+    // The registry's `executeActionsChain` (void) — wired to the child
+    // bridge's public capability ONLY.
     dispatchActionsChain: (chain: ActionsChain) => void,
     registerCatchAllRoute: (domainId: string, route: CrossHopRoute) => void,
     unregisterCatchAllActionHandler: (domainId: string) => void,

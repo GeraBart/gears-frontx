@@ -139,10 +139,10 @@ export class DefaultExtensionManager extends ExtensionManager {
     // @cpt-begin:cpt-frontx-algo-mfe-registry-lifecycle-stage-triggering:p1:inst-algo-lst-sites
     // Non-blocking: the domain's own `destroyed` stage is triggered
     // alongside this unregistration transition — a notification that the
-    // transition is happening, not a phase it waits on. Deferred target
-    // retirement (`ActionsChainsMediator.unregisterAllHandlers`, called
-    // just below via `DefaultMfeRegistry.unregisterDomain`) is what lets a
-    // `destroyed` hook targeting this very domain still reach its handler.
+    // transition is happening, not a phase it waits on. Each hook's first
+    // action resolves and invokes its handler within `executeActionsChain`,
+    // so a `destroyed` hook targeting this very domain reaches its handler
+    // before `DefaultMfeRegistry.unregisterDomain` unregisters it.
     this.triggerDomainOwnLifecycle(
       domainId,
       this.typeSystem.resolveLifecycleStageDestroyedId()
@@ -306,12 +306,9 @@ export class DefaultExtensionManager extends ExtensionManager {
 
     // @cpt-begin:cpt-frontx-algo-mfe-registry-lifecycle-stage-triggering:p1:inst-algo-lst-sites
     // Non-blocking: the extension's own `destroyed` stage is triggered
-    // alongside this unregistration transition. Deferred target retirement
-    // (`ActionsChainsMediator.unregisterAllHandlers`, called just below via
-    // `releaseExtensionBridge` -> `MountManager.releaseExtension`) is what
-    // lets a `destroyed` hook targeting this very extension still reach its
-    // handler even though `unregisterExtensionActionHandler` runs right
-    // after this call returns.
+    // alongside this unregistration transition. Each hook's first action
+    // resolves and invokes its handler within `executeActionsChain`, before
+    // `releaseExtensionBridge` below unregisters this extension's handlers.
     this.triggerLifecycle(
       extensionId,
       this.typeSystem.resolveLifecycleStageDestroyedId()

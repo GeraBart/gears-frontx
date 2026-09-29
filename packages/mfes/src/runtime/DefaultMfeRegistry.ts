@@ -24,13 +24,7 @@ import type { ExtensionDomain, Extension, ActionsChain } from '../types';
 import type { ExtensionDomainImplementationFactory } from './ExtensionDomainImplementationFactory';
 import type { ExtensionMounter } from './ExtensionMounter';
 import { DefaultActionsChainsMediator } from '../mediator/DefaultActionsChainsMediator';
-import { ChainEnvelopeValidator } from '../mediator/ChainEnvelopeValidator';
-import { DiagnosticReporter } from '../mediator/DiagnosticReporter';
-import { DispatchCorrelationIdGenerator } from '../mediator/DispatchCorrelationIdGenerator';
-import { DispatchOriginStore } from '../mediator/DispatchOriginStore';
-import { EnvelopeDiagnosticsMapper } from '../mediator/EnvelopeDiagnosticsMapper';
 import { CROSS_HOP_PROTOCOL_VERSION, CrossHopRoute, type CrossHopEnvelope } from '../mediator/CrossHopRoute';
-import { CrossHopUnavailableError } from '../mediator/CrossHopUnavailableError';
 import { RuntimeCoordinator } from './coordination/RuntimeCoordinator';
 import { InvalidatableDomainContext } from './InvalidatableDomainContext';
 import { ConcurrentMountStrategy } from './ConcurrentMountStrategy';
@@ -47,7 +41,7 @@ import { RuntimeBridgeFactory } from './RuntimeBridgeFactory';
 import { DefaultRuntimeBridgeFactory } from './DefaultRuntimeBridgeFactory';
 import { ChildDomainForwardingRouteFactory } from '../bridge/ChildDomainForwardingRouteFactory';
 import { LoadExtHandler } from './LoadExtHandler';
-import { EntryTypeNotHandledError, ActionsChainRefusalError } from '../errors';
+import { EntryTypeNotHandledError } from '../errors';
 import { extractGtsPackage } from '../gts/extract-package';
 import { DefaultExtensionMounter } from './DefaultExtensionMounter';
 import { MountExtActionHandler } from './MountExtActionHandler';
@@ -56,8 +50,6 @@ import { DomainOccupancyCoordinator } from './DomainOccupancyCoordinator';
 import { ConcurrentMountJoiner } from './ConcurrentMountJoiner';
 import { ActionTimeoutResolver } from '../mediator/ActionTimeoutResolver';
 import { DefaultDomainLifecycleTrigger } from './DefaultDomainLifecycleTrigger';
-import { ConsoleDiagnosticSink } from './ConsoleDiagnosticSink';
-import type { MfeDiagnosticSink, MountSetObserver } from './config';
 import { ParentMfeBridgeImpl } from '../bridge/ParentMfeBridgeImpl';
 import { BridgeInactiveError } from '../bridge/errors';
 import {
@@ -89,8 +81,7 @@ interface ForwardingEntry {
   /** The bridge the advertisement arrived on — the loop-containment identity. */
   readonly edge: ChildMfeBridge;
   /** Hands a versioned cross-hop envelope down through that bridge to the
-   * descendant registry — synchronous and binary: throws to refuse, or
-   * returns having handed the node over. */
+   * descendant registry: throws to refuse, or returns having accepted. */
   readonly sendDown: (envelope: CrossHopEnvelope) => void;
   /**
    * The opaque action-type id set this entry was admitted with — retained
@@ -185,24 +176,11 @@ export class DefaultMfeRegistry extends MfeRegistry {
   private readonly coordinator: RuntimeCoordinator;
 
   /**
-   * Actions chains mediator for action chain execution. Held as the CONCRETE
-   * type — not the exported abstract `ActionsChainsMediator` — because this
-   * registry's own internal cross-hop wiring
-   * (`receiveCrossHopNode`/`acceptSingleNodeForHop`) needs the
-   * completion-bearing "observed execution" operation the ADR deliberately
-   * keeps off that exported abstraction. `DefaultMfeRegistry` already
-   * constructs this concrete class directly and is the sole wiring site for
-   * it, so holding the concrete type here adds no new exported contract.
+   * Actions chains mediator. Held as the concrete type for the internal
+   * members this registry wires: `registerCatchAllRoute` and
+   * `receiveHandedOverChain`.
    */
   private readonly mediator: DefaultActionsChainsMediator;
-
-  /**
-   * Validates a chain envelope before this registry's own
-   * `executeAndAwaitChain` awaits it (`inst-validate-envelope`) — the SAME
-   * instance injected into `this.mediator`, constructed once, here, at the
-   * composition root.
-   */
-  private readonly chainEnvelopeValidator: ChainEnvelopeValidator;
 
   /**
    * The one shared per-action timeout rule — the SAME instance injected into
@@ -221,39 +199,6 @@ export class DefaultMfeRegistry extends MfeRegistry {
    * domain down, so this map never outlives the domain it belongs to.
    */
   private readonly occupancyCoordinatorsByDomain = new Map<string, DomainOccupancyCoordinator>();
-
-  /**
-   * Converts a `DiagnosticContext` to and from the plain record shape
-   * carried across a hop (`inst-diagnostic-record`) — the SAME instance
-   * injected into `this.mediator`, constructed once, here, at the
-   * composition root; also used directly by `receiveCrossHopNode` to
-   * reconstruct the sending side's context from a received envelope.
-   */
-  private readonly envelopeDiagnosticsMapper: EnvelopeDiagnosticsMapper;
-
-  /**
-   * Identity-keyed lifecycle-origin tags a hook's root action carries
-   * (`inst-diagnostic-record`) — constructed once, here, at the composition
-   * root, and injected into BOTH `this.lifecycleManager` (the write side)
-   * and `this.mediator` (the read side), so the two observe the SAME store
-   * without depending on a module-level singleton.
-   */
-  private readonly dispatchOriginStore: DispatchOriginStore;
-
-  /**
-   * Mints this registry's own per-accepted-chain correlation identity —
-   * constructed once, here, and injected into `this.mediator` and the
-   * `DiagnosticReporter` below.
-   */
-  private readonly dispatchCorrelationIdGenerator: DispatchCorrelationIdGenerator;
-
-  /**
-   * Reports a synchronous chain refusal, and contains a diagnostic sink's
-   * own failure — constructed once, here, wired to this registry's own
-   * `dispatchOriginStore`/`dispatchCorrelationIdGenerator`, and injected
-   * into BOTH `this.mediator` and `this.lifecycleManager`.
-   */
-  private readonly diagnosticReporter: DiagnosticReporter;
 
   /**
    * Operation serializer for per-entity concurrency control.
@@ -324,28 +269,10 @@ export class DefaultMfeRegistry extends MfeRegistry {
   private readonly packages = new Map<string, Set<string>>();
 
   /**
-   * Explicit disposed state (`cpt-frontx-adr-action-dispatch-and-chaining`):
-   * `dispose()` releases every collaborator's state, but that alone degrades
-   * a post-disposal `executeActionsChain` call to an ordinary no-handler
-   * chain failure rather than reporting the actual condition — an unusable
-   * dispatch capability. Checked first, synchronously, by `executeActionsChain`.
+   * Set by `dispose()`. A disposed registry refuses every hand-over across a
+   * hop (`inst-receive-refusal-check`).
    */
   private disposed = false;
-
-  /**
-   * Structured diagnostic sink lifecycle-hook dispatch refusals are
-   * reported through — the config-supplied one, or a `console.error`
-   * default (`MfeRegistryConfig.diagnosticSink`).
-   */
-  private readonly diagnosticSink: MfeDiagnosticSink;
-
-  /**
-   * Construction-time observer of committed mount-set changes, if the host
-   * supplied one (`MfeRegistryConfig.mountSetObserver`). `undefined` when
-   * none was supplied — the per-domain mounter treats that as "no observer
-   * to notify" rather than substituting a no-op.
-   */
-  private readonly mountSetObserver: MountSetObserver | undefined;
 
   constructor(config: MfeRegistryConfig) {
     super();
@@ -359,8 +286,6 @@ export class DefaultMfeRegistry extends MfeRegistry {
     }
 
     this.typeSystem = config.typeSystem;
-    this.diagnosticSink = config.diagnosticSink ?? new ConsoleDiagnosticSink();
-    this.mountSetObserver = config.mountSetObserver;
 
     this.operationSerializer = new OperationSerializer();
     this.coordinator = new WeakMapRuntimeCoordinator();
@@ -370,19 +295,8 @@ export class DefaultMfeRegistry extends MfeRegistry {
     // happen.
     this.bridgeFactory = new DefaultRuntimeBridgeFactory(new ChildDomainForwardingRouteFactory());
 
-    // Composition-root-owned collaborators (DIP): constructed exactly once,
-    // here, and injected into both `this.mediator` and `this.lifecycleManager`
-    // below rather than reached for as module-level singletons
-    // (`inst-diagnostic-record`).
-    this.chainEnvelopeValidator = new ChainEnvelopeValidator();
-    this.actionTimeoutResolver = new ActionTimeoutResolver(this.chainEnvelopeValidator);
-    this.envelopeDiagnosticsMapper = new EnvelopeDiagnosticsMapper();
-    this.dispatchOriginStore = new DispatchOriginStore();
-    this.dispatchCorrelationIdGenerator = new DispatchCorrelationIdGenerator();
-    this.diagnosticReporter = new DiagnosticReporter(
-      this.dispatchOriginStore,
-      this.dispatchCorrelationIdGenerator
-    );
+    // Shared by the mediator and every domain's mount/unmount handlers.
+    this.actionTimeoutResolver = new ActionTimeoutResolver();
 
     this.mediator = new DefaultActionsChainsMediator({
       typeSystem: this.typeSystem,
@@ -392,15 +306,6 @@ export class DefaultMfeRegistry extends MfeRegistry {
       resolveForwardingEntry: (targetId, arrivalEdge) =>
         this.resolveForwardingEntryRoute(targetId, arrivalEdge),
       resolveEscalation: () => this.resolveEscalationRoute(),
-      // Same substitutable sink `DefaultLifecycleManager` reports a hook's
-      // dispatch refusal through — one config-supplied (or defaulted)
-      // instance shared by both, per `inst-diagnostic-record`.
-      diagnosticSink: this.diagnosticSink,
-      chainEnvelopeValidator: this.chainEnvelopeValidator,
-      envelopeDiagnosticsMapper: this.envelopeDiagnosticsMapper,
-      dispatchOriginStore: this.dispatchOriginStore,
-      dispatchCorrelationIdGenerator: this.dispatchCorrelationIdGenerator,
-      diagnosticReporter: this.diagnosticReporter,
       actionTimeoutResolver: this.actionTimeoutResolver,
     });
 
@@ -421,25 +326,9 @@ export class DefaultMfeRegistry extends MfeRegistry {
       validateEntryType: (entryTypeId) => this.validateEntryType(entryTypeId),
     });
 
-    // Wired to the ACCEPTANCE-ONLY public surface (`executeActionsChain`),
-    // not the completion-bearing internal `executeAndAwaitChain`: a
-    // lifecycle hook's chain must never be awaited by its trigger
-    // (`cpt-frontx-algo-mfe-registry-lifecycle-stage-triggering`), and
-    // `executeActionsChain` is exactly "accept or synchronously refuse,
-    // never yield anything awaitable for execution."
     this.lifecycleManager = new DefaultLifecycleManager(
       this.extensionManager,
-      (chain) => this.executeActionsChain(chain),
-      this.diagnosticSink,
-      // Same `DispatchOriginStore`/`DiagnosticReporter`/
-      // `DispatchCorrelationIdGenerator` instances injected into
-      // `this.mediator` above, so the tag this class writes is the one
-      // `DefaultActionsChainsMediator.runAcceptedChain` reads back, and a
-      // hook's refusal carries an identity from this registry's one
-      // namespace (`inst-diagnostic-record`).
-      this.dispatchOriginStore,
-      this.diagnosticReporter,
-      this.dispatchCorrelationIdGenerator
+      (chain) => this.executeActionsChain(chain)
     );
 
     this.mountManager = new DefaultMountManager({
@@ -449,9 +338,6 @@ export class DefaultMfeRegistry extends MfeRegistry {
       typeSystem: this.typeSystem,
       triggerLifecycle: (extensionId, stageId) =>
         this.triggerLifecycleStageInternal(extensionId, stageId),
-      // The public child capability accepts and refuses synchronously
-      // (`dispatchActionsChain`, void) — nothing awaitable ever crosses
-      // this bridge (`cpt-frontx-adr-mfe-runtime-public-surface`).
       dispatchActionsChain: (chain) => this.executeActionsChain(chain),
       hostRuntime: this,
       registerCatchAllRoute: (domainId, route) =>
@@ -520,10 +406,7 @@ export class DefaultMfeRegistry extends MfeRegistry {
     this.inboundActionsChainUnsubscribe = null;
     this.propagatedTargetIds.clear();
 
-    // The OLD link (if any) is simply replaced: retraction and deactivation
-    // act on the route only, never on an execution already accepted through
-    // it — there is nothing in flight on this (delivering) side to reject,
-    // since a delivering runtime holds nothing for a node it handed over
+    // The previous link, if any, is replaced; this acts on the route only
     // (`inst-retract-advertisements`).
     this.inboundBridgeLink = link;
     if (!link) return;
@@ -536,14 +419,9 @@ export class DefaultMfeRegistry extends MfeRegistry {
     // copy) — the two sides need not, and generally will not, share a class
     // definition, so identity can only be established structurally.
     if (DefaultMfeRegistry.hasOnCrossHopEnvelopeMethod(link.edge)) {
-      // Automatic downward delivery: a versioned cross-hop envelope
-      // forwarded down to this registry through its inbound bridge lands
-      // directly on this registry's own single-node executor, with no
-      // explicit registration call required from the microfrontend author.
-      // Re-established here on every re-link, discarding whatever the
-      // previous link had accepted (`propagatedTargetIds` was already
-      // cleared above). Synchronous: acceptance or refusal is decided
-      // entirely inside `receiveCrossHopNode`, before this call returns.
+      // Automatic downward delivery: a hand-over through the inbound bridge
+      // lands on `receiveCrossHopNode`, with no registration call required
+      // from the microfrontend author. Re-established on every re-link.
       this.inboundActionsChainUnsubscribe = link.edge.onCrossHopEnvelope((envelope) =>
         this.receiveCrossHopNode(envelope)
       );
@@ -626,20 +504,13 @@ export class DefaultMfeRegistry extends MfeRegistry {
       // @cpt-begin:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-escalation-lookup
       escalate: (envelope) => {
         if (revoked) {
-          throw new CrossHopUnavailableError(
-            extensionId,
-            'link-revoked',
-            `Inbound bridge link for '${extensionId}' has been revoked.`
-          );
+          throw new Error(`Inbound bridge link for '${extensionId}' has been revoked.`);
         }
         if (!isActiveBridge(childBridge)) {
           throw new BridgeInactiveError(extensionId);
         }
-        tagArrivalEdge(envelope.node.action, childBridge);
-        // Synchronous and binary: `receiveCrossHopNode` throws on refusal
-        // (unrecognized protocol version, disposed registry) or returns
-        // having accepted and reserved what the node needs — either way
-        // this call is done the instant it returns.
+        tagArrivalEdge(envelope.chain.action, childBridge);
+        // Throws to refuse, or returns having accepted.
         this.receiveCrossHopNode(envelope);
       },
       // @cpt-end:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-escalation-lookup
@@ -743,10 +614,7 @@ export class DefaultMfeRegistry extends MfeRegistry {
    * registry holds for a descendant's target, then re-propagate the
    * retraction further up if this registry itself has an inbound bridge.
    * Acts on the route only: a sub-chain the far side already accepted
-   * through this entry keeps executing there, untouched by this call —
-   * there is nothing in flight on THIS (delivering) side to reject, since a
-   * delivering runtime holds nothing for a node it handed over
-   * (`inst-retract-advertisements`).
+   * through this entry keeps executing there (`inst-retract-advertisements`).
    */
   private retractForwardingEntry(targetId: string, edge: ChildMfeBridge): void {
     const entry = this.forwardingEntries.get(targetId);
@@ -938,11 +806,7 @@ export class DefaultMfeRegistry extends MfeRegistry {
       this.mountManager,
       (domainId, extId) => this.extensionManager.addMountedExtension(domainId, extId),
       (domainId, extId) => this.extensionManager.removeMountedExtension(domainId, extId),
-      (domainId) => this.extensionManager.getMountedExtensions(domainId),
-      // Construction-time mount-set observer, if the host supplied one —
-      // notified from the commit (this mounter's own bookkeeping calls
-      // above), never from a lifecycle stage (MFES-8, `cpt-frontx-adr-action-dispatch-and-chaining`).
-      this.mountSetObserver
+      (domainId) => this.extensionManager.getMountedExtensions(domainId)
     );
     const lifecycleTrigger = new DefaultDomainLifecycleTrigger(declaration.id, this.lifecycleManager);
 
@@ -1078,10 +942,8 @@ export class DefaultMfeRegistry extends MfeRegistry {
     // comes from the injected plugin: MFES-1 forbids this package from
     // spelling a concrete type-format literal, and a consumer whose stages
     // live in another notation would otherwise never be matched. Void —
-    // `triggerDomainOwnLifecycleStageInternal` dispatches and returns
-    // without waiting for any hook's chain to settle; a hook's own
-    // synchronous refusal is already caught and reported by
-    // `DefaultLifecycleManager` and never propagates here.
+    // `triggerDomainOwnLifecycleStageInternal` hands each hook's chain to
+    // `executeActionsChain` and returns without awaiting any of them.
     this.triggerDomainOwnLifecycleStageInternal(
       declaration.id,
       this.typeSystem.resolveLifecycleStageInitId()
@@ -1261,203 +1123,42 @@ export class DefaultMfeRegistry extends MfeRegistry {
   // ─── Execute actions chain ────────────────────────────────────────────────
 
   // @cpt-begin:cpt-frontx-flow-extension-domain-governance-admission:p1:inst-mount-action
+  /**
+   * Execute an actions chain through this registry's mediator. Takes only
+   * the chain and returns nothing awaitable.
+   */
   // @cpt-begin:cpt-frontx-flow-mfe-host-communication-dispatch-chain:p1:inst-invoke-execute
-  // @cpt-begin:cpt-frontx-flow-mfe-host-communication-dispatch-chain:p1:inst-validate-dispatch
-  // @cpt-begin:cpt-frontx-flow-mfe-host-communication-dispatch-chain:p1:inst-accept-and-reserve
-  // @cpt-begin:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-validate-emitter-capability
-  // @cpt-begin:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-refusal-check
-  // @cpt-begin:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-refuse-sync
-  /**
-   * Accept (or synchronously refuse) an actions chain for execution.
-   *
-   * Acceptance-only per `cpt-frontx-adr-mfe-runtime-public-surface` and
-   * `cpt-frontx-adr-action-dispatch-and-chaining`: this call either accepts
-   * the chain — validating its envelope and this registry's own dispatch
-   * capability (not disposed) — or throws `ActionsChainRefusalError`
-   * synchronously. It never returns a value and never yields a promise a
-   * caller could await for the chain's own execution
-   * (`inst-accept-yields-nothing`); the completion-bearing observed
-   * execution this drives runs entirely on the executor's own, via the
-   * internal `executeAndAwaitChain`.
-   *
-   * @throws {ActionsChainRefusalError} synchronously on a malformed chain,
-   *   an invalid declared per-action timeout, or a disposed registry —
-   *   each a capability unusable at the moment of the call, never a chain
-   *   failure.
-   */
-  executeActionsChain(chain: ActionsChain): void {
-    // @cpt-begin:cpt-frontx-flow-mfe-host-communication-dispatch-chain:p1:inst-refusal-branch
-    if (this.disposed) {
-      // @cpt-begin:cpt-frontx-flow-mfe-host-communication-dispatch-chain:p1:inst-refuse-at-call
-      const refusal = new ActionsChainRefusalError(
-        'disposed_registry',
-        [],
-        'MfeRegistry: dispatch refused — this registry has been disposed'
-      );
-      // Every refusal is attributed through the substitutable sink
-      // (`inst-diagnostic-record`: "for a refusal and for every node failure
-      // alike"), reported BEFORE the throw below — the throw itself, the
-      // contract with this call's caller, is unchanged.
-      this.diagnosticReporter.reportSynchronousChainRefusal(this.diagnosticSink, chain, refusal);
-      throw refusal;
-      // @cpt-end:cpt-frontx-flow-mfe-host-communication-dispatch-chain:p1:inst-refuse-at-call
-    }
-    // @cpt-end:cpt-frontx-flow-mfe-host-communication-dispatch-chain:p1:inst-refusal-branch
-    try {
-      this.chainEnvelopeValidator.validate(chain);
-    } catch (error) {
-      this.diagnosticReporter.reportSynchronousChainRefusal(this.diagnosticSink, chain, error);
-      throw error;
-    }
-
-    // Fire-and-forget: settlement is observed entirely by the executor's
-    // own internals (`executeAndAwaitChain`), never by this caller. Calling
-    // an async function never throws synchronously — any synchronous
-    // exception inside it becomes a rejected promise, caught below — so no
-    // internal, post-acceptance failure can leak out of this call as if it
-    // were a refusal. This call is also what creates the chain's executor
-    // state and reserves what its first executable node needs (both
-    // inside `this.mediator.runAcceptedChain`/`executeChainRecursive`,
-    // synchronously, before this method returns) and returns nothing to
-    // the developer.
-    void this.executeAndAwaitChain(chain).catch((error) => {
-      console.error('[MfeRegistry] Unhandled error in accepted chain execution', error);
-    });
-  }
-  // @cpt-end:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-refuse-sync
-  // @cpt-end:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-refusal-check
-  // @cpt-end:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-validate-emitter-capability
-  // @cpt-end:cpt-frontx-flow-mfe-host-communication-dispatch-chain:p1:inst-accept-and-reserve
-  // @cpt-end:cpt-frontx-flow-mfe-host-communication-dispatch-chain:p1:inst-validate-dispatch
-  // @cpt-end:cpt-frontx-flow-mfe-host-communication-dispatch-chain:p1:inst-invoke-execute
-
-  /**
-   * Internal, completion-bearing chain execution: validates the envelope
-   * and awaits the mediator's own "observed execution" directly (via the
-   * CONCRETE mediator this registry holds), logging a diagnostic when the
-   * chain does not complete. NOT part of the public `MfeRegistry` facade —
-   * `cpt-frontx-adr-mfe-runtime-public-surface` keeps the completion-bearing
-   * operation off the public surface entirely.
-   *
-   * The ONLY caller is `executeActionsChain`'s own fire-and-forget
-   * dispatch: nothing awaitable this method yields ever crosses a bridge
-   * or is passed into bridge wiring — completion observation stays
-   * strictly inside this executor. Lifecycle hooks (`DefaultLifecycleManager`)
-   * are not among its callers either — a triggered stage's chain is
-   * dispatched through the acceptance-only public facade
-   * (`executeActionsChain`, wired as `dispatchActionsChain`), never awaited
-   * by this registry.
-   *
-   * @internal
-   */
   // @cpt-begin:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-accept-yields-nothing
-  private async executeAndAwaitChain(chain: ActionsChain): Promise<void> {
-    try {
-      this.chainEnvelopeValidator.validate(chain);
-    } catch (error) {
-      // `executeActionsChain` already validated and reported before
-      // calling this method, so a refusal reaching this call never
-      // re-reports: the same pure validation simply passes again.
-      this.diagnosticReporter.reportSynchronousChainRefusal(this.diagnosticSink, chain, error);
-      throw error;
-    }
-    // This registry-level console log is `DefaultMfeRegistry`'s own, coarse
-    // "did the chain fail" log for callers of the public facade. It is
-    // independent of, and does not duplicate, the mediator's own
-    // fine-grained per-node `diagnosticSink.reportChainNodeFailure` call:
-    // that one is reported from inside `this.mediator` itself, at the point
-    // of first catch.
-    //
-    // A successful hand-over across a hop settles THIS runtime's own run as
-    // `completed: false` too — this runtime executed nothing for the node,
-    // the far side did — so `handedOver` distinguishes that case: it is not
-    // a chain failure, and logging it as one would be a false failure for
-    // every chain that crosses a hop (`ChainSettlement.handedOver`'s own
-    // doc). Likewise, a run ended by this executor's own teardown
-    // (`ChainSettlement.tornDown`) is a lifetime boundary, never an outcome
-    // of the action — logging it here would misreport disposal itself as a
-    // chain failure. Only a run that is neither completed, handed over, nor
-    // torn down is an actual chain failure.
-    const settlement = await this.mediator.runAcceptedChain(chain);
-    if (!settlement.completed && !settlement.handedOver && !settlement.tornDown) {
-      console.error(
-        `[MfeRegistry] Actions chain failed`,
-        `| path: [${settlement.path.join(' -> ')}]`
-      );
-    }
-    // @cpt-begin:cpt-frontx-flow-extension-domain-governance-admission:p1:inst-admitted-mount
-    // (mount strategy invoked via mediator dispatch chain → strategy.mount())
-    // @cpt-end:cpt-frontx-flow-extension-domain-governance-admission:p1:inst-admitted-mount
-    // @cpt-begin:cpt-frontx-flow-extension-domain-governance-admission:p1:inst-mount-success
-    // (implicit: chain.completed = true on success path)
-    // @cpt-end:cpt-frontx-flow-extension-domain-governance-admission:p1:inst-mount-success
+  executeActionsChain(chain: ActionsChain): void {
+    this.mediator.executeActionsChain(chain);
   }
   // @cpt-end:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-accept-yields-nothing
+  // @cpt-end:cpt-frontx-flow-mfe-host-communication-dispatch-chain:p1:inst-invoke-execute
   // @cpt-end:cpt-frontx-flow-extension-domain-governance-admission:p1:inst-mount-action
 
   /**
-   * Receiving side of every cross-hop delivery into THIS registry's own
-   * mediator — a downward forwarding entry, an upward escalation, or the
-   * converted parent-to-child-domain forwarding tier, all landing here via
-   * `onCrossHopEnvelope`/`InboundBridgeLink.escalate`. Unlike the PUBLIC
-   * `executeActionsChain` (acceptance-only, synchronously refusing when
-   * unusable), this executes exactly the ONE node the envelope carries.
+   * Receiving side of every hand-over into this registry — a downward
+   * forwarding entry, an upward escalation, or the child-domain forwarding
+   * tier. Refuses, with no side effect here, when the envelope carries a
+   * version this copy does not recognize or this registry is disposed;
+   * otherwise accepts, and the sub-chain executes after this call returns.
    *
-   * Synchronous and binary, by construction: refuse at the call — before
-   * taking anything, so the refusal has no side effect here — or accept,
-   * transferring the sub-chain so every later failure of that node is this
-   * registry's own, answered by the `fallback` it dispatches from itself,
-   * never surfacing back through this call (`inst-receive-refusal-check`,
-   * `inst-receive-refuse`).
-   *
-   * @throws {CrossHopUnavailableError} synchronously, before anything is
-   *   taken, when the envelope carries an internal transport protocol
-   *   version this copy does not recognize (with a diagnostic naming the
-   *   version met and the version this copy implements) or this registry
-   *   has been disposed.
+   * @throws {Error} to refuse the hand-over.
    */
   // @cpt-begin:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-receive-hand-over
-  // @cpt-begin:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-receive-refusal-check
   private receiveCrossHopNode(envelope: CrossHopEnvelope): void {
-    if (envelope.version !== CROSS_HOP_PROTOCOL_VERSION) {
-      console.error(
-        '[DefaultMfeRegistry] Cross-hop envelope carries an unrecognized protocol version ' +
-        `(met ${envelope.version}, this copy implements ${CROSS_HOP_PROTOCOL_VERSION}). ` +
-        'Treating this hop as unavailable rather than acting on semantics it cannot establish.'
-      );
-      // Typed so the DISPATCHING side — a different, possibly
-      // independently loaded copy of this package — classifies this as the
-      // hop's own unavailability rather than as a handler failure
-      // (`inst-diagnostic-record`). Recognised structurally there, never by
-      // `instanceof`, precisely because the two copies share no class.
+    // @cpt-begin:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-receive-refusal-check
+    if (envelope.version !== CROSS_HOP_PROTOCOL_VERSION || this.disposed) {
       // @cpt-begin:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-receive-refuse
-      throw new CrossHopUnavailableError(
-        typeof envelope?.node?.action?.target === 'string' ? envelope.node.action.target : '<unknown>',
-        'unrecognized-protocol-version',
-        `Unrecognized cross-hop protocol version: met ${envelope.version}, expected ${CROSS_HOP_PROTOCOL_VERSION}`
+      throw new Error(
+        this.disposed
+          ? 'Hand-over refused: this registry has been disposed.'
+          : `Hand-over refused: unrecognized cross-hop envelope version ${String(envelope.version)}.`
       );
       // @cpt-end:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-receive-refuse
     }
-    if (this.disposed) {
-      throw new CrossHopUnavailableError(
-        typeof envelope?.node?.action?.target === 'string' ? envelope.node.action.target : '<unknown>',
-        'registry-disposed',
-        'Cross-hop delivery refused: this registry has been disposed.'
-      );
-    }
     // @cpt-end:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-receive-refusal-check
-    // Reconstruct THIS dispatch's own correlation identity (and, where it
-    // has one, its origin) from the envelope's `diagnostics` field, so a
-    // node failure at THIS end of the hop still attributes to the SAME
-    // dispatch that crossed into it (`inst-diagnostic-record`) — never a
-    // fresh, disconnected identity minted here. Acceptance validates the
-    // action and mints the execution state, and — WITHOUT resolving the
-    // node itself, which happens only inside the scheduled microtask below
-    // — conditionally RESERVES what the node needs where this registry
-    // will itself execute it, all before it returns; the node's actual
-    // invocation is scheduled strictly after, so no handler code runs on
-    // this call stack.
-    this.mediator.acceptSingleNodeForHop(envelope.node, this.envelopeDiagnosticsMapper.fromEnvelope(envelope.diagnostics));
+    this.mediator.receiveHandedOverChain(envelope.chain);
   }
   // @cpt-end:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-receive-hand-over
 
@@ -1659,23 +1360,7 @@ export class DefaultMfeRegistry extends MfeRegistry {
 
   // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-retract-own-advertisements
   dispose(): void {
-    // Marked FIRST: disposal is an absent capability, not a routing outcome
-    // (`cpt-frontx-adr-action-dispatch-and-chaining`) — a dispatch that
-    // arrives concurrently with this teardown must see the registry as
-    // already disposed, refusing synchronously, rather than racing into
-    // in-flight state this method is about to clear.
     this.disposed = true;
-
-    // @cpt-begin:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-executor-teardown-ends
-    // Signal the executor-lifetime boundary to the mediator itself, so this
-    // registry's teardown governs every execution its executor still holds
-    // — a node whose attempt settles after this call selects neither `next`
-    // nor `fallback` and is recorded as no chain failure
-    // (`cpt-frontx-adr-action-dispatch-and-chaining`). Called from here,
-    // never lazily inferred from `this.disposed` elsewhere, so the
-    // boundary is the SAME instant this registry itself becomes disposed.
-    this.mediator.dispose();
-    // @cpt-end:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-executor-teardown-ends
 
     // Retract every advertisement this registry (and, transitively, its own
     // descendants — already re-propagated through it) previously propagated
@@ -1687,8 +1372,7 @@ export class DefaultMfeRegistry extends MfeRegistry {
     // Drop every forwarding entry this registry holds — this registry is
     // going away regardless of whether its own inbound bridge link exists.
     // Acts on the routes only: a sub-chain the far side already accepted
-    // through any of them keeps executing there, untouched by disposal,
-    // since this delivering side holds nothing for a node it handed over.
+    // through any of them keeps executing there.
     this.forwardingEntries.clear();
     this.advertisableTargets.clear();
 

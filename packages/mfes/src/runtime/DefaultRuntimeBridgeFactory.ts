@@ -38,7 +38,7 @@ export interface ForwardingRouteFactory {
  * invocation arriving while the bridge is inactive or destroyed is rejected
  * explicitly rather than reaching the handler. The mediator keeps the
  * registration for the extension's whole registration lifetime
- * (`unregisterExtensionActionHandler` is no longer called on unmount); this
+ * (`unregisterExtensionActionHandler` is not called on unmount); this
  * wrapper is what makes an inactive bridge's registered handlers
  * unreachable without unregistering them (`inst-fwd-reg-handler`).
  *
@@ -102,7 +102,7 @@ export class DefaultRuntimeBridgeFactory extends RuntimeBridgeFactory {
    * @param entryTypeId - Type ID of the MFE entry
    * @param domainActions - Action type IDs the entry declares it can receive (unused — kept for API compat)
    * @param existing - The extension's already-minted bridge pair, if this is a remount
-   * @param dispatchActionsChain - The public, acceptance-only chain dispatcher (void); wired to the
+   * @param dispatchActionsChain - The registry's `executeActionsChain` (void); wired to the
    *   child bridge's public `executeActionsChain` capability ONLY
    * @param registerCatchAllActionHandler - Callback for registering catch-all child domain handlers in parent mediator
    * @param unregisterCatchAllActionHandler - Callback for unregistering catch-all child domain handlers from parent mediator
@@ -129,8 +129,7 @@ export class DefaultRuntimeBridgeFactory extends RuntimeBridgeFactory {
         throw new Error(`acquireBridge: expected concrete bridge impls for extension '${extensionId}'`);
       }
 
-      // Re-wire the public, acceptance-only child dispatch capability
-      // (void) — nothing awaitable ever crosses this bridge
+      // Re-wire the child's public dispatch capability
       // (`cpt-frontx-adr-mfe-runtime-public-surface`).
       childBridge.setExecuteActionsChainCallback(dispatchActionsChain);
 
@@ -172,9 +171,8 @@ export class DefaultRuntimeBridgeFactory extends RuntimeBridgeFactory {
     // Create parent bridge (concrete type for access to internal methods)
     const parentBridgeImpl = new ParentMfeBridgeImpl(childBridge);
 
-    // Wire the registry's own public, acceptance-only `executeActionsChain`
-    // to the child bridge's public capability (void): nothing awaitable
-    // ever crosses this bridge (`cpt-frontx-adr-mfe-runtime-public-surface`).
+    // Wire the registry's own `executeActionsChain` to the child bridge's
+    // public capability (`cpt-frontx-adr-mfe-runtime-public-surface`).
     // @cpt-begin:cpt-frontx-algo-mfe-host-communication-bridge-delegation:p2:inst-fwd-exec-chain
     childBridge.setExecuteActionsChainCallback(dispatchActionsChain);
     // @cpt-end:cpt-frontx-algo-mfe-host-communication-bridge-delegation:p2:inst-fwd-exec-chain

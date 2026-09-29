@@ -5,24 +5,13 @@ import type { ActionHandler } from './ActionHandler';
 /**
  * Abstract mediator for action chain execution.
  *
- * This is the exportable abstraction that defines the contract for
- * action chain mediation. Concrete implementations encapsulate the
- * actual execution logic, handler registration, and timeout handling.
+ * The exportable contract for action chain mediation. Concrete
+ * implementations encapsulate execution, handler registration, and timeout
+ * handling.
  *
- * Handlers are registered per (targetId, actionTypeId) pair using registerHandler().
- * Both domain-side lifecycle handlers and extension-side custom handlers use the
- * same registration path.
- *
- * Key Responsibilities:
- * - Execute action chains with success/failure branching
- * - Validate actions against target contracts
- * - Manage action handlers (unified per-action-type registration)
- * - Handle timeouts with fallback execution
- *
- * Key Benefits:
- * - Dependency Inversion: MfeRegistry depends on abstraction, not concrete implementation
- * - Testability: Can inject mock mediators for testing
- * - Encapsulation: Execution logic is hidden in concrete class
+ * Handlers are registered per (targetId, actionTypeId) pair using
+ * registerHandler(). Domain-side lifecycle handlers and extension-side
+ * custom handlers use the same registration path.
  */
 export abstract class ActionsChainsMediator {
   /**
@@ -31,23 +20,11 @@ export abstract class ActionsChainsMediator {
   abstract readonly typeSystem: TypeSystemPlugin;
 
   /**
-   * Accept (or synchronously refuse) an action chain for execution.
+   * Execute an actions chain: the action, then `next` recursively on
+   * success or `fallback` recursively on failure. Takes only the chain and
+   * returns nothing awaitable (`cpt-frontx-adr-action-dispatch-and-chaining`).
    *
-   * Acceptance-only per `cpt-frontx-adr-action-dispatch-and-chaining`: this
-   * call either accepts the chain — validating its envelope, creating the
-   * executor's own path/diagnostic state, and reserving what the
-   * first executable node needs, all before returning — or throws
-   * `ActionsChainRefusalError` synchronously. It never returns a value and
-   * never yields a promise an emitter could await for the chain's own
-   * execution; settlement observation (branch selection on `next`/`fallback`)
-   * stays entirely inside the executor. The completion-bearing "observed
-   * execution" operation this drives is deliberately NOT part of this
-   * abstract, exported contract — it is a concrete-mediator-only member, so
-   * an emitter holding only this abstraction has no way to reach it.
-   *
-   * @param chain - The actions chain to accept
-   * @throws {ActionsChainRefusalError} synchronously if the chain (or its
-   *   declared per-action timeout) is invalid.
+   * @param chain - The actions chain to execute
    */
   abstract executeActionsChain(chain: ActionsChain): void;
 
@@ -80,7 +57,6 @@ export abstract class ActionsChainsMediator {
 
   /**
    * Unregister all handlers for a target.
-   * Used during dispose (e.g., when an extension is unmounted).
    *
    * @param targetId - ID of the target
    */

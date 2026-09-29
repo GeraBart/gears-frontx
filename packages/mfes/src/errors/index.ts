@@ -16,7 +16,6 @@ export { ChainExecutionError } from './ChainExecutionError';
 export { MfeTypeConformanceError } from './MfeTypeConformanceError';
 export { UnsupportedDomainActionError } from './UnsupportedDomainActionError';
 export { UnsupportedLifecycleStageError } from './UnsupportedLifecycleStageError';
-export { ActionsChainRefusalError, type ActionsChainRefusalClass } from './ActionsChainRefusalError';
 export { EntryTypeNotHandledError } from './EntryTypeNotHandledError';
 export { DomainRouteValidationError } from './DomainRouteValidationError';
 export { ExtensionRouteConflictError } from './ExtensionRouteConflictError';

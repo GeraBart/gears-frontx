@@ -179,27 +179,21 @@ export interface InboundBridgeLink {
 
   /**
    * Retract a previously propagated advertisement from the immediate parent
-   * registry. Retraction acts on the route only — it stops the route
-   * resolving for a new dispatch — and never on an execution already
-   * accepted through it: nothing in flight on this (the delivering) side
-   * exists to reject, since a delivering runtime holds nothing for a node it
-   * handed over. Realizes `inst-retract-advertisements`.
+   * registry. Retraction acts on the route only: a sub-chain the far side
+   * already accepted keeps executing there. Realizes
+   * `inst-retract-advertisements`.
    */
   retractAdvertisement(targetId: string): void;
 
   /**
-   * Hand an unresolved node's versioned cross-hop envelope to the immediate
-   * parent registry — the receiving parent executes ONE node on the
-   * escalating executor's behalf, never a new public root. Minted by the
-   * parent at link time (`inst-mint-escalation-on-link`); the parent's own
-   * implementation tags the envelope's action with this link's `edge` as its
-   * arrival edge before resolving it, so the parent's own forwarding-entry
-   * resolution never re-selects it as the chain's next hop.
+   * Hand a sub-chain with no local route to the immediate parent registry,
+   * which executes it. Minted by the parent at link time
+   * (`inst-mint-escalation-on-link`); the parent's implementation tags the
+   * action with this link's `edge` as its arrival edge, so the parent's
+   * forwarding-entry resolution never routes that action back onto it.
    *
-   * Synchronous and binary: throws to refuse the delivery at the call — the
-   * escalating executor's own `fallback` answers it — or returns having
-   * accepted the node, in which case the parent has already reserved what it
-   * needs and the escalating executor holds nothing further for it. Realizes
+   * Throws to refuse — the escalating runtime then executes `fallback` — or
+   * returns having accepted; nothing comes back. Realizes
    * `inst-escalation-lookup`, `inst-tag-arrival-edge`, and
    * `inst-hand-over-node`.
    */

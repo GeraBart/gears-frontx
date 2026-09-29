@@ -43,9 +43,8 @@ export class DefaultMountManager extends MountManager {
   private readonly typeSystem: TypeSystemPlugin;
   private readonly triggerLifecycle: LifecycleTrigger;
   /**
-   * The public, acceptance-only chain dispatcher — wired to the child
-   * bridge's public capability (`dispatchActionsChain` param of
-   * `acquireBridge`). Nothing awaitable ever crosses that bridge
+   * The registry's `executeActionsChain` — wired to the child bridge's
+   * public capability (`dispatchActionsChain` param of `acquireBridge`)
    * (`cpt-frontx-adr-mfe-runtime-public-surface`).
    */
   private readonly dispatchActionsChain: ActionsChainDispatcher;
@@ -382,7 +381,7 @@ export class DefaultMountManager extends MountManager {
         // completion — a notification the mount happened, not a phase the
         // mount waits on. `mountState` is already 'mounted' and the bridge
         // already returned to the caller below, regardless of whether any
-        // `activated` hook's chain has settled. This call is never awaited
+        // `activated` hook's chain is still executing. This call is never awaited
         // and this method offers its triggered chain(s) no window and no
         // ordering guarantee relative to this transition's own completion.
         // This line runs at most once per physical mount: the mount-ext
@@ -463,7 +462,7 @@ export class DefaultMountManager extends MountManager {
     // Non-blocking: the `deactivated` stage is triggered alongside unmount
     // — a notification the unmount is happening, not a phase it waits on.
     // The unmount work below proceeds independently of any `deactivated`
-    // hook's chain settlement.
+    // hook's chain.
     this.triggerLifecycle(
       extensionId,
       this.typeSystem.resolveLifecycleStageDeactivatedId()

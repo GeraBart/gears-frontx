@@ -70,20 +70,11 @@ export class ParentMfeBridgeImpl extends ParentMfeBridge {
   }
 
   /**
-   * Hand a versioned cross-hop envelope to the child MFE — the transport
-   * every runtime-crossing hop resolves to
-   * (`cpt-frontx-adr-action-dispatch-and-chaining`), used by a downward
-   * forwarding entry and by the converted parent-to-child-domain forwarding
-   * tier, and by the parent runtime sending an action chain directly to a
-   * child's domain.
-   *
-   * Synchronous and binary: throws to refuse the delivery at the call, with
-   * no side effect in the child runtime, or returns having handed the node
-   * to the child's registry, which has already accepted and reserved what
-   * it needs before this call returns — this runtime is then done with the
-   * node and holds nothing for it (`cpt-frontx-adr-action-dispatch-and-chaining`).
-   * Nothing awaitable ever crosses this bridge: completion observation
-   * stays strictly inside the executor that accepts the envelope.
+   * Hand a sub-chain to the child MFE's registry — used by a downward
+   * forwarding entry and by the child-domain forwarding tier
+   * (`cpt-frontx-adr-action-dispatch-and-chaining`). Throws to refuse, with
+   * no side effect in the child runtime, or returns having accepted;
+   * nothing comes back.
    *
    * @internal concrete-only; not part of the abstract `ParentMfeBridge` contract.
    */

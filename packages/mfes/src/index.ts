@@ -38,8 +38,6 @@ export type {
 } from './types';
 
 // Mediator types (Phase 3)
-// The public surface carries no completion-bearing result type and
-// no per-call execution-options type (`cpt-frontx-adr-mfe-runtime-public-surface`).
 export { ActionHandler } from './mediator/ActionHandler';
 export { ActionsChainsMediator } from './mediator/ActionsChainsMediator';
 
@@ -53,13 +51,7 @@ export type { MfeEntryLifecycle, MfeMountContext } from './handler/MfeHandler';
 // Registry contracts (Phase 3)
 export { MfeRegistry } from './registry/MfeRegistry';
 export { MfeRegistryFactory } from './registry/MfeRegistryFactory';
-export type {
-  MfeRegistryConfig,
-  MfeDiagnosticSink,
-  LifecycleDispatchRefusalDiagnostic,
-  MountSetObserver,
-  MountSetChange,
-} from './runtime/config';
+export type { MfeRegistryConfig } from './runtime/config';
 
 // Runtime abstractions (Phase 3)
 export { MountStrategy } from './runtime/MountStrategy';
@@ -98,9 +90,7 @@ export {
   DomainRouteValidationError,
   ExtensionRouteConflictError,
   DuplicateRouteTokenError,
-  ActionsChainRefusalError,
   type ContractError,
-  type ActionsChainRefusalClass,
 } from './errors';
 
 // Shadow DOM utilities (Phase 7)
