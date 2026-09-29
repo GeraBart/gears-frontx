@@ -67,19 +67,23 @@ export class ConcurrentMountStrategy extends MountStrategy {
     if (staleContainerRelease) {
       await staleContainerRelease;
     }
-    const container = this.hooks.create(extensionId);
-    const cleanup = createContainerCleanup(this.hooks, extensionId, container, (releasedCleanup) => {
-      if (this.cleanupByExtension.get(extensionId) === releasedCleanup) {
-        this.cleanupByExtension.delete(extensionId);
+    await this.coalesceMount(extensionId, async () => {
+      const container = this.hooks.create(extensionId);
+      const cleanup = createContainerCleanup(this.hooks, extensionId, container, (releasedCleanup) => {
+        if (this.cleanupByExtension.get(extensionId) === releasedCleanup) {
+          this.cleanupByExtension.delete(extensionId);
+          this.releaseMount(extensionId);
+        }
+      });
+      this.cleanupByExtension.set(extensionId, cleanup);
+      try {
+        await this.mounter.mount(extensionId, container, cleanup);
+      } catch (error) {
+        this.releaseContainer(extensionId, cleanup);
+        throw error;
       }
+      return true;
     });
-    this.cleanupByExtension.set(extensionId, cleanup);
-    try {
-      await this.mounter.mount(extensionId, container, cleanup);
-    } catch (error) {
-      this.releaseContainer(extensionId, cleanup);
-      throw error;
-    }
     // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-return
     // (implicit return — mount completed)
     // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-return
@@ -100,6 +104,7 @@ export class ConcurrentMountStrategy extends MountStrategy {
     cleanup?.();
     if (this.cleanupByExtension.get(extensionId) === cleanup) {
       this.cleanupByExtension.delete(extensionId);
+      this.releaseMount(extensionId);
     }
   }
 }
@@ -136,42 +141,53 @@ export class OptionalMountStrategy extends MountStrategy {
     if (staleContainerRelease) {
       await staleContainerRelease;
     }
-    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-get-mounted
-    let mounted = this.registry.getMountedExtensions(this.domainId);
-    // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-get-mounted
+    await this.coalesceMount(subject, async () => {
+      // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-get-mounted
+      let mounted = this.registry.getMountedExtensions(this.domainId);
+      // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-get-mounted
 
-    if (mounted.length === 1 && mounted[0] !== subject) {
-      const previousExtensionId = mounted[0];
-      const cleanup = this.cleanupByExtension.get(previousExtensionId);
+      if (mounted.length === 1 && mounted[0] !== subject) {
+        const previousExtensionId = mounted[0];
+        const stalePreviousRelease = this.mounter.getStaleContainerRelease(previousExtensionId);
+        if (stalePreviousRelease) {
+          await stalePreviousRelease;
+          mounted = this.registry.getMountedExtensions(this.domainId);
+        }
+        if (mounted.length === 1 && mounted[0] !== subject) {
+          const cleanup = this.cleanupByExtension.get(previousExtensionId);
+          try {
+            await this.mounter.unmount(previousExtensionId);
+          } finally {
+            this.releaseContainer(previousExtensionId, cleanup);
+          }
+          mounted = this.registry.getMountedExtensions(this.domainId);
+        }
+      }
+
+      // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-optional-idempotent
+      if (mounted.includes(subject)) {
+        return false;
+      }
+      // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-optional-idempotent
+
+      // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-optional-mount
+      const container = this.hooks.create(subject);
+      const cleanup = createContainerCleanup(this.hooks, subject, container, (releasedCleanup) => {
+        if (this.cleanupByExtension.get(subject) === releasedCleanup) {
+          this.cleanupByExtension.delete(subject);
+          this.releaseMount(subject);
+        }
+      });
+      this.cleanupByExtension.set(subject, cleanup);
       try {
-        await this.mounter.unmount(previousExtensionId);
-      } finally {
-        this.releaseContainer(previousExtensionId, cleanup);
+        await this.mounter.mount(subject, container, cleanup);
+      } catch (error) {
+        this.releaseContainer(subject, cleanup);
+        throw error;
       }
-      mounted = this.registry.getMountedExtensions(this.domainId);
-    }
-
-    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-optional-idempotent
-    if (mounted.includes(subject)) {
-      return;
-    }
-    // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-optional-idempotent
-
-    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-optional-mount
-    const container = this.hooks.create(subject);
-    const cleanup = createContainerCleanup(this.hooks, subject, container, (releasedCleanup) => {
-      if (this.cleanupByExtension.get(subject) === releasedCleanup) {
-        this.cleanupByExtension.delete(subject);
-      }
+      return true;
+      // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-optional-mount
     });
-    this.cleanupByExtension.set(subject, cleanup);
-    try {
-      await this.mounter.mount(subject, container, cleanup);
-    } catch (error) {
-      this.releaseContainer(subject, cleanup);
-      throw error;
-    }
-    // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-optional-mount
   }
   // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-optional-displace
 
@@ -195,6 +211,7 @@ export class OptionalMountStrategy extends MountStrategy {
     cleanup?.();
     if (this.cleanupByExtension.get(extensionId) === cleanup) {
       this.cleanupByExtension.delete(extensionId);
+      this.releaseMount(extensionId);
     }
   }
 }
@@ -235,45 +252,57 @@ export class ExclusiveMountStrategy extends MountStrategy {
     if (staleContainerRelease) {
       await staleContainerRelease;
     }
-    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-get-mounted
-    let mounted = this.registry.getMountedExtensions(this.domainId);
-    // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-get-mounted
+    await this.coalesceMount(subject, async () => {
+      // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-get-mounted
+      let mounted = this.registry.getMountedExtensions(this.domainId);
+      // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-get-mounted
 
-    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-exclusive-idempotent
-    if (mounted.length === 1 && mounted[0] === subject) {
-      return;
-    }
-    // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-exclusive-idempotent
+      // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-exclusive-idempotent
+      if (mounted.length === 1 && mounted[0] === subject) {
+        return false;
+      }
+      // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-exclusive-idempotent
 
-    for (const siblingId of mounted) {
-      if (siblingId !== subject) {
-        const cleanup = this.cleanupByExtension.get(siblingId);
-        try {
-          await this.mounter.unmount(siblingId);
-        } finally {
-          this.releaseContainer(siblingId, cleanup);
+      for (const siblingId of mounted) {
+        if (siblingId !== subject) {
+          const staleSiblingRelease = this.mounter.getStaleContainerRelease(siblingId);
+          if (staleSiblingRelease) {
+            await staleSiblingRelease;
+            mounted = this.registry.getMountedExtensions(this.domainId);
+          }
+          if (!mounted.includes(siblingId)) {
+            continue;
+          }
+          const cleanup = this.cleanupByExtension.get(siblingId);
+          try {
+            await this.mounter.unmount(siblingId);
+          } finally {
+            this.releaseContainer(siblingId, cleanup);
+          }
         }
       }
-    }
-    mounted = this.registry.getMountedExtensions(this.domainId);
-    if (mounted.length === 1 && mounted[0] === subject) {
-      return;
-    }
-
-    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-exclusive-mount
-    const container = this.hooks.create(subject);
-    const cleanup = createContainerCleanup(this.hooks, subject, container, (releasedCleanup) => {
-      if (this.cleanupByExtension.get(subject) === releasedCleanup) {
-        this.cleanupByExtension.delete(subject);
+      mounted = this.registry.getMountedExtensions(this.domainId);
+      if (mounted.length === 1 && mounted[0] === subject) {
+        return false;
       }
+
+      // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-exclusive-mount
+      const container = this.hooks.create(subject);
+      const cleanup = createContainerCleanup(this.hooks, subject, container, (releasedCleanup) => {
+        if (this.cleanupByExtension.get(subject) === releasedCleanup) {
+          this.cleanupByExtension.delete(subject);
+          this.releaseMount(subject);
+        }
+      });
+      this.cleanupByExtension.set(subject, cleanup);
+      try {
+        await this.mounter.mount(subject, container, cleanup);
+      } catch (error) {
+        this.releaseContainer(subject, cleanup);
+        throw error;
+      }
+      return true;
     });
-    this.cleanupByExtension.set(subject, cleanup);
-    try {
-      await this.mounter.mount(subject, container, cleanup);
-    } catch (error) {
-      this.releaseContainer(subject, cleanup);
-      throw error;
-    }
   }
   // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-exclusive-mount
   // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-exclusive-evict
@@ -286,6 +315,7 @@ export class ExclusiveMountStrategy extends MountStrategy {
     cleanup?.();
     if (this.cleanupByExtension.get(extensionId) === cleanup) {
       this.cleanupByExtension.delete(extensionId);
+      this.releaseMount(extensionId);
     }
   }
 }

@@ -63,6 +63,10 @@ export abstract class ExtensionMounter {
    * mount fails or when the mounter releases it through `unmount()` or
    * `detach()`. This lets domain-owned `ContainerHooks` clean up resources
    * without giving the mounter knowledge of their implementation.
+   * Shipped strategies coalesce overlapping mounts for one extension before
+   * creating a container. A custom strategy that permits overlapping mounts
+   * of the same extension must use identity-aware cleanup; a legacy hook keyed
+   * only by extension ID cannot distinguish the rejected container safely.
    *
    * The parameter remains optional only for source compatibility with legacy
    * custom mounters. A custom mounter used with a strategy that supplies it

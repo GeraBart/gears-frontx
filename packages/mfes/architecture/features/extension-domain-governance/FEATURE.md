@@ -181,7 +181,7 @@ Internal system functions and procedures that do not interact with actors direct
 **Steps**:
 1. [x] - `p1` - Retrieve the current set of mounted extensions for the target domain from the registry - `inst-me-get-mounted`
 2. [x] - `p1` - **MATCH** the domain's strategy - `inst-me-match-strategy`
-   1. [x] - `p1` - **CASE** ConcurrentMountStrategy: create a new container for the extension and mount it; if mounting fails, destroy the container and propagate the error - `inst-me-concurrent`
+   1. [x] - `p1` - **CASE** ConcurrentMountStrategy: if a mount for the same extension is already live or in flight in this strategy instance, join that mount and return its outcome; otherwise create a new container for the extension and mount it; if mounting fails, destroy the container and propagate the error - `inst-me-concurrent`
    2. [x] - `p1` - **CASE** OptionalMountStrategy: **IF** a different extension is already mounted, unmount it and destroy its container before proceeding - `inst-me-optional-displace`
       1. [x] - `p1` - **IF** the extension is already mounted in this domain, return without action - `inst-me-optional-idempotent`
       2. [x] - `p1` - Create a new container and mount the extension; if mounting fails, destroy the container and propagate the error - `inst-me-optional-mount`

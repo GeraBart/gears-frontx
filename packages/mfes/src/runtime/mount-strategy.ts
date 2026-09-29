@@ -70,6 +70,54 @@ export interface ContainerHooks {
  * semantic constraint at registration, not at the type level.
  */
 export abstract class MountStrategy {
+  // A strategy owns the request-level lifetime of every extension it mounts.
+  // Keeping a resolved promise until its matching container is released makes
+  // repeated actions idempotent and lets overlapping actions share one mount.
+  private readonly liveOrInFlightMounts = new Map<string, Promise<void>>();
+
+  /**
+   * Join an already live or in-flight mount for `extensionId`, or start one.
+   *
+   * Shipped strategies call this after their mounter-specific stale-root
+   * barrier and before creating a container. `releaseMount()` must run when
+   * the matching container is released, including slot detach. `operation`
+   * returns `true` only when it created that matching container, so an
+   * idempotent observation of externally owned state is never retained.
+   */
+  protected coalesceMount(extensionId: string, operation: () => Promise<boolean>): Promise<void> {
+    const existingMount = this.liveOrInFlightMounts.get(extensionId);
+    if (existingMount) {
+      return existingMount;
+    }
+
+    let didMount: Promise<boolean>;
+    try {
+      didMount = operation();
+    } catch (error) {
+      return Promise.reject(error);
+    }
+    const mounting = didMount.then(() => undefined);
+    this.liveOrInFlightMounts.set(extensionId, mounting);
+    void didMount.then(
+      (ownsContainer) => {
+        if (!ownsContainer && this.liveOrInFlightMounts.get(extensionId) === mounting) {
+          this.liveOrInFlightMounts.delete(extensionId);
+        }
+      },
+      () => {
+        if (this.liveOrInFlightMounts.get(extensionId) === mounting) {
+          this.liveOrInFlightMounts.delete(extensionId);
+        }
+      }
+    );
+    return mounting;
+  }
+
+  /** Mark the matching container as no longer live or in flight. */
+  protected releaseMount(extensionId: string): void {
+    this.liveOrInFlightMounts.delete(extensionId);
+  }
+
   /**
    * Mount the extension described in `payload`.
    *

@@ -17,15 +17,17 @@
 import { ExtensionMounter } from './ExtensionMounter';
 import type { MountManager } from './mount-manager';
 
-type TeardownFailuresError = Error & { errors: readonly unknown[] };
+type NativeAggregateError = Error & { errors: Iterable<unknown> };
 
-function createTeardownFailuresError(failures: readonly unknown[]): TeardownFailuresError {
-  const error = new Error(
+const NativeAggregateError = (globalThis as unknown as {
+  AggregateError: new (errors: Iterable<unknown>, message?: string) => NativeAggregateError;
+}).AggregateError;
+
+function createTeardownFailuresError(failures: readonly unknown[]): NativeAggregateError {
+  return new NativeAggregateError(
+    failures,
     `ExtensionMounter.detach: ${failures.length} extension teardowns failed`
-  ) as TeardownFailuresError;
-  error.name = 'ExtensionTeardownError';
-  error.errors = failures;
-  return error;
+  );
 }
 
 /**

@@ -2,8 +2,9 @@ import { describe, it, expect, vi } from 'vitest';
 import { DefaultExtensionMounter } from '../DefaultExtensionMounter';
 import { ExtensionMounter } from '../ExtensionMounter';
 import { MountManager } from '../mount-manager';
-import { ConcurrentMountStrategy } from '../mount-strategies';
+import { ConcurrentMountStrategy, ExclusiveMountStrategy, OptionalMountStrategy } from '../mount-strategies';
 import type { ActionPayload, ContainerHooks } from '../mount-strategy';
+import type { MfeRegistry } from '../../registry/MfeRegistry';
 import type { ParentMfeBridge } from '../../handler/types';
 
 // ─── Fakes ───────────────────────────────────────────────────────────────────
@@ -400,6 +401,31 @@ describe('DefaultExtensionMounter', () => {
       await expect(mounter.mount('ext-c', document.createElement('div'))).rejects.toThrow(/no root attached/);
     });
 
+    it('reports multiple failed teardowns as the standard AggregateError', async () => {
+      const mountManager = new FakeMountManager();
+      const { mounter, root } = makeFixture({ mountManager });
+      mounter.attach(root);
+      await mounter.mount('ext-a', document.createElement('div'));
+      await mounter.mount('ext-b', document.createElement('div'));
+      const firstError = new Error('first teardown failed');
+      const secondError = new Error('second teardown failed');
+      mountManager.unmountErrors.set('ext-a', firstError);
+      mountManager.unmountErrors.set('ext-b', secondError);
+
+      let received: unknown;
+      try {
+        await mounter.detach();
+      } catch (error) {
+        received = error;
+      }
+
+      expect(received).toBeInstanceOf(AggregateError);
+      expect(received).toMatchObject({
+        name: 'AggregateError',
+        errors: [firstError, secondError],
+      });
+    });
+
     it('releases strategy-owned container state during slot-style detach while preserving the lifecycle error', async () => {
       const mountManager = new FakeMountManager();
       const { mounter, root } = makeFixture({ mountManager });
@@ -546,6 +572,81 @@ describe('DefaultExtensionMounter', () => {
       expect(freshContainer).toBeDefined();
       expect(freshRoot.contains(freshContainer!)).toBe(true);
       expect(mounted).toEqual(['ext-1']);
+    });
+  });
+
+  describe('single-cardinality replacement after stale teardown', () => {
+    class DeferredRejectedUnmountManager extends FakeMountManager {
+      readonly teardownError = new Error('stale extension teardown failed');
+      private releaseUnmount: (() => void) | undefined;
+      private readonly unmountGate = new Promise<void>((resolve) => {
+        this.releaseUnmount = resolve;
+      });
+      private signalUnmountStarted: (() => void) | undefined;
+      readonly unmountStarted = new Promise<void>((resolve) => {
+        this.signalUnmountStarted = resolve;
+      });
+
+      override async unmountExtension(extensionId: string): Promise<void> {
+        this.unmountCalls.push(extensionId);
+        if (extensionId === 'ext-a') {
+          this.signalUnmountStarted?.();
+          await this.unmountGate;
+          throw this.teardownError;
+        }
+      }
+
+      rejectStaleUnmount(): void {
+        this.releaseUnmount?.();
+      }
+    }
+
+    function makeRegistry(mounted: readonly string[]): MfeRegistry {
+      return {
+        getMountedExtensions: () => mounted,
+      } as unknown as MfeRegistry;
+    }
+
+    it('Optional waits for the stale sibling epoch before mounting the replacement', async () => {
+      const mountManager = new DeferredRejectedUnmountManager();
+      const { mounter, root: oldRoot, mounted, DOMAIN } = makeFixture({ mountManager });
+      const hooks = new TrackingContainerHooks();
+      const strategy = new OptionalMountStrategy(mounter, hooks, makeRegistry(mounted), DOMAIN);
+      mounter.attach(oldRoot);
+      await strategy.mount(payload('ext-a'));
+
+      const detaching = mounter.detach();
+      await mountManager.unmountStarted;
+      const freshRoot = document.createElement('div');
+      mounter.attach(freshRoot);
+      const replacement = strategy.mount(payload('ext-b'));
+
+      mountManager.rejectStaleUnmount();
+      await expect(detaching).rejects.toBe(mountManager.teardownError);
+      await expect(replacement).resolves.toBeUndefined();
+      expect(mounted).toEqual(['ext-b']);
+      expect(freshRoot.contains(hooks.created.get('ext-b')!)).toBe(true);
+    });
+
+    it('Exclusive waits for the stale sibling epoch before mounting the replacement', async () => {
+      const mountManager = new DeferredRejectedUnmountManager();
+      const { mounter, root: oldRoot, mounted, DOMAIN } = makeFixture({ mountManager });
+      const hooks = new TrackingContainerHooks();
+      const strategy = new ExclusiveMountStrategy(mounter, hooks, makeRegistry(mounted), DOMAIN);
+      mounter.attach(oldRoot);
+      await strategy.mount(payload('ext-a'));
+
+      const detaching = mounter.detach();
+      await mountManager.unmountStarted;
+      const freshRoot = document.createElement('div');
+      mounter.attach(freshRoot);
+      const replacement = strategy.mount(payload('ext-b'));
+
+      mountManager.rejectStaleUnmount();
+      await expect(detaching).rejects.toBe(mountManager.teardownError);
+      await expect(replacement).resolves.toBeUndefined();
+      expect(mounted).toEqual(['ext-b']);
+      expect(freshRoot.contains(hooks.created.get('ext-b')!)).toBe(true);
     });
   });
 
