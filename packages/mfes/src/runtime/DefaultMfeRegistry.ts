@@ -53,6 +53,8 @@ import { DefaultExtensionMounter } from './DefaultExtensionMounter';
 import { MountExtActionHandler } from './MountExtActionHandler';
 import { UnmountExtActionHandler } from './UnmountExtActionHandler';
 import { DomainOccupancyCoordinator } from './DomainOccupancyCoordinator';
+import { ConcurrentMountJoiner } from './ConcurrentMountJoiner';
+import { ActionTimeoutResolver } from '../mediator/ActionTimeoutResolver';
 import { DefaultDomainLifecycleTrigger } from './DefaultDomainLifecycleTrigger';
 import { ConsoleDiagnosticSink } from './ConsoleDiagnosticSink';
 import type { MfeDiagnosticSink, MountSetObserver } from './config';
@@ -201,6 +203,24 @@ export class DefaultMfeRegistry extends MfeRegistry {
    * composition root.
    */
   private readonly chainEnvelopeValidator: ChainEnvelopeValidator;
+
+  /**
+   * The one shared per-action timeout rule — the SAME instance injected into
+   * `this.mediator` and handed to every domain's own internal mount/unmount
+   * handlers, so the mediator's own per-action bound and the occupancy
+   * queue's per-caller timer apply the identical rule
+   * (`cpt-frontx-algo-mfe-host-communication-mediator-dispatch`
+   * `inst-resolve-timeout`).
+   */
+  private readonly actionTimeoutResolver: ActionTimeoutResolver;
+
+  /**
+   * Every registered Optional/Exclusive domain's own occupancy queue, keyed
+   * by domain id — populated in `registerDomain` once cross-validation
+   * succeeds, and removed once `unregisterDomain` (or `dispose`) tears the
+   * domain down, so this map never outlives the domain it belongs to.
+   */
+  private readonly occupancyCoordinatorsByDomain = new Map<string, DomainOccupancyCoordinator>();
 
   /**
    * Converts a `DiagnosticContext` to and from the plain record shape
@@ -355,6 +375,7 @@ export class DefaultMfeRegistry extends MfeRegistry {
     // below rather than reached for as module-level singletons
     // (`inst-diagnostic-record`).
     this.chainEnvelopeValidator = new ChainEnvelopeValidator();
+    this.actionTimeoutResolver = new ActionTimeoutResolver(this.chainEnvelopeValidator);
     this.envelopeDiagnosticsMapper = new EnvelopeDiagnosticsMapper();
     this.dispatchOriginStore = new DispatchOriginStore();
     this.dispatchCorrelationIdGenerator = new DispatchCorrelationIdGenerator();
@@ -380,6 +401,7 @@ export class DefaultMfeRegistry extends MfeRegistry {
       dispatchOriginStore: this.dispatchOriginStore,
       dispatchCorrelationIdGenerator: this.dispatchCorrelationIdGenerator,
       diagnosticReporter: this.diagnosticReporter,
+      actionTimeoutResolver: this.actionTimeoutResolver,
     });
 
     this.extensionManager = new DefaultExtensionManager({
@@ -975,25 +997,35 @@ export class DefaultMfeRegistry extends MfeRegistry {
     // Step 6: Persist handlers to mediator. The domain's `mount_ext` handler
     // (or a type derived from it) is wrapped with the strategy-agnostic
     // mount-execution prologue first, so eligibility, the already-mounted
-    // short-circuit, in-progress-mount joining, and in-progress-unmount
-    // waiting run above every strategy — identically whichever strategy the
-    // domain composed (`cpt-frontx-algo-extension-domain-governance-mount-execution`).
+    // short-circuit, in-progress-mount joining, in-progress-unmount waiting,
+    // and — for Optional/Exclusive — the occupancy queue all run above every
+    // strategy (`cpt-frontx-algo-extension-domain-governance-mount-execution`).
     //
-    // One occupancy coordinator is constructed per domain and shared by
-    // every `mount_ext`-derived action type the domain registers below
-    // (`inst-me-join-in-progress-mount`, `inst-me-no-rerun-eviction`), so
-    // same-extension joining and cross-extension ordering hold across
-    // derived action types. Optional and Exclusive strategies read the
-    // domain's mount set and may evict a sibling as part of mounting, so
-    // different extensions' fresh mounts in those domains are ordered
-    // against one another; a Concurrent domain never evicts a sibling, so
-    // its different extensions' fresh mounts run without that ordering
-    // (cross-validation above already rejected a domain with zero
-    // strategies and mixed-strategy domains are not supported, so the first
-    // strategy is representative of the whole domain).
-    const coordinator = new DomainOccupancyCoordinator(
-      !(mountStrategies[0] instanceof ConcurrentMountStrategy)
-    );
+    // A Concurrent domain (cross-validation above already rejected a domain
+    // with zero strategies, and mixed-strategy domains are not supported, so
+    // the first strategy is representative of the whole domain) is given a
+    // `ConcurrentMountJoiner` — same-extension joining only, no
+    // cross-extension ordering. An Optional or Exclusive domain is given a
+    // `DomainOccupancyCoordinator` instead — its own two-slot occupancy
+    // queue, shared by every `mount_ext`- and `unmount_ext`-derived action
+    // type the domain registers below, so joining, replacement, and
+    // at-turn evaluation hold across derived action types.
+    const isConcurrent = mountStrategies[0] instanceof ConcurrentMountStrategy;
+    const concurrentJoiner = isConcurrent ? new ConcurrentMountJoiner() : undefined;
+    const queue = isConcurrent ? undefined : new DomainOccupancyCoordinator(declaration.id);
+    if (queue) {
+      this.occupancyCoordinatorsByDomain.set(declaration.id, queue);
+    }
+    const admissionReader = {
+      domainOf: (extensionId: string) =>
+        this.extensionManager.getExtensionState(extensionId)?.extension.domain,
+    };
+    const mountedReader = {
+      isMounted: (extensionId: string) =>
+        this.extensionManager.getMountedExtensions(declaration.id).includes(extensionId),
+    };
+    const domainReader = (): { id: string; defaultActionTimeout: number } | undefined =>
+      this.extensionManager.getDomainState(declaration.id)?.domain;
     const mountExtActionId = this.typeSystem.resolveMountExtActionId();
     const unmountExtActionId = this.typeSystem.resolveUnmountExtActionId();
     for (const [actionType, handler] of ctx.getCollectedHandlers()) {
@@ -1002,24 +1034,25 @@ export class DefaultMfeRegistry extends MfeRegistry {
         wrapped = new MountExtActionHandler(
           handler,
           declaration.id,
-          {
-            domainOf: (extensionId) =>
-              this.extensionManager.getExtensionState(extensionId)?.extension.domain,
-          },
-          {
-            isMounted: (extensionId) =>
-              this.extensionManager.getMountedExtensions(declaration.id).includes(extensionId),
-          },
+          admissionReader,
+          mountedReader,
           { inFlight: (extensionId) => mounter.getUnmountInFlight(extensionId) },
-          coordinator
+          this.actionTimeoutResolver,
+          domainReader,
+          queue,
+          concurrentJoiner
         );
       } else if (this.typeSystem.isTypeOf(actionType, unmountExtActionId)) {
-        // Orders this explicit unmount_ext's occupancy mutation on the SAME
-        // coordinator a fresh mount's own eviction is ordered on, so the
-        // two never interleave in a domain built with cross-extension
-        // ordering (`cpt-frontx-algo-extension-domain-governance-mount-execution`
-        // `inst-me-no-rerun-eviction`).
-        wrapped = new UnmountExtActionHandler(handler, coordinator);
+        wrapped = new UnmountExtActionHandler(
+          handler,
+          declaration.id,
+          admissionReader,
+          mountedReader,
+          this.actionTimeoutResolver,
+          domainReader,
+          queue,
+          concurrentJoiner
+        );
       }
       this.mediator.registerHandler(declaration.id, actionType, wrapped);
     }
@@ -1548,12 +1581,25 @@ export class DefaultMfeRegistry extends MfeRegistry {
         .map((state) => state.extension.id);
       // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-retract-advertisements
 
+      // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-queue-domain-unregister
+      // The queue closes: the pending entry (if any) leaves it without
+      // starting and each of its callers fails and takes its own
+      // `fallback`; the running entry is not interrupted. A request
+      // dispatched while the teardown below is in progress fails at once
+      // without entering a slot — unregistration otherwise proceeds exactly
+      // as it does for a domain whose queue is empty.
+      this.occupancyCoordinatorsByDomain
+        .get(domainId)
+        ?.close('was unregistered while the request was queued.');
+      // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-queue-domain-unregister
+
       // Invariant: teardown hooks must still be able to dispatch. The manager
       // unmounts the extensions and fires the domain's `destroyed` stage, whose
       // chains target this domain — so the handlers stay attached until it
       // returns. Detaching after also drops anything a teardown hook registered.
       await this.extensionManager.unregisterDomain(domainId);
       this.mediator.unregisterAllHandlers(domainId);
+      this.occupancyCoordinatorsByDomain.delete(domainId);
 
       // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-retract-advertisements
       for (const extensionId of extensionIdsToRetract) {
@@ -1657,6 +1703,12 @@ export class DefaultMfeRegistry extends MfeRegistry {
     this.operationSerializer.clear();
     this.packages.clear();
     this.handlers.length = 0;
+
+    // Pending callers settle and their timers clear at disposal.
+    for (const coordinator of this.occupancyCoordinatorsByDomain.values()) {
+      coordinator.close('was disposed with the registry while the request was queued.');
+    }
+    this.occupancyCoordinatorsByDomain.clear();
 
     void this.coordinator;
   }

@@ -388,10 +388,16 @@ export class DefaultMountManager extends MountManager {
         // This line runs at most once per physical mount: the mount-ext
         // prologue (`MountExtActionHandler`) never reaches a strategy's mount
         // body — and therefore never reaches this method — for an
-        // already-mounted or joined request, so it is never reached twice
-        // for the same physical mount. A fresh mount that proceeds after an
-        // in-progress unmount settled runs this method again from the top,
-        // so `activated` fires again for that new physical mount.
+        // already-mounted, joined, or still-occupant-at-turn request, so it
+        // is never reached twice for the same physical mount. A fresh mount
+        // that proceeds after an in-progress unmount settled runs this
+        // method again from the top, so `activated` fires again for that
+        // new physical mount. In an Optional or Exclusive domain, an entry
+        // that finds its subject still the domain's occupant at its own
+        // turn (`inst-me-sole-occupant-at-turn`) is handled entirely by the
+        // prologue's own at-turn evaluation, before this method is ever
+        // reached, so no additional `activated` trigger is produced for it
+        // either.
         this.triggerLifecycle(
           extensionId,
           this.typeSystem.resolveLifecycleStageActivatedId()
@@ -435,17 +441,19 @@ export class DefaultMountManager extends MountManager {
     }
 
     // Every unmount_ext reaches this method only after any in-progress mount
-    // of the same extension has settled (inst-um-await-mount-settle), so
-    // mountState is never 'mounting' here through the ordered path. This
-    // guarantee is enforced by `UnmountExtActionHandler`
+    // of the same extension has settled, so mountState is never 'mounting'
+    // here through the ordered path. In a Concurrent domain this guarantee
+    // is enforced by `UnmountExtActionHandler`
     // (`cpt-frontx-algo-extension-domain-governance-mount-execution`
-    // `inst-um-await-mount-settle`), which awaits the domain-occupancy
-    // coordinator's in-flight mount for this same extension id BEFORE
-    // calling into the strategy's `unmount` body that ultimately reaches
-    // this method. By the time this method runs, that mount has already
-    // settled to 'mounted' (normal unmount below) or to 'error' (this early
-    // return, correctly reporting nothing to unmount). A caller that bypasses
-    // the prologue and invokes this method directly while a mount is still in
+    // `inst-um-await-mount-settle`), which awaits the `ConcurrentMountJoiner`'s
+    // in-flight mount for this same extension id BEFORE calling into the
+    // strategy's `unmount` body that ultimately reaches this method. In an
+    // Optional domain the occupancy queue orders an unmount behind a running
+    // mount instead (`inst-me-queue-enter-pending`). By the time this method
+    // runs, that mount has already settled to 'mounted' (normal unmount
+    // below) or to 'error' (this early return, correctly reporting nothing
+    // to unmount). A caller that bypasses the prologue and invokes this
+    // method directly while a mount is still in
     // flight is outside that guarantee.
     if (extensionState.mountState !== 'mounted') {
       return;

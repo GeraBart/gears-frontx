@@ -1,194 +1,241 @@
 /**
  * Domain Occupancy Coordinator
  *
- * One instance per registered domain, shared by every `mount_ext`-derived
- * action type the domain registers. `DefaultMfeRegistry.registerDomain`
- * constructs exactly one coordinator per domain and passes the SAME instance
- * into every `MountExtActionHandler` instance constructed for that domain
+ * The internal two-slot occupancy queue for an Optional or Exclusive
+ * domain's own `mount_ext` and `unmount_ext` action implementations
  * (`cpt-frontx-algo-extension-domain-governance-mount-execution`
- * `inst-me-join-in-progress-mount`, `inst-me-no-rerun-eviction`), so a fresh
- * mount started through one derived action type is joined or ordered
- * against a fresh mount started through another exactly as it would be if
- * both were the same action type.
+ * `inst-me-occupancy-queue`). One instance per registered domain, shared by
+ * every `mount_ext`- and `unmount_ext`-derived action type the domain
+ * registers, so a request accepted through one derived action type joins,
+ * replaces, or is ordered against a request accepted through another exactly
+ * as it would be if both were the same action type.
+ *
+ * The queue holds at most two entries: the running entry and one pending
+ * entry. An entry is one operation (a mount, or an explicit unmount) on one
+ * subject, together with every request that joined it. The queue exposes no
+ * public surface — Concurrent domains keep no occupancy queue at all.
  *
  * @packageDocumentation
  * @internal
  */
 // @cpt-algo:cpt-frontx-algo-extension-domain-governance-mount-execution:p2
 
+import { OccupancyCaller } from './OccupancyCaller';
+import { OccupancyEntry, type OccupancyOperation } from './OccupancyEntry';
+
 /**
  * @internal
  */
 export class DomainOccupancyCoordinator {
-  /**
-   * The settlement promise of the fresh physical mount this coordinator
-   * itself started for an extension id, populated for the whole duration of
-   * that mount. A second request for the SAME extension id joins this entry
-   * (`inst-me-join-in-progress-mount`) instead of starting a second one,
-   * regardless of which `mount_ext`-derived action type it arrived through.
-   */
-  private readonly inFlightMountsByExtension = new Map<string, Promise<void>>();
+  private running: OccupancyEntry | undefined;
+  private pending: OccupancyEntry | undefined;
+  /** Set by `close()`: the suffix every later request's failure message carries. */
+  private closedReasonSuffix: string | undefined;
 
   /**
-   * The domain-wide ordering tail, or `undefined` while the domain is idle
-   * (no fresh mount requiring cross-extension ordering is currently
-   * running). A fresh mount that must be ordered against other extensions'
-   * fresh mounts (see `serializeAcrossExtensions`) chains onto this promise
-   * when it is populated, then replaces it with its own settlement, so the
-   * next such mount is evaluated only after this one completes — win or
-   * lose. Left `undefined` (rather than a resolved promise every call would
-   * still have to `.then()` off) so the FIRST fresh mount in an idle domain
-   * invokes its task synchronously, exactly as an unordered one would.
+   * @param domainId - The domain this queue belongs to, named in every
+   *   failure message this queue produces.
    */
-  private tail: Promise<void> | undefined;
+  constructor(private readonly domainId: string) {}
 
-  /**
-   * @param serializeAcrossExtensions - Whether a fresh mount of one
-   *   extension in this domain must wait for another extension's fresh
-   *   mount in the SAME domain to settle before starting. Optional and
-   *   Exclusive strategies read the domain's current mount set and may
-   *   evict a sibling as part of mounting, so two different extensions'
-   *   fresh mounts reading and acting on that set must never overlap — the
-   *   later one is evaluated only after the earlier one's mutation (eviction
-   *   included) has completed. A Concurrent domain never evicts a sibling —
-   *   each extension's fresh mount neither reads nor mutates any other
-   *   extension's occupancy — so different extensions' fresh mounts there
-   *   are independent and are not ordered against one another.
-   */
-  constructor(private readonly serializeAcrossExtensions: boolean) {}
-
-  /**
-   * The in-flight fresh-mount promise for `extensionId`, if this coordinator
-   * itself has one running, or `undefined`.
-   */
-  getInFlightMount(extensionId: string): Promise<void> | undefined {
-    return this.inFlightMountsByExtension.get(extensionId);
+  /** Whether the queue holds neither a running nor a pending entry. */
+  isEmpty(): boolean {
+    return !this.running && !this.pending;
   }
 
   /**
-   * Run a fresh physical mount for `extensionId` by invoking `task` exactly
-   * once. A second call for the SAME extension id while the first is still
-   * running returns the first's promise instead of invoking `task` again.
-   * When this coordinator was built with `serializeAcrossExtensions`, a call
-   * for a DIFFERENT extension id waits for the previous fresh mount in this
-   * domain to settle before `task` runs.
-   *
-   * A placeholder settlement is published in `inFlightMountsByExtension`
-   * BEFORE `task` is invoked — not after — so a call that re-enters this
-   * method for the SAME extension id synchronously (from `task`'s own
-   * synchronous prefix, e.g. a container hook or a lifecycle mount callback
-   * that dispatches `mount_ext` again before `task`'s first `await`) finds
-   * the entry already in flight and joins it instead of starting a second
-   * physical mount. The placeholder settles from `task`'s own outcome, once
-   * `task` actually resolves or rejects.
+   * Whether `close()` has run: the domain is being unregistered, and every
+   * request submitted from now on fails at once
+   * (`inst-me-queue-domain-unregister`).
    */
-  runFreshMount(extensionId: string, task: () => Promise<void>): Promise<void> {
-    const existing = this.inFlightMountsByExtension.get(extensionId);
-    if (existing) {
-      return existing;
-    }
+  isClosed(): boolean {
+    return this.closedReasonSuffix !== undefined;
+  }
 
-    let settlePlaceholder!: () => void;
-    let rejectPlaceholder!: (error: unknown) => void;
-    const placeholder = new Promise<void>((resolve, reject) => {
-      settlePlaceholder = resolve;
-      rejectPlaceholder = reject;
-    });
-
-    this.inFlightMountsByExtension.set(extensionId, placeholder);
-    // Identity-checked cleanup: only THIS call's own placeholder is ever
-    // removed — and it is removed BEFORE the placeholder settles for its
-    // caller below, so a caller's own fulfillment or rejection handler that
-    // immediately retries `runFreshMount` for the SAME extension id
-    // synchronously never joins this now-settled placeholder; it finds the
-    // map already cleared and starts a fresh mount instead.
-    const cleanup = (): void => {
-      if (this.inFlightMountsByExtension.get(extensionId) === placeholder) {
-        this.inFlightMountsByExtension.delete(extensionId);
-      }
-    };
-
-    // `task` runs only now, with the placeholder already published above —
-    // any synchronous re-entrant call for `extensionId` task's own
-    // synchronous prefix triggers observes and joins that placeholder. On
-    // an idle (or non-serialized) coordinator, `chainOntoTail` invokes
-    // `task` synchronously (not via a `.then()` callback), so a `task` that
-    // THROWS synchronously — rather than returning a rejected promise —
-    // throws out of this call instead of producing a settlement to chain
-    // onto. Caught here and turned into a placeholder rejection, so the
-    // published placeholder still settles and its identity-checked cleanup
-    // above still runs, instead of leaving a joiner waiting forever.
-    try {
-      const settlement = this.chainOntoTail(task);
-      settlement.then(
-        () => {
-          cleanup();
-          settlePlaceholder();
-        },
-        (error) => {
-          cleanup();
-          rejectPlaceholder(error);
-        }
+  /**
+   * Submit a request for `operation` on `subject`. Returns THIS caller's own
+   * settlement — resolved or rejected independently of every other caller
+   * of the same entry.
+   *
+   * @param timeoutMs - This caller's own timer value, already resolved by
+   *   the shared timeout rule (`ActionTimeoutResolver`).
+   * @param task - This caller's own mutation. Every caller supplies its own
+   *   task — one that creates its entry and one that joins an existing
+   *   entry alike. When the entry starts, it runs the task of whichever of
+   *   its callers is still live at that turn
+   *   (`inst-me-queue-evaluate-at-turn`).
+   */
+  submit(
+    operation: OccupancyOperation,
+    subject: string,
+    timeoutMs: number,
+    task: () => Promise<void>
+  ): Promise<void> {
+    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-queue-domain-unregister
+    if (this.closedReasonSuffix !== undefined) {
+      // A closed queue admits nothing: the request fails at once and never
+      // enters a slot, so its caller takes its own `fallback`.
+      return Promise.reject(
+        new Error(
+          `${operation}_ext: request for '${subject}' in domain '${this.domainId}' ${this.closedReasonSuffix}`
+        )
       );
-    } catch (error) {
-      cleanup();
-      rejectPlaceholder(error);
+    }
+    // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-queue-domain-unregister
+
+    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-queue-place
+    const caller = new OccupancyCaller(task);
+
+    if (!this.running) {
+      // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-queue-start-when-empty
+      const entry = new OccupancyEntry(operation, subject);
+      this.admit(entry, caller, timeoutMs);
+      this.startRunning(entry);
+      return caller.settlement;
+      // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-queue-start-when-empty
     }
 
-    return placeholder;
+    if (this.pending && this.pending.matches(operation, subject)) {
+      // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-queue-join-pending
+      this.admit(this.pending, caller, timeoutMs);
+      return caller.settlement;
+      // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-queue-join-pending
+    }
+
+    if (this.running.matches(operation, subject)) {
+      // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-queue-join-running
+      if (this.pending) {
+        this.settlePendingFailure('was replaced in the occupancy queue by a newer request.');
+      }
+      this.admit(this.running, caller, timeoutMs);
+      return caller.settlement;
+      // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-queue-join-running
+    }
+
+    if (!this.pending) {
+      // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-queue-enter-pending
+      const entry = new OccupancyEntry(operation, subject);
+      this.pending = entry;
+      this.admit(entry, caller, timeoutMs);
+      return caller.settlement;
+      // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-queue-enter-pending
+    }
+
+    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-queue-replace-pending
+    this.settlePendingFailure('was replaced in the occupancy queue by a newer request.');
+    const entry = new OccupancyEntry(operation, subject);
+    this.pending = entry;
+    this.admit(entry, caller, timeoutMs);
+    return caller.settlement;
+    // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-queue-replace-pending
+    // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-queue-place
   }
 
   /**
-   * Run an occupancy mutation that is NOT itself a fresh mount of a
-   * particular extension id — an explicit `unmount_ext` dispatch, whose
-   * strategy body reads and mutates the SAME domain-wide mount set a fresh
-   * mount's own eviction reads and mutates. Ordered against every other
-   * ordered mutation (fresh mounts included) on this coordinator's shared
-   * tail exactly like `runFreshMount`, so the two never interleave in a
-   * domain built with `serializeAcrossExtensions` — realizing "occupancy
-   * mutations within a domain are ordered" for the explicit-unmount path,
-   * not only the fresh-mount path.
+   * Closes the queue. The pending entry leaves the queue without starting;
+   * each of its callers fails and takes its own `fallback` — the running
+   * entry is not interrupted (`inst-me-queue-domain-unregister`). Every
+   * request submitted after this call fails at once without entering a
+   * slot, so when the running entry completes nothing is promoted.
    *
-   * A domain NOT built with `serializeAcrossExtensions` (Concurrent) never
-   * evicts a sibling, so this degrades to invoking `task` immediately, with
-   * no ordering applied — identical to an unwrapped call.
+   * @param reasonSuffix - Appended to the failure message named after each
+   *   failed request's own operation/subject/domain.
    */
-  runOrderedMutation(task: () => Promise<void>): Promise<void> {
-    // On an idle (or non-serialized) coordinator, `chainOntoTail` invokes
-    // `task` synchronously — a `task` that throws synchronously would
-    // otherwise throw out of this call itself instead of yielding the
-    // rejected promise this method's signature promises its caller.
-    try {
-      return this.chainOntoTail(task);
-    } catch (error) {
-      return Promise.reject(error);
-    }
+  // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-queue-domain-unregister
+  close(reasonSuffix: string): void {
+    this.closedReasonSuffix = reasonSuffix;
+    this.settlePendingFailure(reasonSuffix);
+  }
+  // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-queue-domain-unregister
+
+  /** Adds `caller` to `entry` and arms its own timer. */
+  private admit(entry: OccupancyEntry, caller: OccupancyCaller, timeoutMs: number): void {
+    entry.addCaller(caller);
+    caller.armTimer(timeoutMs, () => this.onCallerTimerFired(entry, caller, timeoutMs));
   }
 
   /**
-   * Shared ordering primitive behind `runFreshMount` and
-   * `runOrderedMutation`: when `serializeAcrossExtensions`, chain `task`
-   * onto the domain's current ordering tail and replace the tail with this
-   * call's own settlement; otherwise invoke `task` immediately.
+   * A caller's own timer fired. The running entry is never replaced,
+   * removed, or interrupted by a caller's timer — only a caller of the
+   * PENDING entry that has not yet started is removed and failed alone; the
+   * pending entry itself leaves the queue only once its last caller has
+   * left, and never starts
+   * (`inst-me-queue-pending-timeout`, `inst-me-queue-running-never-interrupted`).
    */
-  private chainOntoTail(task: () => Promise<void>): Promise<void> {
-    const previousTail = this.tail;
-    const settlement = this.serializeAcrossExtensions && previousTail
-      ? previousTail.catch(() => { /* an earlier mutation's failure never blocks the next one */ }).then(task)
-      : task();
-
-    if (this.serializeAcrossExtensions) {
-      this.tail = settlement;
-      settlement.catch(() => { /* tracked only for ordering, not surfaced from here */ }).finally(() => {
-        // Only the domain's CURRENT tail returns it to idle — if a later
-        // mutation has since chained onto (and replaced) it, this
-        // settlement finishing must not clear that later one's ordering.
-        if (this.tail === settlement) {
-          this.tail = undefined;
-        }
-      });
+  private onCallerTimerFired(entry: OccupancyEntry, caller: OccupancyCaller, timeoutMs: number): void {
+    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-queue-running-never-interrupted
+    if (entry.hasStarted()) {
+      // The mediator's own per-action bound settles this caller's own
+      // attempt elsewhere; this queue does nothing further for it.
+      return;
     }
+    // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-queue-running-never-interrupted
 
-    return settlement;
+    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-queue-pending-timeout
+    entry.removeCaller(caller);
+    const message =
+      `${entry.operation}_ext: request for '${entry.subject}' in domain '${this.domainId}' ` +
+      `timed out after ${timeoutMs}ms while queued.`;
+    caller.fail(new Error(message));
+    if (entry.callers.length === 0 && this.pending === entry) {
+      this.pending = undefined;
+    }
+    // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-queue-pending-timeout
   }
+
+  /** Fails every caller of the pending entry, if any, and clears the slot. */
+  private settlePendingFailure(reasonSuffix: string): void {
+    const entry = this.pending;
+    if (!entry) {
+      return;
+    }
+    this.pending = undefined;
+    const message = `${entry.operation}_ext: request for '${entry.subject}' in domain '${this.domainId}' ${reasonSuffix}`;
+    entry.settleAll({ success: false, error: new Error(message) });
+  }
+
+  /**
+   * Starts `entry` as the running entry, invoking the task of whichever of
+   * its callers is still live at this turn
+   * (`inst-me-queue-evaluate-at-turn`) synchronously — a synchronous throw
+   * from that task counts as failure.
+   */
+  private startRunning(entry: OccupancyEntry): void {
+    this.running = entry;
+    let settlement: Promise<void>;
+    try {
+      settlement = entry.run();
+    } catch (error) {
+      this.finishRunning(entry, { success: false, error });
+      return;
+    }
+    settlement.then(
+      () => this.finishRunning(entry, { success: true }),
+      (error) => this.finishRunning(entry, { success: false, error })
+    );
+  }
+
+  /**
+   * When the running entry finishes, each of its callers continues — on
+   * success with its own `next`, on failure with its own `fallback`. The
+   * entry leaves the queue, and the pending entry, if any, is promoted to
+   * running and started (`inst-me-queue-complete-running`).
+   */
+  // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-queue-complete-running
+  private finishRunning(
+    entry: OccupancyEntry,
+    outcome: { success: true } | { success: false; error: unknown }
+  ): void {
+    if (this.running === entry) {
+      this.running = undefined;
+    }
+    entry.settleAll(outcome);
+
+    if (!this.running && this.pending) {
+      const promoted = this.pending;
+      this.pending = undefined;
+      this.startRunning(promoted);
+    }
+  }
+  // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-queue-complete-running
 }

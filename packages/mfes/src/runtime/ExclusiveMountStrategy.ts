@@ -38,12 +38,14 @@ export class ExclusiveMountStrategy extends MountStrategy {
     // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-get-mounted
 
     // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-exclusive-idempotent
-    // Through the mediator, the registry's mount-ext prologue
-    // (`MountExtActionHandler`) already completed or joined an already-mounted
-    // or in-progress-mount request before any strategy runs, so this branch
-    // is reached only for a fresh mount on that path. A direct call on this
-    // strategy bypasses the prologue, so this check stays as a defensive
-    // no-op return rather than mounting `subject` a second time.
+    // The prologue's own at-turn evaluation
+    // (`MountExtActionHandler.runMountAtTurn`, `inst-me-sole-occupant-at-turn`)
+    // already settles a mount whose subject is still the domain's occupant
+    // without ever calling into this method — this branch is reached only
+    // for a fresh mount started as the running entry. The guard below is a
+    // defensive no-op for a direct call on this strategy that bypasses the
+    // prologue: it returns without eviction, container creation, or an
+    // `activated` trigger.
     if (mounted.length === 1 && mounted[0] === subject) {
       return;
     }

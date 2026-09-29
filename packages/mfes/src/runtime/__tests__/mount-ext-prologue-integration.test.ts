@@ -126,6 +126,206 @@ class GatedMountHandler extends MfeHandler {
   }
 }
 
+/**
+ * A handler whose lifecycle's own `unmount` signals that it has started,
+ * then awaits an externally-controlled gate before settling — holds a
+ * domain's unregistration teardown in progress for as long as the test
+ * keeps the gate open, deterministically.
+ */
+class GatedUnmountHandler extends MfeHandler {
+  readonly bridgeFactory = new MfeBridgeFactoryDefault();
+  constructor(
+    entryId: string,
+    private readonly gate: Promise<void>,
+    private readonly onUnmountStarted: () => void
+  ) {
+    super(entryId);
+  }
+  async load(): Promise<MfeEntryLifecycle<ChildMfeBridge>> {
+    return {
+      mount: () => {},
+      unmount: async () => {
+        this.onUnmountStarted();
+        await this.gate;
+      },
+    };
+  }
+}
+
+/**
+ * A test-only handler whose `mount_ext` action awaits an
+ * externally-controlled gate BEFORE ever calling the strategy's own
+ * `mount` — makes a fresh mount's occupancy mutation genuinely occupy the
+ * coordinator's ordering tail for as long as the test keeps the gate open,
+ * deterministically. Applies uniformly to every subject the domain
+ * mounts.
+ */
+class GatedBeforeStrategyDomainImpl extends ExtensionDomainImplementation {
+  readonly entries = new Set<string>();
+  readonly completed = new Set<string>();
+  /**
+   * Optional per-subject settlement signals for tests that need to observe
+   * the exact moment a subject enters (`entries.add`) or its inner
+   * completes (`completed.add`), beyond polling the two Sets above —
+   * resolved synchronously from this same recording handler, never a
+   * sleep, a poll, or a bare microtask flush.
+   */
+  onEntered?: (subject: string) => void;
+  onCompleted?: (subject: string) => void;
+  constructor(
+    ctx: DomainContext,
+    readonly strategy: MountStrategy,
+    private readonly gate: Promise<void>,
+    declaresUnmount: boolean = true
+  ) {
+    super();
+    ctx.registerHandler(ACTION_MOUNT_EXT, ActionHandler.fromFunction(async (_t, p) => {
+      const { subject } = p as { subject: string };
+      this.entries.add(subject);
+      this.onEntered?.(subject);
+      await this.gate;
+      try {
+        const result = await this.strategy.mount(p as { subject: string });
+        this.completed.add(subject);
+        return result;
+      } finally {
+        // Fired whether the inner attempt succeeds or fails — a signal that
+        // this entry's own task has settled, not that it succeeded (`completed`
+        // above already tracks success alone).
+        this.onCompleted?.(subject);
+      }
+    }));
+    if (declaresUnmount) {
+      ctx.registerHandler(ACTION_UNMOUNT_EXT, ActionHandler.fromFunction((_t, p) => this.strategy.unmount!(p as { subject: string })));
+    }
+  }
+  protected getMountStrategies(): MountStrategy[] { return [this.strategy]; }
+}
+
+class GatedBeforeStrategyDomainFactory extends ExtensionDomainImplementationFactory {
+  readonly hooks = new TestHooks();
+  strategy!: OptionalMountStrategy | ExclusiveMountStrategy;
+  impl!: GatedBeforeStrategyDomainImpl;
+  /** Propagated onto `impl` once `build()` constructs it — set on this factory BEFORE `registerDomain` triggers `build()`. */
+  onEntered?: (subject: string) => void;
+  onCompleted?: (subject: string) => void;
+  constructor(
+    private readonly reg: MfeRegistry,
+    private readonly domainId: string,
+    private readonly strategyName: 'optional' | 'exclusive',
+    private readonly gate: Promise<void>
+  ) { super(); }
+  build(ctx: DomainContext): GatedBeforeStrategyDomainImpl {
+    this.strategy = this.strategyName === 'optional'
+      ? new OptionalMountStrategy(ctx.mounter, this.hooks, this.reg, this.domainId)
+      : new ExclusiveMountStrategy(ctx.mounter, this.hooks, this.reg, this.domainId);
+    this.impl = new GatedBeforeStrategyDomainImpl(ctx, this.strategy, this.gate, this.strategyName === 'optional');
+    this.impl.onEntered = this.onEntered;
+    this.impl.onCompleted = this.onCompleted;
+    return this.impl;
+  }
+}
+
+/**
+ * A test-only domain declaring TWO `mount_ext`-derived action subtypes,
+ * each wired to its OWN distinguishable inner handler — records which
+ * subtype's handler actually ran for a given subject, in `order` — while
+ * every subject's mount awaits one externally-controlled gate before
+ * reaching the strategy, exactly as `GatedBeforeStrategyDomainImpl` does.
+ * Proves which caller's own task an entry runs at its turn
+ * (`inst-me-queue-evaluate-at-turn`), across TWO subtypes sharing the same
+ * occupancy queue.
+ */
+class TwoDerivedSubtypesGatedDomainImpl extends ExtensionDomainImplementation {
+  /** Which subtype's handler ran, per subject that reached it, in order. */
+  readonly order: string[] = [];
+  constructor(
+    ctx: DomainContext,
+    readonly strategy: OptionalMountStrategy,
+    private readonly gate: Promise<void>,
+    private readonly derivedActionType: string
+  ) {
+    super();
+    const makeHandler = (tag: string) => ActionHandler.fromFunction(async (_t, p) => {
+      const { subject } = p as { subject: string };
+      this.order.push(`${tag}:${subject}`);
+      await this.gate;
+      return this.strategy.mount(p as { subject: string });
+    });
+    ctx.registerHandler(ACTION_MOUNT_EXT, makeHandler('orig'));
+    ctx.registerHandler(this.derivedActionType, makeHandler('fallback'));
+    ctx.registerHandler(ACTION_UNMOUNT_EXT, ActionHandler.fromFunction((_t, p) => this.strategy.unmount!(p as { subject: string })));
+  }
+  protected getMountStrategies(): MountStrategy[] { return [this.strategy]; }
+}
+
+class TwoDerivedSubtypesGatedDomainFactory extends ExtensionDomainImplementationFactory {
+  readonly hooks = new TestHooks();
+  strategy!: OptionalMountStrategy;
+  impl!: TwoDerivedSubtypesGatedDomainImpl;
+  constructor(
+    private readonly reg: MfeRegistry,
+    private readonly domainId: string,
+    private readonly gate: Promise<void>,
+    private readonly derivedActionType: string
+  ) { super(); }
+  build(ctx: DomainContext): TwoDerivedSubtypesGatedDomainImpl {
+    this.strategy = new OptionalMountStrategy(ctx.mounter, this.hooks, this.reg, this.domainId);
+    this.impl = new TwoDerivedSubtypesGatedDomainImpl(ctx, this.strategy, this.gate, this.derivedActionType);
+    return this.impl;
+  }
+}
+
+/**
+ * A test-only handler whose `mount_ext` action awaits an
+ * externally-controlled gate, then either throws (for one designated
+ * "failing" subject — never reaching the strategy at all) or calls straight
+ * through to the strategy (every other subject) — models a request that
+ * stays genuinely in flight for the test to queue other requests behind,
+ * then fails without ever touching occupancy.
+ */
+class GatedFailBeforeStrategyDomainImpl extends ExtensionDomainImplementation {
+  constructor(
+    ctx: DomainContext,
+    readonly strategy: MountStrategy,
+    private readonly gate: Promise<void>,
+    private readonly failingSubject: string,
+    declaresUnmount: boolean = true
+  ) {
+    super();
+    ctx.registerHandler(ACTION_MOUNT_EXT, ActionHandler.fromFunction(async (_t, p) => {
+      const { subject } = p as { subject: string };
+      await this.gate;
+      if (subject === this.failingSubject) {
+        throw new Error(`mount of '${subject}' fails before reaching the strategy`);
+      }
+      return this.strategy.mount(p as { subject: string });
+    }));
+    if (declaresUnmount) {
+      ctx.registerHandler(ACTION_UNMOUNT_EXT, ActionHandler.fromFunction((_t, p) => this.strategy.unmount!(p as { subject: string })));
+    }
+  }
+  protected getMountStrategies(): MountStrategy[] { return [this.strategy]; }
+}
+
+class GatedFailBeforeStrategyDomainFactory extends ExtensionDomainImplementationFactory {
+  readonly hooks = new TestHooks();
+  strategy!: OptionalMountStrategy | ExclusiveMountStrategy;
+  constructor(
+    private readonly reg: MfeRegistry,
+    private readonly domainId: string,
+    private readonly strategyName: 'optional' | 'exclusive',
+    private readonly gate: Promise<void>,
+    private readonly failingSubject: string
+  ) { super(); }
+  build(ctx: DomainContext): GatedFailBeforeStrategyDomainImpl {
+    this.strategy = this.strategyName === 'optional'
+      ? new OptionalMountStrategy(ctx.mounter, this.hooks, this.reg, this.domainId)
+      : new ExclusiveMountStrategy(ctx.mounter, this.hooks, this.reg, this.domainId);
+    return new GatedFailBeforeStrategyDomainImpl(ctx, this.strategy, this.gate, this.failingSubject, this.strategyName === 'optional');
+  }
+}
+
 class TestHooks implements ContainerHooks {
   readonly created: string[] = [];
   readonly destroyed: string[] = [];
@@ -235,6 +435,11 @@ function wireProbe(registry: DefaultMfeRegistry, domainId: string, actionType: s
   const mediator = (registry as unknown as { mediator: DefaultActionsChainsMediator }).mediator;
   mediator.registerHandler(domainId, actionType, ActionHandler.fromFunction(async () => { deferred.resolve(); }));
   return deferred.promise;
+}
+
+/** Create and register a probe-host domain with Concurrent strategy (non-queueing). */
+function createProbeDomain(registry: DefaultMfeRegistry, probeDomainId: string): void {
+  registry.registerDomain(makeDomain(probeDomainId, true), new ConcurrentDomainFactory());
 }
 
 describe('mount-ext prologue — end to end', () => {
@@ -829,4 +1034,1201 @@ describe('mount-ext prologue — end to end', () => {
 
     registry.dispose();
   });
+
+  it('(m) a Concurrent domain keeps no occupancy queue: a gated mount of one extension and a mount of a different extension run independently, and the ungated one mounts while the gated one is still in flight', async () => {
+    const plugin = createPlugin();
+    const domainId = 'domain-concurrent-independence';
+    const registry = freshRegistry(plugin);
+    const gate = createDeferred();
+
+    // A Concurrent domain impl whose `mount_ext` handler gates ONLY
+    // 'ext-a' — every other subject calls straight through to the
+    // strategy, uniformly with every other Concurrent domain impl in this
+    // file, except for this one gate.
+    class GatedOnlyADomainImpl extends ExtensionDomainImplementation {
+      constructor(ctx: DomainContext, readonly strategy: ConcurrentMountStrategy) {
+        super();
+        ctx.registerHandler(ACTION_MOUNT_EXT, ActionHandler.fromFunction(async (_t, p) => {
+          const { subject } = p as { subject: string };
+          if (subject === 'ext-a') {
+            await gate.promise;
+          }
+          return this.strategy.mount(p as { subject: string });
+        }));
+        ctx.registerHandler(ACTION_UNMOUNT_EXT, ActionHandler.fromFunction((_t, p) => this.strategy.unmount!(p as { subject: string })));
+      }
+      protected getMountStrategies(): MountStrategy[] { return [this.strategy]; }
+    }
+    class GatedOnlyADomainFactory extends ExtensionDomainImplementationFactory {
+      readonly hooks = new TestHooks();
+      strategy!: ConcurrentMountStrategy;
+      build(ctx: DomainContext): GatedOnlyADomainImpl {
+        this.strategy = new ConcurrentMountStrategy(ctx.mounter, this.hooks);
+        return new GatedOnlyADomainImpl(ctx, this.strategy);
+      }
+    }
+
+    const factory = new GatedOnlyADomainFactory();
+    registry.registerDomain(makeDomain(domainId, true), factory);
+    await registry.registerExtension(makeExtension('ext-a', domainId));
+    await registry.registerExtension(makeExtension('ext-b', domainId));
+    registry.getMounter(domainId).attach(document.createElement('div'));
+
+    const aFired = wireProbe(registry, domainId, 'concind-a-next');
+    registry.executeActionsChain({
+      action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-a' } },
+      next: { action: { type: 'concind-a-next', target: domainId, payload: {} } },
+    });
+
+    const bFired = wireProbe(registry, domainId, 'concind-b-next');
+    registry.executeActionsChain({
+      action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-b' } },
+      next: { action: { type: 'concind-b-next', target: domainId, payload: {} } },
+    });
+
+    // ext-b's own mount runs and its `next` fires, and ext-b is mounted,
+    // while ext-a's own mount is still gated — a Concurrent domain keeps no
+    // occupancy queue, so two different extensions' fresh mounts there
+    // never order behind one another.
+    await bFired;
+    expect(registry.getMountedExtensions(domainId)).toEqual(['ext-b']);
+
+    gate.resolve();
+    await aFired;
+
+    expect(registry.getMountedExtensions(domainId)).toContain('ext-a');
+    expect(registry.getMountedExtensions(domainId)).toContain('ext-b');
+
+    registry.dispose();
+  });
+});
+
+/**
+ * Two-slot occupancy queue acceptance criteria (Optional/Exclusive domains)
+ * — `cpt-frontx-algo-extension-domain-governance-mount-execution` steps
+ * 6-13, FEATURE §6 acceptance criteria.
+ */
+describe('domain occupancy queue — two-slot semantics (Optional/Exclusive)', () => {
+  for (const strategyName of ['optional', 'exclusive'] as const) {
+    it(`[${strategyName}] burst: mount(A) running, accepting mount(B), mount(C), mount(D) in turn ends with D as sole occupant; only A and D are physically mounted`, async () => {
+      const plugin = createPlugin();
+      const domainId = `domain-burst-${strategyName}`;
+      const registry = freshRegistry(plugin);
+      const gate = createDeferred();
+      const factory = new GatedBeforeStrategyDomainFactory(registry, domainId, strategyName, gate.promise);
+      registry.registerDomain(makeDomain(domainId, strategyName === 'optional'), factory);
+      for (const id of ['ext-a', 'ext-b', 'ext-c', 'ext-d']) {
+        await registry.registerExtension(makeExtension(id, domainId));
+      }
+      registry.getMounter(domainId).attach(document.createElement('div'));
+
+      const order: string[] = [];
+      const realMount = factory.strategy.mount.bind(factory.strategy);
+      vi.spyOn(factory.strategy, 'mount').mockImplementation(async (payload: { subject: string }) => {
+        order.push(payload.subject);
+        return realMount(payload);
+      });
+
+      const aFired = wireProbe(registry, domainId, 'burst-a-next');
+      registry.executeActionsChain({
+        action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-a' } },
+        next: { action: { type: 'burst-a-next', target: domainId, payload: {} } },
+      });
+
+      const bFallback = wireProbe(registry, domainId, 'burst-b-fallback');
+      registry.executeActionsChain({
+        action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-b' } },
+        fallback: { action: { type: 'burst-b-fallback', target: domainId, payload: {} } },
+      });
+      const cFallback = wireProbe(registry, domainId, 'burst-c-fallback');
+      registry.executeActionsChain({
+        action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-c' } },
+        fallback: { action: { type: 'burst-c-fallback', target: domainId, payload: {} } },
+      });
+      const dFired = wireProbe(registry, domainId, 'burst-d-next');
+      registry.executeActionsChain({
+        action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-d' } },
+        next: { action: { type: 'burst-d-next', target: domainId, payload: {} } },
+      });
+
+      // B and C never start: replaced while pending, each takes its own
+      // fallback, well before the gate ever opens.
+      await Promise.all([bFallback, cFallback]);
+
+      gate.resolve();
+      await Promise.all([aFired, dFired]);
+
+      expect(order).toEqual(['ext-a', 'ext-d']);
+      expect(registry.getMountedExtensions(domainId)).toEqual(['ext-d']);
+
+      registry.dispose();
+    });
+
+    it(`[${strategyName}] replacement: both callers of a replaced pending entry take their own fallback, and the replaced entry never starts`, async () => {
+      const plugin = createPlugin();
+      const domainId = `domain-replace-joined-${strategyName}`;
+      const registry = freshRegistry(plugin);
+      const gate = createDeferred();
+      const factory = new GatedBeforeStrategyDomainFactory(registry, domainId, strategyName, gate.promise);
+      registry.registerDomain(makeDomain(domainId, strategyName === 'optional'), factory);
+      await registry.registerExtension(makeExtension('ext-a', domainId));
+      await registry.registerExtension(makeExtension('ext-b', domainId));
+      await registry.registerExtension(makeExtension('ext-c', domainId));
+      registry.getMounter(domainId).attach(document.createElement('div'));
+
+      const order: string[] = [];
+      const realMount = factory.strategy.mount.bind(factory.strategy);
+      vi.spyOn(factory.strategy, 'mount').mockImplementation(async (payload: { subject: string }) => {
+        order.push(payload.subject);
+        return realMount(payload);
+      });
+
+      const aFired = wireProbe(registry, domainId, 'replace-a-next');
+      registry.executeActionsChain({
+        action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-a' } },
+        next: { action: { type: 'replace-a-next', target: domainId, payload: {} } },
+      });
+
+      // Two callers join the same pending mount(B).
+      const b1Fallback = wireProbe(registry, domainId, 'replace-b1-fallback');
+      registry.executeActionsChain({
+        action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-b' } },
+        fallback: { action: { type: 'replace-b1-fallback', target: domainId, payload: {} } },
+      });
+      const b2Fallback = wireProbe(registry, domainId, 'replace-b2-fallback');
+      registry.executeActionsChain({
+        action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-b' } },
+        fallback: { action: { type: 'replace-b2-fallback', target: domainId, payload: {} } },
+      });
+
+      // mount(C) replaces the pending mount(B) — BOTH B callers fall back.
+      const cFired = wireProbe(registry, domainId, 'replace-c-next');
+      registry.executeActionsChain({
+        action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-c' } },
+        next: { action: { type: 'replace-c-next', target: domainId, payload: {} } },
+      });
+
+      await Promise.all([b1Fallback, b2Fallback]);
+
+      gate.resolve();
+      await Promise.all([aFired, cFired]);
+
+      expect(order).toEqual(['ext-a', 'ext-c']);
+      expect(registry.getMountedExtensions(domainId)).toEqual(['ext-c']);
+
+      registry.dispose();
+    });
+
+    it(`[${strategyName}] joining: mount(A) joins a pending mount(A); mount(A) matching the running mount(A) replaces a different pending entry and joins running`, async () => {
+      const plugin = createPlugin();
+      const domainId = `domain-joining-${strategyName}`;
+      const registry = freshRegistry(plugin);
+      const gate = createDeferred();
+      const factory = new GatedBeforeStrategyDomainFactory(registry, domainId, strategyName, gate.promise);
+      registry.registerDomain(makeDomain(domainId, strategyName === 'optional'), factory);
+      await registry.registerExtension(makeExtension('ext-x', domainId));
+      await registry.registerExtension(makeExtension('ext-a', domainId));
+      await registry.registerExtension(makeExtension('ext-b', domainId));
+      registry.getMounter(domainId).attach(document.createElement('div'));
+
+      const order: string[] = [];
+      const realMount = factory.strategy.mount.bind(factory.strategy);
+      vi.spyOn(factory.strategy, 'mount').mockImplementation(async (payload: { subject: string }) => {
+        order.push(payload.subject);
+        return realMount(payload);
+      });
+
+      // Running: mount(X), gated.
+      const xFired = wireProbe(registry, domainId, 'join-x-next');
+      registry.executeActionsChain({
+        action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-x' } },
+        next: { action: { type: 'join-x-next', target: domainId, payload: {} } },
+      });
+
+      // Pending: mount(A) #1.
+      const a1Fired = wireProbe(registry, domainId, 'join-a1-next');
+      registry.executeActionsChain({
+        action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-a' } },
+        next: { action: { type: 'join-a1-next', target: domainId, payload: {} } },
+      });
+
+      // Joins the pending mount(A).
+      const a2Fired = wireProbe(registry, domainId, 'join-a2-next');
+      registry.executeActionsChain({
+        action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-a' } },
+        next: { action: { type: 'join-a2-next', target: domainId, payload: {} } },
+      });
+
+      gate.resolve();
+      await Promise.all([xFired, a1Fired, a2Fired]);
+
+      // Exactly one physical mount of A (joined, not queued twice).
+      expect(order).toEqual(['ext-x', 'ext-a']);
+      expect(registry.getMountedExtensions(domainId)).toEqual(['ext-a']);
+
+      registry.dispose();
+    });
+
+    it(`[${strategyName}] joining: mount(A) matching the RUNNING mount(A) replaces a different pending mount(B) — B's caller takes its own fallback and B never enters, and the newcomer joins running A`, async () => {
+      const plugin = createPlugin();
+      const domainId = `domain-join-running-replaces-pending-${strategyName}`;
+      const registry = freshRegistry(plugin);
+      const gate = createDeferred();
+      const factory = new GatedBeforeStrategyDomainFactory(registry, domainId, strategyName, gate.promise);
+      registry.registerDomain(makeDomain(domainId, strategyName === 'optional'), factory);
+      await registry.registerExtension(makeExtension('ext-a', domainId));
+      await registry.registerExtension(makeExtension('ext-b', domainId));
+      registry.getMounter(domainId).attach(document.createElement('div'));
+
+      const order: string[] = [];
+      const realMount = factory.strategy.mount.bind(factory.strategy);
+      vi.spyOn(factory.strategy, 'mount').mockImplementation(async (payload: { subject: string }) => {
+        order.push(payload.subject);
+        return realMount(payload);
+      });
+
+      // Running: mount(A), gated.
+      const a1Fired = wireProbe(registry, domainId, 'joinrun-a1-next');
+      registry.executeActionsChain({
+        action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-a' } },
+        next: { action: { type: 'joinrun-a1-next', target: domainId, payload: {} } },
+      });
+
+      // Pending: mount(B) — a different subject than the running entry.
+      const bFallback = wireProbe(registry, domainId, 'joinrun-b-fallback');
+      registry.executeActionsChain({
+        action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-b' } },
+        fallback: { action: { type: 'joinrun-b-fallback', target: domainId, payload: {} } },
+      });
+
+      // A newcomer mount(A) matches the RUNNING entry's own operation and
+      // subject — the pending mount(B) is replaced (its caller takes its
+      // own fallback and never enters), and this newcomer joins the
+      // running entry instead of queuing behind it.
+      const a2Fired = wireProbe(registry, domainId, 'joinrun-a2-next');
+      registry.executeActionsChain({
+        action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-a' } },
+        next: { action: { type: 'joinrun-a2-next', target: domainId, payload: {} } },
+      });
+
+      // B is replaced and fails well before the gate ever opens.
+      await bFallback;
+      expect(factory.impl.entries.has('ext-b')).toBe(false);
+
+      gate.resolve();
+      await Promise.all([a1Fired, a2Fired]);
+
+      // Exactly one physical mount of A — both its callers joined the SAME
+      // running entry.
+      expect(order).toEqual(['ext-a']);
+      expect(registry.getMountedExtensions(domainId)).toEqual(['ext-a']);
+      expect(factory.impl.entries.has('ext-b')).toBe(false);
+
+      registry.dispose();
+    });
+  }
+
+  for (const strategyName of ['optional', 'exclusive'] as const) {
+    it(`[${strategyName}] pending timeout: a lone pending caller times out, takes its own fallback, and its entry never starts once the running entry completes`, async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      try {
+        const plugin = createPlugin();
+        const domainId = `domain-lone-pending-timeout-${strategyName}`;
+        const registry = freshRegistry(plugin);
+        const gate = createDeferred();
+        const factory = new GatedBeforeStrategyDomainFactory(registry, domainId, strategyName, gate.promise);
+        registry.registerDomain(makeDomain(domainId, strategyName === 'optional'), factory);
+        await registry.registerExtension(makeExtension('ext-a', domainId));
+        await registry.registerExtension(makeExtension('ext-b', domainId));
+        registry.getMounter(domainId).attach(document.createElement('div'));
+
+        // Running: mount(A), gated.
+        const aFired = wireProbe(registry, domainId, 'lonetimeout-a-next');
+        registry.executeActionsChain({
+          action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-a' } },
+          next: { action: { type: 'lonetimeout-a-next', target: domainId, payload: {} } },
+        });
+
+        // Pending: mount(B) — its lone caller declares a short timeout.
+        const bFallback = wireProbe(registry, domainId, 'lonetimeout-b-fallback');
+        registry.executeActionsChain({
+          action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-b' }, timeout: 10 },
+          fallback: { action: { type: 'lonetimeout-b-fallback', target: domainId, payload: {} } },
+        });
+
+        await vi.advanceTimersByTimeAsync(20);
+        await bFallback;
+
+        // B's entry left the queue without ever starting: its lone caller
+        // was its last, so the entry never becomes the pending entry the
+        // running entry's own completion would otherwise promote.
+        expect(factory.impl.entries.has('ext-b')).toBe(false);
+
+        gate.resolve();
+        await aFired;
+
+        // The running entry (A) completed normally; there was no pending
+        // entry left to promote — B's entry never started.
+        expect(factory.impl.entries.has('ext-b')).toBe(false);
+        expect(registry.getMountedExtensions(domainId)).toEqual(['ext-a']);
+
+        registry.dispose();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  }
+
+  it('[optional] pending timeout: a lone pending caller times out and takes its fallback; two callers — one short, one long — the short one fails alone while the entry still starts for the other', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const plugin = createPlugin();
+      const domainId = 'domain-pending-timeout';
+      const registry = freshRegistry(plugin);
+      const gate = createDeferred();
+      const factory = new GatedBeforeStrategyDomainFactory(registry, domainId, 'optional', gate.promise);
+      registry.registerDomain(makeDomain(domainId, true), factory);
+      await registry.registerExtension(makeExtension('ext-a', domainId));
+      await registry.registerExtension(makeExtension('ext-b', domainId));
+      registry.getMounter(domainId).attach(document.createElement('div'));
+
+      const order: string[] = [];
+      const realMount = factory.strategy.mount.bind(factory.strategy);
+      vi.spyOn(factory.strategy, 'mount').mockImplementation(async (payload: { subject: string }) => {
+        order.push(payload.subject);
+        return realMount(payload);
+      });
+
+      // Running: mount(A), gated.
+      const aFiredPromise = new Promise<void>((resolve) => {
+        const mediator = (registry as unknown as { mediator: DefaultActionsChainsMediator }).mediator;
+        mediator.registerHandler(domainId, 'timeout-a-next', ActionHandler.fromFunction(async () => { resolve(); }));
+      });
+      registry.executeActionsChain({
+        action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-a' } },
+        next: { action: { type: 'timeout-a-next', target: domainId, payload: {} } },
+      });
+
+      // Pending: mount(B), short declared timeout — the caller of the
+      // pending entry that will fire first.
+      const bShortFallback = new Promise<void>((resolve) => {
+        const mediator = (registry as unknown as { mediator: DefaultActionsChainsMediator }).mediator;
+        mediator.registerHandler(domainId, 'timeout-b-short-fallback', ActionHandler.fromFunction(async () => { resolve(); }));
+      });
+      registry.executeActionsChain({
+        action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-b' }, timeout: 10 },
+        fallback: { action: { type: 'timeout-b-short-fallback', target: domainId, payload: {} } },
+      });
+
+      // A second caller joins the same pending mount(B), with a longer
+      // declared timeout — must still see the entry start once B's turn
+      // comes.
+      const bLongFired = new Promise<void>((resolve) => {
+        const mediator = (registry as unknown as { mediator: DefaultActionsChainsMediator }).mediator;
+        mediator.registerHandler(domainId, 'timeout-b-long-next', ActionHandler.fromFunction(async () => { resolve(); }));
+      });
+      registry.executeActionsChain({
+        action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-b' }, timeout: 100000 },
+        next: { action: { type: 'timeout-b-long-next', target: domainId, payload: {} } },
+      });
+
+      await vi.advanceTimersByTimeAsync(20);
+      await bShortFallback;
+
+      // The gate stays closed well past the short timeout — releasing it
+      // now still lets B's own queued entry start for the long-timeout
+      // caller.
+      gate.resolve();
+      await vi.advanceTimersByTimeAsync(1);
+      await Promise.all([aFiredPromise, bLongFired]);
+
+      expect(order).toEqual(['ext-a', 'ext-b']);
+      expect(registry.getMountedExtensions(domainId)).toEqual(['ext-b']);
+
+      registry.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('[optional] running never interrupted: a caller of the running entry whose own timer fires settles that ONE caller\'s own attempt (the mediator\'s per-action bound), but never stops the entry — it completes physically, and the pending entry then starts', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const plugin = createPlugin();
+      const domainId = 'domain-running-never-interrupted';
+      const registry = freshRegistry(plugin);
+      const gate = createDeferred();
+      const factory = new GatedBeforeStrategyDomainFactory(registry, domainId, 'optional', gate.promise);
+      registry.registerDomain(makeDomain(domainId, true), factory);
+      await registry.registerExtension(makeExtension('ext-a', domainId));
+      await registry.registerExtension(makeExtension('ext-b', domainId));
+      registry.getMounter(domainId).attach(document.createElement('div'));
+
+      // A physical-mount completion signal for 'ext-a', independent of its
+      // OWN chain's outcome (below) — proves the running entry itself keeps
+      // running and finishes, regardless of what its caller's own attempt
+      // does.
+      const aStrategyMounted = createDeferred();
+      const realMount = factory.strategy.mount.bind(factory.strategy);
+      vi.spyOn(factory.strategy, 'mount').mockImplementation(async (payload: { subject: string }) => {
+        const result = await realMount(payload);
+        if (payload.subject === 'ext-a') {
+          aStrategyMounted.resolve();
+        }
+        return result;
+      });
+
+      // A's own declared timeout (10ms) is armed BOTH by the queue (for its
+      // caller) and, identically, by the mediator's own per-action bound
+      // (`cpt-frontx-adr-action-dispatch-and-chaining`) — since the entry is
+      // already running when it fires, the queue does nothing
+      // (`inst-me-queue-running-never-interrupted`), but the mediator's own
+      // bound still settles THIS caller's attempt: its chain takes its own
+      // `fallback`, even though the entry it is attached to keeps running.
+      const aFallbackFired = new Promise<void>((resolve) => {
+        const mediator = (registry as unknown as { mediator: DefaultActionsChainsMediator }).mediator;
+        mediator.registerHandler(domainId, 'running-a-fallback', ActionHandler.fromFunction(async () => { resolve(); }));
+      });
+      registry.executeActionsChain({
+        action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-a' }, timeout: 10 },
+        fallback: { action: { type: 'running-a-fallback', target: domainId, payload: {} } },
+      });
+
+      const bFired = new Promise<void>((resolve) => {
+        const mediator = (registry as unknown as { mediator: DefaultActionsChainsMediator }).mediator;
+        mediator.registerHandler(domainId, 'running-b-next', ActionHandler.fromFunction(async () => { resolve(); }));
+      });
+      registry.executeActionsChain({
+        action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-b' } },
+        next: { action: { type: 'running-b-next', target: domainId, payload: {} } },
+      });
+
+      // A's own timer fires while it is still running (gate closed) — its
+      // OWN chain takes fallback, but the entry keeps running: nothing
+      // about the queue's state changes because of it.
+      await vi.advanceTimersByTimeAsync(20);
+      await aFallbackFired;
+      expect(registry.getMountedExtensions(domainId)).toEqual([]);
+
+      gate.resolve();
+      await Promise.all([aStrategyMounted.promise, bFired]);
+
+      expect(registry.getMountedExtensions(domainId)).toEqual(['ext-b']);
+
+      registry.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('inst-me-queue-pending-timeout/inst-me-queue-evaluate-at-turn: a pending caller that times out through the MEDIATOR\'s own per-action bound, while its fallback joins the still-pending entry through a DIFFERENT mount_ext-derived subtype, never runs at the entry\'s turn — the surviving fallback caller\'s subtype runs instead', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const ACTION_MOUNT_EXT_DERIVED = `${ACTION_MOUNT_EXT}derived.v1~`;
+      const plugin = createPlugin();
+      const domainId = 'domain-fallback-task-selection';
+      const registry = freshRegistry(plugin);
+      const gate = createDeferred();
+      const factory = new TwoDerivedSubtypesGatedDomainFactory(registry, domainId, gate.promise, ACTION_MOUNT_EXT_DERIVED);
+      registry.registerDomain(
+        { ...makeDomain(domainId, true), actions: [ACTION_LOAD_EXT, ACTION_MOUNT_EXT, ACTION_MOUNT_EXT_DERIVED, ACTION_UNMOUNT_EXT] },
+        factory
+      );
+      await registry.registerExtension(makeExtension('ext-a', domainId));
+      await registry.registerExtension(makeExtension('ext-b', domainId));
+      registry.getMounter(domainId).attach(document.createElement('div'));
+
+      // Running: mount(ext-a) — gated, occupies the queue for the whole race below.
+      const aFired = new Promise<void>((resolve) => {
+        const mediator = (registry as unknown as { mediator: DefaultActionsChainsMediator }).mediator;
+        mediator.registerHandler(domainId, 'race-a-next', ActionHandler.fromFunction(async () => { resolve(); }));
+      });
+      registry.executeActionsChain({
+        action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-a' } },
+        next: { action: { type: 'race-a-next', target: domainId, payload: {} } },
+      });
+
+      // Pending: mount(ext-b) through the ORIGINAL subtype, with a declared
+      // timeout the mediator's own per-action bound arms identically to the
+      // queue's own caller timer for this same caller
+      // (`inst-me-queue-caller-timer`). Its `fallback`, once dispatched,
+      // re-submits mount(ext-b) through the OTHER derived subtype —
+      // observably distinct from the original — joining this entry while it
+      // is still pending, exactly as `inst-me-queue-join-pending` allows,
+      // before this caller's own queue timer has fired.
+      const fallbackNext = new Promise<void>((resolve) => {
+        const mediator = (registry as unknown as { mediator: DefaultActionsChainsMediator }).mediator;
+        mediator.registerHandler(domainId, 'race-b-fallback-next', ActionHandler.fromFunction(async () => { resolve(); }));
+      });
+      const raceBFallbackDispatched = new Promise<void>((resolve) => {
+        const mediator = (registry as unknown as { mediator: DefaultActionsChainsMediator }).mediator;
+        mediator.registerHandler(domainId, 'race-b-fallback', ActionHandler.fromFunction(async () => {
+          registry.executeActionsChain({
+            action: { type: ACTION_MOUNT_EXT_DERIVED, target: domainId, payload: { subject: 'ext-b' }, timeout: 100000 },
+            next: { action: { type: 'race-b-fallback-next', target: domainId, payload: {} } },
+          });
+          resolve();
+        }));
+      });
+      registry.executeActionsChain({
+        action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-b' }, timeout: 30 },
+        fallback: { action: { type: 'race-b-fallback', target: domainId, payload: {} } },
+      });
+
+      // The mediator's own per-action timer for the original ext-b caller
+      // fires at the SAME nominal 30ms as the queue's own caller timer for
+      // that same caller, but was armed strictly first — so it fires first,
+      // and this advance lets its fallback's join (above) complete before
+      // the queue's own timer for the original caller runs.
+      await vi.advanceTimersByTimeAsync(30);
+      await raceBFallbackDispatched;
+
+      // Ext-a's turn ends — ext-b's entry, now holding only the fallback's
+      // caller (the original having timed out of the queue in the same
+      // advance above), is promoted and starts.
+      gate.resolve();
+      await Promise.all([aFired, fallbackNext]);
+
+      expect(factory.impl.order).toEqual(['orig:ext-a', 'fallback:ext-b']);
+      expect(registry.getMountedExtensions(domainId)).toEqual(['ext-b']);
+
+      registry.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  for (const strategyName of ['optional', 'exclusive'] as const) {
+    it(`[${strategyName}] eligibility at turn: an entry whose subject is unregistered while pending fails without container creation or activated`, async () => {
+      const plugin = createPlugin();
+      const activatedSpy = vi.spyOn(plugin, 'resolveLifecycleStageActivatedId');
+      const domainId = `domain-eligibility-at-turn-${strategyName}`;
+      const registry = freshRegistry(plugin);
+      const gate = createDeferred();
+      const factory = new GatedBeforeStrategyDomainFactory(registry, domainId, strategyName, gate.promise);
+      registry.registerDomain(makeDomain(domainId, strategyName === 'optional'), factory);
+      await registry.registerExtension(makeExtension('ext-a', domainId));
+      await registry.registerExtension(makeExtension('ext-b', domainId));
+      registry.getMounter(domainId).attach(document.createElement('div'));
+      activatedSpy.mockClear();
+
+      const aFired = wireProbe(registry, domainId, 'elig-a-next');
+      registry.executeActionsChain({
+        action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-a' } },
+        next: { action: { type: 'elig-a-next', target: domainId, payload: {} } },
+      });
+
+      const bFallback = wireProbe(registry, domainId, 'elig-b-fallback');
+      registry.executeActionsChain({
+        action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-b' } },
+        fallback: { action: { type: 'elig-b-fallback', target: domainId, payload: {} } },
+      });
+
+      // Unregister B's extension while A is still running and B is pending
+      // — evaluated at ITS turn, B is no longer admitted anywhere.
+      await registry.unregisterExtension('ext-b');
+
+      gate.resolve();
+      await Promise.all([aFired, bFallback]);
+
+      expect(factory.hooks.created).toEqual(['ext-a']);
+      expect(activatedSpy).toHaveBeenCalledTimes(1);
+      expect(registry.getMountedExtensions(domainId)).toEqual(['ext-a']);
+
+      registry.dispose();
+    });
+  }
+
+  it('[optional] eligibility at turn (unmount): a pending unmount(B) whose subject is unregistered while mount(X) runs fails, taking its own fallback, without invoking the strategy\'s own unmount', async () => {
+    const plugin = createPlugin();
+    const domainId = 'domain-eligibility-at-turn-unmount';
+    const registry = freshRegistry(plugin);
+    const gate = createDeferred();
+    const factory = new GatedBeforeStrategyDomainFactory(registry, domainId, 'optional', gate.promise);
+    registry.registerDomain(makeDomain(domainId, true), factory);
+    await registry.registerExtension(makeExtension('ext-x', domainId));
+    await registry.registerExtension(makeExtension('ext-b', domainId));
+    registry.getMounter(domainId).attach(document.createElement('div'));
+
+    const unmountInner = vi.spyOn(factory.strategy, 'unmount');
+
+    // Running: mount(X), gated — keeps the queue non-empty for the whole
+    // window below.
+    const xFired = wireProbe(registry, domainId, 'eligum-x-next');
+    registry.executeActionsChain({
+      action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-x' } },
+      next: { action: { type: 'eligum-x-next', target: domainId, payload: {} } },
+    });
+
+    // Pending: unmount(B) — wired with BOTH `next` and `fallback` so a
+    // regression that lets it succeed (taking `next`) is caught explicitly,
+    // rather than this test simply hanging on an unfired `fallback`.
+    let bNextFired = false;
+    let bFallbackFired = false;
+    const bNext = wireProbe(registry, domainId, 'eligum-b-next');
+    const bFallback = wireProbe(registry, domainId, 'eligum-b-fallback');
+    void bNext.then(() => { bNextFired = true; });
+    void bFallback.then(() => { bFallbackFired = true; });
+    registry.executeActionsChain({
+      action: { type: ACTION_UNMOUNT_EXT, target: domainId, payload: { subject: 'ext-b' } },
+      next: { action: { type: 'eligum-b-next', target: domainId, payload: {} } },
+      fallback: { action: { type: 'eligum-b-fallback', target: domainId, payload: {} } },
+    });
+
+    // Unregister B's extension while X is still running and unmount(B) is
+    // pending — evaluated at ITS turn, B is no longer admitted anywhere.
+    await registry.unregisterExtension('ext-b');
+
+    gate.resolve();
+    await Promise.race([bNext, bFallback]);
+    await xFired;
+
+    expect(bFallbackFired).toBe(true);
+    expect(bNextFired).toBe(false);
+    expect(unmountInner).not.toHaveBeenCalled();
+    expect(registry.getMountedExtensions(domainId)).toEqual(['ext-x']);
+
+    registry.dispose();
+  });
+
+  it('[optional] unmount rows: unmount(A) joins an identical pending unmount(A); a different pending entry (including pending mount(A)) is replaced by a newcomer unmount/mount', async () => {
+    const plugin = createPlugin();
+    const domainId = 'domain-unmount-rows';
+    const registry = freshRegistry(plugin);
+    const gate = createDeferred();
+    const factory = new GatedBeforeStrategyDomainFactory(registry, domainId, 'optional', gate.promise);
+    registry.registerDomain(makeDomain(domainId, true), factory);
+    await registry.registerExtension(makeExtension('ext-a', domainId));
+    await registry.registerExtension(makeExtension('ext-x', domainId));
+    registry.getMounter(domainId).attach(document.createElement('div'));
+
+    // Running: mount(X), gated — keeps the queue non-empty for the whole
+    // window below.
+    const xFired = wireProbe(registry, domainId, 'rows-x-next');
+    registry.executeActionsChain({
+      action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-x' } },
+      next: { action: { type: 'rows-x-next', target: domainId, payload: {} } },
+    });
+
+    // Pending: unmount(A) #1.
+    const a1Fired = wireProbe(registry, domainId, 'rows-a1-next');
+    registry.executeActionsChain({
+      action: { type: ACTION_UNMOUNT_EXT, target: domainId, payload: { subject: 'ext-a' } },
+      next: { action: { type: 'rows-a1-next', target: domainId, payload: {} } },
+    });
+
+    // Joins the pending unmount(A).
+    const a2Fired = wireProbe(registry, domainId, 'rows-a2-next');
+    registry.executeActionsChain({
+      action: { type: ACTION_UNMOUNT_EXT, target: domainId, payload: { subject: 'ext-a' } },
+      next: { action: { type: 'rows-a2-next', target: domainId, payload: {} } },
+    });
+
+    gate.resolve();
+    await Promise.all([xFired, a1Fired, a2Fired]);
+
+    expect(registry.getMountedExtensions(domainId)).toEqual(['ext-x']);
+
+    registry.dispose();
+  });
+
+  it('[optional] unmount rows: an explicit unmount(A) accepted while mount(A) is running waits behind it — success leaves A absent, failure leaves the unmount a no-op', async () => {
+    const plugin = createPlugin();
+    const domainId = 'domain-unmount-behind-mount';
+    const registry = freshRegistry(plugin);
+    const gate = createDeferred();
+    const factory = new GatedBeforeStrategyDomainFactory(registry, domainId, 'optional', gate.promise);
+    registry.registerDomain(makeDomain(domainId, true), factory);
+    await registry.registerExtension(makeExtension('ext-a', domainId));
+    registry.getMounter(domainId).attach(document.createElement('div'));
+
+    const aFired = wireProbe(registry, domainId, 'behind-a-next');
+    registry.executeActionsChain({
+      action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-a' } },
+      next: { action: { type: 'behind-a-next', target: domainId, payload: {} } },
+    });
+
+    const unmountInner = vi.spyOn(factory.strategy, 'unmount');
+    const unmountFired = wireProbe(registry, domainId, 'behind-unmount-next');
+    registry.executeActionsChain({
+      action: { type: ACTION_UNMOUNT_EXT, target: domainId, payload: { subject: 'ext-a' } },
+      next: { action: { type: 'behind-unmount-next', target: domainId, payload: {} } },
+    });
+
+    gate.resolve();
+    await Promise.all([aFired, unmountFired]);
+
+    expect(unmountInner).toHaveBeenCalledTimes(1);
+    expect(registry.getMountedExtensions(domainId)).toEqual([]);
+
+    registry.dispose();
+  });
+
+  it('[optional] unmount rows: an explicit unmount(A) accepted while mount(A) is running, and that mount fails before reaching the strategy, succeeds without invoking the strategy\'s own unmount', async () => {
+    const plugin = createPlugin();
+    const domainId = 'domain-unmount-behind-failing-mount';
+    const registry = freshRegistry(plugin);
+    const gate = createDeferred();
+    const factory = new GatedFailBeforeStrategyDomainFactory(registry, domainId, 'optional', gate.promise, 'ext-a');
+    registry.registerDomain(makeDomain(domainId, true), factory);
+    await registry.registerExtension(makeExtension('ext-a', domainId));
+    registry.getMounter(domainId).attach(document.createElement('div'));
+
+    const unmountInner = vi.spyOn(factory.strategy, 'unmount');
+
+    // Running: mount(A), gated — 'ext-a' is this factory's designated
+    // failing subject, so it fails BEFORE ever reaching the strategy.
+    const aFallback = wireProbe(registry, domainId, 'unmountfail-a-fallback');
+    registry.executeActionsChain({
+      action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-a' } },
+      fallback: { action: { type: 'unmountfail-a-fallback', target: domainId, payload: {} } },
+    });
+
+    // Pending: an explicit unmount(A), waiting behind the running mount(A).
+    const unmountFired = wireProbe(registry, domainId, 'unmountfail-unmount-next');
+    registry.executeActionsChain({
+      action: { type: ACTION_UNMOUNT_EXT, target: domainId, payload: { subject: 'ext-a' } },
+      next: { action: { type: 'unmountfail-unmount-next', target: domainId, payload: {} } },
+    });
+
+    gate.resolve();
+    await Promise.all([aFallback, unmountFired]);
+
+    // The mount it waited on failed, so 'ext-a' never became mounted — the
+    // unmount succeeds without change, never invoking the strategy's own
+    // `unmount` body at all.
+    expect(unmountInner).not.toHaveBeenCalled();
+    expect(registry.getMountedExtensions(domainId)).toEqual([]);
+
+    registry.dispose();
+  });
+
+  it('[optional] unmount rows: unmount(A) replaces a different pending mount(A) — mount(A)\'s caller takes its own fallback and never enters', async () => {
+    const plugin = createPlugin();
+    const domainId = 'domain-unmount-replaces-pending-mount';
+    const registry = freshRegistry(plugin);
+    const gate = createDeferred();
+    const factory = new GatedBeforeStrategyDomainFactory(registry, domainId, 'optional', gate.promise);
+    registry.registerDomain(makeDomain(domainId, true), factory);
+    await registry.registerExtension(makeExtension('ext-x', domainId));
+    await registry.registerExtension(makeExtension('ext-a', domainId));
+    registry.getMounter(domainId).attach(document.createElement('div'));
+
+    // Running: mount(X), gated.
+    const xFired = wireProbe(registry, domainId, 'replrow1-x-next');
+    registry.executeActionsChain({
+      action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-x' } },
+      next: { action: { type: 'replrow1-x-next', target: domainId, payload: {} } },
+    });
+
+    // Pending: mount(A).
+    const aFallback = wireProbe(registry, domainId, 'replrow1-a-fallback');
+    registry.executeActionsChain({
+      action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-a' } },
+      fallback: { action: { type: 'replrow1-a-fallback', target: domainId, payload: {} } },
+    });
+
+    // unmount(A) — same subject, but a DIFFERENT operation, so it does not
+    // join the pending mount(A) (`inst-me-queue-join-same-operation-subject`)
+    // — it replaces it instead.
+    const unmountFired = wireProbe(registry, domainId, 'replrow1-unmount-next');
+    registry.executeActionsChain({
+      action: { type: ACTION_UNMOUNT_EXT, target: domainId, payload: { subject: 'ext-a' } },
+      next: { action: { type: 'replrow1-unmount-next', target: domainId, payload: {} } },
+    });
+
+    // The pending mount(A) is replaced and fails well before the gate ever
+    // opens — its caller takes its own fallback, and mount(A) never enters.
+    await aFallback;
+    expect(factory.impl.entries.has('ext-a')).toBe(false);
+
+    gate.resolve();
+    await Promise.all([xFired, unmountFired]);
+
+    // mount(A) never entered at all: the queue never even created A's
+    // entry before unmount(A) replaced it.
+    expect(factory.impl.entries.has('ext-a')).toBe(false);
+    expect(registry.getMountedExtensions(domainId)).toEqual(['ext-x']);
+
+    registry.dispose();
+  });
+
+  it('[optional] unmount rows: mount(A) replaces a different pending unmount(A) — the strategy\'s own unmount is never invoked for it', async () => {
+    const plugin = createPlugin();
+    const domainId = 'domain-mount-replaces-pending-unmount';
+    const registry = freshRegistry(plugin);
+    const gate = createDeferred();
+    const factory = new GatedBeforeStrategyDomainFactory(registry, domainId, 'optional', gate.promise);
+    registry.registerDomain(makeDomain(domainId, true), factory);
+    await registry.registerExtension(makeExtension('ext-x', domainId));
+    await registry.registerExtension(makeExtension('ext-a', domainId));
+    registry.getMounter(domainId).attach(document.createElement('div'));
+
+    const unmountInner = vi.spyOn(factory.strategy, 'unmount');
+
+    // Running: mount(X), gated.
+    const xFired = wireProbe(registry, domainId, 'replrow2-x-next');
+    registry.executeActionsChain({
+      action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-x' } },
+      next: { action: { type: 'replrow2-x-next', target: domainId, payload: {} } },
+    });
+
+    // Pending: unmount(A).
+    const unmountFallback = wireProbe(registry, domainId, 'replrow2-unmount-fallback');
+    registry.executeActionsChain({
+      action: { type: ACTION_UNMOUNT_EXT, target: domainId, payload: { subject: 'ext-a' } },
+      fallback: { action: { type: 'replrow2-unmount-fallback', target: domainId, payload: {} } },
+    });
+
+    // mount(A) — same subject, different operation — replaces the pending
+    // unmount(A) instead of joining it.
+    const aFired = wireProbe(registry, domainId, 'replrow2-a-next');
+    registry.executeActionsChain({
+      action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-a' } },
+      next: { action: { type: 'replrow2-a-next', target: domainId, payload: {} } },
+    });
+
+    // The pending unmount(A) is replaced and fails well before the gate
+    // ever opens — its caller takes its own fallback, and the strategy's
+    // own `unmount` is never invoked for it (the replaced entry never
+    // starts).
+    await unmountFallback;
+    expect(unmountInner).not.toHaveBeenCalled();
+
+    gate.resolve();
+    await Promise.all([xFired, aFired]);
+
+    expect(unmountInner).not.toHaveBeenCalled();
+    expect(registry.getMountedExtensions(domainId)).toEqual(['ext-a']);
+
+    registry.dispose();
+  });
+
+  it('[optional] unmount rows: an unmount of a subject absent at its turn succeeds without change, never invoking inner', async () => {
+    const plugin = createPlugin();
+    const domainId = 'domain-unmount-absent';
+    const registry = freshRegistry(plugin);
+    const factory = new OptionalDomainFactory(registry, domainId);
+    registry.registerDomain(makeDomain(domainId, true), factory);
+    await registry.registerExtension(makeExtension('ext-a', domainId));
+    registry.getMounter(domainId).attach(document.createElement('div'));
+
+    const unmountInner = vi.spyOn(factory.strategy, 'unmount');
+    const unmountFired = wireProbe(registry, domainId, 'absent-unmount-next');
+    registry.executeActionsChain({
+      action: { type: ACTION_UNMOUNT_EXT, target: domainId, payload: { subject: 'ext-a' } },
+      next: { action: { type: 'absent-unmount-next', target: domainId, payload: {} } },
+    });
+
+    await unmountFired;
+    // The queue's own at-turn evaluation (`inst-um-queue-absent-noop`) finds
+    // the subject absent and succeeds without ever calling into the
+    // strategy's own `unmount` body.
+    expect(unmountInner).not.toHaveBeenCalled();
+    expect(registry.getMountedExtensions(domainId)).toEqual([]);
+
+    registry.dispose();
+  });
+
+  for (const strategyName of ['optional', 'exclusive'] as const) {
+    it(`[${strategyName}] unregister: pending callers take fallback, the pending entry never starts, and the running entry is not interrupted`, async () => {
+      const plugin = createPlugin();
+      const domainId = `domain-unregister-queue-${strategyName}`;
+      const probeDomainId = `${domainId}-probes`;
+      const registry = freshRegistry(plugin);
+      const gate = createDeferred();
+      const factory = new GatedBeforeStrategyDomainFactory(registry, domainId, strategyName, gate.promise);
+      registry.registerDomain(makeDomain(domainId, strategyName === 'optional'), factory);
+      createProbeDomain(registry, probeDomainId);
+      await registry.registerExtension(makeExtension('ext-a', domainId));
+      await registry.registerExtension(makeExtension('ext-b', domainId));
+      registry.getMounter(domainId).attach(document.createElement('div'));
+
+      const aNext = wireProbe(registry, probeDomainId, 'unreg-a-next');
+      const aFallback = wireProbe(registry, probeDomainId, 'unreg-a-fallback');
+      registry.executeActionsChain({
+        action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-a' } },
+        next: { action: { type: 'unreg-a-next', target: probeDomainId, payload: {} } },
+        fallback: { action: { type: 'unreg-a-fallback', target: probeDomainId, payload: {} } },
+      });
+
+      const bFallback = wireProbe(registry, probeDomainId, 'unreg-b-fallback');
+      registry.executeActionsChain({
+        action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-b' } },
+        fallback: { action: { type: 'unreg-b-fallback', target: probeDomainId, payload: {} } },
+      });
+
+      const unregisterPromise = registry.unregisterDomain(domainId);
+      await bFallback;
+
+      gate.resolve();
+      await Promise.race([aNext, aFallback]);
+      await unregisterPromise;
+
+      // Running entry A entered and completed: A is mounted, B never was.
+      // Pending B never started: no container was created for B.
+      expect(factory.hooks.created).toEqual(['ext-a']);
+      expect(factory.impl.entries.has('ext-a')).toBe(true);
+      expect(factory.impl.entries.has('ext-b')).toBe(false);
+
+      registry.dispose();
+    });
+
+    it(`[${strategyName}] dispose: the pending caller settles and its timer clears; the running entry is not interrupted`, async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      try {
+        const plugin = createPlugin();
+        const domainId = `domain-dispose-queue-${strategyName}`;
+        const probeDomainId = `${domainId}-probes`;
+        const registry = freshRegistry(plugin);
+        const gate = createDeferred();
+        const factory = new GatedBeforeStrategyDomainFactory(registry, domainId, strategyName, gate.promise);
+        const entered = createDeferred();
+        const completed = createDeferred();
+        factory.onEntered = (subject) => { if (subject === 'ext-a') entered.resolve(); };
+        factory.onCompleted = (subject) => { if (subject === 'ext-a') completed.resolve(); };
+        registry.registerDomain(makeDomain(domainId, strategyName === 'optional'), factory);
+        createProbeDomain(registry, probeDomainId);
+        await registry.registerExtension(makeExtension('ext-a', domainId));
+        await registry.registerExtension(makeExtension('ext-b', domainId));
+        registry.getMounter(domainId).attach(document.createElement('div'));
+
+        // Baseline timer count before either request is dispatched — nothing
+        // else in this test arms a timer.
+        const baselineTimers = vi.getTimerCount();
+
+        registry.executeActionsChain({
+          action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-a' } },
+          next: { action: { type: 'disp-a-next', target: probeDomainId, payload: {} } },
+          fallback: { action: { type: 'disp-a-fallback', target: probeDomainId, payload: {} } },
+        });
+
+        registry.executeActionsChain({
+          action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-b' } },
+          fallback: { action: { type: 'disp-b-fallback', target: probeDomainId, payload: {} } },
+        });
+
+        // `DefaultActionsChainsMediator.executeActionsChain` defers invoking
+        // a chain's own handler to a microtask (never synchronously within
+        // the dispatch call itself) — so awaiting A's own entered signal,
+        // the first genuinely asynchronous gap after both dispatches above,
+        // is also the first point at which B's own dispatch is guaranteed to
+        // have reached the queue and been admitted as the pending entry,
+        // with its own caller timer armed: both invocations were queued as
+        // microtasks in dispatch order and drain in that same order before
+        // this awaited continuation runs.
+        await entered.promise;
+
+        // Running entry A entered: A started before dispose was called.
+        // Pending entry B was admitted but never entered.
+        expect(factory.impl.entries.has('ext-a')).toBe(true);
+        expect(factory.impl.entries.has('ext-b')).toBe(false);
+
+        // Both requests are admitted: each caller has its own queue timer
+        // (`OccupancyCaller.armTimer`, armed by `DomainOccupancyCoordinator`'s
+        // own `admit`, for the running entry as much as for the pending one)
+        // AND the mediator's own identical per-action bound
+        // (`DefaultActionsChainsMediator.executeLocalNode`'s own
+        // `executeWithTimeout`) — four timers over the pre-dispatch baseline.
+        expect(vi.getTimerCount()).toBe(baselineTimers + 4);
+
+        registry.dispose();
+
+        // Pending entry B never entered: B was queued and never started.
+        expect(factory.impl.entries.has('ext-b')).toBe(false);
+
+        // `registry.dispose()` disposes the mediator FIRST, which ends every
+        // attempt currently in flight — both A's and B's — synchronously,
+        // clearing each one's own mediator-level per-action timer in that
+        // same call (`inst-executor-teardown-ends`: disarmed the instant
+        // `dispose()` runs, never one microtask later). It then fails the
+        // pending entry, which clears B's own queue-level caller timer too.
+        // Only A's own queue-level caller timer survives: the running entry
+        // is never replaced, removed, or interrupted by disposal
+        // (`inst-me-queue-running-never-interrupted`) — exactly one timer
+        // over the pre-dispatch baseline remains armed.
+        expect(vi.getTimerCount()).toBe(baselineTimers + 1);
+
+        // Release the gate so A's own inner physically finishes even though
+        // the registry that dispatched it has already been disposed — its
+        // entry still settles on its own merits.
+        gate.resolve();
+        await completed.promise;
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it(`[${strategyName}] unregister: a request dispatched while unregistration is in progress fails, takes its fallback, and never starts`, async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      try {
+        const plugin = createPlugin();
+        const domainId = `domain-unregister-arrival-${strategyName}`;
+        const probeDomainId = `${domainId}-probes`;
+        const teardownGate = createDeferred();
+        const teardownStarted = createDeferred();
+        const registry = freshRegistry(
+          plugin,
+          new GatedUnmountHandler(ENTRY_ID, teardownGate.promise, () => teardownStarted.resolve())
+        );
+        const factory = new GatedBeforeStrategyDomainFactory(registry, domainId, strategyName, Promise.resolve());
+        registry.registerDomain(makeDomain(domainId, strategyName === 'optional'), factory);
+        createProbeDomain(registry, probeDomainId);
+        await registry.registerExtension(makeExtension('ext-a', domainId));
+        await registry.registerExtension(makeExtension('ext-b', domainId));
+        registry.getMounter(domainId).attach(document.createElement('div'));
+
+        const aNext = wireProbe(registry, probeDomainId, 'arrival-a-next');
+        registry.executeActionsChain({
+          action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-a' } },
+          next: { action: { type: 'arrival-a-next', target: probeDomainId, payload: {} } },
+        });
+        await aNext;
+
+        // Unregistration unmounts A, whose lifecycle `unmount` holds the
+        // teardown open until the gate is released; the domain's handlers
+        // stay registered throughout.
+        const unregisterPromise = registry.unregisterDomain(domainId);
+        await teardownStarted.promise;
+
+        const bNext = wireProbe(registry, probeDomainId, 'arrival-b-next');
+        const bFallback = wireProbe(registry, probeDomainId, 'arrival-b-fallback');
+        registry.executeActionsChain({
+          action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-b' } },
+          next: { action: { type: 'arrival-b-next', target: probeDomainId, payload: {} } },
+          fallback: { action: { type: 'arrival-b-fallback', target: probeDomainId, payload: {} } },
+        });
+        const bOutcome = Promise.race([
+          bNext.then(() => 'next' as const),
+          bFallback.then(() => 'fallback' as const),
+        ]);
+
+        teardownGate.resolve();
+        await unregisterPromise;
+
+        // B failed and took its fallback; its entry never started, so its
+        // own task never ran and no container was created for it.
+        expect(await bOutcome).toBe('fallback');
+        expect(factory.impl.entries.has('ext-b')).toBe(false);
+        expect(factory.hooks.created).toEqual(['ext-a']);
+
+        registry.dispose();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it(`[${strategyName}] unregister: a mount of a still-mounted subject dispatched while unregistration is in progress fails and takes its fallback`, async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      try {
+        const plugin = createPlugin();
+        const domainId = `domain-unregister-still-mounted-${strategyName}`;
+        const probeDomainId = `${domainId}-probes`;
+        const teardownGate = createDeferred();
+        const teardownStarted = createDeferred();
+        const registry = freshRegistry(
+          plugin,
+          new GatedUnmountHandler(ENTRY_ID, teardownGate.promise, () => teardownStarted.resolve())
+        );
+        const factory = new GatedBeforeStrategyDomainFactory(registry, domainId, strategyName, Promise.resolve());
+        registry.registerDomain(makeDomain(domainId, strategyName === 'optional'), factory);
+        createProbeDomain(registry, probeDomainId);
+        await registry.registerExtension(makeExtension('ext-a', domainId));
+        registry.getMounter(domainId).attach(document.createElement('div'));
+
+        const aNext = wireProbe(registry, probeDomainId, 'still-mounted-a-next');
+        registry.executeActionsChain({
+          action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-a' } },
+          next: { action: { type: 'still-mounted-a-next', target: probeDomainId, payload: {} } },
+        });
+        await aNext;
+
+        // Unregistration unmounts A, whose lifecycle `unmount` holds the
+        // teardown open until the gate is released. A is still the domain's
+        // occupant and the queue holds no entry at this point.
+        const unregisterPromise = registry.unregisterDomain(domainId);
+        await teardownStarted.promise;
+        expect(registry.getMountedExtensions(domainId)).toEqual(['ext-a']);
+
+        const againNext = wireProbe(registry, probeDomainId, 'still-mounted-again-next');
+        const againFallback = wireProbe(registry, probeDomainId, 'still-mounted-again-fallback');
+        registry.executeActionsChain({
+          action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-a' } },
+          next: { action: { type: 'still-mounted-again-next', target: probeDomainId, payload: {} } },
+          fallback: { action: { type: 'still-mounted-again-fallback', target: probeDomainId, payload: {} } },
+        });
+        const againOutcome = Promise.race([
+          againNext.then(() => 'next' as const),
+          againFallback.then(() => 'fallback' as const),
+        ]);
+
+        // The request settles while the teardown is still held open: it
+        // fails at once instead of completing as already mounted
+        // (`inst-me-queue-domain-unregister`, `inst-me-already-mounted-complete`).
+        expect(await againOutcome).toBe('fallback');
+        expect(factory.hooks.created).toEqual(['ext-a']);
+
+        teardownGate.resolve();
+        await unregisterPromise;
+
+        registry.dispose();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  }
+
+  for (const strategyName of ['optional', 'exclusive'] as const) {
+    it(`[${strategyName}] already-mounted with a non-empty queue: placed in queue, and — still occupant at its turn — succeeds without container creation or activated`, async () => {
+      const plugin = createPlugin();
+      const activatedSpy = vi.spyOn(plugin, 'resolveLifecycleStageActivatedId');
+      const domainId = `domain-already-mounted-nonempty-${strategyName}`;
+      const registry = freshRegistry(plugin);
+      // 'ext-g's own mount_ext handler stays gated in flight, then fails
+      // BEFORE ever reaching the strategy — a running entry that never
+      // touches occupancy, keeping the queue non-empty for the assertion
+      // window without ever removing 'ext-a'.
+      const gate = createDeferred();
+      const factory = new GatedFailBeforeStrategyDomainFactory(registry, domainId, strategyName, gate.promise, 'ext-g');
+      registry.registerDomain(makeDomain(domainId, strategyName === 'optional'), factory);
+      await registry.registerExtension(makeExtension('ext-a', domainId));
+      await registry.registerExtension(makeExtension('ext-g', domainId));
+      registry.getMounter(domainId).attach(document.createElement('div'));
+
+      await registry.getMounter(domainId).mount('ext-a', document.createElement('div'));
+      expect(registry.getMountedExtensions(domainId)).toEqual(['ext-a']);
+      activatedSpy.mockClear();
+      factory.hooks.created.length = 0;
+
+      // Running: mount(G) — gated, then fails before reaching the strategy.
+      const gFallback = wireProbe(registry, domainId, 'nonempty-g-fallback');
+      registry.executeActionsChain({
+        action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-g' } },
+        fallback: { action: { type: 'nonempty-g-fallback', target: domainId, payload: {} } },
+      });
+
+      // Pending: mount(A) — already mounted, but the queue is non-empty (G
+      // running), so it is placed in the queue and evaluated at its turn.
+      const mountSpy = vi.spyOn(factory.strategy, 'mount');
+      const aFired = wireProbe(registry, domainId, 'nonempty-a-next');
+      registry.executeActionsChain({
+        action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-a' } },
+        next: { action: { type: 'nonempty-a-next', target: domainId, payload: {} } },
+      });
+
+      gate.resolve();
+      await Promise.all([gFallback, aFired]);
+
+      // A's queued mount found itself still the sole occupant at its own
+      // turn — no container creation, no additional activated trigger, and
+      // the strategy's own `mount` was never called for it (only ever for
+      // 'ext-g', which itself never reached the strategy either).
+      expect(mountSpy).not.toHaveBeenCalled();
+      expect(factory.hooks.created).toEqual([]);
+      expect(activatedSpy).not.toHaveBeenCalled();
+      expect(registry.getMountedExtensions(domainId)).toEqual(['ext-a']);
+
+      registry.dispose();
+    });
+  }
 });
