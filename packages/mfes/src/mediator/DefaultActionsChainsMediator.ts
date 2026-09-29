@@ -27,7 +27,8 @@ import { ActionsChainsMediator } from './ActionsChainsMediator';
 import { ActionHandler } from './ActionHandler';
 import { CrossHopFailureMapper } from './CrossHopFailureMapper';
 import { NoHandlerForActionTargetError } from './NoHandlerForActionTargetError';
-import { InvalidDomainDefaultTimeoutError } from './InvalidDomainDefaultTimeoutError';
+import { ActionTimeoutResolver } from './ActionTimeoutResolver';
+import { DeclaredTimeoutActionHandler } from './DeclaredTimeoutActionHandler';
 
 /** Narrows a resolved handler to the cross-hop (forwarding-entry/escalation) shape. */
 function isCrossHopRoute(resolved: ActionHandler | CrossHopRoute): resolved is CrossHopRoute {
@@ -294,6 +295,16 @@ export class DefaultActionsChainsMediator extends ActionsChainsMediator {
    */
   private readonly diagnosticReporter: DiagnosticReporter;
 
+  /**
+   * The one shared per-action timeout rule (`ActionTimeoutResolver`), also
+   * used by the domain's own occupancy queue for each caller's timer
+   * (`inst-resolve-timeout`, `inst-me-queue-caller-timer`) — injected by
+   * `DefaultMfeRegistry` as the SAME instance it hands its own internal
+   * mount/unmount handlers, or a fresh, private one when this mediator is
+   * built standalone.
+   */
+  private readonly actionTimeoutResolver: ActionTimeoutResolver;
+
   constructor(config: {
     typeSystem: TypeSystemPlugin;
     getDomainState: (domainId: string) => ExtensionDomainState | undefined;
@@ -307,6 +318,7 @@ export class DefaultActionsChainsMediator extends ActionsChainsMediator {
     dispatchOriginStore?: DispatchOriginStore;
     dispatchCorrelationIdGenerator?: DispatchCorrelationIdGenerator;
     diagnosticReporter?: DiagnosticReporter;
+    actionTimeoutResolver?: ActionTimeoutResolver;
   }) {
     super();
     this.typeSystem = config.typeSystem;
@@ -324,6 +336,8 @@ export class DefaultActionsChainsMediator extends ActionsChainsMediator {
     this.diagnosticReporter =
       config.diagnosticReporter ??
       new DiagnosticReporter(this.dispatchOriginStore, this.dispatchCorrelationIdGenerator);
+    this.actionTimeoutResolver =
+      config.actionTimeoutResolver ?? new ActionTimeoutResolver(this.chainEnvelopeValidator);
   }
 
   /**
@@ -1120,7 +1134,9 @@ export class DefaultActionsChainsMediator extends ActionsChainsMediator {
       // @cpt-begin:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-invoke-within-timeout
       // @cpt-begin:cpt-frontx-flow-extension-domain-governance-admission:p1:inst-admitted-mount
       const actionPromise = this.executeWithTimeout(
-        () => handler.handleAction(action.type, action.payload),
+        () => handler instanceof DeclaredTimeoutActionHandler
+          ? handler.handleActionWithDeclaredTimeout(action.type, action.payload, action.timeout)
+          : handler.handleAction(action.type, action.payload),
         effectiveTimeout,
         (disarm) => {
           disarmTimer = disarm;
@@ -1493,19 +1509,11 @@ export class DefaultActionsChainsMediator extends ActionsChainsMediator {
    * @returns The timeout in milliseconds
    */
   private resolveTimeout(action: Action): number {
-    if (action.timeout !== undefined) {
-      return action.timeout;
-    }
-
-    const domain = this.resolveDomain(action.target);
-    if (domain) {
-      if (!this.chainEnvelopeValidator.isValidDeclaredTimeout(domain.defaultActionTimeout)) {
-        throw new InvalidDomainDefaultTimeoutError(domain.id, domain.defaultActionTimeout);
-      }
-      return domain.defaultActionTimeout;
-    }
-
-    throw new Error('Cannot resolve timeout: no domain found for target "' + action.target + '"');
+    return this.actionTimeoutResolver.resolve(
+      action.timeout,
+      this.resolveDomain(action.target),
+      action.target
+    );
   }
 
   /**

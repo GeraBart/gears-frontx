@@ -33,6 +33,20 @@ export class OptionalMountStrategy extends MountStrategy {
     const mounted = this.registry.getMountedExtensions(this.domainId);
     // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-get-mounted
 
+    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-optional-idempotent
+    // The prologue's own at-turn evaluation
+    // (`MountExtActionHandler.runMountAtTurn`, `inst-me-sole-occupant-at-turn`)
+    // already settles a mount whose subject is still the domain's occupant
+    // without ever calling into this method — this branch is reached only
+    // for a fresh mount started as the running entry. The guard below is a
+    // defensive no-op for a direct call on this strategy that bypasses the
+    // prologue: it returns without displacement, container creation, or an
+    // `activated` trigger.
+    if (mounted.length === 1 && mounted[0] === subject) {
+      return;
+    }
+    // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-optional-idempotent
+
     if (mounted.length === 1 && mounted[0] !== subject) {
       const priorOccupant = mounted[0];
       // The container release is supplied to the mounter rather than
@@ -42,18 +56,6 @@ export class OptionalMountStrategy extends MountStrategy {
       // callers, never twice.
       await ExtensionReleaserProvider.for(this.mounter).release(priorOccupant, () => this.hooks.destroy(priorOccupant));
     }
-
-    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-optional-idempotent
-    // Through the mediator, the registry's mount-ext prologue
-    // (`MountExtActionHandler`) already completed or joined an already-mounted
-    // or in-progress-mount request before any strategy runs, so this branch
-    // is reached only for a fresh mount on that path. A direct call on this
-    // strategy bypasses the prologue, so this check stays as a defensive
-    // no-op return rather than mounting `subject` a second time.
-    if (mounted.includes(subject)) {
-      return;
-    }
-    // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-optional-idempotent
 
     // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-optional-mount
     const container = this.hooks.create(subject);

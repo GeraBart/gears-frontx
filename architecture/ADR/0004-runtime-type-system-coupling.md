@@ -91,7 +91,7 @@ The runtime hardcodes one type-definition specification and reasons about types 
 
 ## More Information
 
-The injected provider port is defined as the `TypeSystemPlugin` contract in `packages/screensets/src/mfe/plugins/types.ts`; the runtime holds an instance as the registry's read-only `typeSystem` and delegates validation, schema lookup, and type-of resolution to it. The opaque-surface decision is the boundary `cpt-frontx-constraint-mfes-opaque-schema-surface`; the choice of which concrete provider satisfies the port, and the schemas that provider owns, are decided in `cpt-frontx-adr-default-type-substrate-provider`.
+The injected provider port is defined as the `TypeSystemPlugin` contract in `packages/mfes/src/type-substrate/index.ts`; the runtime holds an instance as the registry's read-only `typeSystem` and delegates validation, schema lookup, and type-of resolution to it. The opaque-surface decision is the boundary `cpt-frontx-constraint-mfes-opaque-schema-surface`; the choice of which concrete provider satisfies the port, and the schemas that provider owns, are decided in `cpt-frontx-adr-default-type-substrate-provider`.
 
 **Scope of impact.** Applies to what the runtime may know about a type definition and how it obtains type judgments. It does not decide the concrete provider, the concrete schema representation behind the port, or how microfrontends are loaded, mounted, or isolated.
 
