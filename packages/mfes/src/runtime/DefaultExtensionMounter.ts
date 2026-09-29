@@ -16,7 +16,6 @@
 
 import { ExtensionMounter } from './ExtensionMounter';
 import type { MountManager } from './MountManager';
-import type { MountSetObserver } from './config';
 import { ExtensionReleaserProvider } from './ExtensionReleaserProvider';
 
 /**
@@ -74,12 +73,7 @@ export class DefaultExtensionMounter extends ExtensionMounter {
     private readonly mountManager: MountManager,
     private readonly addMountedExtension: (domainId: string, extensionId: string) => void,
     private readonly removeMountedExtension: (domainId: string, extensionId: string) => void,
-    private readonly getMountedExtensions: (domainId: string) => readonly string[],
-    // Construction-time mount-set observer, if the host supplied one via
-    // `MfeRegistryConfig.mountSetObserver` — `undefined` when none was
-    // supplied. Notified from the commit itself (`mount`/`unmount`/`detach`
-    // below), never from a lifecycle stage.
-    private readonly mountSetObserver?: MountSetObserver
+    private readonly getMountedExtensions: (domainId: string) => readonly string[]
   ) {
     super();
     this.releaser = ExtensionReleaserProvider.for(this);
@@ -158,11 +152,6 @@ export class DefaultExtensionMounter extends ExtensionMounter {
       this.containers.set(extensionId, container);
 
       this.addMountedExtension(this.domainId, extensionId);
-      this.mountSetObserver?.onMountSetChanged({
-        domainId: this.domainId,
-        entered: [extensionId],
-        left: [],
-      });
     })();
 
     this.inFlightMountsByExtension.set(extensionId, { promise: mountWork, container });
@@ -216,11 +205,6 @@ export class DefaultExtensionMounter extends ExtensionMounter {
       this.containers.delete(extensionId);
 
       this.removeMountedExtension(this.domainId, extensionId);
-      this.mountSetObserver?.onMountSetChanged({
-        domainId: this.domainId,
-        entered: [],
-        left: [extensionId],
-      });
     })();
 
     unmountWork.then(settlePlaceholder, rejectPlaceholder);

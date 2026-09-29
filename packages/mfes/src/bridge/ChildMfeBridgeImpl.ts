@@ -41,24 +41,16 @@ export class ChildMfeBridgeImpl extends ChildMfeBridge {
   private readonly properties = new Map<string, SharedProperty>();
 
   /**
-   * Internal: handler receiving a versioned cross-hop envelope forwarded or
-   * escalated down to this registry through the inbound-bridge link — the
-   * transport every runtime-crossing hop resolves to, including a plain
-   * parent-to-child action chain delivery. Wired by
+   * Internal: receiver of a hand-over through this bridge. Wired by
    * `DefaultMfeRegistry.relinkInboundBridge` to
    * `DefaultMfeRegistry.receiveCrossHopNode`, duck-typed for cross-copy
-   * safety. Synchronous and binary: throws to refuse the delivery, or
-   * returns having accepted the node and reserved what it needs.
+   * safety. Throws to refuse the hand-over, or returns having accepted it.
    */
   private crossHopEnvelopeHandler: ((envelope: CrossHopEnvelope) => void) | null = null;
 
   /**
-   * Internal: callback for the public, acceptance-only dispatch of actions
-   * chains via the registry — the registry's own `executeActionsChain`,
-   * void and synchronously-refusing. Injected by the bridge factory during
-   * wiring. This is the ONLY action-dispatch path this bridge carries:
-   * fire-and-forget on acceptance, with no completion of any kind ever
-   * crossing back over it (`cpt-frontx-adr-mfe-runtime-public-surface`).
+   * Internal: the registry's own `executeActionsChain`, injected by the
+   * bridge factory during wiring (`cpt-frontx-adr-mfe-runtime-public-surface`).
    */
   private executeActionsChainCallback: ((chain: ActionsChain) => void) | null = null;
 
@@ -148,41 +140,26 @@ export class ChildMfeBridgeImpl extends ChildMfeBridge {
   }
 
   /**
-   * Accept (or synchronously refuse) an actions chain for execution via the
-   * registry. This is a capability pass-through — it forwards directly to
-   * the registry's own acceptance-only `executeActionsChain` callback,
-   * adding no coordination logic of its own. This is the ONLY public API
-   * for actions chain execution from child MFEs
-   * (`cpt-frontx-adr-child-mfe-host-access`).
+   * Hand an actions chain to the registry's `executeActionsChain`, adding
+   * no coordination logic, and return nothing. The only public API for
+   * actions chain execution from child MFEs
+   * (`cpt-frontx-adr-child-mfe-host-access`). While this bridge is disposed,
+   * inactive, or not wired to a dispatch callback, it hands nothing over.
    *
-   * Refuses synchronously, before anything is forwarded, when this bridge
-   * is disposed, already inactive, or holds no wired dispatch callback —
-   * each an unusable dispatch capability AT THE CALL. Yields nothing a
-   * child can await for the chain's own execution.
-   *
-   * @param chain - Actions chain to accept.
-   * @throws {BridgeDisposedError} If the bridge has been permanently disposed
-   * @throws {BridgeInactiveError} If the extension is registered but not currently mounted
+   * @param chain - Actions chain to execute.
    */
   // @cpt-begin:cpt-frontx-algo-mfe-host-communication-bridge-delegation:p1:inst-fwd-exec-chain
   executeActionsChain(chain: ActionsChain): void {
-    if (this.destroyed) {
-      throw new BridgeDisposedError(this.extensionId);
-    }
-    if (!this.active) {
-      throw new BridgeInactiveError(this.extensionId);
-    }
-    if (!this.executeActionsChainCallback) {
-      throw new Error(`Bridge not connected for extension '${this.extensionId}'`);
+    if (this.destroyed || !this.active || !this.executeActionsChainCallback) {
+      return;
     }
     this.executeActionsChainCallback(chain);
   }
   // @cpt-end:cpt-frontx-algo-mfe-host-communication-bridge-delegation:p1:inst-fwd-exec-chain
 
   /**
-   * Register the handler receiving a versioned cross-hop envelope forwarded
-   * or escalated down through this bridge — the transport every runtime-
-   * crossing hop resolves to (`cpt-frontx-adr-action-dispatch-and-chaining`).
+   * Register the receiver of a hand-over through this bridge
+   * (`cpt-frontx-adr-action-dispatch-and-chaining`).
    * Compare-and-clear unsubscribe: since this bridge object is the SAME one
    * handed to every mount of this extension (`inst-bridge-lifetime`), an
    * unsubscribe captured by an earlier registration must not clobber a
@@ -275,12 +252,10 @@ export class ChildMfeBridgeImpl extends ChildMfeBridge {
   }
 
   /**
-   * INTERNAL: Set the callback for the public, acceptance-only dispatch of
-   * actions chains via the registry. Called by the bridge factory during
-   * wiring.
+   * INTERNAL: Set the registry's `executeActionsChain` callback. Called by
+   * the bridge factory during wiring.
    *
-   * @param callback - The registry's own void, synchronously-refusing
-   *   `executeActionsChain` method.
+   * @param callback - The registry's own `executeActionsChain` method.
    */
   setExecuteActionsChainCallback(
     callback: (chain: ActionsChain) => void
@@ -364,19 +339,13 @@ export class ChildMfeBridgeImpl extends ChildMfeBridge {
   }
 
   /**
-   * INTERNAL: Handle a versioned cross-hop envelope sent from the parent —
-   * a downward forwarding entry, the converted parent-to-child-domain
-   * forwarding tier, or a plain parent-to-child action chain delivery.
-   * Called by `ParentMfeBridgeImpl.sendCrossHopEnvelope()`. Throws the same
-   * way for a disposed or inactive bridge, so that failure is a node
-   * failure inside the sending hop's own boundary rather than a silent
-   * success.
-   *
-   * Synchronous and binary: throws to refuse the delivery at the call, with
-   * no side effect here, or returns having handed the envelope to the
-   * registered receiver, which has already accepted and reserved what the
-   * node needs before this call returns
-   * (`cpt-frontx-adr-action-dispatch-and-chaining`).
+   * INTERNAL: Pass a hand-over from the parent — a downward forwarding
+   * entry or the child-domain forwarding tier — to the registered receiver,
+   * which accepts or refuses it. Called by
+   * `ParentMfeBridgeImpl.sendCrossHopEnvelope()`. With the bridge disposed or
+   * inactive, or no receiver registered, refuses without invoking the
+   * receiver, leaving no side effect here, so the delivering runtime
+   * executes the `fallback`.
    *
    * @throws {BridgeDisposedError} If the bridge has been permanently disposed
    * @throws {BridgeInactiveError} If the extension is registered but not currently mounted

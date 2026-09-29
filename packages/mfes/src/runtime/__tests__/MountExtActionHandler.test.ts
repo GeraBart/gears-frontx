@@ -21,7 +21,6 @@ import { UnmountExtActionHandler } from '../UnmountExtActionHandler';
 import { DomainOccupancyCoordinator } from '../DomainOccupancyCoordinator';
 import { ConcurrentMountJoiner } from '../ConcurrentMountJoiner';
 import { ActionTimeoutResolver } from '../../mediator/ActionTimeoutResolver';
-import { ChainEnvelopeValidator } from '../../mediator/ChainEnvelopeValidator';
 import { ActionHandler } from '../../mediator/ActionHandler';
 
 const DOMAIN_ID = 'domain-under-test';
@@ -55,7 +54,7 @@ function makeReaders(overrides: {
   ];
 }
 
-const timeoutResolver = new ActionTimeoutResolver(new ChainEnvelopeValidator());
+const timeoutResolver = new ActionTimeoutResolver();
 const domainReader = (): { id: string; defaultActionTimeout: number } => ({
   id: DOMAIN_ID,
   defaultActionTimeout: DEFAULT_TIMEOUT,

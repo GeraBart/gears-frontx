@@ -34,7 +34,7 @@ describe('Cross-Runtime Action Chain Routing', () => {
   describe('ChildDomainForwardingRouteFactory.create', () => {
     it('resolves to a CrossHopRoute (never a plain ActionHandler) and hands the envelope to the child domain via sendCrossHopEnvelope, synchronously', () => {
       // Setup: Mock the parent bridge's cross-hop transport as accepting
-      // (returning normally — synchronous and binary).
+      // (returning normally).
       vi.spyOn(parentBridge, 'sendCrossHopEnvelope').mockImplementation(() => {});
 
       // Build the cross-hop route the catch-all tier resolves to.
@@ -49,36 +49,33 @@ describe('Cross-Runtime Action Chain Routing', () => {
       expect(() =>
         route.send({
           version: CROSS_HOP_PROTOCOL_VERSION,
-          node: {
+          chain: {
             action: {
               type: 'mock.ext.action.v1~test.action.v1',
               target: 'mock.ext.domain.v1~parent.domain.v1',
               payload: { foo: 'bar' },
             },
           },
-          diagnostics: {},
         })
       ).not.toThrow();
 
       // Assert: sendCrossHopEnvelope was called with the envelope re-targeted
-      // at the child domain — the sending side is done with the node the
-      // instant this call returns.
+      // at the child domain.
       expect(parentBridge.sendCrossHopEnvelope).toHaveBeenCalledWith({
         version: CROSS_HOP_PROTOCOL_VERSION,
-        node: {
+        chain: {
           action: {
             type: 'mock.ext.action.v1~test.action.v1',
             target: 'mock.ext.domain.v1~child.domain.v1',
             payload: { foo: 'bar' },
           },
         },
-        diagnostics: {},
       });
     });
 
     it('propagates a synchronous refusal from the child domain hop', () => {
-      // Setup: Mock a hop-unavailable refusal (e.g. a deactivated bridge) —
-      // synchronous and binary: throws at the call, no side effect.
+      // Setup: Mock a refusal (e.g. a deactivated bridge): throws at the
+      // call, no side effect.
       const testError = new Error('Test error');
       vi.spyOn(parentBridge, 'sendCrossHopEnvelope').mockImplementation(() => {
         throw testError;
@@ -93,13 +90,12 @@ describe('Cross-Runtime Action Chain Routing', () => {
       expect(() =>
         route.send({
           version: CROSS_HOP_PROTOCOL_VERSION,
-          node: {
+          chain: {
             action: {
               type: 'mock.ext.action.v1~test.action.v1',
               target: 'mock.ext.domain.v1~parent.domain.v1',
             },
           },
-          diagnostics: {},
         })
       ).toThrow('Test error');
     });
@@ -219,9 +215,8 @@ describe('Cross-Runtime Action Chain Routing', () => {
   describe('End-to-End Integration', () => {
     it('should route action from parent mediator through child bridge to child registry', () => {
       // Setup: Mock child registry's cross-hop envelope receiver — the
-      // transport every runtime-crossing hop resolves to. Accepts
-      // synchronously (returns normally) the way a real
-      // `receiveCrossHopNode` does once it has reserved what the node needs.
+      // transport every runtime-crossing hop resolves to. Accepts by
+      // returning normally, the way a real `receiveCrossHopNode` does.
       const childRegistryReceive = vi.fn();
 
       // Wire parent -> child transport
@@ -251,30 +246,27 @@ describe('Cross-Runtime Action Chain Routing', () => {
       expect(() =>
         route.send({
           version: CROSS_HOP_PROTOCOL_VERSION,
-          node: {
+          chain: {
             action: {
               type: 'mock.ext.action.v1~test.action.v1',
               target: 'mock.ext.domain.v1~parent.domain.v1',
               payload: { data: 'test' },
             },
           },
-          diagnostics: {},
         })
       ).not.toThrow();
 
       // Assert: Child registry received the envelope, re-targeted at the
-      // child domain — the sending side is done with the node the instant
-      // this call returns.
+      // child domain.
       expect(childRegistryReceive).toHaveBeenCalledWith({
         version: CROSS_HOP_PROTOCOL_VERSION,
-        node: {
+        chain: {
           action: {
             type: 'mock.ext.action.v1~test.action.v1',
             target: childDomainId,
             payload: { data: 'test' },
           },
         },
-        diagnostics: {},
       });
     });
 
@@ -330,24 +322,22 @@ describe('Cross-Runtime Action Chain Routing', () => {
     });
   });
 
-  describe('ChildDomainForwardingRouteFactory.create — deactivation refuses new deliveries only (inst-bridge-deactivation)', () => {
+  describe('ChildDomainForwardingRouteFactory.create — deactivation refuses new hand-overs only (inst-bridge-deactivation)', () => {
     it(
-      'refuses a delivery attempted AFTER the bridge deactivates with a target-inactive cause, ' +
-        'while a delivery already accepted before deactivation is untouched by it',
+      'refuses a hand-over attempted AFTER the bridge deactivates, ' +
+        'while a hand-over accepted before deactivation is untouched by it',
       () => {
         const childDomainId = 'mock.ext.domain.v1~child.domain.v1';
         const route = new ChildDomainForwardingRouteFactory().create(parentBridge, childDomainId);
 
-        // Accepted BEFORE deactivation: the far side has already taken the
-        // node — this call returns normally.
+        // Accepted BEFORE deactivation — this call returns normally.
         childBridge.onCrossHopEnvelope(() => {});
         expect(() =>
           route.send({
             version: CROSS_HOP_PROTOCOL_VERSION,
-            node: {
+            chain: {
               action: { type: 'mock.ext.action.v1~primary.v1~', target: childDomainId, payload: {} },
             },
-            diagnostics: {},
           })
         ).not.toThrow();
 
@@ -359,10 +349,9 @@ describe('Cross-Runtime Action Chain Routing', () => {
         expect(() =>
           route.send({
             version: CROSS_HOP_PROTOCOL_VERSION,
-            node: {
+            chain: {
               action: { type: 'mock.ext.action.v1~primary.v1~', target: childDomainId, payload: {} },
             },
-            diagnostics: {},
           })
         ).toThrow(/inactive/i);
       }
@@ -370,14 +359,13 @@ describe('Cross-Runtime Action Chain Routing', () => {
   });
 
   describe(
-    'the completion-bearing child-to-parent transport is fully removed — nothing awaitable ' +
-      'ever crosses a bridge or is passed into bridge wiring',
+    'no completion-bearing chain transport crosses a bridge',
     () => {
       it('neither concrete bridge implementation carries a completion-bearing method on its own prototype', () => {
         // The concrete bridges carry no completion-bearing chain transport methods
         // (`sendActionsChain`, `onActionsChain`, `handleParentActionsChain` on ChildMfeBridgeImpl;
         // `sendActionsChain`, `onChildAction`, `handleChildAction` on ParentMfeBridgeImpl).
-        // Every runtime-crossing hop goes through the synchronous, binary
+        // Every runtime-crossing hop goes through the
         // `sendCrossHopEnvelope`/`handleCrossHopEnvelope` pair.
         const childOwnMethods = Object.getOwnPropertyNames(ChildMfeBridgeImpl.prototype);
         const parentOwnMethods = Object.getOwnPropertyNames(ParentMfeBridgeImpl.prototype);

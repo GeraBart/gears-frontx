@@ -30,9 +30,9 @@
 export abstract class DomainLifecycleTrigger {
   /**
    * Fire a lifecycle stage for the named extension only. Non-blocking
-   * (`cpt-frontx-algo-mfe-registry-lifecycle-stage-triggering`): dispatches
-   * the stage's matching hooks and returns without waiting for any of them
-   * to settle. A domain author reaching this through
+   * (`cpt-frontx-algo-mfe-registry-lifecycle-stage-triggering`): hands the
+   * stage's matching hooks' chains to `executeActionsChain` and returns
+   * without awaiting them. A domain author reaching this through
    * `DomainContext.lifecycleTrigger` therefore never receives anything
    * awaitable for chain execution: an invalid `extId` throws SYNCHRONOUSLY
    * rather than returning a rejected promise.

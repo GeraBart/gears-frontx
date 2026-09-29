@@ -15,7 +15,7 @@
  * a handler that does not need an action's declared timeout extends
  * `ActionHandler` directly instead.
  *
- * `DefaultActionsChainsMediator.executeLocalNode` is the one call site that
+ * `DefaultActionsChainsMediator.invokeWithinTimeout` is the one call site that
  * distinguishes a `DeclaredTimeoutActionHandler` from an ordinary
  * `ActionHandler`: for the former it calls `handleActionWithDeclaredTimeout`
  * with the action's own `timeout`; for every other handler it calls the

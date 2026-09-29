@@ -11,18 +11,15 @@
 import type { ParentMfeBridge } from '../handler/ParentMfeBridge';
 
 /**
- * The public, acceptance-only chain dispatcher — the registry's own
- * `executeActionsChain`, void and synchronously-refusing. Wired to the
- * child bridge's public capability, never to internal transport
+ * The registry's own `executeActionsChain`, returning nothing awaitable.
+ * Wired to the child bridge's public capability, never to internal transport
  * (`cpt-frontx-adr-mfe-runtime-public-surface`).
  */
 export type ActionsChainDispatcher = (chain: import('../types').ActionsChain) => void;
 
 /**
- * Non-blocking lifecycle-stage trigger: dispatches every hook bound to the
- * stage through the acceptance-only mediator surface and returns once
- * dispatch (or its synchronous refusal) has been handled for each — never
- * awaiting any dispatched chain's own settlement
+ * Non-blocking lifecycle-stage trigger: hands every hook bound to the stage
+ * to `executeActionsChain` and returns without awaiting any of them
  * (`cpt-frontx-algo-mfe-registry-lifecycle-stage-triggering`).
  */
 export type LifecycleTrigger = (extensionId: string, stageId: string) => void;

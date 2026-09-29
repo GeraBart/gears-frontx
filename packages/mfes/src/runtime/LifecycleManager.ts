@@ -11,10 +11,9 @@
 import type { ActionsChain } from '../types';
 
 /**
- * Acceptance-only chain dispatcher callback that a lifecycle stage uses to
- * dispatch an actions chain. The callback is void and synchronously-refusing
- * — never awaitable for the chain's own execution
- * (`cpt-frontx-constraint-mfes-origin-invariant-chain-execution`,
+ * The `executeActionsChain` callback a lifecycle stage hands each hook's
+ * actions chain to. Returns nothing awaitable
+ * (`cpt-frontx-constraint-mfes-recursive-chain-execution`,
  * `cpt-frontx-adr-action-dispatch-and-chaining`). This type is exported under
  * the alias `LifecycleActionChainExecutor`.
  */
@@ -42,9 +41,9 @@ export type ActionChainExecutor = (chain: ActionsChain) => void;
 export abstract class LifecycleManager {
   /**
    * Trigger a lifecycle stage for a specific extension.
-   * Dispatches every matching hook's actions chain in declaration order
-   * without awaiting any of their settlement, and returns once every hook
-   * has been dispatched or its synchronous refusal contained
+   * Hands every matching hook's actions chain, in declaration order, to
+   * `executeActionsChain` without awaiting it, and returns once every hook's
+   * chain has been handed over
    * (`cpt-frontx-algo-mfe-registry-lifecycle-stage-triggering`).
    *
    * @param extensionId - ID of the extension

@@ -62,19 +62,13 @@ export class ChildDomainForwardingRouteFactory {
     return new CrossHopRoute(
       // @cpt-begin:cpt-frontx-algo-mfe-host-communication-bridge-delegation:p1:inst-catchall-forward
       (envelope: CrossHopEnvelope): void => {
-        // Re-target the envelope's action at the child domain — the dispatched
-        // action carries the ORIGINAL target (the catch-all tier's own key is
-        // the domain id, which IS the action's target here), so no re-targeting
-        // is actually needed; forwarded verbatim, with the node's own
-        // continuations and diagnostic context carried across unchanged. Hands
-        // the node over and is done: a throw here refuses the delivery at the
-        // call, with no side effect in the child runtime; a normal return means
-        // the child's registry has already accepted and reserved what the node
-        // needs, and this runtime holds nothing further for it
-        // (`inst-hand-over-node`, `inst-hand-over-done`).
+        // The catch-all tier's key is the child domain id, which is the
+        // action's target here. Hands the sub-chain over: a throw refuses,
+        // with no side effect in the child runtime; a return means the
+        // child's registry accepted it (`inst-hand-over-node`).
         const forwarded: CrossHopEnvelope = {
           ...envelope,
-          node: { ...envelope.node, action: { ...envelope.node.action, target: childDomainId } },
+          chain: { ...envelope.chain, action: { ...envelope.chain.action, target: childDomainId } },
         };
         parentBridgeImpl.sendCrossHopEnvelope(forwarded);
       }

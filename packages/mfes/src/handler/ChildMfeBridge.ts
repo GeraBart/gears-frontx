@@ -13,25 +13,13 @@ export abstract class ChildMfeBridge {
   abstract readonly extensionId: string;
 
   /**
-   * Accept (or synchronously refuse) an actions chain for execution via the
-   * registry. This is a capability pass-through — the bridge forwards
-   * directly to the registry's own acceptance-only `executeActionsChain`,
-   * adding no coordination logic of its own. This is the ONLY public API
-   * for actions chain execution from child MFEs
-   * (`cpt-frontx-adr-child-mfe-host-access`).
+   * Hand an actions chain to the host registry's `executeActionsChain`,
+   * adding no coordination logic, and return nothing awaitable. The only
+   * public API for actions chain execution from child MFEs
+   * (`cpt-frontx-adr-child-mfe-host-access`). While the bridge is inactive,
+   * disposed, or not wired to a dispatch callback, it hands nothing over.
    *
-   * Acceptance-only: yields nothing a child can await for the chain's own
-   * execution, and takes no per-call execution-options argument. Refuses
-   * synchronously, at the call, when this bridge is disposed, already
-   * inactive, or holds no wired dispatch callback — each an unusable
-   * dispatch capability at the moment of the call, distinct from a bridge
-   * that becomes inactive or loses its route only AFTER a chain has already
-   * been accepted through it, which instead lets that chain's declared
-   * `fallback` run.
-   *
-   * @param chain - Actions chain to accept.
-   * @throws {Error} synchronously if this bridge is disposed, inactive, or
-   *   unwired, or if the chain itself is refused by the registry.
+   * @param chain - Actions chain to execute.
    */
   abstract executeActionsChain(chain: ActionsChain): void;
 
