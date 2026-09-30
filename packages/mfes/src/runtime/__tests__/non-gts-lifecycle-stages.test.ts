@@ -38,6 +38,7 @@ import type { DomainContext } from '../DomainContext';
 import { ConcurrentMountStrategy } from '../ConcurrentMountStrategy';
 import type { ContainerHooks } from '../MountStrategy';
 import { ActionHandler } from '../../mediator/ActionHandler';
+import { DefaultRuntimeBridgeFactory } from '../DefaultRuntimeBridgeFactory';
 
 // Fake non-GTS notation for the four lifecycle stages. Deliberately NOT in
 // the GTS namespace - if the runtime resolved any stage through a literal
@@ -217,21 +218,15 @@ class StubHandler extends MfeHandler {
   }
 }
 
-class RecordingStubHandler extends MfeHandler {
+/** A handler whose lifecycle's own `unmount` throws — makes a physical unmount fail deterministically. */
+class ThrowingUnmountStubHandler extends MfeHandler {
   readonly bridgeFactory = new MfeBridgeFactoryDefault();
-
-  constructor(private readonly lifecycleLog: string[]) {
-    super(ENTRY_BASE_ID);
-  }
+  mountCalls = 0;
 
   async load(): Promise<MfeEntryLifecycle<ChildMfeBridge>> {
     return {
-      mount: () => {
-        this.lifecycleLog.push('mount');
-      },
-      unmount: () => {
-        this.lifecycleLog.push('unmount');
-      },
+      mount: () => { this.mountCalls += 1; },
+      unmount: () => { throw new Error('lifecycle unmount failed'); },
     };
   }
 }
@@ -475,86 +470,6 @@ describe('non-GTS consumer: mount lifecycle resolves activated/deactivated stage
   });
 });
 
-describe('DefaultExtensionMounter lifecycle fence', () => {
-  it('compensates a stale mount so the next lifecycle is a real remount', async () => {
-    const lifecycleLog: string[] = [];
-    const registry = new DefaultMfeRegistry({
-      typeSystem: createNonGtsPlugin(),
-      mfeHandlers: [new RecordingStubHandler(lifecycleLog)],
-    });
-    registry.registerDomain(makeDomain(), new ConcurrentDomainFactory([]));
-    await registry.registerExtension(makeExtension());
-    const mounter = registry.getMounter(DOMAIN_ID);
-    const oldRoot = document.createElement('div');
-    mounter.attach(oldRoot);
-
-    const staleMount = mounter.mount(EXTENSION_ID, document.createElement('div'));
-    const detaching = mounter.detach();
-    const replacementRoot = document.createElement('div');
-    mounter.attach(replacementRoot);
-
-    await expect(detaching).resolves.toBeUndefined();
-    await expect(staleMount).rejects.toThrow(/root was detached during mounting/);
-    await expect(mounter.mount(EXTENSION_ID, document.createElement('div'))).resolves.toBeUndefined();
-    expect(lifecycleLog).toEqual(['mount', 'unmount', 'mount']);
-  });
-
-  it('completes guest teardown before rethrowing a rejected deactivated stage', async () => {
-    const lifecycleLog: string[] = [];
-    const deactivatedError = new Error('deactivated lifecycle failed');
-    const registry = new DefaultMfeRegistry({
-      typeSystem: createNonGtsPlugin(),
-      mfeHandlers: [new RecordingStubHandler(lifecycleLog)],
-    });
-    registry.registerDomain(makeDomain(), new ConcurrentDomainFactory([]));
-    await registry.registerExtension(makeExtension());
-    const mountManager = (registry as unknown as {
-      mountManager: {
-        triggerLifecycle: (extensionId: string, stageId: string) => Promise<void>;
-      };
-    }).mountManager;
-    mountManager.triggerLifecycle = async (_extensionId, stageId) => {
-      if (stageId === FAKE_STAGE_DEACTIVATED) {
-        throw deactivatedError;
-      }
-    };
-    const mounter = registry.getMounter(DOMAIN_ID);
-    mounter.attach(document.createElement('div'));
-    await mounter.mount(EXTENSION_ID, document.createElement('div'));
-
-    await expect(mounter.unmount(EXTENSION_ID)).rejects.toBe(deactivatedError);
-    await expect(mounter.mount(EXTENSION_ID, document.createElement('div'))).resolves.toBeUndefined();
-    expect(lifecycleLog).toEqual(['mount', 'unmount', 'mount']);
-  });
-
-  it('preserves an undefined deactivated rejection after guest teardown', async () => {
-    const lifecycleLog: string[] = [];
-    const registry = new DefaultMfeRegistry({
-      typeSystem: createNonGtsPlugin(),
-      mfeHandlers: [new RecordingStubHandler(lifecycleLog)],
-    });
-    registry.registerDomain(makeDomain(), new ConcurrentDomainFactory([]));
-    await registry.registerExtension(makeExtension());
-    const mountManager = (registry as unknown as {
-      mountManager: {
-        triggerLifecycle: (extensionId: string, stageId: string) => Promise<void>;
-      };
-    }).mountManager;
-    mountManager.triggerLifecycle = async (_extensionId, stageId) => {
-      if (stageId === FAKE_STAGE_DEACTIVATED) {
-        throw undefined;
-      }
-    };
-    const mounter = registry.getMounter(DOMAIN_ID);
-    mounter.attach(document.createElement('div'));
-    await mounter.mount(EXTENSION_ID, document.createElement('div'));
-
-    await expect(mounter.unmount(EXTENSION_ID)).rejects.toBeUndefined();
-    await expect(mounter.mount(EXTENSION_ID, document.createElement('div'))).resolves.toBeUndefined();
-    expect(lifecycleLog).toEqual(['mount', 'unmount', 'mount']);
-  });
-});
-
 // ─── Extension registration: init and destroyed stages ─────────────────────
 
 describe('non-GTS consumer: extension registration resolves init/destroyed stages through the plugin', () => {
@@ -680,4 +595,42 @@ describe('a destroyed hook targeting the entity being torn down', () => {
       expect(completionLog).toEqual([FAKE_STAGE_DESTROYED]);
     }
   );
+});
+
+// ─── Physical unmount teardown on a failed lifecycle unmount ───────────────
+
+describe('inst-um-failure-bridge-released', () => {
+  it('deactivates the bridge and clears the container/shadowRoot even when the lifecycle unmount throws, so a later mount runs as a fresh mount', async () => {
+    const plugin = createNonGtsPlugin();
+    const handler = new ThrowingUnmountStubHandler(ENTRY_BASE_ID);
+    const dispatchOrderLog: string[] = [];
+    const completionLog: string[] = [];
+    const registry = new DefaultMfeRegistry({
+      typeSystem: plugin,
+      mfeHandlers: [handler],
+    });
+
+    registry.registerDomain(makeDomain(), new ConcurrentDomainFactory(dispatchOrderLog, completionLog));
+    await registry.registerExtension(makeExtension());
+
+    const mounter = registry.getMounter(DOMAIN_ID);
+    mounter.attach(document.createElement('div'));
+    await mounter.mount(EXTENSION_ID, document.createElement('div'));
+    expect(handler.mountCalls).toBe(1);
+
+    const deactivateSpy = vi.spyOn(DefaultRuntimeBridgeFactory.prototype, 'deactivateBridge');
+    deactivateSpy.mockClear();
+
+    await expect(mounter.unmount(EXTENSION_ID)).rejects.toThrow('lifecycle unmount failed');
+
+    expect(deactivateSpy).toHaveBeenCalledTimes(1);
+
+    await expect(
+      mounter.mount(EXTENSION_ID, document.createElement('div'))
+    ).resolves.toBeUndefined();
+    expect(handler.mountCalls).toBe(2);
+
+    deactivateSpy.mockRestore();
+    registry.dispose();
+  });
 });

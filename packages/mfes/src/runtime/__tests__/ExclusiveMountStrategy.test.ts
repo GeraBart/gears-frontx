@@ -5,6 +5,7 @@ import { makePayload } from './helpers/make-payload';
 import { FakeMounter } from './helpers/FakeMounter';
 import { FakeContainerHooks } from './helpers/FakeContainerHooks';
 import { FakeRegistry } from './helpers/FakeRegistry';
+import { ExtensionReleaserProvider } from '../ExtensionReleaserProvider';
 
 // ─── ExclusiveMountStrategy ──────────────────────────────────────────────────
 
@@ -38,6 +39,9 @@ describe('ExclusiveMountStrategy', () => {
 
   it('mount evicts siblings and mounts the new extension', async () => {
     registry.setMounted(DOMAIN, ['ext-a', 'ext-b']);
+    // Stands in for the destroy each sibling's own earlier mount would have registered.
+    ExtensionReleaserProvider.for(mounter).registerDestroy('ext-a', () => hooks.destroy('ext-a'));
+    ExtensionReleaserProvider.for(mounter).registerDestroy('ext-b', () => hooks.destroy('ext-b'));
 
     await strategy.mount(makePayload('ext-c'));
 

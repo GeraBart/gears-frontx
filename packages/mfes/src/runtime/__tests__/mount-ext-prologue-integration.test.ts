@@ -127,6 +127,35 @@ class GatedMountHandler extends MfeHandler {
 }
 
 /**
+ * A handler whose lifecycle's own `mount` counts its own calls and signals
+ * that it has started, then awaits an externally-controlled gate before
+ * settling — makes a physical mount genuinely in progress for as long as the
+ * test keeps the gate open, deterministically, while telling a first attempt
+ * apart from a later, fresh one.
+ */
+class GatedCountingMountHandler extends MfeHandler {
+  readonly bridgeFactory = new MfeBridgeFactoryDefault();
+  mountCalls = 0;
+  constructor(
+    entryId: string,
+    private readonly gate: Promise<void>,
+    private readonly onMountStarted: () => void
+  ) {
+    super(entryId);
+  }
+  async load(): Promise<MfeEntryLifecycle<ChildMfeBridge>> {
+    return {
+      mount: async () => {
+        this.mountCalls += 1;
+        this.onMountStarted();
+        await this.gate;
+      },
+      unmount: () => {},
+    };
+  }
+}
+
+/**
  * A handler whose lifecycle's own `unmount` signals that it has started,
  * then awaits an externally-controlled gate before settling — holds a
  * domain's unregistration teardown in progress for as long as the test
@@ -811,6 +840,67 @@ describe('mount-ext prologue — end to end', () => {
     registry.dispose();
   });
 
+  it('inst-me-mount-root-detached (end to end): a mount whose lifecycle mount settles after the slot was detached is rolled back, its container destroyed, and the next mount runs the lifecycle mount again', async () => {
+    const plugin = createPlugin();
+    const domainId = 'domain-mount-root-detached-e2e';
+    const mountStarted = createDeferred();
+    const gate = createDeferred();
+    const handler = new GatedCountingMountHandler(ENTRY_ID, gate.promise, () => mountStarted.resolve());
+    const registry = freshRegistry(plugin, handler);
+    const factory = new ConcurrentDomainFactory();
+    registry.registerDomain(makeDomain(domainId, true), factory);
+    await registry.registerExtension(makeExtension('ext-a', domainId));
+    const mounter = registry.getMounter(domainId);
+    const root = document.createElement('div');
+    mounter.attach(root);
+
+    const firstNextFired = wireProbe(registry, domainId, 'root-detached-mount-next');
+    const firstFallbackFired = wireProbe(registry, domainId, 'root-detached-mount-fallback');
+    registry.executeActionsChain({
+      action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-a' } },
+      next: { action: { type: 'root-detached-mount-next', target: domainId, payload: {} } },
+      fallback: { action: { type: 'root-detached-mount-fallback', target: domainId, payload: {} } },
+    });
+    const firstOutcome = Promise.race([
+      firstNextFired.then(() => 'next' as const),
+      firstFallbackFired.then(() => 'fallback' as const),
+    ]);
+
+    // The lifecycle mount is genuinely in progress, gated open, when the
+    // slot is detached out from under it.
+    await mountStarted.promise;
+    await mounter.detach();
+
+    // Release the gate: the lifecycle mount settles AFTER the slot was
+    // already detached — the mount rolls itself back instead of becoming an
+    // orphan occupant of a root that is no longer attached.
+    gate.resolve();
+    await gate.promise;
+
+    expect(await firstOutcome).toBe('fallback');
+    expect(registry.getMountedExtensions(domainId)).not.toContain('ext-a');
+    expect(factory.hooks.destroyed).toEqual(['ext-a']);
+    expect(root.children).toHaveLength(0);
+
+    // A fresh mount, through a fresh root, runs the lifecycle mount again —
+    // the failed attempt above left nothing behind that would make this one
+    // an already-mounted or joined request.
+    const newRoot = document.createElement('div');
+    mounter.attach(newRoot);
+
+    const secondNextFired = wireProbe(registry, domainId, 'root-detached-mount-second-next');
+    registry.executeActionsChain({
+      action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-a' } },
+      next: { action: { type: 'root-detached-mount-second-next', target: domainId, payload: {} } },
+    });
+    await secondNextFired;
+
+    expect(handler.mountCalls).toBe(2);
+    expect(registry.getMountedExtensions(domainId)).toContain('ext-a');
+
+    registry.dispose();
+  });
+
   it('(j) an explicit unmount of the sole occupant racing a fresh mount of a different extension in an Optional domain destroys the displaced occupant\'s container exactly once, and both actions succeed', async () => {
     const plugin = createPlugin();
     const domainId = 'domain-explicit-unmount-races-mount';
@@ -821,8 +911,11 @@ describe('mount-ext prologue — end to end', () => {
     await registry.registerExtension(makeExtension('ext-b', domainId));
     registry.getMounter(domainId).attach(document.createElement('div'));
 
-    // Pre-mount 'ext-a' as the sole occupant before the race below.
-    await registry.getMounter(domainId).mount('ext-a', document.createElement('div'));
+    // Pre-mount 'ext-a' as the sole occupant before the race below, through
+    // the strategy itself — not the mounter directly — so the destroy the
+    // strategy registers for it (`registerDestroy`) is in place for the
+    // release the race below triggers.
+    await factory.strategy.mount({ subject: 'ext-a' });
     expect(registry.getMountedExtensions(domainId)).toEqual(['ext-a']);
 
     // A destroy hook that throws on a SECOND release of the same
@@ -870,16 +963,19 @@ describe('mount-ext prologue — end to end', () => {
     await registry.registerExtension(makeExtension('ext-a', domainId));
     const mounter = registry.getMounter(domainId);
     mounter.attach(document.createElement('div'));
-    await mounter.mount('ext-a', document.createElement('div'));
+    // Mounted through the strategy itself — not the mounter directly — so
+    // the destroy the strategy registers for it (`registerDestroy`) is in
+    // place for the release detach() and the joining unmount_ext below share.
+    await factory.strategy.mount({ subject: 'ext-a' });
     expect(registry.getMountedExtensions(domainId)).toEqual(['ext-a']);
 
     // A destroy hook that throws on a SECOND release of the same
     // extension's container — a duplicate release fails this test rather
-    // than passing silently. `detach()`'s own release call supplies no
-    // destroy of its own (see `DefaultExtensionMounter.detach()`), so
-    // exactly one call to this hook — the joining strategy's — is the only
-    // correct outcome; zero calls, which would mean the joining call's
-    // destroy was lost, must not happen either.
+    // than passing silently. detach()'s own release runs the SAME destroy
+    // registered at mount time, and the joining unmount_ext coalesces onto
+    // that same release rather than starting a second one, so exactly one
+    // call to this hook is the only correct outcome; zero calls, which would
+    // mean the release's destroy was lost, must not happen either.
     const destroyCallCounts = new Map<string, number>();
     factory.hooks.destroy = (extensionId: string): void => {
       const count = (destroyCallCounts.get(extensionId) ?? 0) + 1;
@@ -902,8 +998,9 @@ describe('mount-ext prologue — end to end', () => {
 
     await Promise.all([detachPromise, unmountFired]);
 
-    // The joining strategy call's real destroy ran exactly once — not lost
-    // to detach()'s own destroy-less release call, and not duplicated.
+    // detach()'s release and the joining unmount_ext coalesce onto the SAME
+    // release, so the destroy registered at mount time ran exactly once —
+    // neither lost nor duplicated.
     expect(destroyCallCounts.get('ext-a')).toBe(1);
     expect(registry.getMountedExtensions(domainId)).toEqual([]);
 
@@ -2405,4 +2502,58 @@ describe('domain occupancy queue — two-slot semantics (Optional/Exclusive)', (
       registry.dispose();
     });
   }
+
+  it('inst-me-queue-await-unmount-at-turn (Optional): a mount request racing a slot detach\'s release waits for it, then finds the slot itself torn down and takes its fallback', async () => {
+    const plugin = createPlugin();
+    const domainId = 'domain-optional-detach-race-queue';
+    const unmountStarted = createDeferred();
+    const unmountGate = createDeferred();
+    const handler = new GatedUnmountHandler(ENTRY_ID, unmountGate.promise, () => unmountStarted.resolve());
+    const registry = freshRegistry(plugin, handler);
+    const factory = new OptionalDomainFactory(registry, domainId);
+    registry.registerDomain(makeDomain(domainId, true), factory);
+    await registry.registerExtension(makeExtension('ext-a', domainId));
+    const mounter = registry.getMounter(domainId);
+    mounter.attach(document.createElement('div'));
+
+    const firstNextFired = wireProbe(registry, domainId, 'detach-race-queue-first-next');
+    registry.executeActionsChain({
+      action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-a' } },
+      next: { action: { type: 'detach-race-queue-first-next', target: domainId, payload: {} } },
+    });
+    await firstNextFired;
+    expect(registry.getMountedExtensions(domainId)).toContain('ext-a');
+
+    // Not awaited: detach() starts releasing 'ext-a' — its gated lifecycle
+    // unmount is genuinely in progress once `unmountStarted` fires.
+    const detachPromise = mounter.detach();
+    await unmountStarted.promise;
+
+    // A second mount_ext of the same extension, dispatched while detach's
+    // release is still in flight — must wait for it (`inst-me-queue-await-unmount-at-turn`)
+    // instead of completing on the still-stale mount-set record, and must
+    // NOT re-run the strategy on a subject the release removes.
+    const secondNextFired = wireProbe(registry, domainId, 'detach-race-queue-second-next');
+    const secondFallbackFired = wireProbe(registry, domainId, 'detach-race-queue-second-fallback');
+    registry.executeActionsChain({
+      action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-a' } },
+      next: { action: { type: 'detach-race-queue-second-next', target: domainId, payload: {} } },
+      fallback: { action: { type: 'detach-race-queue-second-fallback', target: domainId, payload: {} } },
+    });
+    const secondOutcome = Promise.race([
+      secondNextFired.then(() => 'next' as const),
+      secondFallbackFired.then(() => 'fallback' as const),
+    ]);
+
+    unmountGate.resolve();
+    await detachPromise;
+
+    // The waiting mount joins the SAME release detach() itself awaits, so by
+    // the time it resumes, detach has already torn the slot's root down too
+    // — the fresh mount it attempts finds no root and takes its fallback.
+    expect(await secondOutcome).toBe('fallback');
+    expect(registry.getMountedExtensions(domainId)).not.toContain('ext-a');
+
+    registry.dispose();
+  });
 });

@@ -147,7 +147,20 @@ export class MountExtActionHandler extends DeclaredTimeoutActionHandler {
     // While the domain is being unregistered the queue is closed, so the
     // request goes to `submit` and fails at once
     // (`inst-me-queue-domain-unregister`).
-    if (this.mountedReader.isMounted(extensionId) && this.queue.isEmpty() && !this.queue.isClosed()) {
+    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-await-unmount-settle
+    // A mount-set record for `extensionId` is stale while a slot detach's own
+    // unmount of it is still in flight — the record disappears once that
+    // unmount settles, so this short-circuit must not complete on it; the
+    // request falls through to the queue instead, where its turn awaits the
+    // same settlement (`inst-me-queue-await-unmount-at-turn`).
+    const unmountInFlight = this.unmountInFlightReader.inFlight(extensionId);
+    // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-await-unmount-settle
+    if (
+      this.mountedReader.isMounted(extensionId) &&
+      this.queue.isEmpty() &&
+      !this.queue.isClosed() &&
+      !unmountInFlight
+    ) {
       return;
     }
     // @cpt-end:cpt-frontx-state-extension-domain-governance-admission:p1:inst-adm-t9
@@ -177,6 +190,29 @@ export class MountExtActionHandler extends DeclaredTimeoutActionHandler {
     actionTypeId: string,
     payload: Record<string, unknown> | undefined
   ): Promise<void> {
+    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-queue-await-unmount-at-turn
+    // The entry never succeeds on the strength of a mount-set record a
+    // settling slot-detach unmount removes: any such unmount in flight for
+    // this extension is awaited first, before eligibility or occupancy is
+    // read, re-consulting it after each settlement in case another one
+    // started in the meantime.
+    for (
+      let inFlightUnmount = this.unmountInFlightReader.inFlight(extensionId);
+      inFlightUnmount;
+      inFlightUnmount = this.unmountInFlightReader.inFlight(extensionId)
+    ) {
+      try {
+        // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-fresh-mount-after-unmount
+        await inFlightUnmount;
+        // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-fresh-mount-after-unmount
+      } catch (unmountError) {
+        // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-fail-after-unmount-failure
+        throw this.mapUnmountFailure(extensionId, unmountError);
+        // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-fail-after-unmount-failure
+      }
+    }
+    // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-queue-await-unmount-at-turn
+
     // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-queue-eligibility-at-turn
     if (this.admissionReader.domainOf(extensionId) !== this.domainId) {
       throw new Error(
@@ -236,12 +272,7 @@ export class MountExtActionHandler extends DeclaredTimeoutActionHandler {
           try {
             await inFlightUnmount;
           } catch (unmountError) {
-            const failure = new Error(
-              `mount_ext: extension '${extensionId}' could not be mounted in domain ` +
-              `'${this.domainId}' because the in-progress unmount it was waiting on failed.`
-            );
-            (failure as Error & { cause?: unknown }).cause = unmountError;
-            throw failure;
+            throw this.mapUnmountFailure(extensionId, unmountError);
           }
           continue;
         }
@@ -263,5 +294,25 @@ export class MountExtActionHandler extends DeclaredTimeoutActionHandler {
       // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-await-unmount-settle
     });
     // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-join-in-progress-mount
+  }
+
+  /**
+   * Maps a failure from an awaited in-progress unmount into the mount
+   * request's own failure, shared by the Concurrent path and the occupancy
+   * queue's at-turn wait.
+   *
+   * @param extensionId - ID of the extension whose mount was waiting on the
+   *   unmount.
+   * @param unmountError - The error the awaited unmount rejected with.
+   * @returns The error to throw for this mount request, carrying
+   *   `unmountError` as its `cause`.
+   */
+  private mapUnmountFailure(extensionId: string, unmountError: unknown): Error {
+    const failure = new Error(
+      `mount_ext: extension '${extensionId}' could not be mounted in domain ` +
+      `'${this.domainId}' because the in-progress unmount it was waiting on failed.`
+    );
+    (failure as Error & { cause?: unknown }).cause = unmountError;
+    return failure;
   }
 }

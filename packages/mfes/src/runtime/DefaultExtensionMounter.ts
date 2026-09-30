@@ -13,6 +13,8 @@
  * @packageDocumentation
  * @internal
  */
+// @cpt-algo:cpt-frontx-algo-extension-domain-governance-slot-detach:p2
+// @cpt-algo:cpt-frontx-algo-extension-domain-governance-mount-execution:p2
 
 import { ExtensionMounter } from './ExtensionMounter';
 import type { MountManager } from './MountManager';
@@ -90,16 +92,56 @@ export class DefaultExtensionMounter extends ExtensionMounter {
     // mount request racing this detach observes each extension's unmount as
     // in flight (`getUnmountInFlight`) and waits for it instead of racing
     // it, AND a strategy's own explicit release of the same extension
-    // racing this detach still runs its real `destroy` exactly once. This
-    // call deliberately supplies no `destroy` of its own — by detach time
-    // the domain's strategy (and its real container hooks) has already
-    // been invalidated, so this call must never claim the destroy slot
-    // ahead of a genuine one still in flight.
-    const mounted = Array.from(this.getMountedExtensions(this.domainId));
-    for (const extId of mounted) {
-      await this.releaser.release(extId);
-    }
+    // racing this detach still runs the destroy that strategy registered
+    // at mount time, through the shared releaser, exactly once.
+    //
+    // The root is cleared FIRST, synchronously, before the mount set is
+    // even read — so a mount whose own lifecycle mount settles while this
+    // loop is still unmounting an earlier occupant never finds a root to
+    // append its container under; it observes the root as already detached
+    // and rolls itself back instead of becoming an orphan occupant.
+    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-slot-detach:p2:inst-sd-clear-root-first
     this.attachedRoot = null;
+    // @cpt-end:cpt-frontx-algo-extension-domain-governance-slot-detach:p2:inst-sd-clear-root-first
+
+    const mounted = Array.from(this.getMountedExtensions(this.domainId));
+    const failures: unknown[] = [];
+    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-slot-detach:p2:inst-sd-each-occupant
+    for (const extId of mounted) {
+      try {
+        // @cpt-begin:cpt-frontx-algo-extension-domain-governance-slot-detach:p2:inst-sd-unmount-occupant
+        await this.releaser.release(extId);
+        // @cpt-end:cpt-frontx-algo-extension-domain-governance-slot-detach:p2:inst-sd-unmount-occupant
+      } catch (error) {
+        // @cpt-begin:cpt-frontx-algo-extension-domain-governance-slot-detach:p2:inst-sd-continue-on-failure
+        failures.push(error);
+        // @cpt-end:cpt-frontx-algo-extension-domain-governance-slot-detach:p2:inst-sd-continue-on-failure
+      }
+    }
+    // @cpt-end:cpt-frontx-algo-extension-domain-governance-slot-detach:p2:inst-sd-each-occupant
+
+    if (failures.length === 1) {
+      // @cpt-begin:cpt-frontx-algo-extension-domain-governance-slot-detach:p2:inst-sd-single-failure
+      throw failures[0];
+      // @cpt-end:cpt-frontx-algo-extension-domain-governance-slot-detach:p2:inst-sd-single-failure
+    }
+    if (failures.length > 1) {
+      // @cpt-begin:cpt-frontx-algo-extension-domain-governance-slot-detach:p2:inst-sd-aggregate-failure
+      // Reached via `globalThis` — not the bare `AggregateError` identifier
+      // — because this package's own `lib` target predates it; the runtime
+      // host (browser or Node) still provides the constructor.
+      const { AggregateError: AggregateErrorCtor } = globalThis as unknown as {
+        AggregateError: new (errors: Iterable<unknown>, message?: string) => Error;
+      };
+      throw new AggregateErrorCtor(
+        failures,
+        `ExtensionMounter.detach: ${failures.length} extensions in domain '${this.domainId}' failed to unmount.`
+      );
+      // @cpt-end:cpt-frontx-algo-extension-domain-governance-slot-detach:p2:inst-sd-aggregate-failure
+    }
+    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-slot-detach:p2:inst-sd-return
+    return;
+    // @cpt-end:cpt-frontx-algo-extension-domain-governance-slot-detach:p2:inst-sd-return
   }
 
   async mount(extensionId: string, container: Element): Promise<void> {
@@ -141,17 +183,39 @@ export class DefaultExtensionMounter extends ExtensionMounter {
       // since a concurrent detach() call could have cleared it during the await.
       const root = this.attachedRoot;
       if (!root) {
-        throw new Error(
+        // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-mount-root-detached
+        const error = new Error(
           `ExtensionMounter.mount: domain '${this.domainId}' root was detached ` +
           `during mounting of extension '${extensionId}'. The domain's root element ` +
           'must remain attached for the entire duration of the mount operation.'
         );
+        try {
+          await this.mountManager.unmountExtension(extensionId);
+        } catch (compensationError) {
+          (error as Error & { cause?: unknown }).cause = compensationError;
+        }
+        throw error;
+        // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-mount-root-detached
       }
 
-      root.appendChild(container);
-      this.containers.set(extensionId, container);
+      try {
+        root.appendChild(container);
+        this.containers.set(extensionId, container);
 
-      this.addMountedExtension(this.domainId, extensionId);
+        this.addMountedExtension(this.domainId, extensionId);
+      } catch (error) {
+        // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-mount-rollback
+        container.parentNode?.removeChild(container);
+        this.containers.delete(extensionId);
+        this.removeMountedExtension(this.domainId, extensionId);
+        try {
+          await this.mountManager.unmountExtension(extensionId);
+        } catch {
+          // The original error stays primary.
+        }
+        throw error;
+        // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-mount-rollback
+      }
     })();
 
     this.inFlightMountsByExtension.set(extensionId, { promise: mountWork, container });
@@ -193,18 +257,21 @@ export class DefaultExtensionMounter extends ExtensionMounter {
     this.unmountInFlightByExtension.set(extensionId, placeholder);
 
     const unmountWork = (async (): Promise<void> => {
-      await this.mountManager.unmountExtension(extensionId);
+      try {
+        await this.mountManager.unmountExtension(extensionId);
+      } finally {
+        // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-um-failure-container-removed
+        // Remove the container from its parent regardless of whether the
+        // attached root has since been cleared (e.g. by a concurrent
+        // detach()) — the container's own parent is the source of truth,
+        // not `this.attachedRoot`.
+        const container = this.containers.get(extensionId);
+        container?.parentNode?.removeChild(container);
+        this.containers.delete(extensionId);
 
-      // Remove the container from the attached root if still present.
-      const container = this.containers.get(extensionId);
-      if (container && this.attachedRoot) {
-        if (this.attachedRoot.contains(container)) {
-          this.attachedRoot.removeChild(container);
-        }
+        this.removeMountedExtension(this.domainId, extensionId);
+        // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-um-failure-container-removed
       }
-      this.containers.delete(extensionId);
-
-      this.removeMountedExtension(this.domainId, extensionId);
     })();
 
     unmountWork.then(settlePlaceholder, rejectPlaceholder);
