@@ -2,6 +2,7 @@ import { MountStrategy, type ActionPayload, type ContainerHooks } from './MountS
 import type { ExtensionMounter } from './ExtensionMounter';
 import type { MfeRegistry } from '../registry/MfeRegistry';
 import { ExtensionReleaserProvider } from './ExtensionReleaserProvider';
+// @cpt-algo:cpt-frontx-algo-extension-domain-governance-slot-detach:p2
 
 /**
  * Pre-emptive single-mount with no public unmount path.
@@ -53,11 +54,12 @@ export class ExclusiveMountStrategy extends MountStrategy {
 
     for (const siblingId of mounted) {
       if (siblingId !== subject) {
-        // The container release is supplied to the mounter rather than
-        // invoked here directly, so a concurrent unmount of this same
-        // sibling that coalesces onto the SAME physical unmount destroys
-        // its container exactly once between the two callers, never twice.
-        await ExtensionReleaserProvider.for(this.mounter).release(siblingId, () => this.hooks.destroy(siblingId));
+        // The container release registered at the sibling's mount time is
+        // routed through the mounter's releaser rather than invoked here
+        // directly, so a concurrent unmount of this same sibling that
+        // coalesces onto the SAME physical unmount runs that registered
+        // destroy exactly once between the two callers, never twice.
+        await ExtensionReleaserProvider.for(this.mounter).release(siblingId);
       }
     }
 
@@ -69,6 +71,9 @@ export class ExclusiveMountStrategy extends MountStrategy {
       this.hooks.destroy(subject);
       throw error;
     }
+    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-slot-detach:p2:inst-sd-destroy-container
+    ExtensionReleaserProvider.for(this.mounter).registerDestroy(subject, () => this.hooks.destroy(subject));
+    // @cpt-end:cpt-frontx-algo-extension-domain-governance-slot-detach:p2:inst-sd-destroy-container
   }
   // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-exclusive-mount
   // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-exclusive-evict

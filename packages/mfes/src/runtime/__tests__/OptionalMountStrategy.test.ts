@@ -4,6 +4,7 @@ import { makePayload } from './helpers/make-payload';
 import { FakeMounter } from './helpers/FakeMounter';
 import { FakeContainerHooks } from './helpers/FakeContainerHooks';
 import { FakeRegistry } from './helpers/FakeRegistry';
+import { ExtensionReleaserProvider } from '../ExtensionReleaserProvider';
 
 // ─── OptionalMountStrategy ───────────────────────────────────────────────────
 
@@ -37,6 +38,8 @@ describe('OptionalMountStrategy', () => {
 
   it('mount displaces prior single extension before mounting new one', async () => {
     registry.setMounted(DOMAIN, ['ext-a']);
+    // Stands in for the destroy 'ext-a' own earlier mount would have registered.
+    ExtensionReleaserProvider.for(mounter).registerDestroy('ext-a', () => hooks.destroy('ext-a'));
 
     await strategy.mount(makePayload('ext-b'));
 
@@ -58,6 +61,8 @@ describe('OptionalMountStrategy', () => {
 
   it('unmount removes the named extension when it is in mount-set', async () => {
     registry.setMounted(DOMAIN, ['ext-a']);
+    // Stands in for the destroy 'ext-a' own earlier mount would have registered.
+    ExtensionReleaserProvider.for(mounter).registerDestroy('ext-a', () => hooks.destroy('ext-a'));
 
     await strategy.unmount!(makePayload('ext-a'));
 

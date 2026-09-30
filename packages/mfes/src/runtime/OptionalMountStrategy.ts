@@ -2,6 +2,7 @@ import { MountStrategy, type ActionPayload, type ContainerHooks } from './MountS
 import type { ExtensionMounter } from './ExtensionMounter';
 import type { MfeRegistry } from '../registry/MfeRegistry';
 import { ExtensionReleaserProvider } from './ExtensionReleaserProvider';
+// @cpt-algo:cpt-frontx-algo-extension-domain-governance-slot-detach:p2
 
 /**
  * Zero-or-one mount with explicit unmount support.
@@ -49,12 +50,13 @@ export class OptionalMountStrategy extends MountStrategy {
 
     if (mounted.length === 1 && mounted[0] !== subject) {
       const priorOccupant = mounted[0];
-      // The container release is supplied to the mounter rather than
-      // invoked here directly, so a concurrent explicit `unmount_ext` of
-      // this same prior occupant that coalesces onto the SAME physical
-      // unmount destroys its container exactly once between the two
-      // callers, never twice.
-      await ExtensionReleaserProvider.for(this.mounter).release(priorOccupant, () => this.hooks.destroy(priorOccupant));
+      // The container release registered at the prior occupant's mount time
+      // is routed through the mounter's releaser rather than invoked here
+      // directly, so a concurrent explicit `unmount_ext` of this same prior
+      // occupant that coalesces onto the SAME physical unmount runs that
+      // registered destroy exactly once between the two callers, never
+      // twice.
+      await ExtensionReleaserProvider.for(this.mounter).release(priorOccupant);
     }
 
     // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-optional-mount
@@ -65,6 +67,9 @@ export class OptionalMountStrategy extends MountStrategy {
       this.hooks.destroy(subject);
       throw error;
     }
+    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-slot-detach:p2:inst-sd-destroy-container
+    ExtensionReleaserProvider.for(this.mounter).registerDestroy(subject, () => this.hooks.destroy(subject));
+    // @cpt-end:cpt-frontx-algo-extension-domain-governance-slot-detach:p2:inst-sd-destroy-container
     // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-optional-mount
   }
   // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-optional-displace
@@ -77,11 +82,11 @@ export class OptionalMountStrategy extends MountStrategy {
       return;
     }
 
-    // The container release is supplied to the mounter rather than invoked
-    // here directly, so a concurrent fresh mount of a different extension
-    // that displaces this same subject, and coalesces onto the SAME
-    // physical unmount, destroys the container exactly once between the
-    // two callers, never twice.
-    await ExtensionReleaserProvider.for(this.mounter).release(subject, () => this.hooks.destroy(subject));
+    // The container release registered at mount time is routed through the
+    // mounter's releaser rather than invoked here directly, so a concurrent
+    // fresh mount of a different extension that displaces this same
+    // subject, and coalesces onto the SAME physical unmount, runs that
+    // registered destroy exactly once between the two callers, never twice.
+    await ExtensionReleaserProvider.for(this.mounter).release(subject);
   }
 }

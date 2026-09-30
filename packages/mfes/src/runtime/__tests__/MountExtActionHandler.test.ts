@@ -262,6 +262,65 @@ describe('MountExtActionHandler', () => {
     expect(innerCalls).toBe(0);
   });
 
+  it('inst-me-queue-await-unmount-at-turn (queue): a mount of an extension whose non-queue unmount is in flight waits for it instead of completing on the stale mount-set record', async () => {
+    let innerCalls = 0;
+    const inner = ActionHandler.fromFunction(async () => { innerCalls += 1; });
+    const unmountDeferred = createDeferred<void>();
+    const consulted = createDeferred<void>();
+    let consultedOnce = false;
+    let unmountPending = true;
+    let mounted = true;
+    const readers = makeReaders({
+      domainOf: () => DOMAIN_ID,
+      isMounted: () => mounted,
+      inFlight: () => {
+        if (!consultedOnce) {
+          consultedOnce = true;
+          consulted.resolve();
+        }
+        return unmountPending ? unmountDeferred.promise : undefined;
+      },
+    });
+    const queue = new DomainOccupancyCoordinator(DOMAIN_ID);
+    const wrapped = makeQueueHandler(inner, readers, queue);
+
+    const request = wrapped.handleAction('mount_ext', { subject: 'ext-a' });
+    let settled = false;
+    request.then(() => { settled = true; }, () => { settled = true; });
+
+    await consulted.promise;
+    expect(settled).toBe(false);
+
+    mounted = false;
+    unmountPending = false;
+    unmountDeferred.resolve();
+
+    await expect(request).resolves.toBeUndefined();
+    expect(innerCalls).toBe(1);
+  });
+
+  it('inst-me-fail-after-unmount-failure (queue): the mount fails when the awaited non-queue unmount failed', async () => {
+    let innerCalls = 0;
+    const inner = ActionHandler.fromFunction(async () => { innerCalls += 1; });
+    const unmountDeferred = createDeferred<void>();
+    let unmountPending = true;
+    const readers = makeReaders({
+      domainOf: () => DOMAIN_ID,
+      isMounted: () => true,
+      inFlight: () => (unmountPending ? unmountDeferred.promise : undefined),
+    });
+    const queue = new DomainOccupancyCoordinator(DOMAIN_ID);
+    const wrapped = makeQueueHandler(inner, readers, queue);
+
+    const request = wrapped.handleAction('mount_ext', { subject: 'ext-a' });
+
+    unmountPending = false;
+    unmountDeferred.reject(new Error('unmount failed'));
+
+    await expect(request).rejects.toThrow(/in-progress unmount/);
+    expect(innerCalls).toBe(0);
+  });
+
   it('falls through to the inner handler untouched when the payload carries no string subject', async () => {
     let innerCalls = 0;
     const inner = ActionHandler.fromFunction(async () => { innerCalls += 1; });

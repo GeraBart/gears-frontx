@@ -469,14 +469,25 @@ export class DefaultMountManager extends MountManager {
     );
     // @cpt-end:cpt-frontx-algo-mfe-registry-lifecycle-stage-triggering:p1:inst-algo-lst-sites
 
+    // The extension's own lifecycle unmount is awaited in its own try/catch
+    // so a rejection here does not skip the teardown below — every physical
+    // unmount completes bridge deactivation and coordinator cleanup even
+    // when this call fails, then fails with that captured error afterward
+    // (`inst-um-teardown-on-failure`).
+    let failure: { error: unknown } | undefined;
+    const container = extensionState.container;
     try {
       const lifecycle = extensionState.lifecycle;
-      const container = extensionState.container;
       if (lifecycle && container) {
         const unmountTarget = extensionState.shadowRoot ?? container;
         await lifecycle.unmount(unmountTarget);
       }
+    } catch (error) {
+      failure = { error };
+    }
 
+    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-um-failure-bridge-released
+    try {
       // Deactivate (not destroy) the bridge: every advertisement propagated
       // through it stays recorded, and every action-delivery path through it
       // now rejects explicitly until the next mount reactivates it
@@ -497,21 +508,31 @@ export class DefaultMountManager extends MountManager {
           }
         }
       }
-
-      // MOUNTED -> ADMITTED: the extension stays admitted/registered
-      // (`extensionState` is untouched otherwise), it is simply no longer
-      // mounted. Whether this unmount was an explicit `unmount_ext`, an
-      // OptionalMountStrategy displacement, or an ExclusiveMountStrategy
-      // eviction makes no difference to this transition.
-      extensionState.container = null;
-      extensionState.mountState = 'unmounted';
-      extensionState.error = undefined;
-      extensionState.shadowRoot = undefined;
-    } catch (error) {
-      extensionState.mountState = 'error';
-      extensionState.error = error instanceof Error ? error : new Error(String(error));
-      throw error;
+    } catch (cleanupError) {
+      // The lifecycle unmount's own failure, if any, is what the caller
+      // sees — a failure of this cleanup itself is captured only when
+      // nothing failed yet.
+      failure = failure ?? { error: cleanupError };
     }
+    // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-um-failure-bridge-released
+
+    // MOUNTED -> ADMITTED (or ERROR): the extension stays admitted/registered
+    // (`extensionState` is untouched otherwise). Its container and shadow
+    // root are always released — whether this unmount was an explicit
+    // `unmount_ext`, an OptionalMountStrategy displacement, an
+    // ExclusiveMountStrategy eviction, or a slot detach, and whether or not
+    // the lifecycle unmount or the teardown above failed.
+    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-um-teardown-on-failure
+    extensionState.container = null;
+    extensionState.shadowRoot = undefined;
+    if (failure) {
+      extensionState.mountState = 'error';
+      extensionState.error = failure.error instanceof Error ? failure.error : new Error(String(failure.error));
+      throw failure.error;
+    }
+    // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-um-teardown-on-failure
+    extensionState.mountState = 'unmounted';
+    extensionState.error = undefined;
   }
   // @cpt-end:cpt-frontx-state-extension-domain-governance-admission:p1:inst-adm-t10
 

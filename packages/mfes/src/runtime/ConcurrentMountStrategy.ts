@@ -13,6 +13,7 @@
  */
 // @cpt-FEATURE:cpt-frontx-feature-mfe-registry:p2
 // @cpt-algo:cpt-frontx-algo-extension-domain-governance-mount-execution:p2
+// @cpt-algo:cpt-frontx-algo-extension-domain-governance-slot-detach:p2
 // @cpt-dod:cpt-frontx-dod-extension-domain-governance-default-deny:p1
 
 import { MountStrategy, type ActionPayload, type ContainerHooks } from './MountStrategy';
@@ -47,6 +48,9 @@ export class ConcurrentMountStrategy extends MountStrategy {
       this.hooks.destroy(extensionId);
       throw error;
     }
+    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-slot-detach:p2:inst-sd-destroy-container
+    ExtensionReleaserProvider.for(this.mounter).registerDestroy(extensionId, () => this.hooks.destroy(extensionId));
+    // @cpt-end:cpt-frontx-algo-extension-domain-governance-slot-detach:p2:inst-sd-destroy-container
     // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-return
     // (implicit return — mount completed)
     // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-return
@@ -56,11 +60,12 @@ export class ConcurrentMountStrategy extends MountStrategy {
 
   override async unmount(payload: ActionPayload): Promise<void> {
     const extensionId = payload.subject;
-    // The container release is supplied to the mounter rather than invoked
-    // here directly, so an overlapping unmount of the SAME extension
-    // (another concurrent `unmount_ext` dispatch) that coalesces onto the
-    // SAME physical unmount destroys the container exactly once between the
-    // two callers, never twice.
-    await ExtensionReleaserProvider.for(this.mounter).release(extensionId, () => this.hooks.destroy(extensionId));
+    // The container release registered at mount time is routed through the
+    // mounter's releaser rather than invoked here directly, so an
+    // overlapping unmount of the SAME extension (another concurrent
+    // `unmount_ext` dispatch) that coalesces onto the SAME physical unmount
+    // runs that registered destroy exactly once between the two callers,
+    // never twice.
+    await ExtensionReleaserProvider.for(this.mounter).release(extensionId);
   }
 }
