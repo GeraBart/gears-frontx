@@ -44,6 +44,7 @@ import { LoadExtHandler } from './LoadExtHandler';
 import { EntryTypeNotHandledError } from '../errors';
 import { extractGtsPackage } from '../gts/extract-package';
 import { DefaultExtensionMounter } from './DefaultExtensionMounter';
+import { ExtensionReleaserProvider } from './ExtensionReleaserProvider';
 import { MountExtActionHandler } from './MountExtActionHandler';
 import { UnmountExtActionHandler } from './UnmountExtActionHandler';
 import { DomainOccupancyCoordinator } from './DomainOccupancyCoordinator';
@@ -900,7 +901,11 @@ export class DefaultMfeRegistry extends MfeRegistry {
           declaration.id,
           admissionReader,
           mountedReader,
-          { inFlight: (extensionId) => mounter.getUnmountInFlight(extensionId) },
+          {
+            inFlight: (extensionId) =>
+              ExtensionReleaserProvider.for(mounter).inFlight(extensionId) ??
+              mounter.getUnmountInFlight(extensionId),
+          },
           this.actionTimeoutResolver,
           domainReader,
           queue,

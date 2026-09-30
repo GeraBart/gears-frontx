@@ -89,7 +89,7 @@ const SCANNED_EXTENSIONS = new Set(['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx'
 export const CONCRETE_EXPORT_DENYLIST = new Set([
   'ChildMfeBridgeImpl',
   'ParentMfeBridgeImpl',
-  'createChildDomainForwardingRoute',
+  'ChildDomainForwardingHandler',
 ]);
 
 /**

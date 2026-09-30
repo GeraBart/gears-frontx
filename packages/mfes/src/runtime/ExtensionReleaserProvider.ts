@@ -30,11 +30,10 @@ import { ExtensionReleaser } from './ExtensionReleaser';
  * mounter" at the call site, which `ExtensionReleaserProvider.for(mounter)`
  * gives directly, with no instance to plumb through constructors first.
  * Keyed by `WeakMap<ExtensionMounter, ExtensionReleaser>` so an entry for a
- * mounter no longer referenced elsewhere does not pin memory. Tests reach
- * the same guarantees the prior module-level `WeakMap` gave — resolving a
- * mounter twice returns the identical `ExtensionReleaser`, so overlapping
- * `release` calls for the same mounter still coalesce — while a mounter
- * with no releaser resolved for it yet still starts clean.
+ * mounter no longer referenced elsewhere does not pin memory. Resolving the
+ * same mounter twice returns the identical `ExtensionReleaser`, so
+ * overlapping `release` calls for that mounter coalesce, and a mounter with
+ * no releaser resolved yet starts clean.
  */
 export class ExtensionReleaserProvider {
   private static readonly releasersByMounter = new WeakMap<ExtensionMounter, ExtensionReleaser>();

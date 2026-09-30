@@ -11,9 +11,8 @@ interface ReleaseState {
  * `ExtensionReleaserProvider.for(mounter)`, which guarantees a mounter is
  * ever given at most one releaser.
  *
- * Not exported outside this module: strategies and `DefaultExtensionMounter`
- * reach an instance only through `ExtensionReleaserProvider.for(...)`, never
- * by constructing one directly.
+ * Reached only through `ExtensionReleaserProvider.for(...)`: strategies and
+ * `DefaultExtensionMounter` never construct an instance directly.
  */
 export class ExtensionReleaser {
   /**
@@ -24,6 +23,17 @@ export class ExtensionReleaser {
   private readonly releasesInFlight = new Map<string, ReleaseState>();
 
   constructor(private readonly mounter: ExtensionMounter) {}
+
+  /**
+   * The in-flight release settlement for `extensionId` on this releaser's
+   * mounter, if `release` is currently running one, or `undefined`. Read by
+   * the mount-ext prologue (`MountExtActionHandler`) together with
+   * `ExtensionMounter.getUnmountInFlight` so a waiting mount settles only
+   * once BOTH the physical unmount and its chosen `destroy` have run.
+   */
+  inFlight(extensionId: string): Promise<void> | undefined {
+    return this.releasesInFlight.get(extensionId)?.promise;
+  }
 
   /**
    * Unmount `extensionId` on this releaser's mounter via `mounter.unmount()`

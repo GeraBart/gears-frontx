@@ -26,9 +26,13 @@
  *     checked for a real, own-line, non-empty `@safety-reviewed` and `@why`.
  *   - DEFINITELY NOT FUNCTION-VALUED — a declaration whose value can never
  *     be a function by construction: a type/interface/enum declaration (no
- *     runtime value at all), or a variable initializer that is a literal
- *     (string/number/boolean/null/object/array/regex/template with no
- *     function inside it). No annotation is required or checked.
+ *     runtime value at all), or a variable initializer that is a
+ *     string/number/bigint/boolean/null/regular-expression/template
+ *     literal — a literal kind that can never itself be, or hold, a
+ *     function value. No annotation is required or checked. An object or
+ *     array literal is NOT in this list — either can hold a function as a
+ *     property or element (`{ f: () => 1 }`, `[() => 1]`) — so an exported
+ *     object/array literal is UNSUPPORTED, not skipped.
  *   - UNSUPPORTED — anything that is neither of the above: a call
  *     expression initializer (might return a function — `export const f =
  *     memoize(() => {})`), a re-export naming a binding this file has no
@@ -130,7 +134,6 @@ function hasExportModifier(node) {
  */
 function unwrapTypeOnly(expr) {
   let current = expr;
-  // eslint-disable-next-line no-constant-condition
   while (true) {
     if (ts.isParenthesizedExpression(current)) {
       current = current.expression;
@@ -148,7 +151,12 @@ function unwrapTypeOnly(expr) {
   }
 }
 
-/** Expression kinds provably incapable of holding a function value. */
+/**
+ * Expression kinds provably incapable of holding a function value.
+ * Object and array literals are deliberately NOT here — either can hold a
+ * function as a property or element (`{ f: () => 1 }`, `[() => 1]`), so
+ * they fall through to UNSUPPORTED rather than being assumed safe.
+ */
 const LITERAL_EXPRESSION_KINDS = new Set([
   ts.SyntaxKind.StringLiteral,
   ts.SyntaxKind.NumericLiteral,
@@ -159,8 +167,6 @@ const LITERAL_EXPRESSION_KINDS = new Set([
   ts.SyntaxKind.TrueKeyword,
   ts.SyntaxKind.FalseKeyword,
   ts.SyntaxKind.NullKeyword,
-  ts.SyntaxKind.ObjectLiteralExpression,
-  ts.SyntaxKind.ArrayLiteralExpression,
 ]);
 
 /**
@@ -215,12 +221,61 @@ function classifyExpression(expr, localDecls, ownerNode) {
  * }}
  */
 function classifyExports(sourceFile) {
-  /** @type {Map<string, { outcome: string, node: ts.Node }>} */
+  /**
+   * Every top-level declaration this file makes, keyed by name, regardless
+   * of whether that declaration is itself exported — an alias
+   * (`export { f }`, `export default f`) inherits the classification of,
+   * and has its safety tags read from, the implementation's own
+   * declaration, so this map must be complete before any export is
+   * classified: a named export naming a declaration that appears LATER in
+   * the file (`export { f };` above `function f() {}`) must resolve
+   * against the full file, not whatever came before it textually. This is
+   * why declaration-collection (below) and export-classification (further
+   * below) are two separate passes over `sourceFile.statements` rather
+   * than one.
+   * @type {Map<string, { outcome: string, node: ts.Node, reason?: string }>}
+   */
   const localDecls = new Map();
   /** @type {Array<{ name: string, node: ts.Node }>} */
   const checked = [];
   /** @type {Array<{ name: string, reason: string }>} */
   const unsupported = [];
+
+  for (const statement of sourceFile.statements) {
+    if (ts.isFunctionDeclaration(statement)) {
+      const name = statement.name?.text ?? '(default)';
+      localDecls.set(name, { outcome: FUNCTION_VALUED, node: statement });
+      continue;
+    }
+
+    if (ts.isVariableStatement(statement)) {
+      // A `let`/`var` binding can be reassigned after its declaration — its
+      // INITIALIZER shape proves nothing about what the binding holds by
+      // the time anything imports it (`export let f = 0; f = () => 1;` is
+      // exported-function-valued at runtime despite a numeric literal
+      // initializer). Only `const` makes the initializer's classification
+      // trustworthy for the binding's entire lifetime, so any mutable
+      // exported binding is UNSUPPORTED regardless of what its initializer
+      // looks like — conservative by construction, not by enumerating the
+      // ways a reassignment could hide a function.
+      const isMutable = (statement.declarationList.flags & ts.NodeFlags.Const) === 0;
+
+      for (const decl of statement.declarationList.declarations) {
+        if (!ts.isIdentifier(decl.name)) continue;
+        const classification = isMutable
+          ? {
+              outcome: UNSUPPORTED,
+              node: statement,
+              reason: 'exported via a mutable (let/var) binding — a later reassignment could make it function-valued regardless of its initializer, which this script cannot verify; use const, or accept this failing until reviewed',
+            }
+          : decl.initializer === undefined
+            ? { outcome: NOT_FUNCTION_VALUED, node: statement }
+            : classifyExpression(decl.initializer, localDecls, statement);
+        localDecls.set(decl.name.text, classification);
+      }
+      continue;
+    }
+  }
 
   /**
    * @param {string} name
@@ -228,7 +283,6 @@ function classifyExports(sourceFile) {
    * @param {boolean} isExported
    */
   const record = (name, classification, isExported) => {
-    localDecls.set(name, { outcome: classification.outcome, node: classification.node });
     if (!isExported) return;
     if (classification.outcome === FUNCTION_VALUED) {
       checked.push({ name, node: classification.node });
@@ -248,17 +302,6 @@ function classifyExports(sourceFile) {
     }
 
     if (ts.isVariableStatement(statement)) {
-      // A `let`/`var` binding can be reassigned after its declaration — its
-      // INITIALIZER shape proves nothing about what the binding holds by
-      // the time anything imports it (`export let f = 0; f = () => 1;` is
-      // exported-function-valued at runtime despite a numeric literal
-      // initializer). Only `const` makes the initializer's classification
-      // trustworthy for the binding's entire lifetime, so any mutable
-      // exported binding is UNSUPPORTED regardless of what its initializer
-      // looks like — conservative by construction, not by enumerating the
-      // ways a reassignment could hide a function.
-      const isMutable = (statement.declarationList.flags & ts.NodeFlags.Const) === 0;
-
       for (const decl of statement.declarationList.declarations) {
         if (!ts.isIdentifier(decl.name)) {
           if (isExported) {
@@ -269,15 +312,9 @@ function classifyExports(sourceFile) {
           }
           continue;
         }
-        const classification = isMutable
-          ? {
-              outcome: UNSUPPORTED,
-              node: statement,
-              reason: 'exported via a mutable (let/var) binding — a later reassignment could make it function-valued regardless of its initializer, which this script cannot verify; use const, or accept this failing until reviewed',
-            }
-          : decl.initializer === undefined
-            ? { outcome: NOT_FUNCTION_VALUED, node: statement }
-            : classifyExpression(decl.initializer, localDecls, statement);
+        const classification = /** @type {{ outcome: string, node: ts.Node, reason?: string }} */ (
+          localDecls.get(decl.name.text)
+        );
         record(decl.name.text, classification, isExported);
       }
       continue;

@@ -94,7 +94,7 @@
     "pg-pool": "3.10.1",
     "pg-protocol": "1.10.3",
     "picomatch": "4.0.4",
-    "brace-expansion": "5.0.9",
+    "brace-expansion": "5.0.12",
     "fast-uri": "3.1.7",
     "esbuild": "0.25.12",
     "js-yaml": "4.3.0",

@@ -64,11 +64,9 @@ export abstract class ActionsChainsMediator {
 
   /**
    * Register a catch-all handler for a target.
-   * The catch-all handler is invoked for any action type when no specific handler
-   * is registered for the (targetId, actionTypeId) pair.
-   *
-   * Used exclusively for child domain forwarding via bridge transport — the parent
-   * mediator cannot know the child's action types at registration time.
+   * The catch-all handler is invoked for any action type addressed to the
+   * target when no specific handler is registered for the (targetId,
+   * actionTypeId) pair.
    *
    * @param targetId - ID of the target
    * @param handler - Handler to invoke for any unmatched action type

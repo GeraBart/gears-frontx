@@ -775,7 +775,7 @@ describe('mount-ext prologue — end to end', () => {
     registry.dispose();
   });
 
-  it('(i) detach() racing a mount — the mount waits for detach\'s unmount of the same extension', async () => {
+  it('(i) detach() racing a mount — the mount waits for detach\'s FULL release of the same extension (not merely its physical unmount), and finds the root detach itself tore down', async () => {
     const plugin = createPlugin();
     const activatedSpy = vi.spyOn(plugin, 'resolveLifecycleStageActivatedId');
     const domainId = 'domain-detach-races-mount';
@@ -788,25 +788,25 @@ describe('mount-ext prologue — end to end', () => {
     await mounter.mount('ext-a', document.createElement('div'));
     expect(activatedSpy).toHaveBeenCalledTimes(1);
 
-    // Not awaited: detach() is in flight, tracking ext-a's unmount, when the
+    // Not awaited: detach() is in flight, tracking ext-a's release, when the
     // mount_ext request below arrives.
     const detachPromise = mounter.detach();
     expect((mounter as DefaultExtensionMounter).getUnmountInFlight('ext-a')).toBeDefined();
 
-    const mountFired = wireProbe(registry, domainId, 'detach-race-mount-probe');
+    // The waiting mount joins the SAME release detach() itself awaits, so
+    // both settle together — by the time the mount resumes, detach has
+    // already torn down the root too, and the mount fails rather than
+    // racing ahead into a root that is no longer attached.
+    const mountFallbackFired = wireProbe(registry, domainId, 'detach-race-mount-fallback');
     registry.executeActionsChain({
       action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-a' } },
-      next: { action: { type: 'detach-race-mount-probe', target: domainId, payload: {} } },
+      fallback: { action: { type: 'detach-race-mount-fallback', target: domainId, payload: {} } },
     });
 
-    await detachPromise;
-    // Re-attach so the fresh mount that was waiting on detach's unmount has
-    // a root to append its container to.
-    mounter.attach(document.createElement('div'));
-    await mountFired;
+    await Promise.all([detachPromise, mountFallbackFired]);
 
-    expect(registry.getMountedExtensions(domainId)).toContain('ext-a');
-    expect(activatedSpy).toHaveBeenCalledTimes(2);
+    expect(registry.getMountedExtensions(domainId)).not.toContain('ext-a');
+    expect(activatedSpy).toHaveBeenCalledTimes(1);
 
     registry.dispose();
   });
@@ -1098,6 +1098,188 @@ describe('mount-ext prologue — end to end', () => {
 
     expect(registry.getMountedExtensions(domainId)).toContain('ext-a');
     expect(registry.getMountedExtensions(domainId)).toContain('ext-b');
+
+    registry.dispose();
+  });
+
+  it('(n) a mount that waited on an in-progress unmount keeps its own fresh container — the unmount\'s destroy never reaches it', async () => {
+    const plugin = createPlugin();
+    const domainId = 'domain-remount-survives-unmount-destroy';
+    const unmountStarted = createDeferred();
+    const gate = createDeferred();
+    const handler = new GatedUnmountHandler(ENTRY_ID, gate.promise, () => unmountStarted.resolve());
+    const registry = freshRegistry(plugin, handler);
+    const factory = new ConcurrentDomainFactory();
+    registry.registerDomain(makeDomain(domainId, true), factory);
+    await registry.registerExtension(makeExtension('ext-a', domainId));
+    const root = document.createElement('div');
+    const mounter = registry.getMounter(domainId);
+    mounter.attach(root);
+
+    // Pre-mount 'ext-a' directly through the mounter (bypasses the
+    // strategy/hooks), so `factory.hooks.create` below fires exactly once —
+    // for the remount (M) under test.
+    await mounter.mount('ext-a', document.createElement('div'));
+    expect(registry.getMountedExtensions(domainId)).toContain('ext-a');
+
+    // A realistic destroy: releases whatever container is CURRENTLY tracked
+    // for the extension id (mirroring a real host's per-id container map),
+    // not a container reference the caller closed over — the same shape the
+    // bug report describes.
+    const liveContainers = new Map<string, Element>();
+    let remountContainer: Element | undefined;
+    factory.hooks.create = (extensionId: string): Element => {
+      const el = document.createElement('div');
+      liveContainers.set(extensionId, el);
+      factory.hooks.created.push(extensionId);
+      remountContainer = el;
+      return el;
+    };
+    factory.hooks.destroy = (extensionId: string): void => {
+      factory.hooks.destroyed.push(extensionId);
+      const el = liveContainers.get(extensionId);
+      if (el) {
+        el.remove();
+        liveContainers.delete(extensionId);
+      }
+    };
+
+    // U: an explicit unmount_ext of 'ext-a', gated on its own physical
+    // lifecycle unmount — genuinely in progress once `unmountStarted` fires.
+    const unmountFired = wireProbe(registry, domainId, 'f1-unmount-next');
+    registry.executeActionsChain({
+      action: { type: ACTION_UNMOUNT_EXT, target: domainId, payload: { subject: 'ext-a' } },
+      next: { action: { type: 'f1-unmount-next', target: domainId, payload: {} } },
+    });
+
+    await unmountStarted.promise;
+
+    // M: a mount_ext of the SAME extension, dispatched while U is still in
+    // progress — must wait for U's settlement, not race it.
+    const mountFired = wireProbe(registry, domainId, 'f1-mount-next');
+    registry.executeActionsChain({
+      action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-a' } },
+      next: { action: { type: 'f1-mount-next', target: domainId, payload: {} } },
+    });
+
+    // Release U's gated physical unmount, letting both U and the waiting M
+    // proceed.
+    gate.resolve();
+
+    await Promise.all([unmountFired, mountFired]);
+
+    expect(remountContainer).toBeDefined();
+    // Container-identity assertion: M's own fresh container is the one
+    // still attached under root, and is still tracked as 'ext-a's live
+    // container — U's destroy, chosen for its own release, never reached
+    // M's container.
+    expect(root.contains(remountContainer!)).toBe(true);
+    expect(liveContainers.get('ext-a')).toBe(remountContainer);
+    expect(registry.getMountedExtensions(domainId)).toContain('ext-a');
+
+    registry.dispose();
+  });
+
+  it('(o) a mount waiting on U1, then a second unmount (U2) for the same extension, ends with the extension NOT mounted', async () => {
+    const plugin = createPlugin();
+    const domainId = 'domain-remount-then-second-unmount';
+    const unmountStarted = createDeferred();
+    const gate = createDeferred();
+    const handler = new GatedUnmountHandler(ENTRY_ID, gate.promise, () => unmountStarted.resolve());
+    const registry = freshRegistry(plugin, handler);
+    const factory = new ConcurrentDomainFactory();
+    registry.registerDomain(makeDomain(domainId, true), factory);
+    await registry.registerExtension(makeExtension('ext-a', domainId));
+    const mounter = registry.getMounter(domainId);
+    mounter.attach(document.createElement('div'));
+    await mounter.mount('ext-a', document.createElement('div'));
+
+    // U1: the first explicit unmount, gated on its own physical unmount.
+    const u1Fired = wireProbe(registry, domainId, 'f5-u1-next');
+    registry.executeActionsChain({
+      action: { type: ACTION_UNMOUNT_EXT, target: domainId, payload: { subject: 'ext-a' } },
+      next: { action: { type: 'f5-u1-next', target: domainId, payload: {} } },
+    });
+
+    await unmountStarted.promise;
+
+    // M: a mount_ext of the same extension, dispatched while U1 is still in
+    // progress — must wait for U1's settlement.
+    const mFired = wireProbe(registry, domainId, 'f5-m-next');
+    registry.executeActionsChain({
+      action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-a' } },
+      next: { action: { type: 'f5-m-next', target: domainId, payload: {} } },
+    });
+
+    // U2: a second explicit unmount, dispatched right behind M, while M's
+    // own placeholder (published for waiting on U1) should already be in
+    // flight in the joiner — U2 must wait for M rather than coalescing onto
+    // U1 directly.
+    const u2Fired = wireProbe(registry, domainId, 'f5-u2-next');
+    registry.executeActionsChain({
+      action: { type: ACTION_UNMOUNT_EXT, target: domainId, payload: { subject: 'ext-a' } },
+      next: { action: { type: 'f5-u2-next', target: domainId, payload: {} } },
+    });
+
+    gate.resolve();
+
+    await Promise.all([u1Fired, mFired, u2Fired]);
+
+    expect(registry.getMountedExtensions(domainId)).not.toContain('ext-a');
+
+    registry.dispose();
+  });
+
+  it('(p) a mount waiting on an in-progress unmount re-evaluates eligibility — a domain reassignment while it waits fails the mount, and it never remounts', async () => {
+    const plugin = createPlugin();
+    const domainId = 'domain-remount-eligibility-reevaluated';
+    const unmountStarted = createDeferred();
+    const gate = createDeferred();
+    const handler = new GatedUnmountHandler(ENTRY_ID, gate.promise, () => unmountStarted.resolve());
+    const registry = freshRegistry(plugin, handler);
+    const factory = new ConcurrentDomainFactory();
+    registry.registerDomain(makeDomain(domainId, true), factory);
+    await registry.registerExtension(makeExtension('ext-a', domainId));
+    const mounter = registry.getMounter(domainId);
+    mounter.attach(document.createElement('div'));
+    await mounter.mount('ext-a', document.createElement('div'));
+
+    const mountSpy = vi.spyOn(factory.strategy, 'mount');
+
+    // U: an explicit unmount, gated on its own physical unmount.
+    const unmountFired = wireProbe(registry, domainId, 'f6-unmount-next');
+    registry.executeActionsChain({
+      action: { type: ACTION_UNMOUNT_EXT, target: domainId, payload: { subject: 'ext-a' } },
+      next: { action: { type: 'f6-unmount-next', target: domainId, payload: {} } },
+    });
+
+    await unmountStarted.promise;
+
+    // M: a mount_ext of the same extension, dispatched while U is still in
+    // progress — must wait for U's settlement, then re-evaluate eligibility
+    // before remounting.
+    const mountFailedFallback = wireProbe(registry, domainId, 'f6-mount-fallback');
+    registry.executeActionsChain({
+      action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-a' } },
+      fallback: { action: { type: 'f6-mount-fallback', target: domainId, payload: {} } },
+    });
+
+    // While M is still waiting on U's settlement, reassign 'ext-a's
+    // admission away from this domain — reached the same way the fixture's
+    // own admission reader is (`extensionManager.getExtensionState(...)?.extension.domain`).
+    const em = (registry as unknown as {
+      extensionManager: { getExtensionState: (id: string) => { extension: { domain: string } } | undefined };
+    }).extensionManager;
+    em.getExtensionState('ext-a')!.extension.domain = 'domain-elsewhere';
+
+    gate.resolve();
+
+    await Promise.all([unmountFired, mountFailedFallback]);
+
+    // M failed (its fallback ran, not its next) and never re-entered the
+    // strategy's own `mount` at all.
+    expect(mountSpy).not.toHaveBeenCalled();
+    expect(registry.getMountedExtensions(domainId)).not.toContain('ext-a');
 
     registry.dispose();
   });

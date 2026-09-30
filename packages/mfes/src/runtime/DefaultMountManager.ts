@@ -429,8 +429,8 @@ export class DefaultMountManager extends MountManager {
 
     return mountPromise;
   }
-  // @cpt-end:cpt-frontx-state-extension-domain-governance-admission:p1:inst-adm-t5
   // @cpt-end:cpt-frontx-state-extension-domain-governance-admission:p1:inst-adm-t11
+  // @cpt-end:cpt-frontx-state-extension-domain-governance-admission:p1:inst-adm-t5
 
   // @cpt-begin:cpt-frontx-state-extension-domain-governance-admission:p1:inst-adm-t10
   async unmountExtension(extensionId: string): Promise<void> {

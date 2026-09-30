@@ -1,9 +1,8 @@
 /**
- * `LazyLoaderStubBuilder.build` — byte-identity + runtime-guard tests.
+ * `buildLazyLoaderStubSource` — byte-identity + runtime-guard tests.
  *
- * This class lives in its own module (`LazyLoaderStubBuilder.ts`),
- * separate from the audited trust kernel (`mf-dynamic-module-ops.ts`) where
- * `importBlobModule` stays the sole site that ever writes dynamic-`import()`
+ * These functions live in the audited trust kernel (`mf-dynamic-module-ops.ts`),
+ * where `importBlobModule` stays the sole site that ever writes dynamic-`import()`
  * text (see ADR-0011 / cpt-frontx-adr-mfe-load-isolation). The byte-identity
  * test pins the exact generated string so a future edit that alters the
  * generated source (whitespace, quoting, statement order) fails loudly here
@@ -11,10 +10,10 @@
  *
  * The scheme-check clause specifically (`u.startsWith(...)||...`) is NOT
  * hand-hardcoded in the expected string: it is built the same way
- * `LazyLoaderStubBuilder.build` itself builds it, from
- * `builder.inlineContentSchemes()`. This is deliberate, not an
+ * `buildLazyLoaderStubSource` itself builds it, from
+ * `inlineContentSchemes()`. This is deliberate, not an
  * oversight: deriving the clause from
- * `builder.inlineContentSchemes()` rather than hardcoding
+ * `inlineContentSchemes()` rather than hardcoding
  * `"blob:"`/`"data:"` literals means a change to the scheme list cannot
  * leave this test's expectation stale, because both the production code
  * and this test draw the clause from the same source of truth. Every other
@@ -24,14 +23,12 @@
  * pin, not the same category of risk.
  */
 import { describe, expect, it } from 'vitest';
-import { LazyLoaderStubBuilder } from '../LazyLoaderStubBuilder';
+import { buildLazyLoaderStubSource, inlineContentSchemes } from '../mf-dynamic-module-ops';
 
-const builder = new LazyLoaderStubBuilder();
-
-describe('LazyLoaderStubBuilder.build', () => {
+describe('buildLazyLoaderStubSource', () => {
   it('produces the exact stub source text for a given loader id', () => {
-    const source = builder.build('loader-42');
-    const schemeCheck = builder.inlineContentSchemes()
+    const source = buildLazyLoaderStubSource('loader-42');
+    const schemeCheck = inlineContentSchemes()
       .map((scheme) => `u.startsWith(${JSON.stringify(scheme)})`)
       .join('||');
 
@@ -46,8 +43,8 @@ describe('LazyLoaderStubBuilder.build', () => {
   });
 
   it('generates one startsWith(...) clause per scheme in inlineContentSchemes(), in order — proving the guard is DERIVED, not a second hand-copy', () => {
-    const source = builder.build('loader-derived');
-    const schemes = builder.inlineContentSchemes();
+    const source = buildLazyLoaderStubSource('loader-derived');
+    const schemes = inlineContentSchemes();
 
     // No hand-maintained expectation of what the schemes ARE: this asserts
     // the generated text matches whatever the shared list currently says,
@@ -67,7 +64,7 @@ describe('LazyLoaderStubBuilder.build', () => {
   });
 
   it('JSON-stringifies the loader id, escaping characters that could break out of the string literal', () => {
-    const source = builder.build('a"b\\c');
+    const source = buildLazyLoaderStubSource('a"b\\c');
 
     expect(source).toContain(`const __id=${JSON.stringify('a"b\\c')};`);
     // No unescaped quote reaches the emitted literal.
@@ -75,7 +72,7 @@ describe('LazyLoaderStubBuilder.build', () => {
   });
 
   it('the generated stub rejects a resolved URL that is not blob:/data: at runtime', async () => {
-    const source = builder.build('loader-guard');
+    const source = buildLazyLoaderStubSource('loader-guard');
 
     // Execute the EXACT generated body (not a re-implementation of it) via
     // the Function constructor rather than `import()`-ing it as a real ES

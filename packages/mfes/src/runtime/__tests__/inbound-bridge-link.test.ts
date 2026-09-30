@@ -95,4 +95,49 @@ describe('mount-context rendezvous — diagnostics for a registry that adopts no
       expect(logged).toBe(true);
     }
   );
+
+  it(
+    'a rendezvous entry pushed by an alpha.8-era copy (protocol version 2, whose ' +
+      '`escalate` returns a Promise rather than void) is treated as unrecognized, not adopted',
+    () => {
+      const debugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {});
+      const bridge = makeStubBridge();
+      const link: InboundBridgeLink = {
+        edge: bridge,
+        propagateAdvertisement: () => true,
+        retractAdvertisement: () => {},
+        escalate: () => {},
+      };
+      registerInboundBridgeLink(bridge, link);
+
+      const RENDEZVOUS_KEY = Symbol.for('@gears-frontx/mfes:mount-context:1');
+      const host = globalThis as unknown as Record<
+        symbol,
+        Array<{ v: number; bridge: ChildMfeBridge; adopters: unknown[] }>
+      >;
+      let stack = host[RENDEZVOUS_KEY];
+      if (!stack) {
+        stack = [];
+        host[RENDEZVOUS_KEY] = stack;
+      }
+      // An alpha.8-era copy of this module only ever pushes entries tagged
+      // `v: 2`, since that is the only protocol version it knows how to
+      // produce — pushed directly, rather than via `pushAmbientMountingBridge`,
+      // to simulate the entry as that older copy would have written it.
+      stack.push({ v: 2, bridge, adopters: [] });
+
+      try {
+        const adopted = adoptAmbientInboundBridgeLink(() => {});
+        expect(adopted).toBeUndefined();
+      } finally {
+        stack.pop();
+      }
+
+      expect(debugSpy).toHaveBeenCalled();
+      const logged = debugSpy.mock.calls.some((call: unknown[]) =>
+        call.some((arg: unknown) => String(arg).includes('unrecognized'))
+      );
+      expect(logged).toBe(true);
+    }
+  );
 });

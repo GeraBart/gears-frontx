@@ -324,8 +324,7 @@ describe('Cross-Runtime Action Chain Routing', () => {
 
   describe('ChildDomainForwardingRouteFactory.create — deactivation refuses new hand-overs only (inst-bridge-deactivation)', () => {
     it(
-      'refuses a hand-over attempted AFTER the bridge deactivates, ' +
-        'while a hand-over accepted before deactivation is untouched by it',
+      'a hand-over before deactivation is accepted; one after is refused',
       () => {
         const childDomainId = 'mock.ext.domain.v1~child.domain.v1';
         const route = new ChildDomainForwardingRouteFactory().create(parentBridge, childDomainId);
