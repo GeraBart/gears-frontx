@@ -47,18 +47,20 @@ import type { CrossHopEnvelope } from '../mediator/CrossHopRoute';
 
 /**
  * The rendezvous protocol version this copy of the package produces and
- * recognizes. Bumped to `2` to extend the rendezvous into a two-way handoff
- * within the same synchronous window: version 1 only carried the bridge
- * downward (mounting extension -> adopting registry); version 2 additionally
- * carries re-link callbacks back upward (adopting registry -> mount manager),
- * collected in `adopters` and returned by `popAmbientMountingBridge` so a
- * later mount of the SAME host extension can re-offer a fresh link to a
- * registry that was reused, not rebuilt. A stale v1 reader still finds the
- * entry and correctly degrades via the existing "unrecognized version"
- * diagnostic path, since only the entry's own version field changed — the
- * `RENDEZVOUS_KEY` is unchanged.
+ * recognizes. Every entry at version `3` carries a bridge whose attached
+ * `InboundBridgeLink.escalate` is `(envelope) => void` — it either accepts
+ * the hand-over synchronously or throws to refuse, never returning a
+ * `Promise`. A copy recognizing a different version must not adopt such an
+ * entry's link as its own, since its own escalation call sites assume that
+ * same synchronous accept-or-throw contract: adopting a link whose
+ * `escalate` instead resolves or rejects a `Promise` would let a caller
+ * mistake acceptance-in-progress for acceptance, or a refusal for a silent,
+ * unhandled rejection, skipping the fallback path entirely. Any reader that
+ * finds an entry tagged with a version it does not recognize therefore
+ * treats the rendezvous as empty via the "unrecognized version" diagnostic
+ * path, rather than binding a link whose contract it cannot rely on.
  */
-const RENDEZVOUS_PROTOCOL_VERSION = 2 as const;
+const RENDEZVOUS_PROTOCOL_VERSION = 3 as const;
 
 /** A callback through which a previously adopted `InboundBridgeLink` can be replaced (or cleared, with `null`) on a later mount of the same host extension. */
 export type InboundBridgeRelink = (link: InboundBridgeLink | null) => void;

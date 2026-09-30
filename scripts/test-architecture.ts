@@ -187,13 +187,12 @@ function getEcosystemBoundaryChecks(): ArchCheck[] {
         'MFES-5 (cpt-frontx-constraint-mfes-opaque-schema-surface): mfes has no JSONSchema shape import',
     },
     // @cpt-end:cpt-frontx-constraint-mfes-opaque-schema-surface:p10:inst-arch-check
-    // @cpt-begin:cpt-frontx-adr-mfe-load-isolation:p1:inst-arch-check-annotations
+    // @cpt-dod:cpt-frontx-dod-mfe-isolation-blob-core:p1
     {
       command: 'node scripts/check-trust-kernel-annotations.mjs',
       description:
-        'cpt-frontx-adr-mfe-load-isolation: mfe-dynamic-module-ops.ts trust-kernel exports carry @safety-reviewed and @why',
+        'cpt-frontx-dod-mfe-isolation-blob-core: mf-dynamic-module-ops.ts trust-kernel exports carry @safety-reviewed and @why',
     },
-    // @cpt-end:cpt-frontx-adr-mfe-load-isolation:p1:inst-arch-check-annotations
     // @cpt-begin:cpt-frontx-constraint-cli-template-independence:p17:inst-dep-cruiser-check
     {
       command:

@@ -22,11 +22,11 @@
  */
 // @cpt-algo:cpt-frontx-algo-extension-domain-governance-mount-execution:p2
 
-import { ActionHandler } from '../mediator/ActionHandler';
+import type { ActionHandler } from '../mediator/ActionHandler';
 import { DeclaredTimeoutActionHandler } from '../mediator/DeclaredTimeoutActionHandler';
-import { ActionTimeoutResolver } from '../mediator/ActionTimeoutResolver';
-import { DomainOccupancyCoordinator } from './DomainOccupancyCoordinator';
-import { ConcurrentMountJoiner } from './ConcurrentMountJoiner';
+import type { ActionTimeoutResolver } from '../mediator/ActionTimeoutResolver';
+import type { DomainOccupancyCoordinator } from './DomainOccupancyCoordinator';
+import type { ConcurrentMountJoiner } from './ConcurrentMountJoiner';
 
 /**
  * Resolves the domain an extension is admitted to. None of these ports are
@@ -205,48 +205,63 @@ export class MountExtActionHandler extends DeclaredTimeoutActionHandler {
    * joining runs through `concurrentJoiner`; different extensions' fresh
    * mounts are independent.
    */
-  // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-await-unmount-settle
-  // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-fresh-mount-after-unmount
-  // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-fail-after-unmount-failure
   private async handleConcurrentMount(
     actionTypeId: string,
     payload: Record<string, unknown> | undefined,
     extensionId: string
   ): Promise<void> {
-    // Re-entered after an in-progress unmount settles, to re-evaluate
-    // occupancy from the top.
-    for (;;) {
-      const inFlightUnmount = this.unmountInFlightReader.inFlight(extensionId);
-      if (inFlightUnmount) {
-        try {
-          await inFlightUnmount;
-        } catch (unmountError) {
-          const failure = new Error(
-            `mount_ext: extension '${extensionId}' could not be mounted in domain ` +
-            `'${this.domainId}' because the in-progress unmount it was waiting on failed.`
-          );
-          (failure as Error & { cause?: unknown }).cause = unmountError;
-          throw failure;
-        }
-        continue;
-      }
-
-      // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-already-mounted-complete
-      // @cpt-begin:cpt-frontx-state-extension-domain-governance-admission:p1:inst-adm-t9
-      if (this.mountedReader.isMounted(extensionId)) {
-        return;
-      }
-      // @cpt-end:cpt-frontx-state-extension-domain-governance-admission:p1:inst-adm-t9
-      // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-already-mounted-complete
-
-      break;
-    }
-
+    // The whole wait-then-mount attempt runs INSIDE the joiner's task, so
+    // this request's own placeholder is published in the joiner before it
+    // ever waits on an in-progress unmount — a second request for the same
+    // extension arriving while this one still waits joins THIS attempt
+    // instead of coalescing onto the unmount directly.
     // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-join-in-progress-mount
-    await this.concurrentJoiner!.run(extensionId, () => this.inner.handleAction(actionTypeId, payload));
+    await this.concurrentJoiner!.run(extensionId, async () => {
+      // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-await-unmount-settle
+      // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-fresh-mount-after-unmount
+      // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-fail-after-unmount-failure
+      // Re-entered after an in-progress unmount settles, to re-evaluate
+      // eligibility and occupancy from the top.
+      for (;;) {
+        // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-eligibility-check
+        if (this.admissionReader.domainOf(extensionId) !== this.domainId) {
+          throw new Error(
+            `mount_ext: extension '${extensionId}' is not admitted to domain '${this.domainId}'.`
+          );
+        }
+        // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-eligibility-check
+
+        const inFlightUnmount = this.unmountInFlightReader.inFlight(extensionId);
+        if (inFlightUnmount) {
+          try {
+            await inFlightUnmount;
+          } catch (unmountError) {
+            const failure = new Error(
+              `mount_ext: extension '${extensionId}' could not be mounted in domain ` +
+              `'${this.domainId}' because the in-progress unmount it was waiting on failed.`
+            );
+            (failure as Error & { cause?: unknown }).cause = unmountError;
+            throw failure;
+          }
+          continue;
+        }
+
+        // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-already-mounted-complete
+        // @cpt-begin:cpt-frontx-state-extension-domain-governance-admission:p1:inst-adm-t9
+        if (this.mountedReader.isMounted(extensionId)) {
+          return;
+        }
+        // @cpt-end:cpt-frontx-state-extension-domain-governance-admission:p1:inst-adm-t9
+        // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-already-mounted-complete
+
+        break;
+      }
+
+      return this.inner.handleAction(actionTypeId, payload);
+      // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-fail-after-unmount-failure
+      // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-fresh-mount-after-unmount
+      // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-await-unmount-settle
+    });
     // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-join-in-progress-mount
   }
-  // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-fail-after-unmount-failure
-  // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-fresh-mount-after-unmount
-  // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-await-unmount-settle
 }

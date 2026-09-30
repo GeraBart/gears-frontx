@@ -597,9 +597,12 @@ export default [
   // new dynamic-code selectors, so no file loses MFES-1/2/3 coverage by
   // gaining this one.
   //
-  // Scoped to `src/**` only: test files legitimately construct dynamic
-  // `import()` calls to load independent module copies (e.g. cache-isolation
-  // tests), which is not the arbitrary-code-admission surface this guards.
+  // The `files` glob below is `packages/mfes/src/**/*.ts(x)`, which reaches
+  // every file under `src/`, including `__tests__/**` — this block's only
+  // carve-out is the `ignores` entry for the kernel file itself. Tests
+  // under `src/__tests__` that construct dynamic `import()` calls to load
+  // independent module copies (e.g. cache-isolation tests) are therefore
+  // still covered by this rule, same as production code.
   {
     // .mts/.cts are included defensively though none exist in this package
     // today: package.json sets "type": "module", so every .ts file here is
@@ -642,17 +645,16 @@ export default [
             "TemplateElement[value.cooked=/^(header|footer|menu|sidebar|popup|overlay|screen)$/]",
           ].join(', '),
           message:
-            'MFES-3 VIOLATION (cpt-frontx-constraint-mfes-no-layout-domain-values): @gears-frontx/mfes must not define specific extension-domain (layout-domain) values. These are solution vocabulary owned by frontx-template-shell (LayoutDomain enum).',
+            'MFES-3 VIOLATION (cpt-frontx-constraint-mfes-no-layout-domain-values): @gears-frontx/mfes must not define specific extension-domain (layout-domain) values. These are solution vocabulary owned by the consuming template (LayoutDomain enum).',
         },
         // --- Dynamic-code trust kernel (cpt-frontx-adr-mfe-load-isolation) ---
-        // @cpt-begin:cpt-frontx-adr-mfe-load-isolation:p1:inst-eslint-import-expression
+        // @cpt-dod:cpt-frontx-dod-mfe-isolation-blob-core:p1
         {
           selector: 'ImportExpression',
           message:
             'TRUST-KERNEL VIOLATION (cpt-frontx-adr-mfe-load-isolation): dynamic import() may only appear in the audited trust kernel, packages/mfes/src/handler/mfe-handler-mf/mf-dynamic-module-ops.ts. Add the primitive there (with @safety-reviewed/@why) and call it from here instead.',
         },
-        // @cpt-end:cpt-frontx-adr-mfe-load-isolation:p1:inst-eslint-import-expression
-        // @cpt-begin:cpt-frontx-adr-mfe-load-isolation:p1:inst-eslint-new-regexp
+        // @cpt-dod:cpt-frontx-dod-mfe-isolation-blob-core:p1
         // This selector matches the identifier and its string spelling
         // directly, rather than enumerating construction forms (`new
         // RegExp(...)`, `.call`/`.apply`, member spellings, ...), because a
@@ -694,7 +696,6 @@ export default [
           message:
             "TRUST-KERNEL VIOLATION (cpt-frontx-adr-mfe-load-isolation): the identifier `RegExp` (in any form — a call, a member/property reference, an alias, an argument, a JSX tag name, or a matching string/template literal) may only appear in the audited trust kernel, packages/mfes/src/handler/mfe-handler-mf/mf-dynamic-module-ops.ts. Add the primitive there (with @safety-reviewed/@why) and call it from here instead.",
         },
-        // @cpt-end:cpt-frontx-adr-mfe-load-isolation:p1:inst-eslint-new-regexp
         // What remains genuinely out of reach is semantic indirection that
         // never writes the word "RegExp" — as an identifier, a JSX tag
         // name, or a matching string — anywhere in the source at all:
@@ -739,7 +740,7 @@ export default [
             "TemplateElement[value.cooked=/^(header|footer|menu|sidebar|popup|overlay|screen)$/]",
           ].join(', '),
           message:
-            'MFES-3 VIOLATION (cpt-frontx-constraint-mfes-no-layout-domain-values): @gears-frontx/mfes must not define specific extension-domain (layout-domain) values. These are solution vocabulary owned by frontx-template-shell (LayoutDomain enum).',
+            'MFES-3 VIOLATION (cpt-frontx-constraint-mfes-no-layout-domain-values): @gears-frontx/mfes must not define specific extension-domain (layout-domain) values. These are solution vocabulary owned by the consuming template (LayoutDomain enum).',
         },
         // Deliberately NO dynamic-code selectors here: this file IS the
         // audited trust kernel where ImportExpression and non-literal

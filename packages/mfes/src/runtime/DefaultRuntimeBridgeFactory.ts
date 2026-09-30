@@ -79,11 +79,10 @@ class ActiveGuardActionHandler extends ActionHandler {
 export class DefaultRuntimeBridgeFactory extends RuntimeBridgeFactory {
   /**
    * Builds a child-domain forwarding `CrossHopRoute`. Injected through the
-   * constructor (DIP) — defaulted to the concrete
-   * `ChildDomainForwardingRouteFactory` so every existing caller of this
-   * still-public, no-required-args constructor keeps working unchanged —
-   * rather than reached for as a hard-coded `new` inside this class, so
-   * `DefaultMfeRegistry` (the composition root) can substitute it.
+   * constructor (DIP) as an optional argument, defaulting to the concrete
+   * `ChildDomainForwardingRouteFactory`, so the constructor needs no
+   * arguments and `DefaultMfeRegistry` (the composition root) can substitute
+   * it — rather than reaching for a hard-coded `new` inside this class.
    */
   private readonly forwardingRouteFactory: ForwardingRouteFactory;
 

@@ -41,8 +41,7 @@ import { ChildMfeBridge } from '../ChildMfeBridge';
 import { MfeLoadError } from '../../errors';
 import { RetryHandler } from './RetryHandler';
 import { MfeBridgeFactoryDefault } from '../../bridge/MfeBridgeFactoryDefault';
-import { sourceImports, rewriteBareSpecifier, findSurvivingDeclaredSharedDepSpecifier, importBlobModule } from './mf-dynamic-module-ops';
-import { LazyLoaderStubBuilder } from './LazyLoaderStubBuilder';
+import { sourceImports, rewriteBareSpecifier, findSurvivingDeclaredSharedDepSpecifier, importBlobModule, buildLazyLoaderStubSource } from './mf-dynamic-module-ops';
 import { findUndeclaredWellFormedSpecifiers } from './mf-shared-dep-specifier-scan';
 import { LruCache } from './LruCache';
 import { RealmSharedDepTextCacheProvider, type SharedDepTextCache } from './RealmSharedDepTextCacheProvider';
@@ -364,8 +363,10 @@ const SOURCE_TEXT_CACHE_CAPACITY = 256;
  *
  * Entries are bounded by the distinct (shared dep, manifest) pairs a host
  * actually observes without a declared `contentHash` — smaller in practice
- * than {@link SHARED_DEP_TEXT_CACHE_CAPACITY}, since one manifest usually
- * contributes only a handful of such pairs. 64 keeps ample headroom while
+ * than the realm shared-dependency cache's 128-entry bound (see
+ * `SHARED_DEP_TEXT_CACHE_CAPACITY` in `RealmSharedDepTextCacheProvider.ts`),
+ * since one manifest usually contributes only a handful of such pairs.
+ * 64 keeps ample headroom while
  * still bounding a long-running host's memory instead of retaining one
  * string per pair for the handler's entire lifetime.
  */
@@ -421,14 +422,6 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
   private readonly manifestCache: ManifestCache;
   private readonly config: MfeLoaderConfig;
   private readonly retryHandler: RetryHandler;
-  /**
-   * Builds a per-load `__frontx_lazy` loader stub's source text
-   * (`ensureLazyLoaderUrl`) — a private field default rather than a new
-   * public constructor parameter, since this class's own public constructor
-   * stays unchanged; stateless, so substituting it is never needed by a
-   * caller of this class today.
-   */
-  private readonly lazyLoaderStubBuilder = new LazyLoaderStubBuilder();
   // LRU-bounded so a long-running host that loads many distinct MFEs cannot
   // grow the cache without limit. Expose-chunk source text has no reuse
   // value after its load settles, so oldest-first eviction is acceptable.
@@ -1946,11 +1939,11 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
     // {@link LazyLoaderRegistry}) to reach the host-side resolver. Returning
     // a `Promise<Module>` mirrors the original `import()` semantic so the
     // caller's transformed code (`__frontx_lazy('./X').then(m => m.X)`) keeps
-    // working unchanged. Source-text construction lives in the audited trust
-    // kernel ({@link LazyLoaderStubBuilder.build} in `LazyLoaderStubBuilder.ts`)
+    // working unchanged. The source text is built in the audited trust
+    // kernel (`buildLazyLoaderStubSource` in `mf-dynamic-module-ops.ts`)
     // rather than here, so it stays the sole site that writes dynamic-import
     // text — see that function's doc comment for why.
-    const stubSource = this.lazyLoaderStubBuilder.build(loaderId);
+    const stubSource = buildLazyLoaderStubSource(loaderId);
 
     const blob = new Blob([stubSource], { type: 'text/javascript' });
     const url = URL.createObjectURL(blob);

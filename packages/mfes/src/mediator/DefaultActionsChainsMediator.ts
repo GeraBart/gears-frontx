@@ -17,7 +17,7 @@ import type { ExtensionDomainState } from '../runtime/ExtensionManager';
 import { getArrivalEdge } from '../runtime/inbound-bridge-link';
 import { CROSS_HOP_PROTOCOL_VERSION, CrossHopRoute } from './CrossHopRoute';
 import { ActionsChainsMediator } from './ActionsChainsMediator';
-import { ActionHandler } from './ActionHandler';
+import type { ActionHandler } from './ActionHandler';
 import { NoHandlerForActionTargetError } from './NoHandlerForActionTargetError';
 import { ActionTimeoutResolver } from './ActionTimeoutResolver';
 import { DeclaredTimeoutActionHandler } from './DeclaredTimeoutActionHandler';

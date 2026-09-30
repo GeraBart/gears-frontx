@@ -70,9 +70,8 @@ const SHARED_DEP_TEXT_CACHE_KEY = Symbol.for(
  * constructs, multiplies this cache's footprint. Bounds resident
  * MAPPINGS, not retained bytes — a single source response is not
  * size-limited here, and no byte ceiling is claimed on this cache's behalf.
- * 128 is a fixed policy constant, sized to the same per-scope capacity
- * `MfeHandlerMF.ts` documents its own scope-local bound at, and applied
- * once per realm rather than once per handler; it is not a demonstrated
+ * 128 is a fixed policy constant, applied once per realm rather than once
+ * per handler; it is not a demonstrated
  * optimum for every production composition, and sustained eviction churn
  * is the trigger for revisiting it
  * (`cpt-frontx-dod-mfe-isolation-realm-shared-dep-text-cache`).
@@ -109,11 +108,10 @@ interface RealmSharedDepTextCacheGlobal {
 }
 
 /**
- * Recognizes a realm-shared cache's structural shape (`get`/`set`/`delete`)
- * without trusting class identity, which cannot be relied upon across
- * independently evaluated copies (see the doc comment on
- * {@link SharedDepTextCache}). Pure and stateless — no substitution is ever
- * needed for this recognition — so it is a static method.
+ * Provides the realm-shared shared-dependency source-text cache. `getCache`
+ * returns the one cache every compatible, independently loaded copy of this
+ * package in the realm converges on, or this copy's own fallback cache when
+ * the realm rendezvous slot cannot be understood.
  */
 export class RealmSharedDepTextCacheProvider {
   /**
@@ -148,7 +146,14 @@ export class RealmSharedDepTextCacheProvider {
     return RealmSharedDepTextCacheProvider.fallbackCache;
   }
 
-  /** Type-guard, not a cast: narrows `unknown` without trusting the caller. */
+  /**
+   * Type-guard, not a cast: narrows `unknown` without trusting the caller.
+   * Recognizes a realm-shared cache's structural shape (`get`/`set`/`delete`)
+   * without trusting class identity, which cannot be relied upon across
+   * independently evaluated copies (see the doc comment on
+   * {@link SharedDepTextCache}). Pure and stateless — no substitution is ever
+   * needed for this recognition — so it is a static method.
+   */
   private static isStructurallyConformingCache(candidate: unknown): candidate is SharedDepTextCache {
     return (
       typeof candidate === 'object' &&

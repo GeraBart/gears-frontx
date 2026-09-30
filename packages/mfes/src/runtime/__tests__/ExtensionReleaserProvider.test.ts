@@ -15,7 +15,7 @@ import { FakeRegistry } from './helpers/FakeRegistry';
  * this one, since it is what `ExtensionMounter` itself, as a public
  * abstract contract, requires.
  */
-class OldSignatureFakeMounter extends ExtensionMounter {
+class UnmountOnlyFakeMounter extends ExtensionMounter {
   readonly unmountCalls: string[] = [];
   private releaseGate: Promise<void> = Promise.resolve();
   private releaseGateResolve: (() => void) | undefined;
@@ -46,7 +46,7 @@ class OldSignatureFakeMounter extends ExtensionMounter {
 describe('ExtensionReleaserProvider.for(mounter).release() — exactly-once, even with a mounter that only implements the unmount(extensionId) signature', () => {
   it('two overlapping OptionalMountStrategy.unmount() calls for the same extension physically unmount once and destroy its container exactly once', async () => {
     const DOMAIN = 'old-sig-optional-domain';
-    const mounter = new OldSignatureFakeMounter();
+    const mounter = new UnmountOnlyFakeMounter();
     const hooks = new FakeContainerHooks();
     const registry = new FakeRegistry();
     registry.setMounted(DOMAIN, ['ext-a']);
@@ -64,7 +64,7 @@ describe('ExtensionReleaserProvider.for(mounter).release() — exactly-once, eve
 
   it('two concurrent ExclusiveMountStrategy mounts of different extensions that each evict the same prior sibling physically unmount it once and destroy its container exactly once', async () => {
     const DOMAIN = 'old-sig-exclusive-domain';
-    const mounter = new OldSignatureFakeMounter();
+    const mounter = new UnmountOnlyFakeMounter();
     const hooks = new FakeContainerHooks();
     const registry = new FakeRegistry();
     registry.setMounted(DOMAIN, ['ext-a']);

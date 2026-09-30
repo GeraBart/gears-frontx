@@ -80,10 +80,14 @@ function resetRealmSharedDepTextCache(): void {
 // Deleted in setup AND teardown: this cache is deliberately page-lifetime
 // (never cleared by handler discard or registry disposal), so nothing but
 // an explicit reset stops one test's realm state from leaking into another.
-beforeEach(resetRealmSharedDepTextCache);
+beforeEach(() => {
+  resetRealmSharedDepTextCache();
+  vi.resetModules();
+});
 afterEach(() => {
   resetRealmSharedDepTextCache();
   vi.restoreAllMocks();
+  blobModuleStub.current = undefined;
 });
 
 // ─── Loading a genuinely separate module copy ──────────────────────────────
@@ -913,7 +917,6 @@ describe('Realm-shared shared-dependency source-text cache across two independen
       await expect(loadB).rejects.toThrow(/timed out after 1300ms/);
       expect(cache.get(key)).toBe(p2); // P2 REMAINS mapped
 
-      blobModuleStub.current = undefined;
       fetchSpy.mockRestore();
     },
     5000
