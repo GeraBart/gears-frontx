@@ -729,9 +729,13 @@ export class DefaultMfeRegistry extends MfeRegistry {
   /**
    * Internal: auto-unmount path used by `DefaultExtensionManager.unregisterExtension`.
    *
-   * Resolves the extension's domain, then dispatches through the per-domain
-   * `DefaultExtensionMounter` so mount-set bookkeeping (`removeMountedExtension`)
-   * and container DOM teardown run alongside `MountManager.unmountExtension`.
+   * Resolves the extension's domain, then releases it through
+   * `ExtensionReleaserProvider.for(mounter)` — the same route an ordinary
+   * `unmount_ext` action takes — so mount-set bookkeeping
+   * (`removeMountedExtension`), `MountManager.unmountExtension`, AND the
+   * container destroy registered by the mount strategy that created it
+   * (`ContainerHooks.destroy`, via `ExtensionReleaser.registerDestroy`) all
+   * run for this extension, exactly as they do for any other unmount.
    *
    * The serializer lock for this extension is already held by the parent
    * `unregisterExtension` operation; the mounter does not re-acquire it, so
@@ -745,7 +749,7 @@ export class DefaultMfeRegistry extends MfeRegistry {
     const domainState = this.extensionManager.getDomainState(extState.extension.domain);
     const mounter = domainState?.mounter;
     if (mounter) {
-      await mounter.unmount(extensionId);
+      await ExtensionReleaserProvider.for(mounter).release(extensionId);
       return;
     }
     await this.mountManager.unmountExtension(extensionId);
