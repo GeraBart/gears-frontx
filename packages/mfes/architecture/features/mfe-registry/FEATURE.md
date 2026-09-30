@@ -192,7 +192,7 @@ Internal system functions and procedures that do not interact with actors direct
 6. [ ] - `p1` - **FROM** HANDLER_RESOLVED **TO** REJECTED **WHEN** domain contract matching fails or cardinality is exceeded - `inst-state-el-06`
 7. [ ] - `p1` - **FROM** ADMITTED **TO** MOUNTED **WHEN** `handler.load` completes and the lifecycle is mounted under the domain's mount strategy - `inst-state-el-07`
 8. [ ] - `p1` - **FROM** ADMITTED **TO** REJECTED **WHEN** `handler.load` fails or mount fails - `inst-state-el-08`
-9. [x] - `p1` - **FROM** MOUNTED **TO** UNREGISTERED **WHEN** `unregisterExtension` is called — the extension is unmounted first, then removed from the registry - `inst-state-el-09`
+9. [x] - `p1` - **FROM** MOUNTED **TO** UNREGISTERED **WHEN** `unregisterExtension` is called — the extension is first unmounted exactly as an ordinary unmount unmounts it, which includes destroying its container once through the container hooks of the mount strategy that created it; only after that unmount has settled is the extension's `destroyed` lifecycle stage triggered, and only then is the extension removed from the registry - `inst-state-el-09`
 
 ### Factory Cache Lifecycle
 
