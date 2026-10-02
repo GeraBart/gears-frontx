@@ -14,11 +14,17 @@
   - [Mediator Keyed Dispatch and Recursive Chain Execution](#mediator-keyed-dispatch-and-recursive-chain-execution)
   - [Registration Propagation, Escalation, and Retraction](#registration-propagation-escalation-and-retraction)
   - [Bridge Delegation to Registry](#bridge-delegation-to-registry)
+  - [Occupant-Value Rendezvous](#occupant-value-rendezvous)
+  - [History Intent on Lifecycle Actions](#history-intent-on-lifecycle-actions)
 - [4. States (CDSL)](#4-states-cdsl)
   - [Action State Machine](#action-state-machine)
 - [5. Definitions of Done](#5-definitions-of-done)
   - [Mediator Keyed Dispatch and Recursive Chain Execution](#mediator-keyed-dispatch-and-recursive-chain-execution-1)
   - [Narrow Capability Bridge With Delegating Methods](#narrow-capability-bridge-with-delegating-methods)
+  - [Router Port Contract](#router-port-contract)
+  - [Occupant-Value Rendezvous](#occupant-value-rendezvous-1)
+  - [Occupant Values Exposed on No Interface](#occupant-values-exposed-on-no-interface)
+  - [History Intent on Lifecycle Actions](#history-intent-on-lifecycle-actions-1)
 - [6. Acceptance Criteria](#6-acceptance-criteria)
 
 <!-- /toc -->
@@ -30,13 +36,15 @@
 
 ### 1.1 Overview
 
-The host runtime routes actions to microfrontend targets through an actions-chains mediator keyed by target identifier and action type, and that routing reaches any target regardless of how many nesting levels separate sender and target: each registry automatically propagates its admitted targets to its ancestors and escalates an unresolved dispatch to its own parent, so the mediator chain composes transitively up to the shell. A narrow parent–child capability bridge gives child microfrontends exactly the participation capabilities they need, delegating each to the registry and its mediator, while the property channel carries no solution-specific vocabulary. `executeActionsChain` on either surface takes only the chain and returns nothing awaitable: the runtime executes each action and then its `next` or `fallback` recursively. Where a target lives in another runtime, the current runtime hands the sub-chain over and nothing comes back.
+The host runtime routes actions to microfrontend targets through an actions-chains mediator keyed by target identifier and action type, and that routing reaches any target regardless of how many nesting levels separate sender and target: each registry automatically propagates its admitted targets to its ancestors and escalates an unresolved dispatch to its own parent, so the mediator chain composes transitively up to the shell. A narrow parent–child capability bridge gives child microfrontends exactly the participation capabilities they need, delegating each to the registry and its mediator, while the property channel carries no solution-specific vocabulary. `executeActionsChain` on either surface takes only the chain and returns nothing awaitable: the runtime executes each action and then its `next` or `fallback` recursively. Where a target lives in another runtime, the current runtime hands the sub-chain over and nothing comes back. The package also declares the optional router port a registry can be built with: the runtime presents registrations to the injected router, obtains from it each extension's opaque occupant value at mount, hands that value to the extension's own copy of the package through a private realm rendezvous associated with the extension's bridge, and passes the history intent `mount_ext` and `unmount_ext` carry to the router uninterpreted — while no interface handed to extension or host code exposes an occupant value.
 
 ### 1.2 Purpose
 
 This feature details the host–MFE dispatch mechanism and the child-facing bridge surface that together realize `cpt-frontx-fr-mfe-host-communication`, including the registration-propagation and escalation mechanism that makes dispatch reach a target at any nesting depth without widening the bridge surface. Action admission is delegated to the injected type-system provider rather than embedded format knowledge, and runs at the registry that executes the action, where the target lives, applying `cpt-frontx-principle-agnostic-core`. The dispatch semantics detailed here — recursive execution, a per-action timeout, and hand-over of a sub-chain to the runtime where its target lives — are what `cpt-frontx-constraint-mfes-recursive-chain-execution` (MFES-8) rests on.
 
-**Requirements**: `cpt-frontx-fr-mfe-host-communication`
+This feature also specifies the router port contract the package declares (`cpt-frontx-mfes-interface-router-port`), the occupant-value rendezvous through which an extension's own copy of the package obtains the value the router assigned it, the guarantee that no interface handed to extension or host code exposes an occupant value, and the history intent on `mount_ext` and `unmount_ext` (`cpt-frontx-constraint-mfes-router-port`). Out of scope here: when the registry presents registrations and sends release notifications (`cpt-frontx-algo-mfe-registry-router-admission`), and when a domain's handler path reports a settled execution (`cpt-frontx-algo-extension-domain-governance-mount-execution`); the closed action schemas that make the history intent strictly typed (`cpt-frontx-feature-gts-type-provider`); and the concrete router, which the template framework provides.
+
+**Requirements**: `cpt-frontx-fr-mfe-host-communication`, `cpt-frontx-nfr-security`
 
 **Principles**: `cpt-frontx-principle-agnostic-core`
 
@@ -50,7 +58,7 @@ This feature details the host–MFE dispatch mechanism and the child-facing brid
 
 - **PRD**: [PRD.md](../../../../../architecture/PRD.md)
 - **Design**: [DESIGN.md](../../DESIGN.md)
-- **ADRs**: `cpt-frontx-adr-action-dispatch-and-chaining`, `cpt-frontx-adr-child-mfe-host-access`
+- **ADRs**: `cpt-frontx-adr-action-dispatch-and-chaining`, `cpt-frontx-adr-child-mfe-host-access`, `cpt-frontx-adr-extension-routing-port`, `cpt-frontx-adr-shared-dep-cache-reach`
 - **Dependencies**: `cpt-frontx-feature-mfe-registry`
 
 ## 2. Actor Flows (CDSL)
@@ -211,6 +219,51 @@ This feature details the host–MFE dispatch mechanism and the child-facing brid
 8. [x] - `p1` - On the extension's unmount or a failed mount the parent deactivates the bridge rather than destroying it: every hand-over through an inactive bridge is refused, so the delivering runtime executes the `fallback`, and a chain the child hands to an inactive bridge is not handed over. A sub-chain the far side accepted before the deactivation carries on there; property updates are recorded against the bridge but not dispatched to its subscribers while it is inactive. The next mount reactivates that same bridge and delivery through it resumes - `inst-bridge-deactivation`
 9. [x] - `p1` - Action-handler registrations and property subscriptions made through the bridge survive its deactivation and are live again the moment it is reactivated, so an MFE that registers once at its first mount keeps participating across remounts without registering again; an MFE that wants the opposite unregisters its handlers, unsubscribes its properties, and clears its own state from its `unmount()` hook - `inst-registration-survives-remount`
 
+### Occupant-Value Rendezvous
+
+- [x] `p2` - **ID**: `cpt-frontx-algo-mfe-host-communication-occupant-value-rendezvous`
+
+**Input**: A mount of an extension in a domain of a registry, about to invoke the extension's lifecycle `mount(shadowRoot, childBridge, mountContext)`; the release of an extension's bridge pair; a read, by the extension's own copy of this package, of the value associated with its registry's inbound bridge; the construction of a registry that adopts an inbound bridge; the router injected into the registry, or no router; possibly several independently loaded copies of this package in one realm, of the same or of different protocol versions
+
+**Output**: The occupant value the router assigned is associated with the extension's child bridge at the realm rendezvous before the lifecycle mount runs, and is readable by the extension's own copy through an internal accessor until that bridge is released; with no router, or where a copy does not recognize the rendezvous, no value crosses and the mount proceeds unchanged
+
+**Steps**:
+1. [x] - `p1` - Reach the rendezvous through an internal accessor that reads the realm-global slot `Symbol.for('@gears-frontx/mfes:occupant-value:1')`, whose description carries the protocol version this copy speaks, and expects there an entry `{ v: 1, values }` whose `values` is a `WeakMap` keyed by an extension's child bridge object and holding that extension's occupant value. The slot is the package's own, distinct from the mount-context rendezvous (`inst-track-mounting-bridge`) and from the shared-dependency source-text cache slot, and the accessor adds no exported symbol, no capability method on `MfeRegistry`, `ChildMfeBridge` or `ParentMfeBridge`, and no member to either bridge contract (`cpt-frontx-constraint-mfes-cross-nesting-reachability`) - `inst-ov-read-slot`
+2. [x] - `p1` - **IF** the slot holds nothing - `inst-ov-if-empty`
+   1. [x] - `p1` - Create the `WeakMap` and publish the version-tagged entry into the slot synchronously, before using it, so two copies reaching the slot in one realm cannot each end up holding a map of their own - `inst-ov-publish`
+3. [x] - `p1` - **ELSE IF** the entry carries the protocol version this copy speaks and its `values` offers `get`, `set`, `has`, and `delete` as functions - `inst-ov-if-version-known`
+   1. [x] - `p1` - Adopt that map, recognizing it by those operations rather than by class identity, which cannot be relied upon across independently evaluated copies - `inst-ov-adopt`
+   2. [x] - `p1` - Adopt a structurally conforming entry whichever same-realm code published it: the slot is trusted same-realm coordination state, not an authenticity or confidentiality boundary, so the version and structural checks guard against accidental incompatibility only (`cpt-frontx-adr-shared-dep-cache-reach` records that acceptance for the protocol this rendezvous follows) - `inst-ov-trusted-coordination`
+4. [x] - `p1` - **ELSE** the entry is malformed, or carries a protocol version this copy does not recognize - `inst-ov-else-version-unknown`
+   1. [x] - `p1` - Treat the rendezvous as absent, emit a diagnostic naming the unrecognized entry, and neither read, mutate, replace nor delete what was found; this copy then associates and reads no occupant value, and every mount it performs proceeds with no value crossing - `inst-ov-back-away`
+5. [x] - `p1` - **IF** the registry holding the domain was built with a router, then on each mount of an extension — after the extension's bridge pair is acquired for that mount, created at its first mount or reactivated on a later one (`inst-bridge-lifetime`), and before its lifecycle `mount` is invoked — obtain the extension's occupant value through the router's `assignOccupantValue`, passing the registered domain declaration, the registered extension declaration, and the enclosing level's value - `inst-ov-assign`
+   1. [x] - `p1` - The enclosing level's value is the value associated with this registry's own inbound bridge, read through the accessor (`inst-ov-read-own`); it is `undefined` when this registry holds no inbound bridge, when no value is associated with that bridge, or when this copy backed away from the rendezvous - `inst-ov-enclosing-value`
+   2. [x] - `p1` - **IF** `assignOccupantValue` throws, the mount fails before the lifecycle `mount` is invoked and is handled as any failed mount: the bridge is deactivated, the strategy destroys the container, and no newly assigned value is associated - `inst-ov-assign-failure`
+6. [x] - `p1` - Associate the value the router returned with the extension's child bridge in `values`, replacing any value an earlier mount of that extension associated, before invoking the lifecycle `mount`, so the value is in place for the whole synchronous mount window and after it; the runtime associates whatever the router returned and never inspects it - `inst-ov-set-before-mount`
+7. [x] - `p1` - **IF** the registry was built with no router, assign and associate nothing: the extension mounts standalone with no occupant value - `inst-ov-standalone`
+8. [x] - `p1` - When the extension's bridge pair is released — at the extension's permanent unregistration or the registry's disposal (`inst-retract-advertisements`) — delete that child bridge's entry from `values`. An unmount or a failed mount deactivates the bridge and leaves the association in place, since the same bridge is handed to the next mount, which replaces the value (`inst-ov-set-before-mount`) - `inst-ov-release-with-bridge`
+9. [x] - `p1` - The extension's own copy of this package reads its occupant value through the internal accessor, keyed by its registry's inbound bridge — the child bridge its host extension received at mount — and obtains `undefined` when the registry holds no inbound bridge, when no value is associated with it, or when this copy backed away from the rendezvous - `inst-ov-read-own`
+10. [x] - `p1` - **IF** a registry built with a router adopts an inbound bridge at its construction (`inst-inbound-bridge-auto-adopt`), it calls the router's `supplyNavigation` once, handing it a reader that performs `inst-ov-read-own` against the registry's inbound bridge at the moment it is called, so the router reads the value the latest mount associated whenever it builds or rebuilds that extension's navigation. A registry that holds no inbound bridge makes no such call - `inst-ov-supply-navigation`
+11. [x] - `p1` - Occupant values pass only between copies of this package through this rendezvous, and between the runtime and the injected router through `assignOccupantValue` and `supplyNavigation`; no value is placed on the child or parent bridge, on the inbound bridge link, on the mount context, in the lifecycle arguments, in an action, or in a shared property, and no code of this package passes one to extension or host code - `inst-ov-private-exchange`
+12. [x] - `p1` - That guarantee holds at the level of the package's own interfaces and is not a confidentiality boundary: the rendezvous slot is readable by any script running in the same realm, which is accepted on the ground `cpt-frontx-adr-shared-dep-cache-reach` records for its own slot - `inst-ov-interface-level-guarantee`
+13. [x] - `p1` - **RETURN** the association made, read, or released, or nothing where no router is injected or the copy backed away - `inst-ov-return`
+
+### History Intent on Lifecycle Actions
+
+- [ ] `p2` - **ID**: `cpt-frontx-algo-mfe-host-communication-history-intent`
+
+**Input**: A `mount_ext` or `unmount_ext` action, or an action derived from either, handed to `executeActionsChain`, whose payload may carry a history intent
+
+**Output**: The action admitted with its history intent unchanged and, once executed, handed to the router uninterpreted inside the settled-action report; or the action rejected at admission, failing as any action fails
+
+**Steps**:
+1. [ ] - `p1` - Every mount, restoration and opening included, is requested as a `mount_ext` actions chain, and every explicit unmount as an `unmount_ext` actions chain; each executes through the mediator like any other chain (`cpt-frontx-algo-mfe-host-communication-mediator-dispatch`) - `inst-hi-through-actions`
+2. [x] - `p1` - A `mount_ext` or `unmount_ext` payload may carry one optional `history` whose value is one of `none`, `replace`, or `push` - `inst-hi-declare`
+3. [ ] - `p1` - The action is admitted through the type-system provider of the registry that executes it (`inst-delegate-admit`), whose closed concrete schemas reject a `history` outside those three values and any undeclared field on the action or its payload (`cpt-frontx-feature-gts-type-provider`); an action that fails admission fails, and its chain's `fallback` executes, if present - `inst-hi-admit-strict`
+4. [ ] - `p1` - The runtime reads, defaults, and rewrites no history intent on either action: an absent intent stays absent, and reading an absent intent as `push` is the router's - `inst-hi-uninterpreted`
+5. [ ] - `p1` - The intent reaches the router only inside the executed payload of the settled-action report (`inst-me-report-settled` in `cpt-frontx-algo-extension-domain-governance-mount-execution`) - `inst-hi-reach-router`
+6. [ ] - `p1` - **RETURN** the admitted action, or the admission failure - `inst-hi-return`
+
 ## 4. States (CDSL)
 
 ### Action State Machine
@@ -270,6 +323,79 @@ The system **MUST** provide an abstract child bridge contract exposing exactly f
 - Entities: `Action`, `ActionsChain`
 - Component: `cpt-frontx-component-mfe-runtime`
 
+### Router Port Contract
+
+- [x] `p1` - **ID**: `cpt-frontx-dod-mfe-host-communication-router-port-contract`
+
+The system **MUST** declare the router port `RouterPort` — the abstract contract an injected router implements, accepted through the optional `MfeRegistryConfig.router` — and export it, with the types its members name, from the package entry as types. `RouterPort` **MUST** have exactly these members, each synchronous:
+
+- `registerDomain(domain: ExtensionDomain): void` — the registration notification for a domain; throwing rejects the registration.
+- `registerExtension(extension: Extension): void` — the registration notification for an extension; throwing rejects the registration.
+- `releaseDomain(domainId: string): void` and `releaseExtension(extensionId: string): void` — the release notifications that free what the router admitted.
+- `assignOccupantValue(assignment: OccupantValueAssignment): OccupantValue` — the value assignment at mount, where `OccupantValueAssignment` is `{ domain: ExtensionDomain; extension: Extension; enclosingValue: OccupantValue | undefined }`.
+- `reportSettled(report: SettledActionReport): void` — the settled-action report, where `SettledActionReport` is `{ actionTypeId: string; domainId: string; payload: MountExtPayload | UnmountExtPayload; succeeded: boolean }`, `payload` being the executed payload exactly as admitted, history intent included.
+- `supplyNavigation(readOccupantValue: () => OccupantValue | undefined): void` — the supply of an extension's navigation from its occupant value.
+
+`OccupantValue` **MUST** be an opaque type the runtime stores and hands over without inspecting it. The port **MUST** add no member to `MfeRegistry`, `ChildMfeBridge`, or `ParentMfeBridge`, and this package **MUST NOT** import `@gears-frontx/routing` or `@gears-frontx/routing-tanstack`, nor be imported by either.
+
+**Implements**:
+- `cpt-frontx-algo-mfe-host-communication-occupant-value-rendezvous`
+- `cpt-frontx-algo-mfe-host-communication-history-intent`
+
+**Constraints**: `cpt-frontx-constraint-mfes-router-port`, `cpt-frontx-constraint-mfes-cross-nesting-reachability`
+
+**Touches**:
+- Interface: `cpt-frontx-mfes-interface-router-port`, `cpt-frontx-interface-mfe-runtime`
+- Entities: Router port, Occupant value, `Action`
+- Component: `cpt-frontx-component-mfe-runtime`
+
+### Occupant-Value Rendezvous
+
+- [x] `p1` - **ID**: `cpt-frontx-dod-mfe-host-communication-occupant-value-rendezvous`
+
+The system **MUST** hand each extension's occupant value to the extension's own copy of this package through a realm-global rendezvous of its own that follows the protocol of `cpt-frontx-adr-shared-dep-cache-reach`: the slot `Symbol.for('@gears-frontx/mfes:occupant-value:1')`, an entry `{ v: 1, values }` whose `values` is a `WeakMap` keyed by the extension's child bridge, recognized structurally rather than by class identity, published synchronously when absent, and left untouched — neither read, mutated, replaced nor deleted — when malformed or of an unrecognized version, in which case the copy backs away and mounts with no value crossing. Where a router is injected, the parent-side copy **MUST** obtain the value through `assignOccupantValue` from the registered domain, the registered extension, and the value associated with its own registry's inbound bridge, and **MUST** associate it with the extension's child bridge before the lifecycle `mount` runs, on every mount; a throwing assignment **MUST** fail the mount before the lifecycle `mount` runs. The association **MUST** be released with the bridge pair and **MUST** survive an unmount. The extension's own copy **MUST** read the value only through the internal accessor, and a registry built with a router that adopts an inbound bridge **MUST** hand its router a reader of that value through `supplyNavigation`. With no router, nothing is assigned or associated.
+
+**Implements**:
+- `cpt-frontx-algo-mfe-host-communication-occupant-value-rendezvous`
+
+**Constraints**: `cpt-frontx-constraint-mfes-router-port`, `cpt-frontx-constraint-mfes-cross-nesting-reachability`
+
+**Touches**:
+- Entities: Occupant value, Extension
+- Component: `cpt-frontx-component-mfe-runtime`
+- Sequence: `cpt-frontx-mfes-seq-routed-mount-occupant-value`
+
+### Occupant Values Exposed on No Interface
+
+- [x] `p1` - **ID**: `cpt-frontx-dod-mfe-host-communication-occupant-value-not-exposed`
+
+The system **MUST** expose no occupant value on any interface it hands to extension or host code: no member of `MfeRegistry`, of the abstract or concrete `ChildMfeBridge`, of `ParentMfeBridge`, or of the inbound bridge link; no field of `MfeMountContext`; no argument of the lifecycle `mount` or `unmount`; no `Action` or `ActionsChain` the runtime dispatches or hands over; and no shared property value carries or returns one. The system **MUST NOT** pass an occupant value to extension or host code by any other path. The guarantee is stated at the level of the package's own interfaces; the realm slot remains readable by same-realm code, which is accepted and is not claimed as a confidentiality boundary.
+
+**Implements**:
+- `cpt-frontx-algo-mfe-host-communication-occupant-value-rendezvous`
+
+**Constraints**: `cpt-frontx-constraint-mfes-router-port`
+
+**Touches**:
+- Entities: Occupant value, `Action`, `ActionsChain`
+- Component: `cpt-frontx-component-mfe-runtime`
+
+### History Intent on Lifecycle Actions
+
+- [x] `p1` - **ID**: `cpt-frontx-dod-mfe-host-communication-history-intent`
+
+The system **MUST** declare `HistoryIntent` as `'none' | 'replace' | 'push'` and an optional `history?: HistoryIntent` on `MountExtPayload` and on `UnmountExtPayload`; **MUST** request every mount, restoration and opening included, as a `mount_ext` actions chain; **MUST** admit both actions through the injected type-system provider, so a malformed intent or an undeclared field fails the action; and **MUST NOT** read, default, or rewrite the intent, passing it to the router uninterpreted inside the reported payload, an absent intent staying absent.
+
+**Implements**:
+- `cpt-frontx-algo-mfe-host-communication-history-intent`
+
+**Constraints**: `cpt-frontx-constraint-mfes-router-port`, `cpt-frontx-constraint-mfes-recursive-chain-execution`
+
+**Touches**:
+- Entities: `Action`, `ActionsChain`
+- Interface: `cpt-frontx-interface-mfe-runtime`
+- Component: `cpt-frontx-component-mfe-runtime`
+
 ## 6. Acceptance Criteria
 
 - [x] The actions-chains mediator resolves a handler by the `(targetId, actionTypeId)` pair and falls back to the per-target catch-all handler when no specific pair matches
@@ -298,3 +424,12 @@ The system **MUST** provide an abstract child bridge contract exposing exactly f
 - [x] A registry an author reuses across a remount keeps the link it already adopted and continues to route with no further act by the parent; a registry the author rebuilds inside a fresh `mount` call adopts that same still-live link, supersedes its predecessor's adoption — which is unlinked and clears its own propagation record — and advertises every target it holds; both patterns route correctly, and no dispatch is ever delivered through a bridge whose extension is no longer registered
 - [x] A link revoked at a host extension's permanent unregistration or a registry's disposal is inert: a registry that retained a reference to it can neither propagate nor escalate through it, each such call being rejected explicitly rather than silently ignored, so no ancestor can acquire a forwarding entry pointing at an extension that is no longer registered; `retractAdvertisement` is the one exception, an idempotent silent no-op on a revoked link, because the revoking parent has already performed that retraction itself
 - [ ] Propagation, the collision guard, escalation, the hand-over across a hop, loop containment, deactivation, and retraction introduce no new capability method or exported type anywhere in the package's public surface, satisfying `cpt-frontx-constraint-mfes-cross-nesting-reachability` (MFES-6); the inbound-bridge rendezvous is verified, by a test exercising two independently loaded copies of this package rather than one shared module graph, to adopt correctly and never misattribute one extension's bridge to another's registry
+- [x] The package entry exports `RouterPort`, `OccupantValue`, `OccupantValueAssignment`, `SettledActionReport`, and `HistoryIntent` as types; `RouterPort` has exactly the members `registerDomain`, `registerExtension`, `releaseDomain`, `releaseExtension`, `assignOccupantValue`, `reportSettled`, and `supplyNavigation`; `MfeRegistry`, `ChildMfeBridge`, and `ParentMfeBridge` gain no member; and the import-graph guard confirms no edge between this package and `@gears-frontx/routing` or `@gears-frontx/routing-tanstack` in either direction
+- [x] With a router test double, each mount calls `assignOccupantValue` with the registered domain, the registered extension, and the value associated with the mounting registry's own inbound bridge — `undefined` for a root registry — and the returned value is associated with the extension's child bridge before its lifecycle `mount` runs, as observed from inside that `mount`
+- [ ] Across two independently loaded copies of this package rather than one shared module graph, the parent copy associates the value and the extension's own copy reads it through its internal accessor, and a nested registry built with a router inside the extension's `mount` calls `supplyNavigation` once with a reader that returns that value
+- [ ] A rendezvous entry carrying an unrecognized version, and a malformed entry, are left untouched — neither read, mutated, overwritten nor deleted — a diagnostic is logged, and the extension still mounts with no occupant value crossing
+- [ ] After an unmount or a failed mount the accessor still returns the extension's value; a later mount replaces it with the newly assigned value; after the extension's unregistration, and after the registry's disposal, the accessor returns `undefined` for that bridge
+- [x] An `assignOccupantValue` that throws fails the mount before the lifecycle `mount` is invoked, and the chain's `fallback` executes
+- [ ] A registry built with no router associates no occupant value for any bridge and makes no `supplyNavigation` call
+- [ ] With a router test double whose `assignOccupantValue` returns a unique sentinel object it holds only in a closure, never on a property, a test mounts an extension and inspects, for each of `MfeRegistry`, the `ChildMfeBridge` handed to `mount` (abstract surface and concrete implementation), `ParentMfeBridge`, the inbound bridge link attached to that bridge, the `MfeMountContext`, every argument passed to the lifecycle `mount` and `unmount`, every action and actions chain dispatched or handed over during the mount and unmount, and every shared property value delivered to the extension, every own and inherited property — string- and symbol-keyed, enumerable or not — recursively through the plain objects and arrays reachable from it, and finds no reference to the sentinel; the same test finds the sentinel through the internal accessor keyed by that child bridge
+- [ ] A `mount_ext` and an `unmount_ext` carrying `history: 'none'`, `'replace'`, or `'push'` reach the router inside the reported payload with that value unchanged; one carrying no `history` reaches it with none; one carrying a `history` outside those values, or an undeclared payload field, fails admission and its chain's `fallback` executes

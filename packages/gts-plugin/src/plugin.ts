@@ -165,44 +165,60 @@ export class GtsPlugin implements TypeSystemPlugin<JSONSchema> {
    * (e.g., action payloads with no `id`), gts-ts uses the `type` field to
    * resolve the schema.
    *
-   * On schema validation failure `register()` throws. The underlying gts-ts
-   * store writes the entity before the validation step runs, so an invalid
-   * instance may transiently occupy the store; the throw prevents any caller
-   * code from proceeding, and a subsequent successful `register()` with the
-   * same deterministic id supersedes it. Callers that catch and continue
-   * MUST NOT rely on prior registration state.
+   * Validate-before-persist: `GtsStore` exposes no validate-only call —
+   * `validateInstance` requires the instance to already be resolvable in the
+   * store it is called on, both to look up its schema and to resolve any
+   * `x-gts-ref` cross-reference against sibling instances — and no call to
+   * remove an entity once registered. So this validates the candidate against
+   * a disposable store seeded with everything the real store currently holds
+   * (schemas and sibling instances alike, via `getAll()`), which resolves
+   * identically to the real store for both the schema lookup and any
+   * `x-gts-ref` check, without ever persisting failure into the store the
+   * rest of this plugin reads from. Only a candidate that validates clean is
+   * registered into the real, shared store. A failed call leaves that store
+   * exactly as it was before the call.
    *
    * @param entity - The GTS instance to register and validate
    * @throws Error if schema validation fails
    */
   register(entity: unknown): void {
-    // @cpt-begin:cpt-frontx-algo-gts-type-provider-runtime-registration:p1:inst-rr-01
+    // @cpt-begin:cpt-frontx-algo-gts-type-provider-runtime-registration:p1:inst-rr-06
     const jsonEntity: JsonEntity = createJsonEntity(entity);
-    // @cpt-end:cpt-frontx-algo-gts-type-provider-runtime-registration:p1:inst-rr-01
-    // @cpt-begin:cpt-frontx-algo-gts-type-provider-runtime-registration:p1:inst-rr-02
-    this.gtsStore.register(jsonEntity);
-    // @cpt-end:cpt-frontx-algo-gts-type-provider-runtime-registration:p1:inst-rr-02
-    // @cpt-begin:cpt-frontx-algo-gts-type-provider-runtime-registration:p1:inst-rr-03
-    const result = this.gtsStore.validateInstance(jsonEntity.id);
-    // @cpt-end:cpt-frontx-algo-gts-type-provider-runtime-registration:p1:inst-rr-03
-    // @cpt-begin:cpt-frontx-algo-gts-type-provider-runtime-registration:p1:inst-rr-04
+    // @cpt-end:cpt-frontx-algo-gts-type-provider-runtime-registration:p1:inst-rr-06
+    // @cpt-begin:cpt-frontx-algo-gts-type-provider-runtime-registration:p1:inst-rr-07
+    const candidateStore = new GtsStore();
+    for (const existing of this.gtsStore.getAll()) {
+      candidateStore.register(existing);
+    }
+    candidateStore.register(jsonEntity);
+    const result = candidateStore.validateInstance(jsonEntity.id);
+    // @cpt-end:cpt-frontx-algo-gts-type-provider-runtime-registration:p1:inst-rr-07
+    // @cpt-begin:cpt-frontx-algo-gts-type-provider-runtime-registration:p1:inst-rr-08
     if (!result.ok || !result.valid) {
-      // @cpt-begin:cpt-frontx-algo-gts-type-provider-runtime-registration:p1:inst-rr-04a
+      // @cpt-begin:cpt-frontx-algo-gts-type-provider-runtime-registration:p1:inst-rr-08a
       const reason = result.ok
         ? 'schema validation returned invalid'
         : (result.error ?? 'unknown validation error');
       const schema = jsonEntity.schemaId ? this.getSchema(jsonEntity.schemaId) : undefined;
-      // @cpt-end:cpt-frontx-algo-gts-type-provider-runtime-registration:p1:inst-rr-04a
-      // @cpt-begin:cpt-frontx-algo-gts-type-provider-runtime-registration:p1:inst-rr-04b
+      // @cpt-end:cpt-frontx-algo-gts-type-provider-runtime-registration:p1:inst-rr-08a
+      // @cpt-begin:cpt-frontx-algo-gts-type-provider-runtime-registration:p1:inst-rr-08b
       throw new Error(
         `GTS validation failed for instance '${jsonEntity.id || '(anonymous)'}'\n` +
           `Reason: ${reason}\n` +
           `Instance: ${JSON.stringify(entity, null, 2)}\n` +
           `Schema: ${schema ? JSON.stringify(schema, null, 2) : '(schema not resolved)'}`
       );
-      // @cpt-end:cpt-frontx-algo-gts-type-provider-runtime-registration:p1:inst-rr-04b
+      // @cpt-end:cpt-frontx-algo-gts-type-provider-runtime-registration:p1:inst-rr-08b
     }
-    // @cpt-end:cpt-frontx-algo-gts-type-provider-runtime-registration:p1:inst-rr-04
+    // @cpt-end:cpt-frontx-algo-gts-type-provider-runtime-registration:p1:inst-rr-08
+
+    // @cpt-begin:cpt-frontx-algo-gts-type-provider-runtime-registration:p1:inst-rr-09
+    // The candidate validated clean against the mirrored store above: commit
+    // the same wrapped entity to the real, shared store. `gtsStore.register`
+    // does not itself re-validate, so this persists exactly what the
+    // candidate already proved valid.
+    this.gtsStore.register(jsonEntity);
+    // @cpt-end:cpt-frontx-algo-gts-type-provider-runtime-registration:p1:inst-rr-09
   }
 
   // @cpt-algo:cpt-frontx-algo-gts-type-provider-schema-validation:p1

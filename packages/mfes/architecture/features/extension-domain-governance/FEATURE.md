@@ -15,7 +15,6 @@
   - [Mount Strategy Selection and Cardinality Validation](#mount-strategy-selection-and-cardinality-validation)
   - [Strategy Mount Execution](#strategy-mount-execution)
   - [Slot Detach Teardown](#slot-detach-teardown)
-  - [Route Identity: Validity, Declared Route, and Token Derivation](#route-identity-validity-declared-route-and-token-derivation)
 - [4. States (CDSL)](#4-states-cdsl)
   - [Extension Admission Lifecycle](#extension-admission-lifecycle)
   - [Extension Domain Cardinality Lifecycle](#extension-domain-cardinality-lifecycle)
@@ -23,19 +22,19 @@
   - [Contract Enforcement at Admission](#contract-enforcement-at-admission)
   - [Cardinality Matrix Enforcement at Domain Registration](#cardinality-matrix-enforcement-at-domain-registration)
   - [Default-Deny Posture and Security NFR](#default-deny-posture-and-security-nfr)
-  - [Route Identity Enforcement at Registration](#route-identity-enforcement-at-registration)
+  - [Settled-Action Report From the Domain Handler Path](#settled-action-report-from-the-domain-handler-path)
 - [6. Acceptance Criteria](#6-acceptance-criteria)
 
 <!-- /toc -->
 
-- [x] `p1` - **ID**: `cpt-frontx-featstatus-extension-domain-governance`
+- [ ] `p1` - **ID**: `cpt-frontx-featstatus-extension-domain-governance`
 ## 1. Feature Context
 
-- [x] `p2` - `cpt-frontx-feature-extension-domain-governance`
+- [ ] `p2` - `cpt-frontx-feature-extension-domain-governance`
 
 ### 1.1 Overview
 
-Governs extension-domain occupancy through composable named mount strategies and a cardinality matrix, admitting extensions only by subset-rule contract matching with the scoped infrastructure-lifecycle-action exemption — realizing default-deny admission.
+Governs extension-domain occupancy through composable named mount strategies and a cardinality matrix, admitting extensions only by subset-rule contract matching with the scoped infrastructure-lifecycle-action exemption — realizing default-deny admission — and reporting each executed `mount_ext` or `unmount_ext` once, from the domain's own handler path, to the router injected into the registry holding the domain.
 
 ### 1.2 Purpose
 
@@ -44,6 +43,9 @@ This feature specifies the admission lifecycle that decides whether a given exte
 - Multi-occupant domain support through composable named strategies (`cpt-frontx-fr-mfe-multi-occupant-domain`).
 - Type-aware contract matching that validates structural capability and property compatibility before any extension is admitted (`cpt-frontx-fr-mfe-type-validation`).
 - A security-anchored default-deny posture enforced at the admission boundary (`cpt-frontx-nfr-security`).
+- The one settled-action report per executed `mount_ext` or `unmount_ext`, made from the domain's handler path before the chain continues, which lets an injected router derive the domain's occupancy and keep the URL in agreement with it, while every request absorbed before execution, every slot detach, and every unregistration reports nothing (`cpt-frontx-constraint-mfes-router-port`, `cpt-frontx-adr-extension-domain-occupancy`).
+
+Out of scope here: routing identity and the page-wide uniqueness of routed-domain routes, which belong to the injected router and reach it through the registry's registration notifications (`cpt-frontx-algo-mfe-registry-router-admission`); the router port's member contract and the history intent (`cpt-frontx-feature-mfe-host-communication`).
 
 The feature realizes the design principle that nothing is granted until explicitly validated (`cpt-frontx-principle-default-deny-admission`).
 
@@ -61,10 +63,12 @@ The feature realizes the design principle that nothing is granted until explicit
 
 - **PRD**: [PRD.md](../../../../../architecture/PRD.md)
 - **Design**: [DESIGN.md](../../DESIGN.md)
+- **ADR 0009**: [ADR/0009-extension-domain-occupancy.md](../../../../../architecture/ADR/0009-extension-domain-occupancy.md)
+- **ADR 0036**: [ADR/0036-extension-routing-port.md](../../../../../architecture/ADR/0036-extension-routing-port.md)
 - **Dependencies**:
   - `cpt-frontx-feature-mfe-registry` — admission and mount strategies act on registry-resolved extensions; domain registration is an MFE Registry concern.
   - `cpt-frontx-feature-gts-type-provider` — action–behavior consistency validation at admission uses type-of resolution from the GTS provider.
-  - `cpt-frontx-feature-mfe-host-communication` — the one per-action timeout rule (`inst-resolve-timeout` in `cpt-frontx-algo-mfe-host-communication-mediator-dispatch`) is the rule the occupancy queue uses for each caller's timer.
+  - `cpt-frontx-feature-mfe-host-communication` — the one per-action timeout rule (`inst-resolve-timeout` in `cpt-frontx-algo-mfe-host-communication-mediator-dispatch`) is the rule the occupancy queue uses for each caller's timer; the router port contract (`cpt-frontx-dod-mfe-host-communication-router-port-contract`) supplies the `reportSettled` member the settled-action report is made through.
 
 ## 2. Actor Flows (CDSL)
 
@@ -83,34 +87,32 @@ User-facing interactions that start with an actor and describe the end-to-end fl
 
 **Error Scenarios**:
 - Domain registration fails because declared lifecycle actions are inconsistent with the chosen mount strategy (cardinality violation).
-- Domain registration fails because the domain's own declared route is not a valid route name.
+- Domain registration fails because the router injected into the registry rejects it, for example because its route collides with the route of another routed domain live in the page.
 - Extension admission fails because the extension's required properties are not provided by the domain, or the entry does not support all capabilities the domain requires, or the entry requires domain capabilities the domain does not provide.
-- Extension admission fails because the extension declares both a base route and a presentation route that disagree, or because its route token is already claimed by another extension registered in the same domain.
+- Extension registration fails because the router injected into the registry rejects it.
 
 **Steps**:
 1. [x] - `p1` - Developer composes a domain implementation factory by selecting one of the three named mount strategies (Concurrent, Optional, or Exclusive) and declaring the domain's lifecycle actions - `inst-compose-domain`
 2. [x] - `p1` - Developer calls the registry to register the composed domain - `inst-register-domain-call`
-3. [x] - `p1` - **IF** the domain declares a route and it is not a valid route name (`cpt-frontx-algo-extension-domain-governance-route-identity`) — checked before the domain is admitted anywhere, including into the type system, so a rejected domain is left registered nowhere - `inst-domain-route-invalid-check`
-   1. [x] - `p1` - System rejects the domain registration, naming the domain id and the invalid value - `inst-domain-route-invalid-reject`
-4. [x] - `p1` - System performs action–behavior consistency check against the cardinality matrix for the selected strategy - `inst-cardinality-check`
-5. [x] - `p1` - **IF** the domain's declared actions violate the cardinality matrix row for the strategy - `inst-cardinality-fail-check`
+3. [x] - `p1` - System performs action–behavior consistency check against the cardinality matrix for the selected strategy - `inst-cardinality-check`
+4. [x] - `p1` - **IF** the domain's declared actions violate the cardinality matrix row for the strategy - `inst-cardinality-fail-check`
    1. [x] - `p1` - System rejects the domain registration and returns an error identifying the violated rule - `inst-cardinality-reject`
    2. [x] - `p1` - **RETURN** domain registration failure - `inst-domain-reg-fail`
+5. [x] - `p1` - **IF** a router is injected into the registry, System presents the domain declaration, any declared `route` carried uninterpreted, to that router before the domain becomes durable (`inst-algo-ra-present-domain` in `cpt-frontx-algo-mfe-registry-router-admission`); the runtime itself neither validates the route nor checks it against any other domain - `inst-domain-router-admission`
+   1. [x] - `p1` - **IF** the router rejects the domain, System rejects the domain registration with the router's error, leaving the domain registered nowhere in the registry, and **RETURN** domain registration failure - `inst-domain-router-reject`
+   2. [x] - `p1` - **IF** the router admits the domain but its subsequent type-system registration fails, System releases the router admission (`inst-domain-type-register` in `cpt-frontx-algo-mfe-registry-router-admission`) before rejecting the domain registration with a `DomainValidationError`, leaving the domain registered nowhere in the registry and the router free to admit a corrected retry under the same domain id, and **RETURN** domain registration failure - `inst-domain-type-register-reject`
 6. [x] - `p1` - System registers the domain with its strategy instance as the mount executor - `inst-domain-registered`
 7. [x] - `p1` - Developer registers an extension entry into the registry (via `cpt-frontx-component-mfe-runtime`), declaring the entry's required properties, supported capabilities, and required domain capabilities - `inst-register-extension`
-8. [x] - `p1` - System resolves whether the extension declares both a base route and a presentation route (`cpt-frontx-algo-extension-domain-governance-route-identity`) — checked before the extension is admitted anywhere, including into the type system, so a rejected extension is left registered nowhere - `inst-extension-route-reconcile`
-   1. [x] - `p1` - **IF** both are declared and, once each is stripped of one leading `/`, they are not equal - `inst-extension-route-conflict-check`
-      1. [x] - `p1` - System rejects the extension registration, naming the conflicting base and presentation values - `inst-extension-route-conflict-reject`
-9. [x] - `p1` - System derives the extension's route token (`cpt-frontx-algo-extension-domain-governance-route-identity`) and, when defined and the target domain is already registered, checks it against every sibling extension already registered in that domain — when the target domain is not yet registered, this check is skipped and the ordinary domain-not-registered rejection applies once registration proceeds - `inst-extension-route-token-check`
-   1. [x] - `p1` - **IF** a sibling extension in the same domain already carries an equal route token - `inst-extension-route-duplicate-check`
-      1. [x] - `p1` - System rejects the extension registration, naming both extension ids, the domain id, and the token - `inst-extension-route-duplicate-reject`
-10. [x] - `p1` - System runs subset-rule contract matching between the extension entry and the target domain as part of that registration — before any mount action is issued - `inst-contract-match`
-11. [x] - `p1` - Developer issues a mount action targeting the registered domain, specifying the (already contract-matched) extension to admit - `inst-mount-action`
-12. [x] - `p1` - **IF** contract matching returns any error - `inst-contract-fail-check`
+8. [x] - `p1` - System runs subset-rule contract matching between the extension entry and the target domain as part of that registration — before any mount action is issued - `inst-contract-match`
+9. [x] - `p1` - **IF** a router is injected into the registry and the extension passed every admission check of the registration, System presents the extension declaration, any declared `route` carried uninterpreted, to that router before the extension becomes durable (`inst-algo-ra-present-extension` in `cpt-frontx-algo-mfe-registry-router-admission`); the runtime itself derives no route token and checks no route against any sibling - `inst-extension-router-admission`
+   1. [x] - `p1` - **IF** the router rejects the extension, System rejects the extension registration with the router's error, leaving the extension registered nowhere in the registry - `inst-extension-router-reject`
+   2. [x] - `p1` - **IF** the router admits the extension but its subsequent type-system registration fails, System releases the router admission (`inst-extension-type-register` in `cpt-frontx-algo-mfe-registry-router-admission`) before rejecting the extension registration with the type system's error, leaving the extension registered nowhere in the registry and the router free to admit a corrected retry under the same extension id - `inst-extension-type-register-reject`
+10. [x] - `p1` - Developer issues a mount action targeting the registered domain, specifying the (already contract-matched) extension to admit - `inst-mount-action`
+11. [x] - `p1` - **IF** contract matching returns any error - `inst-contract-fail-check`
     1. [x] - `p1` - System rejects the extension admission with an error naming each unsatisfied rule (missing property, unsupported action, or unhandled domain action) - `inst-contract-reject`
     2. [x] - `p1` - **RETURN** extension admission failure - `inst-admission-fail`
-13. [x] - `p1` - System admits the extension into the domain and delegates to the domain's mount strategy to execute the occupancy behavior - `inst-admitted-mount`
-14. [x] - `p1` - **RETURN** extension mounted successfully - `inst-mount-success`
+12. [x] - `p1` - System admits the extension into the domain and delegates to the domain's mount strategy to execute the occupancy behavior - `inst-admitted-mount`
+13. [x] - `p1` - **RETURN** extension mounted successfully - `inst-mount-success`
 
 ## 3. Processes / Business Logic (CDSL)
 
@@ -174,11 +176,11 @@ Internal system functions and procedures that do not interact with actors direct
 
 ### Strategy Mount Execution
 
-- [x] `p2` - **ID**: `cpt-frontx-algo-extension-domain-governance-mount-execution`
+- [ ] `p2` - **ID**: `cpt-frontx-algo-extension-domain-governance-mount-execution`
 
-**Input**: The extension identifier (the subject) and the domain that a mount request, or in an Optional domain an explicit unmount request, addresses (the extension is not presumed admitted to that domain); the action's declared timeout when it declares one, and the domain's own `defaultActionTimeout` used when it declares none; the addressed domain's strategy instance; and the domain's container hooks and mount-set state from the MFE Registry.
+**Input**: The extension identifier (the subject) and the domain that a mount request, or in an Optional domain an explicit unmount request, addresses (the extension is not presumed admitted to that domain); the action's declared timeout when it declares one, and the domain's own `defaultActionTimeout` used when it declares none; the addressed domain's strategy instance; the domain's container hooks and mount-set state from the MFE Registry; the request's admitted payload, including any history intent it carries; and the router injected into the registry holding the domain, or no router.
 
-**Output**: One of: the request completed successfully immediately because the extension was already mounted (in an Optional or Exclusive domain, only while the domain's occupancy queue is empty and the domain is not being unregistered); the request joined an entry and settled with that entry's outcome; the request's entry ran and either physically mounted or unmounted its subject, or found at its turn that nothing needed to change and succeeded without change; a fresh mount proceeded after an in-progress unmount that the occupancy queue does not own settled; or the request failed — the extension is not admitted to the addressed domain, a newer request replaced the pending entry it was in, its own timer fired while its entry was still pending, the domain was unregistered while its entry was pending, the request was accepted while its Optional or Exclusive domain was being unregistered, the entry it joined failed, the unmount it waited on failed, or the mount itself failed and was rolled back (`inst-me-mount-root-detached`, `inst-me-mount-rollback`).
+**Output**: One of: the request completed successfully immediately because the extension was already mounted (in an Optional or Exclusive domain, only while the domain's occupancy queue is empty and the domain is not being unregistered); the request joined an entry and settled with that entry's outcome; the request's entry ran and either physically mounted or unmounted its subject, or found at its turn that nothing needed to change and succeeded without change; a fresh mount proceeded after an in-progress unmount that the occupancy queue does not own settled; or the request failed — the extension is not admitted to the addressed domain, a newer request replaced the pending entry it was in, its own timer fired while its entry was still pending, the domain was unregistered while its entry was pending, the request was accepted while its Optional or Exclusive domain was being unregistered, the entry it joined failed, the unmount it waited on failed, or the mount itself failed and was rolled back (`inst-me-mount-root-detached`, `inst-me-mount-rollback`). Where a router is injected, a request whose execution reached the domain's handler has been reported to it exactly once, with that execution's outcome, before the request settles; every other request has reported nothing.
 
 **Steps**:
 1. [x] - `p1` - **IF** the mount request names an extension that is not admitted to the addressed domain (the extension belongs to another domain, or no domain admits it under that name), **RETURN** the request as failed - `inst-me-eligibility-check`
@@ -227,7 +229,15 @@ Internal system functions and procedures that do not interact with actors direct
     1. [x] - `p1` - Deactivate the extension's bridge and release the container's connection to it - `inst-um-failure-bridge-released`
     2. [x] - `p1` - Remove the container from the DOM and the extension from the domain's mount set - `inst-um-failure-container-removed`
     3. [x] - `p1` - Destroy the container exactly once; a failure of that destroy does not replace the lifecycle error the unmount reports - `inst-um-failure-container-destroyed`
-21. [x] - `p1` - **RETURN** mount outcome - `inst-me-return`
+21. [x] - `p1` - **IF** the request's execution reached the domain's handler — the handler the domain implementation registered for `mount_ext` or `unmount_ext` (or an action type derived from either) ran for it: a fresh mount started as the running entry (`inst-me-queue-fresh-mount-at-turn`), a fresh mount in a Concurrent domain, including one that proceeds after an in-progress unmount settled (`inst-me-fresh-mount-after-unmount`), an explicit unmount of a mounted subject at its turn (`inst-um-queue-unmount-at-turn`), or an unmount in a Concurrent domain that `inst-um-after-mount-failure` does not complete without action (`inst-um-after-mount-success`) — and the registry holding the domain was built with a router, report that execution once to that router through `reportSettled` (`cpt-frontx-dod-mfe-host-communication-router-port-contract`), carrying the executed action's type, its payload exactly as admitted with any history intent it carries passed uninterpreted, the domain's id, and whether the execution succeeded - `inst-me-report-settled`
+    1. [x] - `p1` - The report is made from the domain's handler path after the domain's handler settles, whether it succeeded or failed, and before the request settles back to the actions-chains mediator, so it precedes the chain's `next` on success and its `fallback` on failure; chain execution itself records and reports nothing (`cpt-frontx-constraint-mfes-recursive-chain-execution`) - `inst-me-report-before-next`
+    2. [x] - `p1` - One execution produces one report: every caller of the entry that ran, joined callers included (`inst-me-queue-join-pending`, `inst-me-queue-join-running`, `inst-me-join-in-progress-mount`), settles on that one execution, and no caller produces a report of its own - `inst-me-report-once-per-execution`
+    3. [x] - `p1` - The physical releases an execution performs internally — an Optional displacement (`inst-me-optional-displace`), an Exclusive eviction (`inst-me-exclusive-evict`), and the teardown of the nested occupants of a departing extension that itself hosts domains, whose slots detach as it unmounts (`cpt-frontx-algo-extension-domain-governance-slot-detach`) — are part of that one settled outcome: none is reported separately and none dispatches an `unmount_ext` of its own; the router derives the resulting occupancy from the action, the domain's cardinality semantics, and its own orchestration state - `inst-me-report-internal-releases`
+    4. [x] - `p1` - **IF** `reportSettled` throws, log a diagnostic naming the domain and the subject and settle the request with the execution's own outcome; the report never changes an outcome - `inst-me-report-failure-isolated`
+22. [x] - `p1` - A request that never reaches the domain's handler reports nothing: a mount of an extension that is already mounted (`inst-me-already-mounted-complete`, `inst-me-sole-occupant-at-turn`), a request that joins an entry already queued or running, a pending request superseded by a later one (`inst-me-queue-replace-pending`), a pending request whose timer fires before it starts (`inst-me-queue-pending-timeout`), a request refused because its domain is being unregistered (`inst-me-queue-domain-unregister`), a request that fails eligibility (`inst-me-eligibility-check`, `inst-me-queue-eligibility-at-turn`) or fails because the unmount it waited on failed (`inst-me-fail-after-unmount-failure`, `inst-me-queue-await-unmount-at-turn`), and an unmount that completes without change because its subject is absent or the mount it waited on failed (`inst-um-queue-absent-noop`, `inst-um-after-mount-failure`) - `inst-me-no-report-unexecuted`
+23. [x] - `p1` - **IF** the registry holding the domain was built with no router, every request runs exactly as above and nothing is reported to anyone - `inst-me-report-standalone`
+24. [ ] - `p1` - An Exclusive domain keeps no public `unmount_ext` (`inst-sc-exclusive-row`): its occupant leaves only through a replacing `mount_ext` that evicts it, through teardown of an ancestor extension caused by that ancestor's own action, or through terminal disposal of its registry - `inst-me-exclusive-no-public-unmount`
+25. [x] - `p1` - **RETURN** mount outcome - `inst-me-return`
 
 ### Slot Detach Teardown
 
@@ -245,23 +255,8 @@ Internal system functions and procedures that do not interact with actors direct
    3. [x] - `p1` - **IF** this unmount fails, record the failure and continue with the next extension - `inst-sd-continue-on-failure`
 3. [x] - `p1` - **IF** exactly one unmount failed, **RETURN** the detach as failed with that failure unchanged - `inst-sd-single-failure`
 4. [x] - `p1` - **IF** more than one unmount failed, **RETURN** the detach as failed with one aggregate error that carries every failure in mount-set order - `inst-sd-aggregate-failure`
-5. [x] - `p1` - **RETURN** detach completed - `inst-sd-return`
-
-### Route Identity: Validity, Declared Route, and Token Derivation
-
-- [x] `p1` - **ID**: `cpt-frontx-algo-extension-domain-governance-route-identity`
-
-**Definition — routability.** An extension is routable if and only if its declared route, with one leading `/` stripped, is a valid route name: a single lower-case token drawn from `a`-`z`, `0`-`9`, and `-`, beginning with a letter. An extension whose declared route fails that check once stripped, or that declares no route at all, is not routable and takes no route token. This is the one place routability is defined for this component; a domain's own route name is validated by the same alphabet but is never itself stripped (`inst-domain-route-invalid-check`, below) — a domain name is not a path.
-
-**Input**: An extension's own registration (base `route` and, where present, `presentation.route`) or a domain's own registration (`route`).
-
-**Output**: For an extension — its declared route (raw) and, from that, its route token (normalized, or absent if not routable). For a domain — whether its declared route is a valid route name.
-
-**Steps**:
-1. [x] - `p1` - Route-name validity: a candidate is a valid route name iff it matches a lower-case letter followed by any number of lower-case letters, digits, or `-` - `inst-is-valid-route-name`
-2. [x] - `p1` - Route-name equality: two route names are equal iff they are identical character-by-character, with no decoding - `inst-route-names-equal`
-3. [x] - `p1` - An extension's declared route is its base `route` when present and itself a string, else `presentation.route` when the extension carries a presentation object whose `route` is itself a string, else absent — a non-string value in either place is treated as absent, never propagated further - `inst-get-declared-route`
-4. [x] - `p1` - An extension's route token is its declared route with one leading `/` stripped, iff that stripped value is a valid route name (step 1); otherwise the extension has no route token and is not routable - `inst-get-extension-route-token`
+5. [x] - `p1` - A slot detach is resource cleanup, not an occupancy action: the unmounts it performs dispatch no `unmount_ext` and send no settled-action report to any router - `inst-sd-no-report`
+6. [x] - `p1` - **RETURN** detach completed - `inst-sd-return`
 
 ## 4. States (CDSL)
 
@@ -352,22 +347,23 @@ The system **MUST** deny extension admission by default: an extension is only mo
 - DB: N/A
 - Entities: Extension, ExtensionDomain
 
-### Route Identity Enforcement at Registration
+### Settled-Action Report From the Domain Handler Path
 
-- [x] `p1` - **ID**: `cpt-frontx-dod-extension-domain-governance-route-identity-enforcement`
+- [ ] `p1` - **ID**: `cpt-frontx-dod-extension-domain-governance-settled-action-report`
 
-The system **MUST** reject a domain registration whose declared route is not a valid route name, naming the domain id and the invalid value. The system **MUST** reject an extension registration whose base route and presentation route are both declared but, once each is stripped of one leading `/`, disagree. The system **MUST** reject an extension registration whose route token is already claimed by another extension registered in the same domain, naming both extension ids, the domain id, and the token. An extension with no route, or with a route that fails routability, is admitted without a route token rather than rejected. All three route checks run before the domain or extension is admitted anywhere, including into the type system, so a rejected registration is left registered nowhere — no partial admission.
+The system **MUST**, where the registry holding a domain was built with a router, report each `mount_ext` or `unmount_ext` execution that reaches the domain's handler exactly once to that router through `reportSettled`, with the executed action's type, its payload as admitted (any history intent passed uninterpreted), the domain's id, and its outcome, from the domain's handler path before the request settles back to the mediator and so before the chain's `next` runs. Optional displacement, Exclusive eviction, and the teardown of a departing host's nested occupants **MUST** be part of that one report and **MUST NOT** be reported separately or dispatched as `unmount_ext` actions. A request that never reaches the domain's handler — already mounted, joined, superseded while pending, timed out while pending, refused during domain unregistration, ineligible, or an unmount that changes nothing — **MUST** report nothing, and a slot detach **MUST** report nothing. A report that throws **MUST NOT** change the request's outcome. With no router the system **MUST** report nothing. An Exclusive domain **MUST** keep no public `unmount_ext`.
 
 **Implements**:
-- `cpt-frontx-flow-extension-domain-governance-admission`
-- `cpt-frontx-algo-extension-domain-governance-route-identity`
+- `cpt-frontx-algo-extension-domain-governance-mount-execution`
+- `cpt-frontx-algo-extension-domain-governance-slot-detach`
 
-**Constraints**: `cpt-frontx-constraint-mfes-no-layout-domain-values`
+**Constraints**: `cpt-frontx-constraint-mfes-router-port`, `cpt-frontx-constraint-mfes-recursive-chain-execution`
 
 **Touches**:
-- API: N/A (internal runtime admission path)
+- API: N/A (internal runtime mount path)
 - DB: N/A
-- Entities: Extension, ExtensionDomain
+- Entities: Action / ActionsChain, ExtensionDomain, Router port
+- Sequence: `cpt-frontx-mfes-seq-routed-mount-occupant-value`
 
 ## 6. Acceptance Criteria
 
@@ -381,12 +377,6 @@ The system **MUST** reject a domain registration whose declared route is not a v
 - [x] A domain backed by an unrecognized strategy instance is rejected at registration.
 - [x] No extension-domain name, placement constant, or application-specific vocabulary appears in any admission, matching, or cardinality enforcement code path (satisfies `cpt-frontx-constraint-mfes-no-layout-domain-values`).
 - [x] An extension that passes all admission checks is mounted according to the domain's strategy: ConcurrentMountStrategy mounts side by side; OptionalMountStrategy displaces any prior occupant; ExclusiveMountStrategy evicts all other occupants.
-- [x] A domain registration whose declared route is a valid route name is accepted; one whose declared route is not (empty, upper case, a leading `/`, or any other alphabet violation) is rejected, naming the domain id and the invalid value.
-- [x] An extension without a presentation can declare a base `route` and is routable under it when that route is valid.
-- [x] An extension whose base `route` and `presentation.route` are both declared and equal once each is stripped of one leading `/` (for example `'settings'` and `'/settings'`) is not a conflict; one whose stripped values differ is rejected at registration.
-- [x] An extension whose declared route is not routable (fails the route-name check once stripped, or is absent) is admitted without a route token; it is never rejected for this reason alone.
-- [x] Registering two extensions with the same route token in the same domain is rejected at registration time, naming both extension ids, the domain id, and the token; the same token is allowed across two different domains.
-- [x] Unregistering an extension frees its route token: a subsequent extension may register the same token in that domain.
 - [x] In a Concurrent domain, a mount request for an extension already mounted completes successfully immediately, without container creation or an additional `activated` trigger; a mount request for an extension whose mount is in progress joins that mount and settles with its outcome; a mount request arriving while the extension is being unmounted waits for that unmount to settle before re-evaluating; an unmount request arriving while the extension's mount is in progress waits for that mount to settle, then unmounts it, leaving it absent. A Concurrent domain keeps no occupancy queue, so mounts of two different extensions there run independently and neither replaces the other.
 - [x] A mount request naming a domain the extension is not admitted to fails.
 - [x] In an Optional or Exclusive domain, a mount request for an extension already mounted completes successfully immediately while the occupancy queue is empty and the domain is not being unregistered, without eviction, container creation, or an additional `activated` trigger; while the queue is not empty, it takes its place in the queue and, if the extension is still the occupant at its turn, succeeds without container creation, mount-set change, or an additional `activated` trigger.
@@ -406,3 +396,13 @@ The system **MUST** reject a domain registration whose declared route is not a v
 - [x] In an Optional or Exclusive domain, a mount request for an extension whose slot-detach unmount is in flight waits for that unmount to settle and never reports success on the strength of the mount-set record the unmount removes; if that unmount failed, the request fails.
 - [x] Mount rollback: when placing the container or recording the extension in the mount set fails after the extension's lifecycle mount has run, the container leaves the DOM, the extension is not in the mount set, its lifecycle is unmounted, and the mount fails with the original error.
 - [x] Unmount failure: when an extension's own lifecycle unmount fails, its bridge is still deactivated, its container still leaves the DOM and is destroyed exactly once, the extension leaves the mount set, and the unmount fails with the lifecycle error; a later mount of the extension runs as a fresh mount.
+- [x] No route-name validation, route-token derivation, or route-uniqueness check appears in the runtime's domain or extension admission path; a domain or extension that declares a `route` is admitted or rejected by the runtime exactly as it would be without one, and the `route` reaches an injected router unchanged.
+- [ ] With a router test double injected, a fresh mount in an Exclusive, an Optional, and a Concurrent domain is reported exactly once, carrying the executed action's type, its payload as admitted, the domain id, and a successful outcome, before the chain's `next` runs; a mount whose execution fails is reported once with a failed outcome before the chain's `fallback` runs.
+- [ ] An explicit `unmount_ext` of a mounted extension in an Optional and in a Concurrent domain is reported exactly once before the chain's `next` runs.
+- [x] A fresh mount that displaces a prior occupant in an Optional domain, or evicts the occupant of an Exclusive domain, produces one report for the mount and none for the displaced or evicted extension.
+- [x] A fresh mount that replaces an extension which itself hosts domains produces one report in the parent registry, and the nested occupants released by that teardown produce no report in the nested registry and dispatch no `unmount_ext`.
+- [ ] A mount of an already-mounted extension, a request joining a queued or running entry, a pending request superseded by a later one, a pending request whose timer fires, a request refused during domain unregistration, and an Optional-domain unmount whose subject is absent at its turn each report nothing; a burst A, B, C, D in an Exclusive domain produces exactly two reports, for A and for D.
+- [ ] A slot detach, and the unmount performed by unregistering a mounted extension, report nothing.
+- [ ] A history intent on an executed `mount_ext` or `unmount_ext` reaches the router inside the reported payload unchanged, and an absent history intent stays absent in the report.
+- [ ] A router test double whose `reportSettled` throws leaves the request's outcome and its chain's continuation unchanged.
+- [ ] A registry built with no router mounts and unmounts in every strategy with nothing reported.

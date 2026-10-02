@@ -33,6 +33,12 @@ import {
   type InboundBridgeLink,
   type InboundBridgeRelink,
 } from './inbound-bridge-link';
+import type { RouterPort } from '../router/RouterPort';
+import {
+  associateOccupantValue,
+  readOccupantValue,
+  releaseOccupantValue,
+} from './occupant-value-rendezvous';
 
 export type HandlerResolver = (entryTypeId: string) => MfeHandler | undefined;
 
@@ -60,6 +66,15 @@ export class DefaultMountManager extends MountManager {
     parentBridge: ParentMfeBridge
   ) => InboundBridgeLink;
   private readonly retractInboundBridgeLink: (childBridge: ChildMfeBridge) => void;
+  /** The router snapshotted by the factory, or `undefined` for a standalone registry. */
+  private readonly router: RouterPort | undefined;
+  /**
+   * Reads this registry's own inbound bridge, if any — the enclosing-value
+   * key for `assignOccupantValue` (`inst-ov-enclosing-value`). Threaded in
+   * the same way as `buildInboundBridgeLink`/`retractInboundBridgeLink`
+   * rather than as a new method on `MfeRegistry` or `DefaultMfeRegistry`.
+   */
+  private readonly getInboundBridge: () => ChildMfeBridge | undefined;
 
   /**
    * The `ChildMfeBridge` whose inbound link is currently registered for each
@@ -125,6 +140,8 @@ export class DefaultMountManager extends MountManager {
       parentBridge: ParentMfeBridge
     ) => InboundBridgeLink;
     retractInboundBridgeLink: (childBridge: ChildMfeBridge) => void;
+    router?: RouterPort;
+    getInboundBridge: () => ChildMfeBridge | undefined;
   }) {
     super();
     this.extensionManager = config.extensionManager;
@@ -141,6 +158,8 @@ export class DefaultMountManager extends MountManager {
     this.bridgeFactory = config.bridgeFactory;
     this.buildInboundBridgeLink = config.buildInboundBridgeLink;
     this.retractInboundBridgeLink = config.retractInboundBridgeLink;
+    this.router = config.router;
+    this.getInboundBridge = config.getInboundBridge;
   }
 
   async loadExtension(extensionId: string): Promise<void> {
@@ -329,6 +348,48 @@ export class DefaultMountManager extends MountManager {
           registerInboundBridgeLink(childBridge, link);
           this.childBridgesByExtension.set(extensionId, childBridge);
         }
+
+        // @cpt-algo:cpt-frontx-algo-mfe-host-communication-occupant-value-rendezvous:p1
+        // @cpt-begin:cpt-frontx-algo-mfe-host-communication-occupant-value-rendezvous:p1:inst-ov-assign
+        // After the bridge pair is acquired for this mount and before the
+        // lifecycle mount runs: obtain this extension's occupant value from
+        // the router, keyed by this registry's own inbound bridge for the
+        // enclosing value (`inst-ov-enclosing-value`). A throw here fails
+        // the mount before `lifecycle.mount` is invoked — the existing
+        // catch below deactivates the acquired bridge exactly as any other
+        // pre-lifecycle failure does (`inst-ov-assign-failure`).
+        // @cpt-begin:cpt-frontx-algo-mfe-host-communication-occupant-value-rendezvous:p1:inst-ov-standalone
+        // `this.router` is `undefined` for a standalone registry, so this
+        // whole branch is skipped: nothing is assigned and nothing is
+        // associated — the extension mounts exactly as it would with no
+        // occupant-value rendezvous at all.
+        if (this.router) {
+          // @cpt-begin:cpt-frontx-algo-mfe-host-communication-occupant-value-rendezvous:p1:inst-ov-enclosing-value
+          // `undefined` when this registry holds no inbound bridge (a root
+          // registry — `getInboundBridge()` returns `undefined`), when no
+          // value is associated with it, or when this copy backed away from
+          // the rendezvous (`readOccupantValue` returns `undefined` in both
+          // of those last two cases).
+          const enclosingValue = readOccupantValue(this.getInboundBridge());
+          // @cpt-end:cpt-frontx-algo-mfe-host-communication-occupant-value-rendezvous:p1:inst-ov-enclosing-value
+          // @cpt-begin:cpt-frontx-algo-mfe-host-communication-occupant-value-rendezvous:p1:inst-ov-assign-failure
+          // A throw here propagates out of this `try` block unchanged,
+          // reaching the same `catch` that handles every other pre-lifecycle
+          // mount failure below: `mountState` moves to 'error', the acquired
+          // bridge is deactivated, and no occupant value is associated —
+          // `lifecycle.mount` is never reached.
+          const occupantValue = this.router.assignOccupantValue({
+            domain: domainState.domain,
+            extension: extensionState.extension,
+            enclosingValue,
+          });
+          // @cpt-end:cpt-frontx-algo-mfe-host-communication-occupant-value-rendezvous:p1:inst-ov-assign-failure
+          // @cpt-begin:cpt-frontx-algo-mfe-host-communication-occupant-value-rendezvous:p1:inst-ov-set-before-mount
+          associateOccupantValue(childBridge, occupantValue);
+          // @cpt-end:cpt-frontx-algo-mfe-host-communication-occupant-value-rendezvous:p1:inst-ov-set-before-mount
+        }
+        // @cpt-end:cpt-frontx-algo-mfe-host-communication-occupant-value-rendezvous:p1:inst-ov-standalone
+        // @cpt-end:cpt-frontx-algo-mfe-host-communication-occupant-value-rendezvous:p1:inst-ov-assign
 
         pushAmbientMountingBridge(childBridge);
         let claimed: readonly InboundBridgeRelink[];
@@ -558,6 +619,13 @@ export class DefaultMountManager extends MountManager {
         this.bridgeFactory.destroyBridge(domainState, extensionState.bridge);
       }
     }
+
+    // @cpt-begin:cpt-frontx-algo-mfe-host-communication-occupant-value-rendezvous:p1:inst-ov-release-with-bridge
+    // The bridge pair is released here (permanent unregistration or registry
+    // disposal) — an ordinary unmount or a failed mount never reaches this
+    // method, so the association survives both, exactly as specified.
+    releaseOccupantValue(extensionState?.childBridge ?? undefined);
+    // @cpt-end:cpt-frontx-algo-mfe-host-communication-occupant-value-rendezvous:p1:inst-ov-release-with-bridge
 
     try {
       this.unregisterExtensionActionHandler(extensionId);

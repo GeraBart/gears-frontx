@@ -17,6 +17,4 @@ export { MfeTypeConformanceError } from './MfeTypeConformanceError';
 export { UnsupportedDomainActionError } from './UnsupportedDomainActionError';
 export { UnsupportedLifecycleStageError } from './UnsupportedLifecycleStageError';
 export { EntryTypeNotHandledError } from './EntryTypeNotHandledError';
-export { DomainRouteValidationError } from './DomainRouteValidationError';
-export { ExtensionRouteConflictError } from './ExtensionRouteConflictError';
-export { DuplicateRouteTokenError } from './DuplicateRouteTokenError';
+export { DomainUnregisteringError } from './DomainUnregisteringError';
