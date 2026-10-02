@@ -35,6 +35,7 @@ export type {
   LoadExtPayload,
   MountExtPayload,
   UnmountExtPayload,
+  HistoryIntent,
 } from './types';
 
 // Mediator types (Phase 3)
@@ -52,6 +53,14 @@ export type { MfeEntryLifecycle, MfeMountContext } from './handler/MfeHandler';
 export { MfeRegistry } from './registry/MfeRegistry';
 export { MfeRegistryFactory } from './registry/MfeRegistryFactory';
 export type { MfeRegistryConfig } from './runtime/config';
+
+// Router port (Phase 6) — the concrete router stays outside this package
+export type {
+  RouterPort,
+  OccupantValue,
+  OccupantValueAssignment,
+  SettledActionReport,
+} from './router/RouterPort';
 
 // Runtime abstractions (Phase 3)
 export { MountStrategy } from './runtime/MountStrategy';
@@ -87,9 +96,7 @@ export {
   UnsupportedDomainActionError,
   UnsupportedLifecycleStageError,
   EntryTypeNotHandledError,
-  DomainRouteValidationError,
-  ExtensionRouteConflictError,
-  DuplicateRouteTokenError,
+  DomainUnregisteringError,
   type ContractError,
 } from './errors';
 
@@ -169,11 +176,3 @@ export type { MfeStateContainerConfig } from './state';
 
 // GTS package extraction utility
 export { extractGtsPackage } from './gts/extract-package';
-
-// Route identity — validity, equality, declared-route and token derivation
-export {
-  isValidRouteName,
-  routeNamesEqual,
-  getDeclaredRoute,
-  getExtensionRouteToken,
-} from './routing-identity';

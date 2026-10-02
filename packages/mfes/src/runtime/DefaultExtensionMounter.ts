@@ -104,6 +104,13 @@ export class DefaultExtensionMounter extends ExtensionMounter {
     this.attachedRoot = null;
     // @cpt-end:cpt-frontx-algo-extension-domain-governance-slot-detach:p2:inst-sd-clear-root-first
 
+    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-slot-detach:p2:inst-sd-no-report
+    // Resource cleanup, not an occupancy action: `this.releaser.release`
+    // below runs the ordinary physical-unmount path, which dispatches no
+    // `unmount_ext` action and therefore reaches no domain handler for a
+    // router to report through (`cpt-frontx-algo-extension-domain-governance-mount-execution`
+    // only reports executions that reach the handler via `mount_ext`/`unmount_ext`).
+    // @cpt-end:cpt-frontx-algo-extension-domain-governance-slot-detach:p2:inst-sd-no-report
     const mounted = Array.from(this.getMountedExtensions(this.domainId));
     const failures: unknown[] = [];
     // @cpt-begin:cpt-frontx-algo-extension-domain-governance-slot-detach:p2:inst-sd-each-occupant

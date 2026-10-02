@@ -27,6 +27,8 @@ import { DeclaredTimeoutActionHandler } from '../mediator/DeclaredTimeoutActionH
 import type { ActionTimeoutResolver } from '../mediator/ActionTimeoutResolver';
 import type { DomainOccupancyCoordinator } from './DomainOccupancyCoordinator';
 import type { ConcurrentMountJoiner } from './ConcurrentMountJoiner';
+import type { RouterPort } from '../router/RouterPort';
+import type { MountExtPayload } from '../types';
 
 /**
  * Resolves the domain an extension is admitted to. None of these ports are
@@ -109,10 +111,80 @@ export class MountExtActionHandler extends DeclaredTimeoutActionHandler {
     private readonly actionTimeoutResolver: ActionTimeoutResolver,
     private readonly domainReader: () => { id: string; defaultActionTimeout: number } | undefined,
     private readonly queue: DomainOccupancyCoordinator | undefined,
-    private readonly concurrentJoiner: ConcurrentMountJoiner | undefined
+    private readonly concurrentJoiner: ConcurrentMountJoiner | undefined,
+    private readonly router?: RouterPort
   ) {
     super();
   }
+
+  /**
+   * Runs the domain's registered `mount_ext` handler and, where a router is
+   * injected, reports its settled outcome to it exactly once — after the
+   * handler settles and before this method's own caller (the occupancy
+   * queue's turn, or the Concurrent joiner's task) returns control to the
+   * mediator, so the report precedes the chain's `next`/`fallback`
+   * (`inst-me-report-settled`, `inst-me-report-before-next`). The report
+   * never changes the outcome: a throwing `reportSettled` is logged and
+   * swallowed (`inst-me-report-failure-isolated`).
+   */
+  // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-report-settled
+  // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-report-once-per-execution
+  // Called exactly once per execution that reaches `this.inner` — the
+  // domain's own registered `mount_ext` handler — from each of this
+  // class's two fresh-mount call sites; every caller that joined or shared
+  // that one execution settles on its outcome without this method running
+  // again, so one execution produces exactly one `reportSettled` call.
+  private async runAndReportSettled(
+    actionTypeId: string,
+    payload: Record<string, unknown> | undefined
+  ): Promise<void> {
+    let succeeded = true;
+    let failure: unknown;
+    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-report-internal-releases
+    // Whatever the strategy does inside this call — an Optional
+    // displacement or an Exclusive eviction of a different extension, or
+    // the teardown of a departing host extension's own nested occupants —
+    // is internal to this one execution and produces no report of its own
+    // and dispatches no `unmount_ext`: only this one `reportSettled` call
+    // below, after this call returns or throws, reports anything.
+    try {
+      await this.inner.handleAction(actionTypeId, payload);
+    } catch (error) {
+      succeeded = false;
+      failure = error;
+    }
+    // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-report-internal-releases
+    // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-report-once-per-execution
+    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-report-before-next
+    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-report-standalone
+    // `this.router` is `undefined` for a domain held by a standalone
+    // registry, so this whole branch — and therefore every report — is
+    // skipped for that registry's whole life.
+    if (this.router) {
+      try {
+        this.router.reportSettled({
+          actionTypeId,
+          domainId: this.domainId,
+          payload: payload as unknown as MountExtPayload,
+          succeeded,
+        });
+      } catch (reportError) {
+        // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-report-failure-isolated
+        console.error(
+          `[MountExtActionHandler] reportSettled failed for domain '${this.domainId}', ` +
+          `subject '${String((payload as { subject?: unknown } | undefined)?.subject)}':`,
+          reportError
+        );
+        // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-report-failure-isolated
+      }
+    }
+    // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-report-standalone
+    // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-report-before-next
+    if (!succeeded) {
+      throw failure;
+    }
+  }
+  // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-report-settled
 
   async handleActionWithDeclaredTimeout(
     actionTypeId: string,
@@ -143,6 +215,11 @@ export class MountExtActionHandler extends DeclaredTimeoutActionHandler {
 
     // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-occupancy-queue
     // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-already-mounted-complete
+    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-no-report-unexecuted
+    // An already-mounted request returning here (and a request that joins
+    // an entry already queued or running, below) never reaches `this.inner`
+    // — and therefore never reaches `runAndReportSettled` — so it reports
+    // nothing to any router.
     // @cpt-begin:cpt-frontx-state-extension-domain-governance-admission:p1:inst-adm-t9
     // While the domain is being unregistered the queue is closed, so the
     // request goes to `submit` and fails at once
@@ -164,6 +241,7 @@ export class MountExtActionHandler extends DeclaredTimeoutActionHandler {
       return;
     }
     // @cpt-end:cpt-frontx-state-extension-domain-governance-admission:p1:inst-adm-t9
+    // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-no-report-unexecuted
     // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-already-mounted-complete
 
     // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-queue-caller-timer
@@ -230,7 +308,7 @@ export class MountExtActionHandler extends DeclaredTimeoutActionHandler {
     // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-sole-occupant-at-turn
 
     // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-queue-fresh-mount-at-turn
-    return this.inner.handleAction(actionTypeId, payload);
+    return this.runAndReportSettled(actionTypeId, payload);
     // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-queue-fresh-mount-at-turn
   }
   // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-queue-evaluate-at-turn
@@ -288,7 +366,7 @@ export class MountExtActionHandler extends DeclaredTimeoutActionHandler {
         break;
       }
 
-      return this.inner.handleAction(actionTypeId, payload);
+      return this.runAndReportSettled(actionTypeId, payload);
       // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-fail-after-unmount-failure
       // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-fresh-mount-after-unmount
       // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-await-unmount-settle

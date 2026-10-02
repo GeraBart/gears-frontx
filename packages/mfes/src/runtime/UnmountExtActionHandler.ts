@@ -28,6 +28,8 @@ import { ActionTimeoutResolver } from '../mediator/ActionTimeoutResolver';
 import { DomainOccupancyCoordinator } from './DomainOccupancyCoordinator';
 import { ConcurrentMountJoiner } from './ConcurrentMountJoiner';
 import type { ExtensionAdmissionReader, MountedExtensionReader } from './MountExtActionHandler';
+import type { RouterPort } from '../router/RouterPort';
+import type { UnmountExtPayload } from '../types';
 
 /**
  * Decorates a domain's collected `unmount_ext` handler.
@@ -65,10 +67,56 @@ export class UnmountExtActionHandler extends DeclaredTimeoutActionHandler {
     private readonly actionTimeoutResolver: ActionTimeoutResolver,
     private readonly domainReader: () => { id: string; defaultActionTimeout: number } | undefined,
     private readonly queue: DomainOccupancyCoordinator | undefined,
-    private readonly concurrentJoiner: ConcurrentMountJoiner | undefined
+    private readonly concurrentJoiner: ConcurrentMountJoiner | undefined,
+    private readonly router?: RouterPort
   ) {
     super();
   }
+
+  /**
+   * Runs the domain's registered `unmount_ext` handler and, where a router
+   * is injected, reports its settled outcome to it exactly once, mirroring
+   * `MountExtActionHandler.runAndReportSettled` (`inst-me-report-settled`,
+   * `inst-me-report-before-next`, `inst-me-report-failure-isolated`).
+   */
+  // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-report-settled
+  private async runAndReportSettled(
+    actionTypeId: string,
+    payload: Record<string, unknown> | undefined
+  ): Promise<void> {
+    let succeeded = true;
+    let failure: unknown;
+    try {
+      await this.inner.handleAction(actionTypeId, payload);
+    } catch (error) {
+      succeeded = false;
+      failure = error;
+    }
+    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-report-before-next
+    if (this.router) {
+      try {
+        this.router.reportSettled({
+          actionTypeId,
+          domainId: this.domainId,
+          payload: payload as unknown as UnmountExtPayload,
+          succeeded,
+        });
+      } catch (reportError) {
+        // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-report-failure-isolated
+        console.error(
+          `[UnmountExtActionHandler] reportSettled failed for domain '${this.domainId}', ` +
+          `subject '${String((payload as { subject?: unknown } | undefined)?.subject)}':`,
+          reportError
+        );
+        // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-report-failure-isolated
+      }
+    }
+    // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-report-before-next
+    if (!succeeded) {
+      throw failure;
+    }
+  }
+  // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-report-settled
 
   async handleActionWithDeclaredTimeout(
     actionTypeId: string,
@@ -110,7 +158,7 @@ export class UnmountExtActionHandler extends DeclaredTimeoutActionHandler {
 
     if (this.mountedReader.isMounted(extensionId)) {
       // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-um-queue-unmount-at-turn
-      return this.inner.handleAction(actionTypeId, payload);
+      return this.runAndReportSettled(actionTypeId, payload);
       // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-um-queue-unmount-at-turn
     }
     // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-um-queue-absent-noop
@@ -145,7 +193,7 @@ export class UnmountExtActionHandler extends DeclaredTimeoutActionHandler {
       // below: the awaited mount has already settled to mounted.
     }
     // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-um-after-mount-success
-    return this.inner.handleAction(actionTypeId, payload);
+    return this.runAndReportSettled(actionTypeId, payload);
     // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-um-after-mount-success
   }
   // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-um-await-mount-settle

@@ -237,6 +237,19 @@ export interface LoadExtPayload {
 }
 
 /**
+ * The history intent a `mount_ext` or `unmount_ext` action carries, passed to
+ * the router uninterpreted: the runtime reads, defaults, and rewrites none of
+ * it. An absent intent means `push`, but that reading is the router's, never
+ * the runtime's (`cpt-frontx-algo-mfe-host-communication-history-intent`).
+ * GTS Type: enum declared on the `history` field of
+ * gts.frontx.mfes.ext.mount_ext.v1~ and gts.frontx.mfes.ext.unmount_ext.v1~
+ */
+// @cpt-algo:cpt-frontx-algo-mfe-host-communication-history-intent:p2
+// @cpt-dod:cpt-frontx-dod-mfe-host-communication-history-intent:p1
+// @cpt-begin:cpt-frontx-algo-mfe-host-communication-history-intent:p1:inst-hi-declare
+export type HistoryIntent = 'none' | 'replace' | 'push';
+
+/**
  * Payload for mount_ext action. Pure data; no DOM references. Containers are
  * materialized by the domain implementation's `ContainerHooks` and attached
  * by the per-domain `ExtensionMounter`.
@@ -244,6 +257,11 @@ export interface LoadExtPayload {
 export interface MountExtPayload {
   /** The extension ID to mount (GTS subject reference) */
   subject: string;
+  /**
+   * Optional history intent, admitted by the closed `mount_ext` schema and
+   * passed to the router uninterpreted; absent means push.
+   */
+  history?: HistoryIntent;
 }
 
 /**
@@ -253,4 +271,10 @@ export interface MountExtPayload {
 export interface UnmountExtPayload {
   /** The extension ID to unmount (GTS subject reference) */
   subject: string;
+  /**
+   * Optional history intent, admitted by the closed `unmount_ext` schema and
+   * passed to the router uninterpreted; absent means push.
+   */
+  history?: HistoryIntent;
 }
+// @cpt-end:cpt-frontx-algo-mfe-host-communication-history-intent:p1:inst-hi-declare
