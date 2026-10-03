@@ -77,27 +77,23 @@ export class DefaultMountManager extends MountManager {
   private readonly getInboundBridge: () => ChildMfeBridge | undefined;
 
   /**
-   * The `ChildMfeBridge` whose inbound link is currently registered for each
-   * extension — set the first time an extension mounts, and deleted only by
-   * `releaseExtension` (the extension's permanent unregistration). Distinct
-   * from an extension's retained bridge pair on `ExtensionState`, which
-   * outlives every individual mount/unmount cycle for the same reason: this
-   * map tracks the one bridge object a descendant registry may have
-   * propagated advertisements through, so `releaseExtension` can trigger
-   * parent-owned retraction (`inst-retract-advertisements`) for it.
+   * The `ChildMfeBridge` whose inbound link is registered for each extension,
+   * set at the first mount after each registration and deleted by
+   * `releaseExtension`. Distinct from an extension's retained bridge pair on
+   * `ExtensionState`: this map tracks the one bridge object a descendant
+   * registry may have propagated advertisements through, so
+   * `releaseExtension` can trigger parent-owned retraction
+   * (`inst-retract-advertisements`) for it.
    */
   private readonly childBridgesByExtension = new Map<string, ChildMfeBridge>();
 
   /**
-   * The re-link callback of whichever registry adopted the inbound-bridge
-   * link of the CURRENT (or most recent) mount of each extension, keyed by
-   * extension id — retained across unmount/remount cycles, not cleared on
-   * retraction, and deleted only by `releaseExtension`. Since the link is
-   * minted once at first mount and lives for the extension's whole
-   * registration lifetime, this map is populated
-   * once and never re-triggered on remount: only a FRESH adoption inside a
-   * later mount's own window (a registry the author rebuilds rather than
-   * reuses) ever supersedes it.
+   * The re-link callbacks of the registries that adopted an inbound link in
+   * the latest mount window that produced a claim, keyed by extension id. A
+   * fresh claim replaces the entry (unlinking the adopters it supersedes).
+   * `releaseExtension` unlinks the adopters (`relink(null)`) but keeps the
+   * entry, so the next mount after re-registration re-offers them the current
+   * link. An ordinary unmount leaves the entry unchanged.
    */
   private readonly inboundAdoptersByExtension = new Map<string, readonly InboundBridgeRelink[]>();
 
@@ -334,18 +330,18 @@ export class DefaultMountManager extends MountManager {
           domainId: extensionState.extension.domain,
         };
 
-        // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-track-mounting-bridge
         // Prepare the link a nested registry constructed synchronously inside
         // this extension's own `mount()` body will automatically adopt, then
         // track `childBridge` as the ambient mounting bridge for exactly the
         // synchronous portion of the `lifecycle.mount(...)` invocation below —
         // no configuration or method call required from the microfrontend
-        // author. Minted once, at first mount only: the link (and the bridge
-        // it is attached to) lives for the extension's whole registration
-        // lifetime.
+        // author. Minted per registration, at the first mount after each
+        // registration: the link (and the bridge it is attached to) serves
+        // every later mount until `releaseExtension` retracts it.
+        let mintedLink: InboundBridgeLink | undefined;
         if (!this.childBridgesByExtension.has(extensionId)) {
-          const link = this.buildInboundBridgeLink(extensionId, childBridge, parentBridge);
-          registerInboundBridgeLink(childBridge, link);
+          mintedLink = this.buildInboundBridgeLink(extensionId, childBridge, parentBridge);
+          registerInboundBridgeLink(childBridge, mintedLink);
           this.childBridgesByExtension.set(extensionId, childBridge);
         }
 
@@ -391,36 +387,49 @@ export class DefaultMountManager extends MountManager {
         // @cpt-end:cpt-frontx-algo-mfe-host-communication-occupant-value-rendezvous:p1:inst-ov-standalone
         // @cpt-end:cpt-frontx-algo-mfe-host-communication-occupant-value-rendezvous:p1:inst-ov-assign
 
+        // Adopters retained from this extension's previous registration are
+        // handed the freshly minted link before the window opens, so the
+        // navigation reader sees the associated value.
+        const retainedAdopters = this.inboundAdoptersByExtension.get(extensionId);
+        if (mintedLink && retainedAdopters) {
+          // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-reoffer-retained-adoption
+          // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-reoffer-hand-link
+          for (const relink of retainedAdopters) {
+            relink(mintedLink);
+          }
+          // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-reoffer-hand-link
+          // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-reoffer-retained-adoption
+        }
+
+        // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-track-mounting-bridge
         pushAmbientMountingBridge(childBridge);
-        let claimed: readonly InboundBridgeRelink[];
         let mountInvocation: void | Promise<void>;
         try {
           mountInvocation = lifecycle.mount(shadowRoot, childBridge, mountContext);
         } finally {
-          claimed = popAmbientMountingBridge();
+          const claimed = popAmbientMountingBridge();
+          // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-record-claims-on-mount-throw
+          // Claims are recorded even when `lifecycle.mount` throws
+          // synchronously; the error then propagates unchanged.
+          // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-relink-repropagate
+          if (claimed.length > 0) {
+            // A registry constructed inside this window adopted the link
+            // itself, which supersedes whatever the previous record holds.
+            // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-unlink-on-retraction
+            const superseded = this.inboundAdoptersByExtension.get(extensionId);
+            if (superseded) {
+              for (const relink of superseded) {
+                relink(null);
+              }
+            }
+            // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-unlink-on-retraction
+            this.inboundAdoptersByExtension.set(extensionId, claimed);
+          }
+          // else: nothing claimed in this window; the record is untouched.
+          // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-relink-repropagate
+          // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-record-claims-on-mount-throw
         }
         // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-track-mounting-bridge
-
-        // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-relink-repropagate
-        if (claimed.length > 0) {
-          // A registry was constructed inside this window and adopted the
-          // link itself (the ordinary fresh-registry-per-mount pattern, or a
-          // registry rebuilt on a remount) — this supersedes whatever adopted
-          // a previous mount of this same extension.
-          const superseded = this.inboundAdoptersByExtension.get(extensionId);
-          if (superseded) {
-            for (const relink of superseded) {
-              relink(null);
-            }
-          }
-          this.inboundAdoptersByExtension.set(extensionId, claimed);
-        }
-        // else: no fresh adoption during this window — the previously
-        // adopting registry (if any) still holds the SAME live link, since
-        // the link is minted once at first mount and outlives every
-        // individual mount/unmount cycle. Nothing to re-offer, nothing
-        // to unlink.
-        // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-relink-repropagate
 
         await mountInvocation;
 
@@ -621,9 +630,10 @@ export class DefaultMountManager extends MountManager {
     }
 
     // @cpt-begin:cpt-frontx-algo-mfe-host-communication-occupant-value-rendezvous:p1:inst-ov-release-with-bridge
-    // The bridge pair is released here (permanent unregistration or registry
-    // disposal) — an ordinary unmount or a failed mount never reaches this
-    // method, so the association survives both, exactly as specified.
+    // The bridge pair is released here (unregistration or registry
+    // disposal) — an ordinary unmount or a failed mount never reaches
+    // this method, so the association survives both, exactly as
+    // specified.
     releaseOccupantValue(extensionState?.childBridge ?? undefined);
     // @cpt-end:cpt-frontx-algo-mfe-host-communication-occupant-value-rendezvous:p1:inst-ov-release-with-bridge
 
@@ -637,7 +647,6 @@ export class DefaultMountManager extends MountManager {
     }
 
     this.childBridgesByExtension.delete(extensionId);
-    this.inboundAdoptersByExtension.delete(extensionId);
 
     if (extensionState) {
       extensionState.bridge = null;

@@ -62,7 +62,7 @@ import type { CrossHopEnvelope } from '../mediator/CrossHopRoute';
  */
 const RENDEZVOUS_PROTOCOL_VERSION = 3 as const;
 
-/** A callback through which a previously adopted `InboundBridgeLink` can be replaced (or cleared, with `null`) on a later mount of the same host extension. */
+/** A callback through which a registry's adopted `InboundBridgeLink` is replaced, or cleared with `null`, by the mount manager's retention record (supersede, unlink, re-offer). */
 export type InboundBridgeRelink = (link: InboundBridgeLink | null) => void;
 
 /**
@@ -76,9 +76,9 @@ export type InboundBridgeRelink = (link: InboundBridgeLink | null) => void;
  * `adopters` collects the re-link callback of every registry that adopts
  * `bridge` during this window (ordinarily zero or one) — published by
  * `adoptAmbientInboundBridgeLink` and handed back to the caller by
- * `popAmbientMountingBridge`, which is the sole channel through which a later
- * mount of the same host extension can reach an already-constructed registry.
- * Nothing persists at the rendezvous itself once the entry is popped.
+ * `popAmbientMountingBridge`, which is the sole channel through which the
+ * mount manager's retention record reaches an already-constructed registry
+ * (supersede, unlink, re-offer). Nothing persists at the rendezvous itself once the entry is popped.
  */
 interface RendezvousEntry {
   readonly v: number;
@@ -229,8 +229,7 @@ export function registerInboundBridgeLink(bridge: ChildMfeBridge, link: InboundB
  * The link's `propagateAdvertisement`/`retractAdvertisement`/`escalate`
  * closures all capture the parent registry's own `this`; leaving the
  * property in place after retraction would keep the bridge object — which
- * may outlive the link (e.g. an author-held reference, or a reused nested
- * registry per `inst-nested-registry-lifetime-scope`) — holding a strong
+ * may outlive the link (e.g. an author-held reference) — holding a strong
  * reference back into the ancestor registry for no further purpose. Safe to
  * call even if no link is attached (e.g. a root extension with no nested
  * registry ever adopted it).
@@ -258,8 +257,8 @@ export function unregisterInboundBridgeLink(bridge: ChildMfeBridge): void {
  * rendezvous entry's `adopters` array — never invoked from this function
  * itself — so `popAmbientMountingBridge` can hand it back to the mount
  * manager, which retains it against the host extension as the sole channel
- * through which a later mount of that same extension can reach this
- * already-constructed registry (`inst-publish-relink-callback`).
+ * through which its retention record reaches this already-constructed
+ * registry (`inst-publish-relink-callback`).
  */
 export function adoptAmbientInboundBridgeLink(
   relink: InboundBridgeRelink
@@ -276,6 +275,7 @@ export function adoptAmbientInboundBridgeLink(
   }
 
   if (entry.v !== RENDEZVOUS_PROTOCOL_VERSION) {
+    // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-registry-is-root
     console.debug(
       '[DefaultMfeRegistry] Mount-context rendezvous entry carries an unrecognized ' +
       `protocol version (found ${entry.v}, this copy recognizes ${RENDEZVOUS_PROTOCOL_VERSION}). ` +
@@ -283,6 +283,7 @@ export function adoptAmbientInboundBridgeLink(
       'extension\'s bridge.'
     );
     return undefined;
+    // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-registry-is-root
   }
   // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-no-ambient-bridge
 

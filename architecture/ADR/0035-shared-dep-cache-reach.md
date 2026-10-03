@@ -46,7 +46,7 @@ Neither the reach nor its absence is stated normatively anywhere: the algorithm 
 ## Considered Options
 
 * **A dedicated, version-namespaced realm-global cache rendezvous** — a new `Symbol.for` slot on the realm's global object, distinct from every existing rendezvous, holding a version-tagged entry that carries the one cache compatible copies converge on.
-* **Host the cache at the existing mount-context rendezvous** — reuse the realm-global slot the nesting composition already uses to hand a bridge down and a link callback back up.
+* **Host the cache at the existing mount-context rendezvous** — reuse the realm-global slot the nesting composition already uses to hand a bridge down and a relink callback back up.
 * **Reach the cache through the inbound bridge link or a child bridge capability** — add a source-text or cache operation to the channel that already crosses a nesting boundary.
 * **Attach the cache to the bridge object handed across the nesting boundary** — carry it as a property on the bridge instance a parent hands to a child.
 * **Inject the ancestor host's handler instance into the nested host** — have the composed application pass the outer handler down and let the nested registry reuse it rather than constructing its own.
@@ -109,7 +109,7 @@ A new `Symbol.for` slot, distinct from every existing rendezvous, holding a vers
 
 ### Host the cache at the existing mount-context rendezvous
 
-Put the cache in the realm-global slot the nesting composition already uses to hand a bridge down and a link callback back up.
+Put the cache in the realm-global slot the nesting composition already uses to hand a bridge down and a relink callback back up.
 
 * Good, because it mints no new global slot and reuses a convergence mechanism already proven across copies.
 * Bad, because that slot's contract scopes its entry to one synchronous mount window and requires that nothing remain at the rendezvous once the window closes; a page-lifetime cache is exactly what it forbids, so this option is not a reuse of that mechanism but an amendment of it.

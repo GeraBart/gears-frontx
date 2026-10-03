@@ -172,13 +172,16 @@ export class DefaultRuntimeBridgeFactory extends RuntimeBridgeFactory {
 
     // Wire the registry's own `executeActionsChain` to the child bridge's
     // public capability (`cpt-frontx-adr-mfe-runtime-public-surface`).
+    // @cpt-begin:cpt-frontx-algo-mfe-host-communication-bridge-delegation:p2:inst-child-exec-chain
     // @cpt-begin:cpt-frontx-algo-mfe-host-communication-bridge-delegation:p2:inst-fwd-exec-chain
     childBridge.setExecuteActionsChainCallback(dispatchActionsChain);
     // @cpt-end:cpt-frontx-algo-mfe-host-communication-bridge-delegation:p2:inst-fwd-exec-chain
+    // @cpt-end:cpt-frontx-algo-mfe-host-communication-bridge-delegation:p2:inst-child-exec-chain
 
     // Wire child domain forwarding callbacks.
     // The forwarding handler is registered as a catch-all because the parent
     // cannot enumerate the child domain's action types at registration time.
+    // @cpt-begin:cpt-frontx-algo-mfe-host-communication-bridge-delegation:p2:inst-child-reg-domain
     // @cpt-begin:cpt-frontx-algo-mfe-host-communication-bridge-delegation:p2:inst-fwd-reg-domain
     const registerChildDomainCallback = (domainId: string) => {
       const route = this.forwardingRouteFactory.create(parentBridgeImpl, domainId);
@@ -191,6 +194,7 @@ export class DefaultRuntimeBridgeFactory extends RuntimeBridgeFactory {
 
     childBridge.setChildDomainCallbacks(registerChildDomainCallback, unregisterChildDomainCallback);
     // @cpt-end:cpt-frontx-algo-mfe-host-communication-bridge-delegation:p2:inst-fwd-reg-domain
+    // @cpt-end:cpt-frontx-algo-mfe-host-communication-bridge-delegation:p2:inst-child-reg-domain
 
     // Wire per-(extensionId, actionTypeId) handler registration.
     // The bridge captures extensionId and domainId from createBridge params.
@@ -199,6 +203,7 @@ export class DefaultRuntimeBridgeFactory extends RuntimeBridgeFactory {
     // extension-targeted actions. Wrapped in ActiveGuardActionHandler so an
     // invocation arriving while the bridge is inactive never reaches the
     // handler (`inst-fwd-reg-handler`).
+    // @cpt-begin:cpt-frontx-algo-mfe-host-communication-bridge-delegation:p2:inst-child-reg-handler
     // @cpt-begin:cpt-frontx-algo-mfe-host-communication-bridge-delegation:p2:inst-fwd-reg-handler
     childBridge.setRegisterActionHandlerCallback((actionTypeId, handler) => {
       registerExtensionActionHandler(
@@ -209,6 +214,7 @@ export class DefaultRuntimeBridgeFactory extends RuntimeBridgeFactory {
       );
     });
     // @cpt-end:cpt-frontx-algo-mfe-host-communication-bridge-delegation:p2:inst-fwd-reg-handler
+    // @cpt-end:cpt-frontx-algo-mfe-host-communication-bridge-delegation:p2:inst-child-reg-handler
 
     // Populate initial properties from domain state (raw values)
     for (const [propertyTypeId, rawValue] of domainState.properties) {
