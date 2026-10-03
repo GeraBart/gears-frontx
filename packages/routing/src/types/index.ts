@@ -171,7 +171,7 @@ export type DomainKey = string & { readonly [domainKeyBrand]: true };
 /**
  * A value conforming to the grammar's `name` alphabet, used as an entry's
  * own extension segment. Sourced from an extension registration's own
- * normalized `presentation.route` (`cpt-frontx-routing-adr-occupant-identity-stability`).
+ * normalized `Extension.route` (`cpt-frontx-routing-adr-occupant-identity-stability`).
  * Branded for the identical reason `DomainKey` is (see above).
  */
 export type ExtensionToken = string & { readonly [extensionTokenBrand]: true };

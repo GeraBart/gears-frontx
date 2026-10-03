@@ -137,12 +137,6 @@ export interface ExtensionPresentation {
   label: string;
   /** Optional icon identifier (e.g., "user", "settings") */
   icon?: string;
-  /**
-   * Single route-name token for navigation, in the routing grammar's `name`
-   * alphabet once one leading `/` is stripped (e.g. "profile", "/settings")
-   * — not a multi-segment path.
-   */
-  route: string;
   /** Optional sort order for menu items (lower numbers first) */
   order?: number;
 }
@@ -164,11 +158,10 @@ export interface Extension {
   /** Optional lifecycle hooks - explicitly declared actions for each stage */
   lifecycle?: LifecycleHook[];
   /**
-   * Optional declared route, usable by an extension without `presentation`.
+   * Optional declared route of the extension.
    * A deliberate exception to the "domain-specific fields go to derived
    * types" convention above — routability applies to an extension in any
-   * domain. When both this and `presentation.route` are set, they must agree
-   * once each is stripped of one leading `/`.
+   * domain.
    */
   route?: string;
   // Domain-specific fields are added via derived types, not defined here
@@ -178,11 +171,14 @@ export interface Extension {
  * Screen Extension (derived from Extension)
  * GTS Type: gts.frontx.mfes.ext.extension.v1~frontx.screensets.layout.screen.v1~
  *
- * Extends the base Extension type with presentation metadata required for screen domain.
- * Screen domain sets extensionsTypeId to reference this derived type, so all screen
- * extensions must include presentation metadata.
+ * Extends the base Extension type with a required declared route and the
+ * presentation metadata required for screen domain. Screen domain sets
+ * extensionsTypeId to reference this derived type, so all screen extensions
+ * must declare a route and include presentation metadata.
  */
 export interface ScreenExtension extends Extension {
+  /** Declared route for screen domain extensions (required) */
+  route: string;
   /** Presentation metadata for screen domain extensions (required) */
   presentation: ExtensionPresentation;
 }
