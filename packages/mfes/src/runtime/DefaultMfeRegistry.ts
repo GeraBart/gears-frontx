@@ -405,9 +405,11 @@ export class DefaultMfeRegistry extends MfeRegistry {
     // the extension being mounted is itself constructing this registry, adopt
     // that extension's bridge as this registry's inbound bridge — no config
     // field, no method call, no author action (`inst-inbound-bridge-auto-adopt`).
-    // The published `relink` callback is what a LATER mount of the same host
-    // extension uses to re-link this same registry instance, if the author
-    // reuses rather than rebuilds it (`inst-publish-relink-callback`). If no
+    // The published `relink` callback is how the mount manager's retention
+    // record re-links this registry instance: unlinked when the host
+    // extension is unregistered, and handed the current link on the next
+    // mount after re-registration
+    // (`inst-publish-relink-callback`). If no
     // mount's ambient bridge is tracked, this registry adopts nothing and
     // `relinkInboundBridge(null)` behaves as a root/shell registry
     // (`inst-no-ambient-bridge` / `inst-registry-is-root`).
@@ -437,15 +439,15 @@ export class DefaultMfeRegistry extends MfeRegistry {
 
   /**
    * The ONE place this registry's inbound-bridge link state changes — used
-   * both by the constructor's initial ambient adoption and by a fresh
-   * adoption's supersession of a previous adopter when a registry is rebuilt
-   * inside a later mount of the same host extension. Idempotent: a no-op if
-   * `link` is already this registry's current link.
+   * both by the constructor's initial ambient adoption and by the mount
+   * manager's retention record (unlink on unregistration or supersession,
+   * re-offer on a later mount). A no-op if `link` is already this registry's
+   * current link.
    *
    * @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-relink-repropagate
    */
   private relinkInboundBridge(link: InboundBridgeLink | null): void {
-    if (this.inboundBridgeLink === link) return; // idempotent
+    if (this.inboundBridgeLink === link) return; // already the current link
 
     this.inboundActionsChainUnsubscribe?.();
     this.inboundActionsChainUnsubscribe = null;
@@ -492,7 +494,7 @@ export class DefaultMfeRegistry extends MfeRegistry {
    * admitted to it directly, and every forwarding entry it holds on behalf
    * of its own descendants. Called only from `relinkInboundBridge`, after
    * the link is already in place, so `propagateAdvertisementUpward`'s own
-   * idempotence guard (`propagatedTargetIds`) governs whether any given
+   * already-propagated guard (`propagatedTargetIds`) governs whether any given
    * target actually re-propagates further.
    */
   private repropagateThroughInboundBridge(): void {
@@ -641,7 +643,7 @@ export class DefaultMfeRegistry extends MfeRegistry {
     // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-ancestor-has-inbound-bridge
     // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-has-inbound-bridge
     if (this.propagatedTargetIds.has(targetId)) {
-      // Idempotence guard: already propagated (e.g. a post-relink explicit
+      // Already propagated through the current link (e.g. a post-relink explicit
       // re-registration by the author) — do not double-advertise.
       return;
     }
@@ -691,14 +693,11 @@ export class DefaultMfeRegistry extends MfeRegistry {
    * leaving this registry's forwarding entries and inbound link intact so a
    * later remount resumes delivery on the same bridge. This retraction runs
    * regardless of whether the nested registry that extension hosts ever
-   * disposes itself. This is what fixes both (i) a fresh-registry-per-mount
-   * pattern getting its readvertisement rejected by a stale collision-guard
-   * entry from a prior mount, and (ii) a persistent-registry pattern left
-   * pointing at a bridge this registry has already torn down: after this
-   * runs, the parent's own forwarding-entry state for that bridge is fully
-   * clean, so a subsequent remount re-advertises without collision, and a
-   * reused (not rebuilt) child registry's own further attempts to propagate
-   * or retract through its now-revoked link simply fail to find an entry to
+   * disposes itself. After this runs, the parent's own forwarding-entry
+   * state for that bridge is fully clean, so a later registration of the
+   * extension re-advertises without collision, and a retained child
+   * registry's own further attempts to propagate or retract through its
+   * now-revoked link simply fail to find an entry to
    * touch here — never crash, never resurrect stale routing.
    */
   // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-retract-advertisements

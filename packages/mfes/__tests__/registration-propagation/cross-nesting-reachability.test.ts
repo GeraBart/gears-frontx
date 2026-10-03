@@ -952,7 +952,7 @@ describe('Cross-nesting reachability: registration propagation, escalation, retr
     vi.restoreAllMocks();
   });
 
-  it('(j) a nested registry an author reuses (not rebuilds) across a remount keeps its already-adopted live link — no re-link needed — and continues to advertise every target it holds', async () => {
+  it('(j) a single nested registry keeps its already-adopted live link across an unmount and remount — no re-link needed — and continues to advertise every target it holds', async () => {
     const REUSE_ENTRY = 'entry.reuse-child.v1';
     const REUSE_EXT = 'ext.reuse-child.v1';
     const D_REUSE = 'domain.reuse-child.v1';
@@ -963,8 +963,8 @@ describe('Cross-nesting reachability: registration propagation, escalation, retr
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const reuseCounter = makeCallCounter();
 
-    // Constructed exactly once, the very first time `mount()` runs — never
-    // rebuilt on a later remount. The link it adopts at that first mount is
+    // Constructed exactly once, the very first time `mount()` runs. The link
+    // it adopts at that first mount is
     // minted once, for the whole registration lifetime of its host
     // extension, and stays live across every subsequent mount/unmount cycle
     // of that same extension — so it needs no re-link from the parent.
@@ -982,10 +982,9 @@ describe('Cross-nesting reachability: registration propagation, escalation, retr
           ])
         );
       }
-      // Remount: the author reuses the SAME registry instance instead of
-      // rebuilding it — no new `DefaultMfeRegistry` is constructed here, so
-      // no further ambient-bridge adoption ever happens for it; reachability
-      // is unaffected, since the link it adopted at first mount is still the
+      // Remount: the SAME registry instance serves the extension — no
+      // further ambient-bridge adoption happens for it; reachability is
+      // unaffected, since the link it adopted at first mount is still the
       // registry's own current link.
     });
 
@@ -999,7 +998,7 @@ describe('Cross-nesting reachability: registration propagation, escalation, retr
     const mounter0 = registry0.getMounter(D0);
     mounter0.attach(document.createElement('div'));
 
-    // ── First mount: reusedRegistry is freshly constructed and properly
+    // ── First mount: reusedRegistry is constructed in the window and
     // linked — the shell can reach its domain. ──
     await mounter0.mount(REUSE_EXT, document.createElement('div'));
     expect(reusedRegistry).toBeDefined();
@@ -1015,15 +1014,14 @@ describe('Cross-nesting reachability: registration propagation, escalation, retr
     // both stay exactly as they were (`inst-bridge-deactivation`). ──
     await mounter0.unmount(REUSE_EXT);
 
-    // ── Remount: reuseHandler's mount() body reuses `reusedRegistry` as-is;
-    // no new registry is constructed, and none is needed — reusedRegistry's
-    // link was never revoked, so it is still the SAME live link, now
-    // reactivated along with the bridge it is attached to. ──
+    // ── Remount: reuseHandler's mount() body constructs nothing; the
+    // registry's link was never revoked, so it is still the SAME live link,
+    // active again together with the bridge it is attached to. ──
     await mounter0.mount(REUSE_EXT, document.createElement('div'));
 
-    // The shell still reaches D_REUSE: the reused registry's advertisement
-    // for it was never retracted, so nothing needs to be re-propagated,
-    // with no action required from the microfrontend author.
+    // The shell still reaches D_REUSE: the registry's advertisement for it
+    // was never retracted, so nothing needs to be re-propagated, with no
+    // action required from the microfrontend author.
     void awaitChain(registry0, actionChain(ACTION_REUSE_LEAF, D_REUSE));
     await reuseCounter.waitFor(2);
     expect(reuseCounter.count).toBe(2);
@@ -1031,7 +1029,7 @@ describe('Cross-nesting reachability: registration propagation, escalation, retr
     vi.restoreAllMocks();
   });
 
-  it('(k) after unmount + remount with a cached/reused registry, a shell-to-descendant dispatch succeeds through the SAME, reactivated bridge pair', async () => {
+  it('(k) after unmount + remount, a shell-to-descendant dispatch succeeds through the SAME, reactivated bridge pair', async () => {
     const REUSE_ENTRY = 'entry.reuse-child2.v1';
     const REUSE_EXT = 'ext.reuse-child2.v1';
     const D_REUSE = 'domain.reuse-child2.v1';
@@ -1194,7 +1192,7 @@ describe('Cross-nesting reachability: registration propagation, escalation, retr
     vi.restoreAllMocks();
   });
 
-  it('(m) when a registry IS freshly constructed inside a remount\'s window, its adoption supersedes the PREVIOUS mount\'s registry, which is left unlinked', async () => {
+  it('(m) a fresh claim made in a mount window supersedes the adopters recorded for the extension, which are left unlinked (inst-relink-repropagate)', async () => {
     const FRESH_ENTRY = 'entry.fresh-child.v1';
     const FRESH_EXT = 'ext.fresh-child.v1';
     const D_FRESH = 'domain.fresh-child.v1';
@@ -1209,8 +1207,8 @@ describe('Cross-nesting reachability: registration propagation, escalation, retr
     const registries: DefaultMfeRegistry[] = [];
 
     const freshHandler = new InjectableMountHandler(FRESH_ENTRY, () => {
-      // Fresh-registry-per-mount pattern: a brand new registry every time
-      // `mount()` runs, never reused across a remount.
+      // Each `mount()` call constructs a registry inside its window, so each
+      // window produces a fresh claim.
       const index = registries.length;
       const registry = new DefaultMfeRegistry({ typeSystem: plugin });
       registry.registerDomain(
@@ -1257,10 +1255,10 @@ describe('Cross-nesting reachability: registration propagation, escalation, retr
     await rootCounter.waitFor(1);
     expect(rootCounter.count).toBe(1);
 
-    // The FIRST registry — the previous mount's — was unlinked when the
-    // SECOND registry's own construction, inside the remount's ambient
-    // window, produced a fresh adoption of the extension's still-live link:
-    // that fresh adoption supersedes the first registry's earlier one
+    // The FIRST registry was unlinked when the SECOND registry's
+    // construction, inside the second mount's ambient window, produced a
+    // fresh claim on the extension's still-live link: that fresh claim
+    // supersedes the claim the first registry holds
     // (`inst-relink-repropagate`'s supersession clause), NOT an
     // unmount-triggered revocation — an ordinary unmount never revokes the
     // link at all (test (l2)). Proven here by escalating directly FROM

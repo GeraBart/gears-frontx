@@ -561,7 +561,7 @@ describe('Cross-copy boundary: registration propagation, escalation, retraction 
     sendSpy.mockRestore();
   });
 
-  it('(7) a copy-B registry reused (not rebuilt) across a remount of its copy-A host extension keeps its already-adopted live link across the copy boundary and continues to advertise successfully', async () => {
+  it('(7) a copy-B registry keeps its already-adopted live link across an unmount and remount of its copy-A host extension, and continues to advertise successfully', async () => {
     vi.resetModules();
     const copyA = await loadCopy();
     vi.resetModules();
@@ -578,7 +578,7 @@ describe('Cross-copy boundary: registration propagation, escalation, retraction 
     const reuseCounter = makeCallCounter();
 
     // Constructed exactly once, from copy B, the very first time `mount()`
-    // runs — never rebuilt on a later remount of its copy-A host extension.
+    // runs.
     let reusedNested: InstanceType<Copy['DefaultMfeRegistry']> | undefined;
 
     const reuseHandler = makeInjectableMountHandler(copyA, REUSE_ENTRY, () => {
@@ -591,9 +591,8 @@ describe('Cross-copy boundary: registration propagation, escalation, retraction 
           ])
         );
       }
-      // Remount: reused as-is — no new copy-B `DefaultMfeRegistry` is
-      // constructed here, so reachability depends entirely on copy A's
-      // mount manager re-offering the fresh link across the copy boundary.
+      // Remount: no new copy-B `DefaultMfeRegistry` is constructed here;
+      // the registry's adopted link stays live across the copy boundary.
     });
 
     const shell = new copyA.DefaultMfeRegistry({
