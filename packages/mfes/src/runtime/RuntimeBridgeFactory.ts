@@ -16,7 +16,6 @@ import type { ChildMfeBridge } from '../handler/ChildMfeBridge';
 import type { ExtensionDomainState } from './ExtensionManager';
 import type { ActionsChain } from '../types';
 import type { ActionHandler } from '../mediator/ActionHandler';
-import type { CrossHopRoute } from '../mediator/CrossHopRoute';
 
 export abstract class RuntimeBridgeFactory {
   /**
@@ -25,22 +24,17 @@ export abstract class RuntimeBridgeFactory {
    * `existing` is provided (a remount of an already-mounted-before
    * extension), re-wires the transport callbacks onto the SAME bridge pair
    * and reactivates it — never re-subscribing to domain property updates,
-   * never replaying property values, never touching handler registrations
-   * or child-domain state, which all survive deactivation untouched.
+   * never replaying property values, never touching handler registrations,
+   * which survive deactivation untouched.
    */
   abstract acquireBridge(
     domainState: ExtensionDomainState,
     extensionId: string,
-    entryTypeId: string,
-    domainActions: readonly string[],
     existing: { parentBridge: ParentMfeBridge; childBridge: ChildMfeBridge } | undefined,
     // The registry's `executeActionsChain` (void) — wired to the child
     // bridge's public capability ONLY.
     dispatchActionsChain: (chain: ActionsChain) => void,
-    registerCatchAllRoute: (domainId: string, route: CrossHopRoute) => void,
-    unregisterCatchAllActionHandler: (domainId: string) => void,
-    registerExtensionActionHandler: (extensionId: string, actionTypeId: string, handler: ActionHandler, domainId: string) => void,
-    unregisterExtensionActionHandler: (extensionId: string) => void
+    registerExtensionActionHandler: (extensionId: string, actionTypeId: string, handler: ActionHandler, domainId: string) => void
   ): { parentBridge: ParentMfeBridge; childBridge: ChildMfeBridge };
 
   /**

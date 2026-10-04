@@ -9,4 +9,3 @@
 
 export { ChildMfeBridgeImpl } from './ChildMfeBridgeImpl';
 export { ParentMfeBridgeImpl } from './ParentMfeBridgeImpl';
-export { ChildDomainForwardingRouteFactory } from './ChildDomainForwardingRouteFactory';

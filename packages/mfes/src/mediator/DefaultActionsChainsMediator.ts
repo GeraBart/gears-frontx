@@ -79,12 +79,6 @@ export class DefaultActionsChainsMediator extends ActionsChainsMediator {
   private readonly targetDomainMap = new Map<string, string>();
 
   /**
-   * Per-target catch-all tier. Child-domain forwarding registers a
-   * `CrossHopRoute` here.
-   */
-  private readonly catchAllHandlers = new Map<string, ActionHandler | CrossHopRoute>();
-
-  /**
    * The shared per-action timeout rule, also used by the occupancy queue.
    */
   private readonly actionTimeoutResolver: ActionTimeoutResolver;
@@ -122,14 +116,15 @@ export class DefaultActionsChainsMediator extends ActionsChainsMediator {
   /**
    * Accept a sub-chain handed over across a hop and execute it after this
    * call returns. The caller has already checked the envelope version and
-   * this registry's disposal.
+   * this registry's disposal. A chain handed down from the parent has its
+   * action resolved by this runtime's own handlers only, never escalated.
    *
    * @internal
    */
   // @cpt-begin:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-receive-transfer
   // @cpt-begin:cpt-frontx-flow-mfe-host-communication-dispatch-chain:p1:inst-flow-accepted-continues
-  receiveHandedOverChain(chain: ActionsChain): void {
-    void Promise.resolve().then(() => this.executeChain(chain));
+  receiveHandedOverChain(chain: ActionsChain, fromParent = false): void {
+    void Promise.resolve().then(() => this.executeChain(chain, !fromParent));
   }
   // @cpt-end:cpt-frontx-flow-mfe-host-communication-dispatch-chain:p1:inst-flow-accepted-continues
   // @cpt-end:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-receive-transfer
@@ -140,11 +135,11 @@ export class DefaultActionsChainsMediator extends ActionsChainsMediator {
    * chain. A sub-chain handed over across a hop ends here. Never rejects.
    */
   // @cpt-algo:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1
-  private async executeChain(chain: ActionsChain): Promise<void> {
-    const { action } = chain;
+  private async executeChain(chain: ActionsChain, escalate = true): Promise<void> {
     try {
+      const { action } = chain;
       // @cpt-begin:cpt-frontx-flow-mfe-host-communication-dispatch-chain:p1:inst-resolve-handler
-      const resolved = this.resolveHandler(action.target, action.type, getArrivalEdge(action));
+      const resolved = this.resolveHandler(action.target, action.type, getArrivalEdge(action), escalate);
       // @cpt-end:cpt-frontx-flow-mfe-host-communication-dispatch-chain:p1:inst-resolve-handler
 
       // @cpt-begin:cpt-frontx-flow-mfe-host-communication-dispatch-chain:p1:inst-no-handler-check
@@ -218,7 +213,7 @@ export class DefaultActionsChainsMediator extends ActionsChainsMediator {
       // @cpt-begin:cpt-frontx-flow-mfe-host-communication-dispatch-chain:p1:inst-check-fallback
       // @cpt-begin:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-has-fallback
       // @cpt-begin:cpt-frontx-state-mfe-host-communication-action-lifecycle:p2:inst-failed-check-fallback
-      if (chain.fallback) {
+      if (chain?.fallback) {
         // @cpt-begin:cpt-frontx-flow-mfe-host-communication-dispatch-chain:p1:inst-recurse-fallback
         // @cpt-begin:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-recurse-fallback-algo
         // @cpt-begin:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-dispatch-continuation
@@ -350,9 +345,10 @@ export class DefaultActionsChainsMediator extends ActionsChainsMediator {
   }
 
   /**
-   * Resolve the handler for a (targetId, actionTypeId) pair: keyed, then
-   * hierarchy-derived, then catch-all, then a downward forwarding entry
-   * (excluding one whose bridge equals the arrival edge), then escalation.
+   * Resolve the handler for a (targetId, actionTypeId) pair: exact
+   * (target, action type) keyed handler, then a downward forwarding entry (excluding one whose
+   * bridge equals the arrival edge), then escalation unless `escalate` is
+   * false.
    *
    * @returns The handler or cross-hop route, or undefined if none resolves.
    */
@@ -360,7 +356,8 @@ export class DefaultActionsChainsMediator extends ActionsChainsMediator {
   private resolveHandler(
     targetId: string,
     actionTypeId: string,
-    arrivalEdge?: unknown
+    arrivalEdge: unknown,
+    escalate: boolean
   ): ActionHandler | CrossHopRoute | undefined {
     const targetHandlers = this.actionHandlers.get(targetId);
     if (targetHandlers) {
@@ -369,26 +366,9 @@ export class DefaultActionsChainsMediator extends ActionsChainsMediator {
         return handler;
       }
       // @cpt-end:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-keyed-lookup
-
-      // @cpt-begin:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-no-keyed
-      // @cpt-begin:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-hierarchy-lookup
-      for (const [registeredActionTypeId, registeredHandler] of targetHandlers) {
-        if (
-          this.typeSystem.isTypeOf(actionTypeId, registeredActionTypeId) ||
-          this.typeSystem.isTypeOf(registeredActionTypeId, actionTypeId)
-        ) {
-          return registeredHandler;
-        }
-      }
-      // @cpt-end:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-hierarchy-lookup
     }
 
-    // @cpt-begin:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-catchall-lookup
-    const catchAll = this.catchAllHandlers.get(targetId);
-    if (catchAll) {
-      return catchAll;
-    }
-    // @cpt-end:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-catchall-lookup
+    // @cpt-begin:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-no-keyed
 
     // @cpt-begin:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-forwarding-entry-lookup
     const forwardingRoute = this.resolveForwardingEntry?.(targetId, arrivalEdge);
@@ -398,7 +378,7 @@ export class DefaultActionsChainsMediator extends ActionsChainsMediator {
     // @cpt-end:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-forwarding-entry-lookup
 
     // @cpt-begin:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-escalation-lookup
-    return this.resolveEscalation?.();
+    return escalate ? this.resolveEscalation?.() : undefined;
     // @cpt-end:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-escalation-lookup
     // @cpt-end:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-no-keyed
   }
@@ -456,36 +436,10 @@ export class DefaultActionsChainsMediator extends ActionsChainsMediator {
   }
 
   /**
-   * Unregister every handler for a target, its catch-all included.
+   * Unregister every handler for a target.
    */
   unregisterAllHandlers(targetId: string): void {
     this.actionHandlers.delete(targetId);
     this.targetDomainMap.delete(targetId);
-    this.catchAllHandlers.delete(targetId);
-  }
-
-  /**
-   * Register a catch-all handler for a target, invoked for any action type
-   * with no specific handler.
-   */
-  registerCatchAllHandler(targetId: string, handler: ActionHandler): void {
-    this.catchAllHandlers.set(targetId, handler);
-  }
-
-  /**
-   * Register the catch-all tier for a target with a `CrossHopRoute`: the
-   * child-domain forwarding tier (`ChildDomainForwardingRouteFactory`).
-   *
-   * @internal
-   */
-  registerCatchAllRoute(targetId: string, route: CrossHopRoute): void {
-    this.catchAllHandlers.set(targetId, route);
-  }
-
-  /**
-   * Unregister a catch-all handler for a target.
-   */
-  unregisterCatchAllHandler(targetId: string): void {
-    this.catchAllHandlers.delete(targetId);
   }
 }

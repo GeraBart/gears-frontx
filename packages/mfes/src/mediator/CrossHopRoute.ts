@@ -1,6 +1,6 @@
 /**
- * Cross-hop route for the downward forwarding-entry, upward escalation, and
- * parent-to-child-domain forwarding resolution tiers.
+ * Cross-hop route for the downward forwarding-entry and upward escalation
+ * resolution tiers.
  *
  * Not an `ActionHandler`: a `CrossHopRoute` hands the sub-chain — the action
  * with its `next` and `fallback` — across a hop in a versioned envelope to

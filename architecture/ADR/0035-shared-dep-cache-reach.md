@@ -79,7 +79,7 @@ The source-text cache is held per handler as a reference obtained from the realm
 
 ### Consequences
 
-* Good, because reuse now reaches as far as the key's safety argument does: two loads that agree on the identity of the emitted build fetch it once per realm rather than once per copy.
+* Good, because reuse reaches as far as the key's safety argument does: two loads that agree on the identity of the emitted build fetch it once per realm rather than once per copy.
 * Good, because the mechanism is invisible to consumers — no exported symbol, no capability method, no constructor argument, and no application wiring — so a composed application gains the benefit by composing.
 * Good, because the version-tagged entry lets an incompatible copy recognize that it does not understand what it found and fall back locally, instead of operating on state whose semantics it cannot establish.
 * Good, because memory is bounded once for the realm rather than once per handler, so the bound applies once per realm, independent of a composition's handler count.
@@ -87,7 +87,7 @@ The source-text cache is held per handler as a reference obtained from the realm
 * Bad, and accepted: any code already executing in the realm can pre-occupy or mutate the well-known rendezvous slot and thereby observe or substitute shared-dependency source text. This is accepted because the JavaScript realm is already the trusted coordination domain: `cpt-frontx-adr-mfe-load-isolation` controls how microfrontend code is admitted and evaluated through the audited loading path, but does not provide isolation from arbitrary code that has already obtained same-realm execution. This protocol creates no new admission path and grants no code execution capability to an otherwise unadmitted party.
 * Bad, because a timeout in one copy may evict a realm entry another copy is awaiting; the waiter is unaffected, but a later caller for that key may start a duplicate fetch. That is the accepted price of a retry that can recover from a hung fetch.
 * Bad, because the realm-wide capacity is one number serving every composition in the page, so a page whose distinct build identities exceed it trades hit rate for the bound rather than growing to fit.
-* Neutral, because the cache now outlives every handler that ever touched it; nothing reclaims it before the realm ends, which is sound for inert source text and would not be for anything with freshness semantics.
+* Neutral, because the cache outlives every handler that ever touched it; nothing reclaims it before the realm ends, which is sound for inert source text and would not be for anything with freshness semantics.
 * Neutral, because the capacity is a fixed, provisional operational bound rather than a measured optimum: evidence of sustained eviction churn would justify raising the constant without disturbing the reach, the protocol, the key semantics, or the lifetime. Adaptive sizing is rejected, because it would weaken the memory policy and require a cross-copy resizing protocol no evidence calls for.
 
 ### Confirmation

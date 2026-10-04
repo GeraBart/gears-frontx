@@ -256,56 +256,6 @@ class GatedBeforeStrategyDomainFactory extends ExtensionDomainImplementationFact
 }
 
 /**
- * A test-only domain declaring TWO `mount_ext`-derived action subtypes,
- * each wired to its OWN distinguishable inner handler — records which
- * subtype's handler actually ran for a given subject, in `order` — while
- * every subject's mount awaits one externally-controlled gate before
- * reaching the strategy, exactly as `GatedBeforeStrategyDomainImpl` does.
- * Proves which caller's own task an entry runs at its turn
- * (`inst-me-queue-evaluate-at-turn`), across TWO subtypes sharing the same
- * occupancy queue.
- */
-class TwoDerivedSubtypesGatedDomainImpl extends ExtensionDomainImplementation {
-  /** Which subtype's handler ran, per subject that reached it, in order. */
-  readonly order: string[] = [];
-  constructor(
-    ctx: DomainContext,
-    readonly strategy: OptionalMountStrategy,
-    private readonly gate: Promise<void>,
-    private readonly derivedActionType: string
-  ) {
-    super();
-    const makeHandler = (tag: string) => ActionHandler.fromFunction(async (_t, p) => {
-      const { subject } = p as { subject: string };
-      this.order.push(`${tag}:${subject}`);
-      await this.gate;
-      return this.strategy.mount(p as { subject: string });
-    });
-    ctx.registerHandler(ACTION_MOUNT_EXT, makeHandler('orig'));
-    ctx.registerHandler(this.derivedActionType, makeHandler('fallback'));
-    ctx.registerHandler(ACTION_UNMOUNT_EXT, ActionHandler.fromFunction((_t, p) => this.strategy.unmount!(p as { subject: string })));
-  }
-  protected getMountStrategies(): MountStrategy[] { return [this.strategy]; }
-}
-
-class TwoDerivedSubtypesGatedDomainFactory extends ExtensionDomainImplementationFactory {
-  readonly hooks = new TestHooks();
-  strategy!: OptionalMountStrategy;
-  impl!: TwoDerivedSubtypesGatedDomainImpl;
-  constructor(
-    private readonly reg: MfeRegistry,
-    private readonly domainId: string,
-    private readonly gate: Promise<void>,
-    private readonly derivedActionType: string
-  ) { super(); }
-  build(ctx: DomainContext): TwoDerivedSubtypesGatedDomainImpl {
-    this.strategy = new OptionalMountStrategy(ctx.mounter, this.hooks, this.reg, this.domainId);
-    this.impl = new TwoDerivedSubtypesGatedDomainImpl(ctx, this.strategy, this.gate, this.derivedActionType);
-    return this.impl;
-  }
-}
-
-/**
  * A test-only handler whose `mount_ext` action awaits an
  * externally-controlled gate, then either throws (for one designated
  * "failing" subject — never reaching the strategy at all) or calls straight
@@ -701,71 +651,6 @@ describe('mount-ext prologue — end to end', () => {
 
       registry.dispose();
     }
-  });
-
-  it('(g) two mount_ext-derived action types requesting the same extension concurrently share one physical mount', async () => {
-    // A domain that declares TWO concrete mount_ext action subtypes (both
-    // typed as mount_ext by the plugin's prefix match), each independently
-    // wrapped by the registry's prologue in `registerDomain` — proves the
-    // two wrapped handlers share the SAME occupancy coordinator rather than
-    // each tracking in-flight mounts on its own.
-    const ACTION_MOUNT_EXT_DERIVED = `${ACTION_MOUNT_EXT}derived.v1~`;
-
-    class TwoActionTypesDomainImpl extends ExtensionDomainImplementation {
-      constructor(ctx: DomainContext, readonly strategy: ConcurrentMountStrategy) {
-        super();
-        const mountHandler = ActionHandler.fromFunction((_t, p) => this.strategy.mount(p as { subject: string }));
-        ctx.registerHandler(ACTION_MOUNT_EXT, mountHandler);
-        ctx.registerHandler(ACTION_MOUNT_EXT_DERIVED, mountHandler);
-        ctx.registerHandler(ACTION_UNMOUNT_EXT, ActionHandler.fromFunction((_t, p) => this.strategy.unmount!(p as { subject: string })));
-      }
-      protected getMountStrategies(): MountStrategy[] { return [this.strategy]; }
-    }
-
-    class TwoActionTypesDomainFactory extends ExtensionDomainImplementationFactory {
-      readonly hooks = new TestHooks();
-      strategy!: ConcurrentMountStrategy;
-      build(ctx: DomainContext): TwoActionTypesDomainImpl {
-        this.strategy = new ConcurrentMountStrategy(ctx.mounter, this.hooks);
-        return new TwoActionTypesDomainImpl(ctx, this.strategy);
-      }
-    }
-
-    const plugin = createPlugin();
-    const activatedSpy = vi.spyOn(plugin, 'resolveLifecycleStageActivatedId');
-    const domainId = 'domain-derived-action-join';
-    const registry = freshRegistry(plugin);
-    const factory = new TwoActionTypesDomainFactory();
-    registry.registerDomain(
-      { ...makeDomain(domainId, true), actions: [ACTION_LOAD_EXT, ACTION_MOUNT_EXT, ACTION_MOUNT_EXT_DERIVED, ACTION_UNMOUNT_EXT] },
-      factory
-    );
-    await registry.registerExtension(makeExtension('ext-a', domainId));
-    registry.getMounter(domainId).attach(document.createElement('div'));
-
-    const mountSpy = vi.spyOn(factory.strategy, 'mount');
-
-    const firstFired = wireProbe(registry, domainId, 'derived-probe-1');
-    const secondFired = wireProbe(registry, domainId, 'derived-probe-2');
-
-    // Dispatched through two DIFFERENT mount_ext-derived action types, for
-    // the same extension, neither awaited before the other starts.
-    registry.executeActionsChain({
-      action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-a' } },
-      next: { action: { type: 'derived-probe-1', target: domainId, payload: {} } },
-    });
-    registry.executeActionsChain({
-      action: { type: ACTION_MOUNT_EXT_DERIVED, target: domainId, payload: { subject: 'ext-a' } },
-      next: { action: { type: 'derived-probe-2', target: domainId, payload: {} } },
-    });
-
-    await Promise.all([firstFired, secondFired]);
-
-    expect(mountSpy).toHaveBeenCalledTimes(1);
-    expect(activatedSpy).toHaveBeenCalledTimes(1);
-    expect(registry.getMountedExtensions(domainId)).toContain('ext-a');
-
-    registry.dispose();
   });
 
   it('(h) overlapping unmounts of the same extension physically unmount once, and a mount requested meanwhile waits for that settlement', async () => {
@@ -1800,83 +1685,6 @@ describe('domain occupancy queue — two-slot semantics (Optional/Exclusive)', (
     }
   });
 
-  it('inst-me-queue-pending-timeout/inst-me-queue-evaluate-at-turn: a pending caller that times out through the MEDIATOR\'s own per-action bound, while its fallback joins the still-pending entry through a DIFFERENT mount_ext-derived subtype, never runs at the entry\'s turn — the surviving fallback caller\'s subtype runs instead', async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-    try {
-      const ACTION_MOUNT_EXT_DERIVED = `${ACTION_MOUNT_EXT}derived.v1~`;
-      const plugin = createPlugin();
-      const domainId = 'domain-fallback-task-selection';
-      const registry = freshRegistry(plugin);
-      const gate = createDeferred();
-      const factory = new TwoDerivedSubtypesGatedDomainFactory(registry, domainId, gate.promise, ACTION_MOUNT_EXT_DERIVED);
-      registry.registerDomain(
-        { ...makeDomain(domainId, true), actions: [ACTION_LOAD_EXT, ACTION_MOUNT_EXT, ACTION_MOUNT_EXT_DERIVED, ACTION_UNMOUNT_EXT] },
-        factory
-      );
-      await registry.registerExtension(makeExtension('ext-a', domainId));
-      await registry.registerExtension(makeExtension('ext-b', domainId));
-      registry.getMounter(domainId).attach(document.createElement('div'));
-
-      // Running: mount(ext-a) — gated, occupies the queue for the whole race below.
-      const aFired = new Promise<void>((resolve) => {
-        const mediator = (registry as unknown as { mediator: DefaultActionsChainsMediator }).mediator;
-        mediator.registerHandler(domainId, 'race-a-next', ActionHandler.fromFunction(async () => { resolve(); }));
-      });
-      registry.executeActionsChain({
-        action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-a' } },
-        next: { action: { type: 'race-a-next', target: domainId, payload: {} } },
-      });
-
-      // Pending: mount(ext-b) through the ORIGINAL subtype, with a declared
-      // timeout the mediator's own per-action bound arms identically to the
-      // queue's own caller timer for this same caller
-      // (`inst-me-queue-caller-timer`). Its `fallback`, once dispatched,
-      // re-submits mount(ext-b) through the OTHER derived subtype —
-      // observably distinct from the original — joining this entry while it
-      // is still pending, exactly as `inst-me-queue-join-pending` allows,
-      // before this caller's own queue timer has fired.
-      const fallbackNext = new Promise<void>((resolve) => {
-        const mediator = (registry as unknown as { mediator: DefaultActionsChainsMediator }).mediator;
-        mediator.registerHandler(domainId, 'race-b-fallback-next', ActionHandler.fromFunction(async () => { resolve(); }));
-      });
-      const raceBFallbackDispatched = new Promise<void>((resolve) => {
-        const mediator = (registry as unknown as { mediator: DefaultActionsChainsMediator }).mediator;
-        mediator.registerHandler(domainId, 'race-b-fallback', ActionHandler.fromFunction(async () => {
-          registry.executeActionsChain({
-            action: { type: ACTION_MOUNT_EXT_DERIVED, target: domainId, payload: { subject: 'ext-b' }, timeout: 100000 },
-            next: { action: { type: 'race-b-fallback-next', target: domainId, payload: {} } },
-          });
-          resolve();
-        }));
-      });
-      registry.executeActionsChain({
-        action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-b' }, timeout: 30 },
-        fallback: { action: { type: 'race-b-fallback', target: domainId, payload: {} } },
-      });
-
-      // The mediator's own per-action timer for the original ext-b caller
-      // fires at the SAME nominal 30ms as the queue's own caller timer for
-      // that same caller, but was armed strictly first — so it fires first,
-      // and this advance lets its fallback's join (above) complete before
-      // the queue's own timer for the original caller runs.
-      await vi.advanceTimersByTimeAsync(30);
-      await raceBFallbackDispatched;
-
-      // Ext-a's turn ends — ext-b's entry, now holding only the fallback's
-      // caller (the original having timed out of the queue in the same
-      // advance above), is promoted and starts.
-      gate.resolve();
-      await Promise.all([aFired, fallbackNext]);
-
-      expect(factory.impl.order).toEqual(['orig:ext-a', 'fallback:ext-b']);
-      expect(registry.getMountedExtensions(domainId)).toEqual(['ext-b']);
-
-      registry.dispose();
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
   for (const strategyName of ['optional', 'exclusive'] as const) {
     it(`[${strategyName}] eligibility at turn: an entry whose subject is unregistered while pending fails without container creation or activated`, async () => {
       const plugin = createPlugin();
@@ -2553,6 +2361,38 @@ describe('domain occupancy queue — two-slot semantics (Optional/Exclusive)', (
     // — the fresh mount it attempts finds no root and takes its fallback.
     expect(await secondOutcome).toBe('fallback');
     expect(registry.getMountedExtensions(domainId)).not.toContain('ext-a');
+
+    registry.dispose();
+  });
+
+  it('a failed unregisterDomain leaves the domain usable: a mount_ext request is admitted afterwards', async () => {
+    const plugin = createPlugin();
+    const domainId = 'domain-failed-unregister';
+    const registry = freshRegistry(plugin, new ThrowingUnmountHandler(ENTRY_ID));
+    registry.registerDomain(makeDomain(domainId, true), new OptionalDomainFactory(registry, domainId));
+    await registry.registerExtension(makeExtension('ext-a', domainId));
+    await registry.registerExtension(makeExtension('ext-b', domainId));
+    const mounter = registry.getMounter(domainId);
+    mounter.attach(document.createElement('div'));
+    await mounter.mount('ext-a', document.createElement('div'));
+
+    // Draining unmounts ext-a, whose lifecycle `unmount` throws.
+    await expect(registry.unregisterDomain(domainId)).rejects.toThrow('unmount failed');
+
+    const nextFired = wireProbe(registry, domainId, 'after-failed-unregister-next');
+    const fallbackFired = wireProbe(registry, domainId, 'after-failed-unregister-fallback');
+    registry.executeActionsChain({
+      action: { type: ACTION_MOUNT_EXT, target: domainId, payload: { subject: 'ext-b' } },
+      next: { action: { type: 'after-failed-unregister-next', target: domainId, payload: {} } },
+      fallback: { action: { type: 'after-failed-unregister-fallback', target: domainId, payload: {} } },
+    });
+    const outcome = await Promise.race([
+      nextFired.then(() => 'next' as const),
+      fallbackFired.then(() => 'fallback' as const),
+    ]);
+
+    expect(outcome).toBe('next');
+    expect(registry.getMountedExtensions(domainId)).toContain('ext-b');
 
     registry.dispose();
   });

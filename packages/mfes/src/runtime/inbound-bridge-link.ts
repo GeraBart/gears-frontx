@@ -177,7 +177,7 @@ export interface InboundBridgeLink {
    * `inst-collision-check`, `inst-collision-reject`,
    * `inst-record-forwarding-entry`, and `inst-repropagate-upward`.
    */
-  propagateAdvertisement(targetId: string, actionTypeIds: readonly string[]): boolean;
+  propagateAdvertisement(targetId: string): boolean;
 
   /**
    * Retract a previously propagated advertisement from the immediate parent

@@ -12,10 +12,8 @@
  * - An ACCEPTANCE ends this runtime's part: it executes neither `next` nor
  *   `fallback` for that sub-chain.
  *
- * Exercised at the two tiers whose resolution lives outside the mediator:
- * the downward forwarding-entry tier and the upward escalation tier. The
- * parent-to-child-domain forwarding tier is exercised against its real
- * bridge in `__tests__/bridge/cross-runtime-routing.test.ts`.
+ * Exercised at both runtime-crossing tiers: the downward forwarding-entry
+ * tier and the upward escalation tier.
  *
  * Action and domain IDs are a mock notation rather than real GTS strings:
  * MFES-1 forbids @gears-frontx/mfes from carrying type-format literals.

@@ -506,4 +506,186 @@ describe('retention and re-offer of a nested registry adoption', () => {
     expect(errorSpy).not.toHaveBeenCalled();
     registry.dispose();
   });
+
+  it('a failed occupant-value assignment leaves the retained adopters unlinked; the retried mount mints the link again and re-links them (inst-reoffer-retained-adoption)', async () => {
+    const ENTRY = 'entry.assign-fails.v1';
+    const EXT = 'ext.assign-fails.v1';
+    const D_N = 'domain.assign-fails-nested.v1';
+    const ACTION_LEAF = 'mock.action.v1~action_assign_fails_leaf.v1~';
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const plugin = createMockPlugin();
+    const leaf = makeCallCounter();
+    const assignOccupantValue = vi.fn(() => undefined);
+    const router = fakeRouter({ assignOccupantValue });
+
+    let nested: DefaultMfeRegistry | undefined;
+    const lifecycle: MfeEntryLifecycle<ChildMfeBridge> = {
+      mount: () => {
+        if (!nested) {
+          nested = buildNestedRegistry(plugin, D_N, ACTION_LEAF, leaf);
+        }
+      },
+      unmount: () => {},
+    };
+    const shell = new DefaultMfeRegistry({
+      typeSystem: plugin,
+      mfeHandlers: [new StableLifecycleHandler(ENTRY, lifecycle)],
+      router,
+    });
+    shell.registerDomain(makeDomain(D0), new GenericDomainFactory());
+    shell.getMounter(D0).attach(document.createElement('div'));
+    const mounter = shell.getMounter(D0);
+
+    await shell.registerExtension(makeExtension(EXT, D0, ENTRY));
+    await mounter.mount(EXT, document.createElement('div'));
+    await shell.unregisterExtension(EXT);
+    expect(currentInboundEdge(nested!)).toBeUndefined();
+
+    await shell.registerExtension(makeExtension(EXT, D0, ENTRY));
+    assignOccupantValue.mockImplementationOnce(() => {
+      throw new Error('assignment refused');
+    });
+    await expect(mounter.mount(EXT, document.createElement('div'))).rejects.toThrow('assignment refused');
+
+    // The assignment failed before the re-offer.
+    expect(currentInboundEdge(nested!)).toBeUndefined();
+    expect(forwardingEntryIds(shell).has(D_N)).toBe(false);
+
+    await mounter.mount(EXT, document.createElement('div'));
+    expect(currentInboundEdge(nested!)).toBeDefined();
+    await awaitChain(shell, actionChain(ACTION_LEAF, D_N));
+    await leaf.waitFor(1);
+    expect(leaf.count).toBe(1);
+  });
+
+  it('a failed occupant-value assignment followed by unregistration leaves no link attached to the extension\'s bridge (inst-ov-assign-failure)', async () => {
+    const ENTRY = 'entry.assign-fails-unregister.v1';
+    const EXT = 'ext.assign-fails-unregister.v1';
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const plugin = createMockPlugin();
+    const router = fakeRouter({
+      assignOccupantValue: () => {
+        throw new Error('assignment refused');
+      },
+    });
+    const lifecycle: MfeEntryLifecycle<ChildMfeBridge> = { mount: () => {}, unmount: () => {} };
+    const shell = new DefaultMfeRegistry({
+      typeSystem: plugin,
+      mfeHandlers: [new StableLifecycleHandler(ENTRY, lifecycle)],
+      router,
+    });
+    shell.registerDomain(makeDomain(D0), new GenericDomainFactory());
+    shell.getMounter(D0).attach(document.createElement('div'));
+
+    await shell.registerExtension(makeExtension(EXT, D0, ENTRY));
+    await expect(shell.getMounter(D0).mount(EXT, document.createElement('div'))).rejects.toThrow('assignment refused');
+    const childBridge = (shell as unknown as {
+      extensionManager: { getExtensionState(id: string): { childBridge: ChildMfeBridge | null } | undefined };
+    }).extensionManager.getExtensionState(EXT)?.childBridge;
+    expect(childBridge).toBeDefined();
+
+    await shell.unregisterExtension(EXT);
+
+    expect(Object.getOwnPropertySymbols(childBridge!)).not.toContain(
+      Symbol.for('@gears-frontx/mfes:inbound-bridge-link:1')
+    );
+  });
+
+  it('a re-offered registry whose router reads the navigation reader immediately sees the new occupant value (inst-ov-supply-navigation)', async () => {
+    const ENTRY = 'entry.reads-immediately.v1';
+    const EXT = 'ext.reads-immediately.v1';
+    const D_N = 'domain.reads-immediately-nested.v1';
+    const ACTION_LEAF = 'mock.action.v1~action_reads_immediately_leaf.v1~';
+    const plugin = createMockPlugin();
+    const leaf = makeCallCounter();
+    let assigned = 0;
+    const shellRouter = fakeRouter({ assignOccupantValue: () => `value-${++assigned}` });
+    const readValues: unknown[] = [];
+    const nestedRouter = fakeRouter({
+      supplyNavigation: (reader) => {
+        readValues.push(reader());
+      },
+    });
+
+    let nested: DefaultMfeRegistry | undefined;
+    const lifecycle: MfeEntryLifecycle<ChildMfeBridge> = {
+      mount: () => {
+        if (!nested) {
+          nested = buildNestedRegistry(plugin, D_N, ACTION_LEAF, leaf, nestedRouter);
+        }
+      },
+      unmount: () => {},
+    };
+    const shell = new DefaultMfeRegistry({
+      typeSystem: plugin,
+      mfeHandlers: [new StableLifecycleHandler(ENTRY, lifecycle)],
+      router: shellRouter,
+    });
+    shell.registerDomain(makeDomain(D0), new GenericDomainFactory());
+    shell.getMounter(D0).attach(document.createElement('div'));
+    const mounter = shell.getMounter(D0);
+
+    await shell.registerExtension(makeExtension(EXT, D0, ENTRY));
+    await mounter.mount(EXT, document.createElement('div'));
+    await shell.unregisterExtension(EXT);
+    await shell.registerExtension(makeExtension(EXT, D0, ENTRY));
+    await mounter.mount(EXT, document.createElement('div'));
+
+    expect(readValues).toEqual(['value-1', 'value-2']);
+  });
+
+  describe('an action handed down from the parent never escalates', () => {
+    const ACTION_UNHANDLED = 'mock.action.v1~action_unhandled.v1~';
+
+    async function setUp(label: string) {
+      const ENTRY = `entry.${label}.v1`;
+      const EXT = `ext.${label}.v1`;
+      const D_N = `domain.${label}-nested.v1`;
+      const ACTION_LEAF = `mock.action.v1~action_${label}_leaf.v1~`;
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      const plugin = createMockPlugin();
+      const leaf = makeCallCounter();
+      let nested: DefaultMfeRegistry | undefined;
+      const lifecycle: MfeEntryLifecycle<ChildMfeBridge> = {
+        mount: () => {
+          nested = buildNestedRegistry(plugin, D_N, ACTION_LEAF, leaf);
+        },
+        unmount: () => {},
+      };
+      const shell = buildShell(plugin, [new StableLifecycleHandler(ENTRY, lifecycle)]);
+      await shell.registerExtension(makeExtension(EXT, D0, ENTRY));
+      await shell.getMounter(D0).mount(EXT, document.createElement('div'));
+      const received = vi.spyOn(
+        shell as unknown as { receiveCrossHopNode(envelope: unknown): void },
+        'receiveCrossHopNode'
+      );
+      return { shell, nested: nested!, leaf, received, D_N, ACTION_LEAF };
+    }
+
+    it('unresolved in the child, it fails there: the chain\'s fallback runs once in the child and nothing reaches the parent', async () => {
+      const { shell, leaf, received, D_N, ACTION_LEAF } = await setUp('no-escalate-fallback');
+
+      await awaitChain(shell, {
+        action: { type: ACTION_UNHANDLED, target: D_N, payload: {} },
+        fallback: { action: { type: ACTION_LEAF, target: D_N, payload: {} } },
+      });
+      await leaf.waitFor(1);
+
+      expect(leaf.count).toBe(1);
+      expect(received).not.toHaveBeenCalled();
+    });
+
+    it('with no fallback nothing happens and nothing reaches the parent', async () => {
+      const { shell, leaf, received, D_N, ACTION_LEAF } = await setUp('no-escalate-bare');
+
+      // Handed down in order: the unhandled action fails synchronously in the
+      // child, so the leaf action behind it settling shows it already ran.
+      await awaitChain(shell, actionChain(ACTION_UNHANDLED, D_N));
+      await awaitChain(shell, actionChain(ACTION_LEAF, D_N));
+      await leaf.waitFor(1);
+
+      expect(leaf.count).toBe(1);
+      expect(received).not.toHaveBeenCalled();
+    });
+  });
 });

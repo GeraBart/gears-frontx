@@ -55,26 +55,10 @@ export class ChildMfeBridgeImpl extends ChildMfeBridge {
   private executeActionsChainCallback: ((chain: ActionsChain) => void) | null = null;
 
   /**
-   * Internal: callback for registering child domains in the parent mediator.
-   */
-  private registerChildDomainCallback: ((domainId: string) => void) | null = null;
-
-  /**
-   * Internal: callback for unregistering child domains from the parent mediator.
-   */
-  private unregisterChildDomainCallback: ((domainId: string) => void) | null = null;
-
-  /**
    * Internal: callback for registering this MFE's action handler in the parent mediator.
    * The callback receives the actionTypeId and handler class instance.
    */
   private registerActionHandlerCallback: ((actionTypeId: string, handler: ActionHandler) => void) | null = null;
-
-  /**
-   * Internal: set of child domain IDs registered via registerChildDomain().
-   * Tracked for cleanup on bridge disposal.
-   */
-  private readonly childDomainIds: Set<string> = new Set();
 
   /**
    * Internal: whether this bridge is currently mounted. `false` between an
@@ -264,21 +248,6 @@ export class ChildMfeBridgeImpl extends ChildMfeBridge {
   }
 
   /**
-   * INTERNAL: Set callbacks for child domain registration.
-   * Called by bridge factory during wiring.
-   *
-   * @param register - Callback to register a child domain in the parent mediator
-   * @param unregister - Callback to unregister a child domain from the parent mediator
-   */
-  setChildDomainCallbacks(
-    register: (domainId: string) => void,
-    unregister: (domainId: string) => void
-  ): void {
-    this.registerChildDomainCallback = register;
-    this.unregisterChildDomainCallback = unregister;
-  }
-
-  /**
    * INTERNAL: Set callback for action handler registration.
    * Called by bridge factory during wiring.
    *
@@ -307,40 +276,8 @@ export class ChildMfeBridgeImpl extends ChildMfeBridge {
   }
 
   /**
-   * INTERNAL: Register a child domain for cross-runtime action forwarding.
-   * This is a concrete-only method used by child MFEs that define their own domains.
-   *
-   * When a child MFE registers its own domains in a child MfeRegistry,
-   * it should call this method to enable the parent's mediator to route actions
-   * to those domains through the bridge transport.
-   *
-   * @param domainId - ID of the child domain to register
-   * @throws Error if callbacks are not wired (programming error)
-   */
-  registerChildDomain(domainId: string): void {
-    if (!this.registerChildDomainCallback) {
-      throw new Error('registerChildDomain callback not wired');
-    }
-    this.registerChildDomainCallback(domainId);
-    this.childDomainIds.add(domainId);
-  }
-
-  /**
-   * INTERNAL: Unregister a child domain from cross-runtime action forwarding.
-   * This is a concrete-only method used by child MFEs to clean up forwarding.
-   *
-   * @param domainId - ID of the child domain to unregister
-   */
-  unregisterChildDomain(domainId: string): void {
-    if (this.unregisterChildDomainCallback) {
-      this.unregisterChildDomainCallback(domainId);
-    }
-    this.childDomainIds.delete(domainId);
-  }
-
-  /**
    * INTERNAL: Pass a hand-over from the parent — a downward forwarding
-   * entry or the child-domain forwarding tier — to the registered receiver,
+   * entry — to the registered receiver,
    * which accepts or refuses it. Called by
    * `ParentMfeBridgeImpl.sendCrossHopEnvelope()`. With the bridge disposed or
    * inactive, or no receiver registered, refuses without invoking the
@@ -369,22 +306,8 @@ export class ChildMfeBridgeImpl extends ChildMfeBridge {
   /**
    * INTERNAL: Permanent teardown, called by the bridge factory only when the
    * extension this bridge belongs to is unregistered.
-   *
-   * CRITICAL ORDERING: Must unregister all child domains BEFORE nulling callbacks.
-   * This ensures forwarding handlers are properly removed from the parent's mediator.
    */
   destroy(): void {
-    // Step 1: Unregister all tracked child domains (callbacks MUST be wired at this point)
-    for (const domainId of this.childDomainIds) {
-      this.unregisterChildDomain(domainId);
-    }
-
-    // Step 2: Clear the set
-    this.childDomainIds.clear();
-
-    // Step 3: Now null the callbacks (after all unregistrations are complete)
-    this.registerChildDomainCallback = null;
-    this.unregisterChildDomainCallback = null;
     this.registerActionHandlerCallback = null;
 
     // Clean up the rest

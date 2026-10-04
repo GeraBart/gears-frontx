@@ -1133,7 +1133,7 @@ describe('Cross-nesting reachability: registration propagation, escalation, retr
     errorSpy.mockClear();
 
     // A retained reference to the now-revoked link must refuse to act.
-    const accepted: boolean = link.propagateAdvertisement(OTHER_TARGET, [ACTION_OTHER]);
+    const accepted: boolean = link.propagateAdvertisement(OTHER_TARGET);
     expect(accepted).toBe(false);
 
     expect(() => link.retractAdvertisement(OTHER_TARGET)).not.toThrow();
@@ -1182,7 +1182,7 @@ describe('Cross-nesting reachability: registration propagation, escalation, retr
 
     // The link is still live: it keeps refusing to act only for the reason
     // that its bridge is now inactive, never because it was revoked.
-    const accepted: boolean = link.propagateAdvertisement('domain.does-not-matter.v1', []);
+    const accepted: boolean = link.propagateAdvertisement('domain.does-not-matter.v1');
     expect(accepted).toBe(true);
 
     expect(() =>
