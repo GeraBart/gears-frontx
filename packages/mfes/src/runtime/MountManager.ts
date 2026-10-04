@@ -2,7 +2,6 @@
  * Mount Manager
  *
  * Abstract mount manager interface and callback type definitions.
- * Extracted from the legacy screensets package in Phase 7 (extension-domain governance).
  *
  * @packageDocumentation
  * @internal

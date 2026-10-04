@@ -212,7 +212,7 @@ Internal system functions and procedures that do not interact with actors direct
 2. [x] - `p1` - **WHILE** the domain remains closed, **IF** `registerExtension` names this domain id, reject immediately with a domain-unregistering error, before the target domain's presence is otherwise checked and before the type system, router, or any other admission check runs - `inst-algo-du-reject-registration`
 3. [x] - `p1` - Drain the domain's current extension membership by re-querying it after each pass: closing the domain to new registrations first means a later pass can only ever find fewer live extensions than an earlier one, never more, so the drain is guaranteed to terminate once every extension present at close time (and none admitted after) has been unregistered - `inst-algo-du-drain-bounded`
 4. [x] - `p1` - Once the domain itself has been removed from the registry, clear the closed marking for this domain id so the id can be registered again as a fresh domain - `inst-algo-du-reopen`
-5. [x] - `p1` - The closed marking is cleared even if draining or domain removal throws, so a failed unregistration never leaves the domain id permanently unregistrable - `inst-algo-du-reopen-on-failure`
+5. [x] - `p1` - The closed marking is cleared even if draining or domain removal throws, so a failed unregistration never leaves the domain id permanently unregistrable; when the unregistration fails and the domain stays registered, its occupancy queue accepts requests again, and a pending request already failed when the queue closed stays failed - `inst-algo-du-reopen-on-failure`
 
 ### Non-Blocking Lifecycle Stage Triggering
 

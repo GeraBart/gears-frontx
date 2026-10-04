@@ -1503,9 +1503,11 @@ export class DefaultMfeRegistry extends MfeRegistry {
         // domain that is still registered after a failed unregistration has
         // its occupancy queue reopened, so it stays usable.
         this.domainsUnregistering.delete(domainId);
+        // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-queue-domain-unregister
         if (this.extensionManager.getDomainState(domainId)) {
           this.occupancyCoordinatorsByDomain.get(domainId)?.reopen();
         }
+        // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-queue-domain-unregister
         // @cpt-end:cpt-frontx-algo-mfe-registry-domain-unregister-closes-admission:p1:inst-algo-du-reopen-on-failure
         // @cpt-end:cpt-frontx-algo-mfe-registry-domain-unregister-closes-admission:p1:inst-algo-du-reopen
       }

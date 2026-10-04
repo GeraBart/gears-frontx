@@ -2,7 +2,6 @@
  * Extension Manager — State Types and Abstract Interface
  *
  * State interfaces and abstract extension manager contract.
- * Extracted from the legacy screensets package in Phase 7 (extension-domain governance).
  *
  * @packageDocumentation
  * @internal

@@ -3,7 +3,6 @@
  *
  * Default implementation of ExtensionManager using Maps for storage.
  * Contains all business logic for registration, validation, and lifecycle triggering.
- * Extracted from the legacy screensets package in Phase 7 (extension-domain governance).
  *
  * @packageDocumentation
  * @internal
