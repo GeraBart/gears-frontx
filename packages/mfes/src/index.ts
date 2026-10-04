@@ -91,13 +91,10 @@ export {
   DomainValidationError,
   MfeLoadError,
   ExtensionTypeError,
-  ChainExecutionError,
   MfeTypeConformanceError,
-  UnsupportedDomainActionError,
   UnsupportedLifecycleStageError,
   EntryTypeNotHandledError,
   DomainUnregisteringError,
-  type ContractError,
 } from './errors';
 
 // Shadow DOM utilities
@@ -108,6 +105,7 @@ export type { ShadowRootOptions } from './shadow';
 export {
   validateContract,
   formatContractErrors,
+  type ContractError,
   type ContractValidationResult,
   type ContractErrorType,
 } from './validation/contract';

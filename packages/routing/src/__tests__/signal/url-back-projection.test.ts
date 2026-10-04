@@ -309,17 +309,17 @@ describe('url-back-projection — route-style single-entry domain', () => {
 });
 
 describe('url-back-projection — verb is the caller\'s own choice', () => {
-  it('push appends a new history entry a back step can undo', async () => {
+  it('push appends a new history entry a back step can undo', () => {
     const adapter = resetRealm('/en?modal=create-contact');
 
     backProjectEntries('modal' as DomainKey, { removed: ['create-contact' as ExtensionToken] }, 'push');
     expect(lastWrittenUrl(adapter)).toBe('/en');
 
     adapter.go(-1);
-    await vi.waitFor(() => expect(currentUrl(adapter)).toBe('/en?modal=create-contact'));
+    expect(currentUrl(adapter)).toBe('/en?modal=create-contact');
   });
 
-  it('replace overwrites the current entry, so a later back step does not resurrect what was closed', async () => {
+  it('replace overwrites the current entry, so a later back step does not resurrect what was closed', () => {
     const adapter = resetRealm('/en?other=marker');
     adapter.pushState('/en?other=marker&modal=create-contact');
 
@@ -330,7 +330,7 @@ describe('url-back-projection — verb is the caller\'s own choice', () => {
     // The `replace` overwrote the "modal open" entry itself, so stepping
     // back lands one entry further than that, at the original
     // `/en?other=marker` push — never resurrecting the closed modal.
-    await vi.waitFor(() => expect(currentUrl(adapter)).toBe('/en?other=marker'));
+    expect(currentUrl(adapter)).toBe('/en?other=marker');
   });
 });
 

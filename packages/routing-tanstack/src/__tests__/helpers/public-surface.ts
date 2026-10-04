@@ -12,7 +12,6 @@ const REACT_ROUTER_PASSTHROUGH = [
   'createRootRoute',
   'createRootRouteWithContext',
   'createRoute',
-  'RouterProvider',
   'useNavigate',
   'useParams',
   'useSearch',

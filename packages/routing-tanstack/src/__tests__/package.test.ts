@@ -32,7 +32,6 @@ describe('@gears-frontx/routing-tanstack entry point', () => {
         'createRootRoute',
         'createRootRouteWithContext',
         'createRoute',
-        'RouterProvider',
         'useNavigate',
         'useParams',
         'useSearch',

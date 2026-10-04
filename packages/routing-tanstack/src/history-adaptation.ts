@@ -107,10 +107,8 @@ const attachByHistory = new WeakMap<RouterHistory, () => void>();
  * as safe as invoking it once, since the second setup re-does precisely
  * what the cleanup undid rather than finding nothing left to redo.
  *
- * Exported from this package's own entry point because a consumer that
- * mounts a raw `RouterProvider` instead of `EngineProvider` has no other
- * way to establish the registration, and would otherwise hold a history
- * that never moves.
+ * Internal to this package: `EngineProvider` is the one mount boundary that
+ * establishes the registration.
  */
 // The teardown algorithm's own scope marker for this file sits at `destroy`
 // below, the other half of this pair.
