@@ -518,6 +518,54 @@ describe('useBlocker end to end through the adapted history', () => {
     return root.addChildren([general, profile]);
   }
 
+  it('blocks a navigate() when shouldBlockFn returns true: no write, view unchanged', async () => {
+    const adapter = resetRealm('/en?screen=dashboard;route=settings/general;orientation=left');
+    const history = adaptComposedHistory(resolveNavigationHistory(), ENTRY_ADDRESS);
+    // Mounted through a raw `RouterProvider` rather than `EngineProvider`,
+    // so this test owns the attach the provider's own effect would run.
+    attachAdaptedHistory(history);
+    let blockerInvoked!: () => void;
+    const blocked = new Promise<void>((resolve) => {
+      blockerInvoked = resolve;
+    });
+    const calls: unknown[] = [];
+    const router = createProviderRouter(
+      buildBlockableRouteTree(calls, () => {
+        blockerInvoked();
+        return true;
+      }),
+      history,
+    );
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(<RouterProvider router={router} />);
+    });
+    expect(container.textContent).toBe('general');
+    const writeBeforeNavigate = adapter.lastWrite;
+
+    await act(async () => {
+      (globalThis as unknown as { __engineProviderProbeNavigate: (opts: { to: string }) => void }).__engineProviderProbeNavigate({
+        to: '/settings/profile',
+      });
+      await blocked;
+    });
+
+    expect(calls).toHaveLength(1);
+    expect((calls[0] as { action: string }).action).toBe('PUSH');
+    expect(adapter.lastWrite).toBe(writeBeforeNavigate);
+    expect(container.textContent).toBe('general');
+    expect(router.state.location.pathname).toBe('/settings/general');
+
+    await act(async () => {
+      root.unmount();
+    });
+    container.remove();
+    history.destroy();
+  });
+
   it('lets a navigate() through when shouldBlockFn returns false: the write reaches the shared history', async () => {
     const adapter = resetRealm('/en?screen=dashboard;route=settings/general;orientation=left');
     const history = adaptComposedHistory(resolveNavigationHistory(), ENTRY_ADDRESS);
