@@ -597,8 +597,8 @@ export default [
   // new dynamic-code selectors, so no file loses MFES-1/2/3 coverage by
   // gaining this one.
   //
-  // The `files` glob below is `packages/mfes/src/**/*.ts(x)`, which reaches
-  // every file under `src/`, including `__tests__/**` — this block's only
+  // The `files` globs below cover every .ts/.tsx/.mts/.cts/.js/.mjs/.cjs
+  // file under `packages/mfes/src`, including `__tests__/**` — this block's only
   // carve-out is the `ignores` entry for the kernel file itself. Tests
   // under `src/__tests__` that construct dynamic `import()` calls to load
   // independent module copies (e.g. cache-isolation tests) are therefore

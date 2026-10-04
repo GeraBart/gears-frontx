@@ -3,7 +3,6 @@
  *
  * Concrete mount manager that handles MFE loading, mounting, and unmounting
  * with full lifecycle support.
- * Extracted from the legacy screensets package in Phase 7 (extension-domain governance).
  *
  * @packageDocumentation
  * @internal

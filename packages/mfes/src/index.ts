@@ -85,7 +85,7 @@ export { NoHandlerForActionTargetError } from './mediator/NoHandlerForActionTarg
 // Bridge error classes (Phase 6)
 export { NoActionsChainHandlerError, BridgeDisposedError, BridgeInactiveError } from './bridge/errors';
 
-// Error classes (Phase 7)
+// Error classes
 export {
   MfeError,
   DomainValidationError,
@@ -100,11 +100,11 @@ export {
   type ContractError,
 } from './errors';
 
-// Shadow DOM utilities (Phase 7)
+// Shadow DOM utilities
 export { createShadowRoot, injectCssVariables, injectStylesheet } from './shadow';
 export type { ShadowRootOptions } from './shadow';
 
-// Contract matching validation (Phase 7)
+// Contract matching validation
 export {
   validateContract,
   formatContractErrors,
@@ -112,17 +112,17 @@ export {
   type ContractErrorType,
 } from './validation/contract';
 
-// Lifecycle validation (Phase 7)
+// Lifecycle validation
 export {
   validateDomainLifecycleHooks,
   validateExtensionLifecycleHooks,
   type LifecycleValidationResult,
 } from './validation/lifecycle';
 
-// Extension type validation (Phase 7)
+// Extension type validation
 export { validateExtensionType } from './validation/extension-type';
 
-// Extension manager (Phase 7)
+// Extension manager
 export { ExtensionManager } from './runtime/ExtensionManager';
 export type {
   ExtensionDomainState,
@@ -131,11 +131,11 @@ export type {
   DomainLifecycleTriggerCallback,
 } from './runtime/ExtensionManager';
 
-// Mount manager (Phase 7)
+// Mount manager
 export { MountManager } from './runtime/MountManager';
 export type { ActionsChainDispatcher, LifecycleTrigger } from './runtime/MountManager';
 
-// Runtime bridge factory (Phase 7)
+// Runtime bridge factory
 export { RuntimeBridgeFactory } from './runtime/RuntimeBridgeFactory';
 
 // MFE Isolation — handler, trust kernel, types (Phase 8)

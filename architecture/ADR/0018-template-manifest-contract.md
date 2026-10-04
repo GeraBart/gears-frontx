@@ -58,7 +58,7 @@ The convention-inference option couples the CLI to brittle layout heuristics and
 * Good, because a versioned shape lets the contract evolve while older published manifests remain readable.
 * Bad, because every template author must author and maintain a conforming manifest, including its ownership-boundary declaration, adding an authoring obligation that pure convention-inference would avoid.
 * Bad, because the manifest shape becomes a contract whose evolution must be governed for compatibility, adding contract-stewardship overhead.
-* The **description is optional**, so that manifests published before it was declared stay conforming and installable; the exclusion this buys is that a template declaring no description is not selectable from a stated intent and is reachable only by its exact reference.
+* The **description is optional**, so a manifest that declares none is conforming and installable; the exclusion this buys is that a template declaring no description is not selectable from a stated intent and is reachable only by its exact reference.
 * The manifest still carries **no template-classification field**: the description is the template's own prose about itself, not a value drawn from a taxonomy, so declaring it does not reintroduce the classification `cpt-frontx-adr-template-classification` removed.
 
 ### Confirmation

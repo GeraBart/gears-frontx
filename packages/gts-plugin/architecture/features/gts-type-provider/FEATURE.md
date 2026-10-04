@@ -108,13 +108,13 @@ Internal system functions and procedures that do not interact with actors direct
 **Output**: Provider internal store populated with infrastructure schemas and validated default lifecycle stage instances; provider transitions to READY state.
 
 **Steps**:
-1. [x] - `p1` - Create the internal GTS store for schema and instance registration. - `inst-ir-01`
+1. [x] - `p1` - Create the internal GTS store for schema and instance registration, and the scratch GTS store that mirrors it and against which a candidate instance is validated. - `inst-ir-01`
 2. [x] - `p1` - Load the full set of ecosystem infrastructure schema definitions from the declared schema sources (13 schemas: 8 core, 2 MF-specific, 3 extension action schemas). Each concrete action schema (`mount_ext`, `unmount_ext`, `load_ext`) is self-contained — it re-declares every property the base action schema (`action.v1`) would otherwise provide — and closed: `additionalProperties: false` at its own top level and on its own `payload`, so an undeclared field on either is rejected at validation. The base action schema (`action.v1`) stays open. `mount_ext` and `unmount_ext` each declare an optional `history` property — a strictly typed enum of `none`, `replace`, and `push` — rejected when present with any other value. - `inst-ir-02`
 3. [x] - `p1` - **FOR EACH** infrastructure schema in the loaded set: - `inst-ir-03`
-   1. [x] - `p1` - Wrap the schema as a typed entity and register it in the internal GTS store. - `inst-ir-03a`
+   1. [x] - `p1` - Wrap the schema as a typed entity and register it in both the internal and the scratch GTS store. - `inst-ir-03a`
 4. [x] - `p1` - Load the set of default lifecycle stage instances from the declared instance sources (4 instances: init, activated, deactivated, destroyed). - `inst-ir-04`
 5. [x] - `p1` - **FOR EACH** lifecycle stage instance in the loaded set: - `inst-ir-05`
-   1. [x] - `p1` - Wrap the instance as a typed entity and register it in the internal GTS store. - `inst-ir-05a`
+   1. [x] - `p1` - Wrap the instance as a typed entity and register it in both the internal and the scratch GTS store. - `inst-ir-05a`
 6. [x] - `p1` - **FOR EACH** registered lifecycle stage instance: - `inst-ir-06`
    1. [x] - `p1` - Request the GTS store to validate the instance against its corresponding registered schema. - `inst-ir-06a`
    2. [x] - `p1` - **IF** validation fails: - `inst-ir-06b`
@@ -170,13 +170,13 @@ Steps 4–10 stand apart from the hierarchy check above: they take neither `type
 
 **Steps**:
 1. [x] - `p1` - `registerSchema`: wrap the supplied schema as a typed GTS entity. - `inst-rr-01`
-2. [x] - `p1` - `registerSchema`: register the wrapped schema directly in the internal GTS store — a schema registration carries no validation step to run before persisting. - `inst-rr-02`
+2. [x] - `p1` - `registerSchema`: register the wrapped schema directly in both the internal and the scratch GTS store — a schema registration carries no validation step to run before persisting. - `inst-rr-02`
 3. [x] - `p1` - `register`: wrap the supplied instance as a typed GTS entity. - `inst-rr-06`
-4. [x] - `p1` - Validate the wrapped instance against a disposable store seeded with every entity currently held in the internal GTS store (schemas and sibling instances alike), so the resolved schema and any cross-instance reference check see the same state the internal store would offer — without ever persisting the candidate into the internal store itself. - `inst-rr-07`
-5. [x] - `p1` - **IF** the validation result is not ok or not valid: - `inst-rr-08`
+4. [x] - `p1` - Register the wrapped instance in the scratch GTS store, which mirrors the internal store because every successful write goes to both, and validate it there, so schema resolution and any cross-instance reference check see the same state the internal store offers without the candidate entering the internal store. - `inst-rr-07`
+5. [x] - `p1` - **IF** the validation result is not ok or not valid, rebuild the scratch GTS store from every entity the internal store holds, so it again mirrors the internal store: - `inst-rr-08`
    1. [x] - `p1` - Compose an error identifying the instance, the failure reason, and the resolved schema. - `inst-rr-08a`
    2. [x] - `p1` - Raise the error, aborting the registration; the internal GTS store is left unchanged. - `inst-rr-08b`
-6. [x] - `p1` - Validation passed: register the already-wrapped instance in the internal GTS store. - `inst-rr-09`
+6. [x] - `p1` - Validation passed: register the already-wrapped instance in the internal GTS store, so both stores again hold the same entities. - `inst-rr-09`
 7. [x] - `p1` - Retrieve a registered schema by type identifier, returning undefined when no entity exists or the entity content is not a schema object. - `inst-rr-05`
 
 ## 4. States (CDSL)

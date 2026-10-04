@@ -2,7 +2,6 @@
  * Contract Matching Validation
  *
  * Validates that MFE entries are compatible with extension domains before mounting.
- * Extracted from the legacy screensets package in Phase 7 (extension-domain governance).
  *
  * @packageDocumentation
  */
