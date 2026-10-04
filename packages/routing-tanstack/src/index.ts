@@ -43,7 +43,6 @@ export {
   createRootRoute,
   createRootRouteWithContext,
   createRoute,
-  RouterProvider,
   useNavigate,
   useParams,
   useSearch,

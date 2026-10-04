@@ -231,17 +231,11 @@ export type EngineProviderProps<TRouteTree extends AnyRoute> = EngineProviderTre
 
 /**
  * `createProviderRouter` above returns only a constructed
- * router — a consumer mounting it directly through `RouterProvider`,
- * bypassing this component, has no lifecycle hook of its own from which to
- * attach that router's `history` or to call `router.history.destroy()`, so
- * it gets an inert history for the life of that mount and, once the mount
- * ends, the exact leak §3, Teardown On Unmount, describes — both on the one
- * export typed against the engine-provider port itself. This overload gives
- * that consumer the same mount boundary and the same symmetric attach/destroy effect below,
- * applied to the already-constructed router's own `history` member (the
- * same adapted `RouterHistory` object either overload ultimately mounts
- * and tears down) instead of a separately supplied `history` prop —
- * `router` is expected stable for the lifetime of one mount, exactly like
+ * router. This overload mounts such a router with the same mount boundary
+ * and the same symmetric attach/destroy effect below, applied to the
+ * already-constructed router's own `history` member (the same adapted
+ * `RouterHistory` object either overload ultimately mounts and tears down)
+ * instead of a separately supplied `history` prop — `router` is expected stable for the lifetime of one mount, exactly like
  * `history` above.
  *
  * The contract this overload commits to is unconditional: `EngineProvider`
@@ -250,9 +244,7 @@ export type EngineProviderProps<TRouteTree extends AnyRoute> = EngineProviderTre
  * A `router` constructed elsewhere with a consumer-owned, non-adapted
  * history still has that history's own `destroy()` called on unmount
  * (`attachAdaptedHistory` is a no-op for an object it never registered, so
- * the mismatched half of the pair costs nothing) — a caller who wants to
- * keep managing that history's lifecycle itself must mount the router
- * through a raw `RouterProvider` instead of this overload.
+ * the mismatched half of the pair costs nothing).
  */
 export interface EngineProviderFromRouterProps<TRouter extends AnyRouter> {
   readonly router: TRouter;
@@ -287,14 +279,6 @@ export interface EngineProviderFromRouterProps<TRouter extends AnyRouter> {
  * dead: the second setup re-does exactly what the cleanup undid, so a
  * StrictMode mount still ends with exactly one live subscription, and an
  * actual unmount still ends with zero.
- *
- * The consequence for a consumer that does not use this component: a raw
- * `<RouterProvider router={router} />` mount receives an inert history —
- * `location` stays at whatever the adaptation projected at construction and
- * no navigation from outside this occupant ever reaches it — until
- * something calls `attachAdaptedHistory` (`./history-adaptation.js`,
- * re-exported from this package's own entry point) on it. Such a consumer
- * owns both halves: that attach, and the matching `router.history.destroy()`.
  */
 export function EngineProvider<TRouteTree extends AnyRoute>(props: EngineProviderProps<TRouteTree>): ReactElement;
 export function EngineProvider<TRouter extends AnyRouter>(props: EngineProviderFromRouterProps<TRouter>): ReactElement;

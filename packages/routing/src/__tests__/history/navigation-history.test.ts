@@ -2,6 +2,15 @@ import { describe, expect, it, vi } from 'vitest';
 import { createNavigationHistory } from '../../history/navigation-history.js';
 import { FakeHistoryAdapter } from './fake-history-adapter.js';
 
+function nextNotification(history: ReturnType<typeof createNavigationHistory>): Promise<void> {
+  return new Promise<void>((resolve) => {
+    const release = history.subscribe(() => {
+      release();
+      resolve();
+    });
+  });
+}
+
 // FEATURE (navigation-substrate) §2, Imperative Navigation Outside The UI
 // Tree; §3, Realm-Global Singleton Resolution, step 2.1 (construction reads
 // the adapter's current location so a reader who never subscribes still sees
@@ -90,9 +99,12 @@ describe('createNavigationHistory — go', () => {
     const history = createNavigationHistory(adapter);
     const subscriber = vi.fn();
     history.subscribe(subscriber);
+    const notified = nextNotification(history);
 
     history.go(-1);
-    await vi.waitFor(() => expect(subscriber).toHaveBeenCalledTimes(1));
+    await notified;
+
+    expect(subscriber).toHaveBeenCalledTimes(1);
 
     expect(subscriber).toHaveBeenCalledWith({
       location: { path: '/en', search: '', hash: '', position: 0 },
@@ -154,8 +166,11 @@ describe('createNavigationHistory — position tracking', () => {
     history.push('/b');
     expect(history.location.position).toBe(2);
 
+    const notified = nextNotification(history);
     history.go(-1);
-    await vi.waitFor(() => expect(history.location.position).toBe(1));
+    await notified;
+
+    expect(history.location.position).toBe(1);
 
     expect(history.location).toEqual({ path: '/a', search: '', hash: '', position: 1 });
   });
@@ -164,8 +179,10 @@ describe('createNavigationHistory — position tracking', () => {
     const adapter = new FakeHistoryAdapter('/en');
     const history = createNavigationHistory(adapter);
     history.push('/a');
+    const notified = nextNotification(history);
     history.go(-1);
-    await vi.waitFor(() => expect(history.location.position).toBe(0));
+    await notified;
+    expect(history.location.position).toBe(0);
 
     // A `go` past either end of the real stack is a silent no-op
     // (`FakeHistoryAdapter#go`, mirroring a real browser) — no `popstate`
@@ -183,8 +200,10 @@ describe('createNavigationHistory — position tracking', () => {
     history.push('/a');
     expect(history.location.position).toBe(1);
 
+    const notified = nextNotification(history);
     adapter.simulateExternalPop('/b');
-    await vi.waitFor(() => expect(history.location.path).toBe('/b'));
+    await notified;
+    expect(history.location.path).toBe('/b');
 
     expect(history.location.position).toBe(0);
   });

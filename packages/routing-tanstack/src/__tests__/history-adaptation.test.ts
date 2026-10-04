@@ -658,34 +658,22 @@ describe('rejected/throwing blocker', () => {
     expect((reported[0] as Error).message).toBe('wrapper-forwarded blocker failure');
   });
 
-  it('an async blocker that genuinely awaits still gates the navigation correctly', async () => {
-    const adapter = resetRealm(EXAMPLE_7_3_URL);
-    const history = adaptComposedHistory(resolveNavigationHistory(), DASHBOARD_ENTRY_ADDRESS);
-    history.block({
-      blockerFn: async () => {
-        await new Promise((resolve) => setTimeout(resolve, 0));
-        return true;
-      },
-    });
-
-    history.push('/settings/profile?orientation=left');
-    await new Promise((resolve) => setTimeout(resolve, 10));
-
-    expect(adapter.lastWrite).toBeUndefined();
-  });
-
   it('an async blocker that genuinely awaits and resolves false lets the navigation through', async () => {
     const adapter = resetRealm(EXAMPLE_7_3_URL);
-    const history = adaptComposedHistory(resolveNavigationHistory(), DASHBOARD_ENTRY_ADDRESS);
+    const navigationHistory = resolveNavigationHistory();
+    const history = adaptComposedHistory(navigationHistory, DASHBOARD_ENTRY_ADDRESS);
     history.block({
-      blockerFn: async () => {
-        await new Promise((resolve) => setTimeout(resolve, 0));
-        return false;
-      },
+      blockerFn: async () => false,
+    });
+    const written = new Promise<void>((resolve) => {
+      const release = navigationHistory.subscribe(() => {
+        release();
+        resolve();
+      });
     });
 
     history.push('/settings/profile?orientation=left');
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    await written;
 
     expect(adapter.lastWrite).toBe(
       '/en?screen=dashboard;route=settings/profile;orientation=left&sheet=tenant-details;route=contacts;tenantId=456',

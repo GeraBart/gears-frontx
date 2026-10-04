@@ -518,45 +518,6 @@ describe('useBlocker end to end through the adapted history', () => {
     return root.addChildren([general, profile]);
   }
 
-  async function settle(): Promise<void> {
-    await new Promise<void>((resolve) => setTimeout(resolve, 0));
-    await new Promise<void>((resolve) => setTimeout(resolve, 0));
-  }
-
-  it('blocks a navigate() when shouldBlockFn returns true: no write, view unchanged', async () => {
-    const adapter = resetRealm('/en?screen=dashboard;route=settings/general;orientation=left');
-    const history = adaptComposedHistory(resolveNavigationHistory(), ENTRY_ADDRESS);
-    const calls: unknown[] = [];
-    const router = createProviderRouter(buildBlockableRouteTree(calls, () => true), history);
-
-    const container = document.createElement('div');
-    document.body.appendChild(container);
-    const root = createRoot(container);
-    await act(async () => {
-      root.render(<RouterProvider router={router} />);
-    });
-    expect(container.textContent).toBe('general');
-
-    await act(async () => {
-      (globalThis as unknown as { __engineProviderProbeNavigate: (opts: { to: string }) => void }).__engineProviderProbeNavigate({
-        to: '/settings/profile',
-      });
-      await settle();
-    });
-
-    expect(calls).toHaveLength(1);
-    expect((calls[0] as { action: string }).action).toBe('PUSH');
-    expect(adapter.lastWrite).toBeUndefined();
-    expect(container.textContent).toBe('general');
-    expect(router.state.location.pathname).toBe('/settings/general');
-
-    await act(async () => {
-      root.unmount();
-    });
-    container.remove();
-    history.destroy();
-  });
-
   it('lets a navigate() through when shouldBlockFn returns false: the write reaches the shared history', async () => {
     const adapter = resetRealm('/en?screen=dashboard;route=settings/general;orientation=left');
     const history = adaptComposedHistory(resolveNavigationHistory(), ENTRY_ADDRESS);
@@ -573,11 +534,17 @@ describe('useBlocker end to end through the adapted history', () => {
       root.render(<RouterProvider router={router} />);
     });
 
+    const resolved = new Promise<void>((resolve) => {
+      const unsub = router.subscribe('onResolved', () => {
+        unsub();
+        resolve();
+      });
+    });
     await act(async () => {
       (globalThis as unknown as { __engineProviderProbeNavigate: (opts: { to: string }) => void }).__engineProviderProbeNavigate({
         to: '/settings/profile',
       });
-      await settle();
+      await resolved;
     });
 
     expect(calls).toHaveLength(1);

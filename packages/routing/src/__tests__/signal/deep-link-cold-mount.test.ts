@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { resolveNavigationHistory } from '../../history/singleton.js';
 import { createObserver, resetRealm, staticSource as source } from '../helpers.js';
 import type { DomainKey } from '../../types/index.js';
@@ -95,14 +95,20 @@ describe('deep-link-cold-mount — cold URL several domains deep', () => {
   it('a back step through history reports the same transition a forward navigation to that URL would', async () => {
     const adapter = resetRealm('/en');
     const transitions: string[][] = [];
+    let onTransition: () => void = () => {};
     createObserver('screen' as DomainKey, source([]), (transition) => {
       transitions.push(transition.entries.map((e) => e.extension));
+      onTransition();
     });
     resolveNavigationHistory(() => adapter).push('/en?screen=dashboard');
     transitions.length = 0;
+    const observed = new Promise<void>((resolve) => {
+      onTransition = resolve;
+    });
 
     adapter.go(-1);
-    await vi.waitFor(() => expect(transitions).toEqual([[]]));
+    await observed;
+    expect(transitions).toEqual([[]]);
   });
 });
 
