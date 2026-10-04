@@ -24,6 +24,7 @@ import { ConcurrentMountStrategy } from '../ConcurrentMountStrategy';
 import type { ContainerHooks } from '../MountStrategy';
 import { ActionHandler } from '../../mediator/ActionHandler';
 import type { RouterPort } from '../../router/RouterPort';
+import { DomainValidationError } from '../../errors/DomainValidationError';
 
 const ACTION_LOAD_EXT = 'cti.example.action~load_ext.v1~';
 const ACTION_MOUNT_EXT = 'cti.example.action~mount_ext.v1~';
@@ -195,6 +196,43 @@ describe('router admission', () => {
 
     expect(router.registerExtension).toHaveBeenCalledTimes(1);
     expect(router.registerExtension).toHaveBeenCalledWith(expect.objectContaining({ id: EXTENSION_ID }));
+
+    registry.dispose();
+  });
+
+  it('registering an already-registered domain id throws before any router call and leaves the live domain unchanged', () => {
+    const plugin = createPlugin();
+    const router = createRouterSpy();
+    const registry = freshRegistry(plugin, router);
+    registry.registerDomain(makeDomain(), new ConcurrentDomainFactory());
+    const mounter = registry.getMounter(DOMAIN_ID);
+
+    expect(() => registry.registerDomain(makeDomain(), new ConcurrentDomainFactory())).toThrow(
+      DomainValidationError
+    );
+
+    expect(router.registerDomain).toHaveBeenCalledTimes(1);
+    expect(router.releaseDomain).not.toHaveBeenCalled();
+    expect(registry.getMounter(DOMAIN_ID)).toBe(mounter);
+
+    registry.dispose();
+  });
+
+  it('registering an already-registered extension id throws before any router call and leaves the registered extension unchanged', async () => {
+    const plugin = createPlugin();
+    const router = createRouterSpy();
+    const registry = freshRegistry(plugin, router);
+    registry.registerDomain(makeDomain(), new ConcurrentDomainFactory());
+    const original = makeExtension();
+    await registry.registerExtension(original);
+
+    await expect(registry.registerExtension({ ...original })).rejects.toThrow(
+      `Extension '${EXTENSION_ID}' is already registered.`
+    );
+
+    expect(router.registerExtension).toHaveBeenCalledTimes(1);
+    expect(router.releaseExtension).not.toHaveBeenCalled();
+    expect(registry.getExtension(EXTENSION_ID)).toBe(original);
 
     registry.dispose();
   });

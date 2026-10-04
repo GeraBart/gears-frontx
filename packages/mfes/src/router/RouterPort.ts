@@ -49,7 +49,7 @@ export interface OccupantValueAssignment {
  * `inst-me-report-settled`).
  */
 export interface SettledActionReport {
-  /** The action type actually dispatched — may be a derived mount_ext/unmount_ext subtype. */
+  /** The action type dispatched (mount_ext or unmount_ext). */
   actionTypeId: string;
   /** The domain the executed action's handler belongs to. */
   domainId: string;

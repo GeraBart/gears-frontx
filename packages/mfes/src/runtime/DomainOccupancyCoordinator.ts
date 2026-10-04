@@ -5,10 +5,9 @@
  * domain's own `mount_ext` and `unmount_ext` action implementations
  * (`cpt-frontx-algo-extension-domain-governance-mount-execution`
  * `inst-me-occupancy-queue`). One instance per registered domain, shared by
- * every `mount_ext`- and `unmount_ext`-derived action type the domain
- * registers, so a request accepted through one derived action type joins,
- * replaces, or is ordered against a request accepted through another exactly
- * as it would be if both were the same action type.
+ * the domain's `mount_ext` and `unmount_ext` handlers, so a request accepted
+ * through one joins, replaces, or is ordered against a request accepted
+ * through the other.
  *
  * The queue holds at most two entries: the running entry and one pending
  * entry. An entry is one operation (a mount, or an explicit unmount) on one
@@ -147,6 +146,11 @@ export class DomainOccupancyCoordinator {
     this.settlePendingFailure(reasonSuffix);
   }
   // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-queue-domain-unregister
+
+  /** Reopens a closed queue, so requests submitted after this call are admitted again. */
+  reopen(): void {
+    this.closedReasonSuffix = undefined;
+  }
 
   /** Adds `caller` to `entry` and arms its own timer. */
   private admit(entry: OccupancyEntry, caller: OccupancyCaller, timeoutMs: number): void {

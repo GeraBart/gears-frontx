@@ -61,22 +61,4 @@ export abstract class ActionsChainsMediator {
    * @param targetId - ID of the target
    */
   abstract unregisterAllHandlers(targetId: string): void;
-
-  /**
-   * Register a catch-all handler for a target.
-   * The catch-all handler is invoked for any action type addressed to the
-   * target when no specific handler is registered for the (targetId,
-   * actionTypeId) pair.
-   *
-   * @param targetId - ID of the target
-   * @param handler - Handler to invoke for any unmatched action type
-   */
-  abstract registerCatchAllHandler(targetId: string, handler: ActionHandler): void;
-
-  /**
-   * Unregister a catch-all handler for a target.
-   *
-   * @param targetId - ID of the target
-   */
-  abstract unregisterCatchAllHandler(targetId: string): void;
 }

@@ -8,9 +8,9 @@
  * `DomainContext` invalidation because it is stored directly on the
  * implementation's field, not accessed through `ctx`.
  *
- * The public `triggerLifecycleStage`, `triggerDomainLifecycleStage`, and
- * `triggerDomainOwnLifecycleStage` methods have been removed from
- * `MfeRegistry` per `cpt-frontx-dod-mfe-registry-lifecycle-trigger-contract`.
+ * `MfeRegistry` carries no public `triggerLifecycleStage`,
+ * `triggerDomainLifecycleStage`, or `triggerDomainOwnLifecycleStage` method
+ * (`cpt-frontx-dod-mfe-registry-lifecycle-trigger-contract`).
  *
  * @packageDocumentation
  */

@@ -37,12 +37,12 @@ import type { UnmountExtPayload } from '../types';
  * A Concurrent domain is given `concurrentJoiner` (and no `queue`); an
  * Optional domain is given `queue` (and no `concurrentJoiner`) — the SAME
  * instance `MountExtActionHandler` was given for this domain's
- * `mount_ext`-derived handlers.
+ * `mount_ext` handler.
  */
 export class UnmountExtActionHandler extends DeclaredTimeoutActionHandler {
   /**
    * @param inner - The handler the domain factory registered for
-   *   `unmount_ext` (or a type derived from it) — ultimately a bound
+   *   `unmount_ext` — ultimately a bound
    *   `strategy.unmount(...)` call.
    * @param domainId - The domain this `unmount_ext` handler was registered
    *   for.

@@ -9,7 +9,7 @@ import type { ExtensionDomainState } from '../../runtime/ExtensionManager';
 
 // Mock-plugin-local stand-ins for the framework's well-known lifecycle action
 // IDs, deliberately NOT the real GTS strings — proves the mediator's
-// hierarchy-aware paths never assume any particular notation.
+// paths never assume any particular notation.
 const MOUNT_EXT = 'mock.action.v1~mount_ext.v1~';
 const UNMOUNT_EXT = 'mock.action.v1~unmount_ext.v1~';
 const LOAD_EXT = 'mock.action.v1~load_ext.v1~';
@@ -17,9 +17,6 @@ const STAGE_INIT = 'mock.stage.v1~init.v1';
 const STAGE_ACTIVATED = 'mock.stage.v1~activated.v1';
 const STAGE_DEACTIVATED = 'mock.stage.v1~deactivated.v1';
 const STAGE_DESTROYED = 'mock.stage.v1~destroyed.v1';
-// A domain-declared "is-a" derivative of mount_ext — NOT string-equal to
-// MOUNT_EXT, but recognized as derived from it by the mock's isTypeOf.
-const DERIVED_MOUNT_EXT = `${MOUNT_EXT}vendor.v1~`;
 const ACTION_A = 'mock.action.v1~a.v1~';
 const ACTION_B = 'mock.action.v1~b.v1~';
 const ACTION_C = 'mock.action.v1~c.v1~';
@@ -517,33 +514,7 @@ describe('DefaultActionsChainsMediator — hand-over across a hop', () => {
   });
 });
 
-describe('DefaultActionsChainsMediator — hierarchy-aware handler resolution', () => {
-  it('resolves a handler registered under a DERIVED mount_ext id when dispatched with the BASE id', async () => {
-    const mediator = makeMediator();
-    const handler = recordingHandler();
-    mediator.registerHandler('domain-1', DERIVED_MOUNT_EXT, handler.handler);
-
-    mediator.executeActionsChain({
-      action: { type: MOUNT_EXT, target: 'domain-1', payload: { subject: 'ext-1' } },
-    });
-
-    await handler.reached.promise;
-    expect(handler.calls).toHaveLength(1);
-  });
-
-  it('resolves a handler registered under the BASE mount_ext id when dispatched with a DERIVED id', async () => {
-    const mediator = makeMediator();
-    const handler = recordingHandler();
-    mediator.registerHandler('domain-1', MOUNT_EXT, handler.handler);
-
-    mediator.executeActionsChain({
-      action: { type: DERIVED_MOUNT_EXT, target: 'domain-1', payload: { subject: 'ext-1' } },
-    });
-
-    await handler.reached.promise;
-    expect(handler.calls).toHaveLength(1);
-  });
-
+describe('DefaultActionsChainsMediator — handler resolution', () => {
   it('does not misroute an ActionHandler that defines its own `send` method as a CrossHopRoute', async () => {
     const reached = createDeferred();
     class HandlerWithOwnSendMethod extends ActionHandler {
@@ -587,20 +558,6 @@ describe('DefaultActionsChainsMediator — hierarchy-aware handler resolution', 
     expect(fallback.calls).toHaveLength(1);
   });
 
-  it('exempts a DERIVED infrastructure action from entry declaration validation', async () => {
-    // The entry declares NO actions — a derived load_ext treated as a
-    // regular action would fail the declaration check.
-    const entry = { id: 'ext-1', actions: [] } as unknown as MfeEntry;
-    const mediator = makeMediator({ getExtensionEntry: () => entry });
-    const handler = recordingHandler();
-    mediator.registerHandler('ext-1', `${LOAD_EXT}vendor.v1~`, handler.handler, 'domain-1');
-
-    mediator.executeActionsChain({ action: { type: `${LOAD_EXT}vendor.v1~`, target: 'ext-1' } });
-
-    await handler.reached.promise;
-    expect(handler.calls).toHaveLength(1);
-  });
-
   it('unregisterAllHandlers removes the target: a later action to it executes `fallback`', async () => {
     const mediator = makeMediator();
     const fallback = recordingHandler();
@@ -615,5 +572,12 @@ describe('DefaultActionsChainsMediator — hierarchy-aware handler resolution', 
 
     await fallback.reached.promise;
     expect(fallback.calls).toHaveLength(1);
+  });
+
+  it('executeChain never rejects, even when handed a malformed chain', async () => {
+    const mediator = makeMediator();
+    const execute = (mediator as unknown as { executeChain(chain: unknown): Promise<void> }).executeChain;
+
+    await expect(execute.call(mediator, undefined)).resolves.toBeUndefined();
   });
 });

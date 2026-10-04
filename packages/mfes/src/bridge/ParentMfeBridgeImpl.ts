@@ -71,8 +71,7 @@ export class ParentMfeBridgeImpl extends ParentMfeBridge {
 
   /**
    * Hand a sub-chain to the child MFE's registry — used by a downward
-   * forwarding entry and by the child-domain forwarding tier
-   * (`cpt-frontx-adr-action-dispatch-and-chaining`). Throws to refuse, with
+   * forwarding entry (`cpt-frontx-adr-action-dispatch-and-chaining`). Throws to refuse, with
    * no side effect in the child runtime, or returns having accepted;
    * nothing comes back.
    *

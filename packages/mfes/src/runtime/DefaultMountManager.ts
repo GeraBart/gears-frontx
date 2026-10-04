@@ -18,7 +18,6 @@ import type { ParentMfeBridge } from '../handler/ParentMfeBridge';
 import type { TypeSystemPlugin } from '../type-substrate';
 import type { RuntimeCoordinator } from './coordination/RuntimeCoordinator';
 import type { ActionHandler } from '../mediator/ActionHandler';
-import type { CrossHopRoute } from '../mediator/CrossHopRoute';
 import type { ActionsChain } from '../types';
 import { DefaultExtensionManager } from './DefaultExtensionManager';
 import type { MfeRegistry } from '../registry/MfeRegistry';
@@ -55,8 +54,6 @@ export class DefaultMountManager extends MountManager {
    */
   private readonly dispatchActionsChain: ActionsChainDispatcher;
   private readonly hostRuntime: MfeRegistry;
-  private readonly registerCatchAllRoute: (domainId: string, route: CrossHopRoute) => void;
-  private readonly unregisterCatchAllActionHandler: (domainId: string) => void;
   private readonly registerExtensionActionHandler: (extensionId: string, actionTypeId: string, handler: ActionHandler, domainId: string) => void;
   private readonly unregisterExtensionActionHandler: (extensionId: string) => void;
   private readonly bridgeFactory: RuntimeBridgeFactory;
@@ -125,8 +122,6 @@ export class DefaultMountManager extends MountManager {
     triggerLifecycle: LifecycleTrigger;
     dispatchActionsChain: ActionsChainDispatcher;
     hostRuntime: MfeRegistry;
-    registerCatchAllRoute: (domainId: string, route: CrossHopRoute) => void;
-    unregisterCatchAllActionHandler: (domainId: string) => void;
     registerExtensionActionHandler: (extensionId: string, actionTypeId: string, handler: ActionHandler, domainId: string) => void;
     unregisterExtensionActionHandler: (extensionId: string) => void;
     bridgeFactory: RuntimeBridgeFactory;
@@ -147,8 +142,6 @@ export class DefaultMountManager extends MountManager {
     this.triggerLifecycle = config.triggerLifecycle;
     this.dispatchActionsChain = config.dispatchActionsChain;
     this.hostRuntime = config.hostRuntime;
-    this.registerCatchAllRoute = config.registerCatchAllRoute;
-    this.unregisterCatchAllActionHandler = config.unregisterCatchAllActionHandler;
     this.registerExtensionActionHandler = config.registerExtensionActionHandler;
     this.unregisterExtensionActionHandler = config.unregisterExtensionActionHandler;
     this.bridgeFactory = config.bridgeFactory;
@@ -281,7 +274,6 @@ export class DefaultMountManager extends MountManager {
           );
         }
 
-        const entryDomainActions = extensionState.entry.domainActions;
         const existing =
           extensionState.bridge && extensionState.childBridge
             ? { parentBridge: extensionState.bridge, childBridge: extensionState.childBridge }
@@ -290,14 +282,9 @@ export class DefaultMountManager extends MountManager {
         const { parentBridge, childBridge } = this.bridgeFactory.acquireBridge(
           domainState,
           extensionId,
-          extensionState.entry.id,
-          entryDomainActions,
           existing,
           (chain: ActionsChain) => this.dispatchActionsChain(chain),
-          (domainId, route) => this.registerCatchAllRoute(domainId, route),
-          (domainId) => this.unregisterCatchAllActionHandler(domainId),
-          (extId, actionTypeId, handler, domainId) => this.registerExtensionActionHandler(extId, actionTypeId, handler, domainId),
-          (extId) => this.unregisterExtensionActionHandler(extId)
+          (extId, actionTypeId, handler, domainId) => this.registerExtensionActionHandler(extId, actionTypeId, handler, domainId)
         );
         acquiredParentBridge = parentBridge;
 
@@ -329,21 +316,6 @@ export class DefaultMountManager extends MountManager {
           extensionId,
           domainId: extensionState.extension.domain,
         };
-
-        // Prepare the link a nested registry constructed synchronously inside
-        // this extension's own `mount()` body will automatically adopt, then
-        // track `childBridge` as the ambient mounting bridge for exactly the
-        // synchronous portion of the `lifecycle.mount(...)` invocation below —
-        // no configuration or method call required from the microfrontend
-        // author. Minted per registration, at the first mount after each
-        // registration: the link (and the bridge it is attached to) serves
-        // every later mount until `releaseExtension` retracts it.
-        let mintedLink: InboundBridgeLink | undefined;
-        if (!this.childBridgesByExtension.has(extensionId)) {
-          mintedLink = this.buildInboundBridgeLink(extensionId, childBridge, parentBridge);
-          registerInboundBridgeLink(childBridge, mintedLink);
-          this.childBridgesByExtension.set(extensionId, childBridge);
-        }
 
         // @cpt-algo:cpt-frontx-algo-mfe-host-communication-occupant-value-rendezvous:p1
         // @cpt-begin:cpt-frontx-algo-mfe-host-communication-occupant-value-rendezvous:p1:inst-ov-assign
@@ -386,6 +358,21 @@ export class DefaultMountManager extends MountManager {
         }
         // @cpt-end:cpt-frontx-algo-mfe-host-communication-occupant-value-rendezvous:p1:inst-ov-standalone
         // @cpt-end:cpt-frontx-algo-mfe-host-communication-occupant-value-rendezvous:p1:inst-ov-assign
+
+        // Prepare the link a nested registry constructed synchronously inside
+        // this extension's own `mount()` body will automatically adopt, then
+        // track `childBridge` as the ambient mounting bridge for exactly the
+        // synchronous portion of the `lifecycle.mount(...)` invocation below —
+        // no configuration or method call required from the microfrontend
+        // author. Minted per registration, at the first mount after each
+        // registration: the link (and the bridge it is attached to) serves
+        // every later mount until `releaseExtension` retracts it.
+        let mintedLink: InboundBridgeLink | undefined;
+        if (!this.childBridgesByExtension.has(extensionId)) {
+          mintedLink = this.buildInboundBridgeLink(extensionId, childBridge, parentBridge);
+          registerInboundBridgeLink(childBridge, mintedLink);
+          this.childBridgesByExtension.set(extensionId, childBridge);
+        }
 
         // Adopters retained from this extension's previous registration are
         // handed the freshly minted link before the window opens, so the

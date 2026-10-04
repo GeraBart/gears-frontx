@@ -187,7 +187,7 @@ function makeRouter(supplyNavigation: RouterPort['supplyNavigation']): RouterPor
 function makeObservableLink() {
   const unsubscribe = vi.fn();
   const onCrossHopEnvelope = vi.fn(() => unsubscribe);
-  const propagateAdvertisement = vi.fn((_targetId: string, _actionTypeIds: readonly string[]) => true);
+  const propagateAdvertisement = vi.fn((_targetId: string) => true);
   const bridge = { onCrossHopEnvelope } as unknown as ChildMfeBridge;
   const link: InboundBridgeLink = {
     edge: bridge,

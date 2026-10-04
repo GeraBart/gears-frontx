@@ -335,35 +335,6 @@ describe('MountExtActionHandler', () => {
     expect(innerCalls).toBe(1);
   });
 
-  it('two independently constructed mount_ext-derived handlers sharing one joiner join the same in-flight mount for the same extension', async () => {
-    let innerCalls = 0;
-    const gate = createDeferred<void>();
-    const inner = ActionHandler.fromFunction(async () => {
-      innerCalls += 1;
-      await gate.promise;
-    });
-    const joiner = new ConcurrentMountJoiner();
-    let mounted = false;
-    const readers = makeReaders({
-      domainOf: () => DOMAIN_ID,
-      isMounted: () => mounted,
-      inFlight: () => undefined,
-    });
-    const wrappedA = makeConcurrentHandler(inner, readers, joiner);
-    const wrappedB = makeConcurrentHandler(inner, readers, joiner);
-
-    const first = wrappedA.handleAction('mount_ext.derived-a', { subject: 'ext-a' });
-    const second = wrappedB.handleAction('mount_ext.derived-b', { subject: 'ext-a' });
-
-    expect(innerCalls).toBe(1);
-
-    gate.resolve();
-    mounted = true;
-    await expect(first).resolves.toBeUndefined();
-    await expect(second).resolves.toBeUndefined();
-    expect(innerCalls).toBe(1);
-  });
-
   it('inst-me-join-in-progress-mount: a synchronous re-entrant mount request for the SAME extension joins the same physical mount instead of starting a second one', async () => {
     let innerCalls = 0;
     let mounted = false;

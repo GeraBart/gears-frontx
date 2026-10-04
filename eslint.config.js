@@ -614,6 +614,9 @@ export default [
       'packages/mfes/src/**/*.tsx',
       'packages/mfes/src/**/*.mts',
       'packages/mfes/src/**/*.cts',
+      'packages/mfes/src/**/*.js',
+      'packages/mfes/src/**/*.mjs',
+      'packages/mfes/src/**/*.cjs',
     ],
     ignores: ['packages/mfes/src/handler/mfe-handler-mf/mf-dynamic-module-ops.ts'],
     rules: {

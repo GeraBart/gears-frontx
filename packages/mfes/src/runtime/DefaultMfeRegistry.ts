@@ -40,7 +40,6 @@ import { DefaultMountManager } from './DefaultMountManager';
 import { OperationSerializer } from './OperationSerializer';
 import { RuntimeBridgeFactory } from './RuntimeBridgeFactory';
 import { DefaultRuntimeBridgeFactory } from './DefaultRuntimeBridgeFactory';
-import { ChildDomainForwardingRouteFactory } from '../bridge/ChildDomainForwardingRouteFactory';
 import { LoadExtHandler } from './LoadExtHandler';
 import { EntryTypeNotHandledError, DomainUnregisteringError, DomainValidationError } from '../errors';
 import { extractGtsPackage } from '../gts/extract-package';
@@ -87,13 +86,6 @@ interface ForwardingEntry {
   /** Hands a versioned cross-hop envelope down through that bridge to the
    * descendant registry: throws to refuse, or returns having accepted. */
   readonly sendDown: (envelope: CrossHopEnvelope) => void;
-  /**
-   * The opaque action-type id set this entry was admitted with — retained
-   * (rather than discarded after the admission-time collision check) so
-   * `repropagateThroughInboundBridge` can re-advertise this forwarding entry
-   * upward, unchanged, after this registry's own inbound bridge is re-linked.
-   */
-  readonly actionTypeIds: readonly string[];
 }
 
 /** A `ChildMfeBridge` that also exposes the concrete-only `onCrossHopEnvelope` hook. */
@@ -181,8 +173,7 @@ export class DefaultMfeRegistry extends MfeRegistry {
 
   /**
    * Actions chains mediator. Held as the concrete type for the internal
-   * members this registry wires: `registerCatchAllRoute` and
-   * `receiveHandedOverChain`.
+   * member this registry wires: `receiveHandedOverChain`.
    */
   private readonly mediator: DefaultActionsChainsMediator;
 
@@ -259,14 +250,13 @@ export class DefaultMfeRegistry extends MfeRegistry {
 
   /**
    * Every target this registry would advertise if linked — its own admitted
-   * domains and extensions, keyed by target id with the opaque action-type id
-   * set each was admitted with. Populated on admission regardless of whether
+   * domains and extensions, by target id. Populated on admission regardless of whether
    * this registry currently holds an inbound bridge, and consulted by
    * `repropagateThroughInboundBridge` so a re-link (`relinkInboundBridge`)
    * re-advertises every target this registry still holds, not merely the ones
    * it happened to hold at the moment of its ORIGINAL link.
    */
-  private readonly advertisableTargets = new Map<string, readonly string[]>();
+  private readonly advertisableTargets = new Set<string>();
 
   /**
    * The revoker for each `InboundBridgeLink` this registry has minted, keyed
@@ -335,7 +325,7 @@ export class DefaultMfeRegistry extends MfeRegistry {
     // `DefaultRuntimeBridgeFactory`'s own hard-coded default, so this
     // registry is the one place substituting the route factory would
     // happen.
-    this.bridgeFactory = new DefaultRuntimeBridgeFactory(new ChildDomainForwardingRouteFactory());
+    this.bridgeFactory = new DefaultRuntimeBridgeFactory();
 
     // Shared by the mediator and every domain's mount/unmount handlers.
     this.actionTimeoutResolver = new ActionTimeoutResolver();
@@ -383,10 +373,6 @@ export class DefaultMfeRegistry extends MfeRegistry {
         this.triggerLifecycleStageInternal(extensionId, stageId),
       dispatchActionsChain: (chain) => this.executeActionsChain(chain),
       hostRuntime: this,
-      registerCatchAllRoute: (domainId, route) =>
-        this.mediator.registerCatchAllRoute(domainId, route),
-      unregisterCatchAllActionHandler: (domainId) =>
-        this.mediator.unregisterCatchAllHandler(domainId),
       registerExtensionActionHandler: (extensionId, actionTypeId, handler, domainId) =>
         this.mediator.registerHandler(extensionId, actionTypeId, handler, domainId),
       unregisterExtensionActionHandler: (extensionId) =>
@@ -470,7 +456,7 @@ export class DefaultMfeRegistry extends MfeRegistry {
       // lands on `receiveCrossHopNode`, with no registration call required
       // from the microfrontend author. Re-established on every re-link.
       this.inboundActionsChainUnsubscribe = link.edge.onCrossHopEnvelope((envelope) =>
-        this.receiveCrossHopNode(envelope)
+        this.receiveCrossHopNode(envelope, true)
       );
     }
     // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-relink-downward-delivery
@@ -482,7 +468,7 @@ export class DefaultMfeRegistry extends MfeRegistry {
     // a router — never for a root registry (no `link` above) and never for
     // a standalone one (no router).
     if (this.router) {
-      this.router.supplyNavigation(() => readOccupantValue(link.edge));
+      this.router.supplyNavigation(() => readOccupantValue(this.inboundBridgeLink?.edge));
     }
     // @cpt-end:cpt-frontx-algo-mfe-host-communication-occupant-value-rendezvous:p1:inst-ov-supply-navigation
   }
@@ -498,11 +484,11 @@ export class DefaultMfeRegistry extends MfeRegistry {
    * target actually re-propagates further.
    */
   private repropagateThroughInboundBridge(): void {
-    for (const [targetId, actionTypeIds] of this.advertisableTargets) {
-      this.propagateAdvertisementUpward(targetId, actionTypeIds);
+    for (const targetId of this.advertisableTargets) {
+      this.propagateAdvertisementUpward(targetId);
     }
-    for (const [targetId, entry] of this.forwardingEntries) {
-      this.propagateAdvertisementUpward(targetId, entry.actionTypeIds);
+    for (const targetId of this.forwardingEntries.keys()) {
+      this.propagateAdvertisementUpward(targetId);
     }
   }
 
@@ -542,8 +528,8 @@ export class DefaultMfeRegistry extends MfeRegistry {
     return {
       edge: childBridge,
       // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-propagate-upward
-      propagateAdvertisement: (targetId, actionTypeIds) =>
-        revoked ? false : this.admitAdvertisement(targetId, actionTypeIds, childBridge, sendDown),
+      propagateAdvertisement: (targetId) =>
+        revoked ? false : this.admitAdvertisement(targetId, childBridge, sendDown),
       // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-propagate-upward
       retractAdvertisement: (targetId) => {
         if (!revoked) this.retractForwardingEntry(targetId, childBridge);
@@ -582,7 +568,6 @@ export class DefaultMfeRegistry extends MfeRegistry {
    */
   private admitAdvertisement(
     targetId: string,
-    actionTypeIds: readonly string[],
     edge: ChildMfeBridge,
     sendDown: (envelope: CrossHopEnvelope) => void
   ): boolean {
@@ -615,11 +600,11 @@ export class DefaultMfeRegistry extends MfeRegistry {
 
     // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-no-collision
     // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-record-forwarding-entry
-    this.forwardingEntries.set(targetId, { edge, sendDown, actionTypeIds });
+    this.forwardingEntries.set(targetId, { edge, sendDown });
     // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-record-forwarding-entry
 
     // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-repropagate-upward
-    this.propagateAdvertisementUpward(targetId, actionTypeIds);
+    this.propagateAdvertisementUpward(targetId);
     // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-repropagate-upward
     // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-no-collision
     return true;
@@ -629,7 +614,7 @@ export class DefaultMfeRegistry extends MfeRegistry {
    * Compose and propagate an advertisement for a locally-admitted target
    * upward through this registry's inbound bridge, if it has one.
    */
-  private propagateAdvertisementUpward(targetId: string, actionTypeIds: readonly string[]): void {
+  private propagateAdvertisementUpward(targetId: string): void {
     // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-has-inbound-bridge
     // Same check, shared by two call sites: step 6's own-advertisement
     // propagation and step 8.2's re-propagation of an admitted descendant
@@ -647,7 +632,7 @@ export class DefaultMfeRegistry extends MfeRegistry {
       // re-registration by the author) — do not double-advertise.
       return;
     }
-    const accepted = this.inboundBridgeLink.propagateAdvertisement(targetId, actionTypeIds);
+    const accepted = this.inboundBridgeLink.propagateAdvertisement(targetId);
     if (accepted) {
       this.propagatedTargetIds.add(targetId);
     }
@@ -724,7 +709,7 @@ export class DefaultMfeRegistry extends MfeRegistry {
   // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-retract-advertisements
 
   /**
-   * Mediator-injected tier-4 resolution: a downward forwarding entry for
+   * Mediator-injected tier-2 resolution: a downward forwarding entry for
    * `targetId`, excluding one whose bridge equals the chain's tagged arrival
    * edge (loop containment).
    */
@@ -742,7 +727,7 @@ export class DefaultMfeRegistry extends MfeRegistry {
   // @cpt-end:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-forwarding-entry-lookup
 
   /**
-   * Mediator-injected tier-5 resolution: the escalation route bound to this
+   * Mediator-injected tier-3 resolution: the escalation route bound to this
    * registry's inbound bridge. `undefined` when this registry holds no
    * inbound bridge (it is the shell). Arrival-edge tagging is NOT done here
    * — it happens inside `link.escalate` itself, minted by the PARENT
@@ -751,7 +736,7 @@ export class DefaultMfeRegistry extends MfeRegistry {
    * regardless of which copy this (child) registry belongs to.
    *
    * Deliberately target-blind by design: by the time the mediator's
-   * escalation tier runs, tiers 1-4 have already exhausted every way THIS
+   * escalation tier runs, tiers 1-2 have already exhausted every way THIS
    * registry could resolve the target locally. A nested registry structurally
    * cannot know what an ancestor registry holds — so escalation always tries
    * upward regardless of which target failed to resolve here. Not needing
@@ -854,6 +839,15 @@ export class DefaultMfeRegistry extends MfeRegistry {
     declaration: ExtensionDomain,
     factory: ExtensionDomainImplementationFactory
   ): void {
+    // An already-registered id is refused before anything is changed or
+    // presented to the router; the live registration stays as it is.
+    if (this.extensionManager.getDomainState(declaration.id)) {
+      throw new DomainValidationError(
+        declaration.id,
+        new Error(`domain '${declaration.id}' is already registered`)
+      );
+    }
+
     // Step 1: Validate lifecycle hooks and store initial (in-memory, fully
     // reversible) domain state — no init trigger yet, and no type-system
     // registration yet either: that runs only after router admission,
@@ -932,7 +926,7 @@ export class DefaultMfeRegistry extends MfeRegistry {
     // domain to the GtsStore (no validate-only call exists on the port), so
     // running it any earlier would leave a router-rejected domain durably
     // registered with the type system — the same partial-admission hazard
-    // already fixed for extensions (`inst-algo-ra-present-extension`).
+    // extensions avoid (`inst-algo-ra-present-extension`).
     // @cpt-begin:cpt-frontx-algo-mfe-registry-router-admission:p1:inst-algo-ra-standalone
     // `this.router` is `undefined` for a standalone registry, so the
     // presentation, rejection rollback, and admission-tracking branch below
@@ -959,7 +953,7 @@ export class DefaultMfeRegistry extends MfeRegistry {
         // Roll back exactly like a cardinality rejection: nothing was yet
         // persisted beyond the in-progress registration discarded here —
         // the type system has not seen this declaration either, since that
-        // registration is still below this point, unreached.
+        // registration comes after this point and is not reached.
         ctx.clearCollectedHandlers();
         this.extensionManager.unregisterDomain(declaration.id).catch(() => { /* best-effort */ });
         throw error;
@@ -977,7 +971,7 @@ export class DefaultMfeRegistry extends MfeRegistry {
     // was yet persisted to the mediator, recorded, or advertised — but, since
     // the router may already have admitted this declaration above, this also
     // throws a `DomainValidationError` rather than the router's own error,
-    // matching this method's pre-existing contract for an invalid domain.
+    // as this method does for any invalid domain.
     // The router admission itself must be released here too: it is tracked
     // (`routerAdmittedDomainIds`) only on a successful `router.registerDomain`
     // above, and nothing else in this method's failure paths frees it — a
@@ -1002,7 +996,7 @@ export class DefaultMfeRegistry extends MfeRegistry {
     // @cpt-begin:cpt-frontx-flow-extension-domain-governance-admission:p1:inst-domain-registered
     // @cpt-begin:cpt-frontx-state-extension-domain-governance-cardinality:p2:inst-card-t3
     // Step 6: Persist handlers to mediator. The domain's `mount_ext` handler
-    // (or a type derived from it) is wrapped with the strategy-agnostic
+    // is wrapped with the strategy-agnostic
     // mount-execution prologue first, so eligibility, the already-mounted
     // short-circuit, in-progress-mount joining, in-progress-unmount waiting,
     // and — for Optional/Exclusive — the occupancy queue all run above every
@@ -1014,9 +1008,9 @@ export class DefaultMfeRegistry extends MfeRegistry {
     // `ConcurrentMountJoiner` — same-extension joining only, no
     // cross-extension ordering. An Optional or Exclusive domain is given a
     // `DomainOccupancyCoordinator` instead — its own two-slot occupancy
-    // queue, shared by every `mount_ext`- and `unmount_ext`-derived action
-    // type the domain registers below, so joining, replacement, and
-    // at-turn evaluation hold across derived action types.
+    // queue, shared by the `mount_ext` and `unmount_ext` handlers the domain
+    // registers below, so joining, replacement, and at-turn evaluation hold
+    // across both.
     const isConcurrent = mountStrategies[0] instanceof ConcurrentMountStrategy;
     const concurrentJoiner = isConcurrent ? new ConcurrentMountJoiner() : undefined;
     const queue = isConcurrent ? undefined : new DomainOccupancyCoordinator(declaration.id);
@@ -1037,7 +1031,7 @@ export class DefaultMfeRegistry extends MfeRegistry {
     const unmountExtActionId = this.typeSystem.resolveUnmountExtActionId();
     for (const [actionType, handler] of ctx.getCollectedHandlers()) {
       let wrapped = handler;
-      if (this.typeSystem.isTypeOf(actionType, mountExtActionId)) {
+      if (actionType === mountExtActionId) {
         wrapped = new MountExtActionHandler(
           handler,
           declaration.id,
@@ -1054,7 +1048,7 @@ export class DefaultMfeRegistry extends MfeRegistry {
           concurrentJoiner,
           this.router
         );
-      } else if (this.typeSystem.isTypeOf(actionType, unmountExtActionId)) {
+      } else if (actionType === unmountExtActionId) {
         wrapped = new UnmountExtActionHandler(
           handler,
           declaration.id,
@@ -1083,8 +1077,8 @@ export class DefaultMfeRegistry extends MfeRegistry {
     // advertisable targets (regardless of whether it currently holds an
     // inbound bridge, so a later re-link can re-advertise it), then propagate
     // it upward if this registry has an inbound bridge to propagate through.
-    this.advertisableTargets.set(declaration.id, declaration.actions);
-    this.propagateAdvertisementUpward(declaration.id, declaration.actions);
+    this.advertisableTargets.add(declaration.id);
+    this.propagateAdvertisementUpward(declaration.id);
     // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-compose-advertisement
 
     // Step 8: Non-blocking 'init' lifecycle stage trigger. The stage ID
@@ -1179,16 +1173,10 @@ export class DefaultMfeRegistry extends MfeRegistry {
 
     // @cpt-begin:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-required-check-loop
     // Enforce REQUIRED actions in declaration.
-    // Non-string entries are treated as non-matching (F-009 hardening) rather than
-    // letting typeSystem.isTypeOf throw on a malformed declaredActions entry.
-    const hasMountExtOrDerivative = declaredActions.some(
-      (id) => typeof id === 'string' && this.typeSystem.isTypeOf(id, mountExtActionId)
-    );
-    const hasUnmountExtOrDerivative = declaredActions.some(
-      (id) => typeof id === 'string' && this.typeSystem.isTypeOf(id, unmountExtActionId)
-    );
+    const hasMountExt = declaredActions.includes(mountExtActionId);
+    const hasUnmountExt = declaredActions.includes(unmountExtActionId);
     // @cpt-begin:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-missing-required
-    if (requireMount && !hasMountExtOrDerivative) {
+    if (requireMount && !hasMountExt) {
       // @cpt-begin:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-required-fail
       throw new Error(
         `Domain '${declaration.id}': ${strategyName} requires '${mountExtActionId}' in declaration.actions.`
@@ -1197,7 +1185,7 @@ export class DefaultMfeRegistry extends MfeRegistry {
     }
     // @cpt-end:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-missing-required
     // @cpt-begin:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-missing-required
-    if (requireUnmount && !hasUnmountExtOrDerivative) {
+    if (requireUnmount && !hasUnmountExt) {
       // @cpt-begin:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-required-fail
       throw new Error(
         `Domain '${declaration.id}': ${strategyName} requires '${unmountExtActionId}' in declaration.actions.`
@@ -1210,17 +1198,12 @@ export class DefaultMfeRegistry extends MfeRegistry {
     // @cpt-begin:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-forbidden-check-loop
     // Enforce FORBIDDEN actions in declaration.
     // @cpt-begin:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-forbidden-present
-    if (forbidUnmount && hasUnmountExtOrDerivative) {
+    if (forbidUnmount && hasUnmountExt) {
     // @cpt-end:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-forbidden-present
       // @cpt-begin:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-forbidden-fail
-      // Name the actual declared action that triggered the violation (may be a
-      // hierarchy-derived id, not necessarily the plugin-resolved base id) for debuggability.
-      const offendingAction = declaredActions.find(
-        (id) => typeof id === 'string' && this.typeSystem.isTypeOf(id, unmountExtActionId)
-      );
       throw new Error(
         `Domain '${declaration.id}': ${strategyName} forbids '${unmountExtActionId}' in declaration.actions, ` +
-        `but declared action '${String(offendingAction)}' violates this rule.`
+        `but declared action '${unmountExtActionId}' violates this rule.`
       );
       // @cpt-end:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-forbidden-fail
     }
@@ -1287,15 +1270,15 @@ export class DefaultMfeRegistry extends MfeRegistry {
 
   /**
    * Receiving side of every hand-over into this registry — a downward
-   * forwarding entry, an upward escalation, or the child-domain forwarding
-   * tier. Refuses, with no side effect here, when the envelope carries a
+   * forwarding entry or an upward escalation. Refuses, with no side effect here, when the envelope carries a
    * version this copy does not recognize or this registry is disposed;
    * otherwise accepts, and the sub-chain executes after this call returns.
+   * A chain handed down from the parent (`fromParent`) is never escalated.
    *
    * @throws {Error} to refuse the hand-over.
    */
   // @cpt-begin:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-receive-hand-over
-  private receiveCrossHopNode(envelope: CrossHopEnvelope): void {
+  private receiveCrossHopNode(envelope: CrossHopEnvelope, fromParent = false): void {
     // @cpt-begin:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-receive-refusal-check
     if (envelope.version !== CROSS_HOP_PROTOCOL_VERSION || this.disposed) {
       // @cpt-begin:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-receive-refuse
@@ -1307,7 +1290,7 @@ export class DefaultMfeRegistry extends MfeRegistry {
       // @cpt-end:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-receive-refuse
     }
     // @cpt-end:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-receive-refusal-check
-    this.mediator.receiveHandedOverChain(envelope.chain);
+    this.mediator.receiveHandedOverChain(envelope.chain, fromParent);
   }
   // @cpt-end:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-receive-hand-over
 
@@ -1369,6 +1352,12 @@ export class DefaultMfeRegistry extends MfeRegistry {
       // @cpt-end:cpt-frontx-algo-mfe-registry-domain-unregister-closes-admission:p1:inst-algo-du-reject-registration
 
       // @cpt-begin:cpt-frontx-flow-mfe-registry-register-validate-mount:p1:inst-flow-rvm-05
+      // An already-registered id is refused before anything is changed or
+      // presented to the router; the registered extension stays as it is.
+      if (this.extensionManager.getExtensionState(extension.id)) {
+        throw new Error(`Extension '${extension.id}' is already registered.`);
+      }
+
       // Developer-invoked registration of an Extension value: delegates entry
       // type-validation, handler resolution, and entry storage to the manager.
       await this.extensionManager.registerExtension(extension);
@@ -1386,13 +1375,9 @@ export class DefaultMfeRegistry extends MfeRegistry {
 
       // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-compose-advertisement
       // Admission complete: record this extension as one of this registry's
-      // own advertisable targets, then propagate its advertisement upward,
-      // using its declared receivable-action set as the opaque action-type id set.
-      const admittedEntry = this.extensionManager.getExtensionState(extension.id)?.entry;
-      if (admittedEntry) {
-        this.advertisableTargets.set(extension.id, admittedEntry.actions);
-        this.propagateAdvertisementUpward(extension.id, admittedEntry.actions);
-      }
+      // own advertisable targets, then propagate its advertisement upward.
+      this.advertisableTargets.add(extension.id);
+      this.propagateAdvertisementUpward(extension.id);
       // @cpt-end:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-compose-advertisement
 
       try {
@@ -1514,8 +1499,13 @@ export class DefaultMfeRegistry extends MfeRegistry {
         // @cpt-begin:cpt-frontx-algo-mfe-registry-domain-unregister-closes-admission:p1:inst-algo-du-reopen-on-failure
         // Cleared on every path, including a throw from any step above, so
         // a failed unregistration never leaves this domain id permanently
-        // closed to a fresh `registerDomain`/`registerExtension` pair.
+        // closed to a fresh `registerDomain`/`registerExtension` pair. A
+        // domain that is still registered after a failed unregistration has
+        // its occupancy queue reopened, so it stays usable.
         this.domainsUnregistering.delete(domainId);
+        if (this.extensionManager.getDomainState(domainId)) {
+          this.occupancyCoordinatorsByDomain.get(domainId)?.reopen();
+        }
         // @cpt-end:cpt-frontx-algo-mfe-registry-domain-unregister-closes-admission:p1:inst-algo-du-reopen-on-failure
         // @cpt-end:cpt-frontx-algo-mfe-registry-domain-unregister-closes-admission:p1:inst-algo-du-reopen
       }

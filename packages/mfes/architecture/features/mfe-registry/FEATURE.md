@@ -90,16 +90,17 @@ User-facing interactions that start with an actor (human or external system) and
 - Extension entry type validation fails — the registry rejects the extension and it is not placed into its extension domain.
 - No registered handler matches the extension's declared base type — the registry rejects with a handler-not-found error.
 - Domain contract matching fails — the extension is rejected before load.
+- The domain or extension id is already registered — the registry rejects the registration before anything is changed or presented to a router, and the registered domain or extension is left unchanged.
 - The injected router rejects a domain or extension registration (for example, a routed-domain route that collides with another routed domain live in the page) — the registry rejects with the router's error and nothing of that registration is left in the registry.
 
 **Steps**:
 1. [ ] - `p1` - Developer obtains a registry instance by calling `createMfeRegistryFactory().build` with an injected `TypeSystemPlugin` and, optionally, a router implementing the router port - `inst-flow-rvm-01`
 2. [ ] - `p1` - Developer calls `registry.registerDomain` with an `ExtensionDomain` declaration and an `ExtensionDomainImplementationFactory` - `inst-flow-rvm-02`
-3. [ ] - `p1` - Registry validates the domain declaration through `typeSystem.register` and synchronously constructs the domain implementation via the factory - `inst-flow-rvm-03`
-4. [ ] - `p1` - **IF** validation fails **THEN** registry throws, domain is not registered, flow ends - `inst-flow-rvm-04`
-5. [x] - `p1` - **IF** a router is injected, the registry presents the validated domain declaration to it before the domain becomes durable (`cpt-frontx-algo-mfe-registry-router-admission`) - `inst-flow-rvm-router-domain`
+3. [ ] - `p1` - Registry checks that the domain id is not already registered, then synchronously constructs the domain implementation via the factory; the domain declaration is validated and registered through `typeSystem.register` only after the router admits it (step 5), or directly when no router is injected - `inst-flow-rvm-03`
+4. [ ] - `p1` - **IF** the domain id is already registered **THEN** registry throws before anything is changed or presented to a router, the already-registered domain is left unchanged, and the flow ends; **IF** constructing the domain implementation fails **THEN** registry throws before presenting anything to a router, nothing of this call is registered, and the flow ends; **IF** `typeSystem.register` fails **THEN** registry releases the router admission, if any, throws a `DomainValidationError`, nothing of this call is left registered, and the flow ends - `inst-flow-rvm-04`
+5. [x] - `p1` - **IF** a router is injected, the registry presents the domain declaration to it before the domain becomes durable (`cpt-frontx-algo-mfe-registry-router-admission`) - `inst-flow-rvm-router-domain`
    1. [x] - `p1` - **IF** the router rejects the domain, the registry throws the router's error, the domain is left registered nowhere in the registry, and the flow ends - `inst-flow-rvm-router-domain-reject`
-6. [x] - `p1` - Developer calls `registry.registerExtension` with an `Extension` value - `inst-flow-rvm-05`
+6. [x] - `p1` - Developer calls `registry.registerExtension` with an `Extension` value; **IF** the extension id is already registered, registry throws before anything is changed or presented to a router, the registered extension is left unchanged, and the flow ends - `inst-flow-rvm-05`
 7. [ ] - `p1` - Registry invokes handler resolution: **FOR EACH** registered handler ordered by descending priority, evaluate `typeSystem.isTypeOf(extension.entry.typeId, handler.handledBaseTypeId)` - `inst-flow-rvm-06`
    1. [ ] - `p1` - **IF** `isTypeOf` returns true, select this handler and stop evaluation - `inst-flow-rvm-06a`
 8. [ ] - `p1` - **IF** no handler matched, registry rejects the extension and flow ends - `inst-flow-rvm-07`

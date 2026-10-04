@@ -54,7 +54,7 @@ export type RoutingErrorCode =
 export class RoutingError extends Error {
   readonly code: RoutingErrorCode;
   /** Set only for `invalid-shell-subroute` / `invalid-foreign-segment` /
-   * `invalid-domain-key` / `invalid-extension-token` / `invalid-name`, and
+   * `invalid-domain-key` / `invalid-extension-token`, and
    * for `replaced-old-extension-absent`, where it is the old extension
    * token no entry under `domainKey` carries. */
   readonly value?: string;

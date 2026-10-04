@@ -74,15 +74,15 @@ export interface UnmountInFlightReader {
  * strategy-agnostic mount-execution prologue.
  *
  * `DefaultMfeRegistry.registerDomain` constructs one instance per
- * `mount_ext`-derived action type a domain registers. A Concurrent domain is
+ * `mount_ext` handler a domain registers. A Concurrent domain is
  * given `concurrentJoiner` (and no `queue`); an Optional or Exclusive domain
  * is given `queue` (and no `concurrentJoiner`) — the SAME instance for every
- * `mount_ext`- and `unmount_ext`-derived action type the domain registers.
+ * `mount_ext` and `unmount_ext` handler the domain registers.
  */
 export class MountExtActionHandler extends DeclaredTimeoutActionHandler {
   /**
    * @param inner - The handler the domain factory registered for
-   *   `mount_ext` (or a type derived from it) — ultimately a bound
+   *   `mount_ext` — ultimately a bound
    *   `strategy.mount(...)` call.
    * @param domainId - The domain this `mount_ext` handler was registered
    *   for.

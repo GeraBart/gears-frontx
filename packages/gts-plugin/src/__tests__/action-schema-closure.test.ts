@@ -108,7 +108,7 @@ describe('closed concrete action schemas (mount_ext, unmount_ext, load_ext)', ()
   });
 
   it('a concrete action schema derived from the open base action.v1 still validates against its own self-contained closed leaf', () => {
-    const DERIVED = `${MOUNT_EXT}test.schemaclosure.fixture.custom_mount_ext.v1~`;
+    const DERIVED = 'gts.frontx.mfes.comm.action.v1~test.schemaclosure.fixture.custom_action.v1~';
     const derivedSchema: JSONSchema = {
       $id: `gts://${DERIVED}`,
       $schema: 'https://json-schema.org/draft/2020-12/schema',
