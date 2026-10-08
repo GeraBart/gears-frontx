@@ -1,5 +1,5 @@
 import { readdirSync, readFileSync } from 'node:fs';
-import { basename, dirname, join } from 'node:path';
+import { dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
@@ -76,7 +76,7 @@ const BASE_UI_RUNTIME_VARS = new Set([
 // only survives inside a comment must read as *removed*, not defined.
 const definedTokens = new Set(
   Array.from(
-    themeCss.replace(/\/\*[\s\S]*?\*\//g, ' ').matchAll(/(--[a-z0-9-]+)\s*:/g),
+    themeCss.replace(/\/\*[\s\S]*?\*\//g, ' ').matchAll(/(--[a-z0-9_-]+)\s*:/g),
     (match) => match[1],
   ),
 );
@@ -100,6 +100,23 @@ const moduleFiles = readdirSync(componentsDir, { recursive: true, encoding: 'utf
 // copies would let an edit to one keep passing against the other.
 const GUARDED_PROP =
   /^(?:padding|margin|scroll-margin)(?:-[a-z]+)*$|^(?:gap|row-gap|column-gap|font-size|line-height|letter-spacing|font-weight|border-spacing)$/;
+
+// The prefixes a module may read without declaring the variable, provided it carries a fallback
+// (UIKIT-2, architecture/DESIGN.md). Both are keyed on the COMPONENT's directory, not on the
+// reader's filename: a component made of many modules (data-grid is one directory of services,
+// plugins and parts) has one namespace, and a variable such as `--data-grid-header-background` is
+// read by a different module than the one a consumer would guess from its name.
+//   - `--<component>-*`: a consumer-override hook. Public API: the kit never sets one, a consumer
+//     class does. `--button-bg` is read by button.module.css and set by the consumer.
+//   - `--_<component>-*`: a private variable. Plumbing one stylesheet of the component (or its code,
+//     inline) sets and another reads; not API, never documented, free to rename. The leading
+//     underscore is the kit's existing private form (utilities.css's `--_scroll-fade-size-*`).
+// Only the component's own namespaces match: `--table-*` and `--_table-*` are no variables of a
+// data-grid module's to read, whatever the fallback.
+function overrideHookPrefixes(file: string): string[] {
+  const component = relative(componentsDir, file).split(sep)[0];
+  return [`--${component}-`, `--_${component}-`];
+}
 
 describe('theme tokens', () => {
   // The scale is 4 / 6 / 8 / 10 / 12 / 16 on a 10px base, with the base at
@@ -172,16 +189,20 @@ describe('theme tokens', () => {
   // comments, including why its body keeps the trailing `}` (the
   // metric-scale guard below relies on that for its `[;}]` terminator).
 
-  it.each(moduleFiles)('%s consumes only theme-defined or same-part local variables', (file) => {
-    const css = readFileSync(file, 'utf8');
+  // The variables a module reads that nothing defines: not in theme.css, not written by Base UI,
+  // not declared by the same part, and not a consumer hook with a fallback. A function of the
+  // path and the CSS text, so the namespace rule can be run on a synthetic module below.
+  function undefinedVariables(file: string, css: string): string[] {
     const rules = extractRules(css);
+    const undefinedTokens: string[] = [];
 
     // A component's own public override hooks (button.module.css's
     // --button-bg/-fg/-border{,-hover}, see button.md's "Custom colors")
-    // are named `--<component>-*`, derived from the module's own filename —
-    // NOT declared anywhere in the module, by design: the kit never sets
-    // them, a consumer class does. `--${basename(file, '.module.css')}-`.
-    const hookPrefix = `--${basename(file, '.module.css')}-`;
+    // are named `--<component>-*` — NOT declared anywhere in the module, by
+    // design: the kit never sets them, a consumer class does. Its private
+    // variables, `--_<component>-*`, are read the same way. See
+    // `overrideHookPrefixes` for the two forms.
+    const hookPrefixes = overrideHookPrefixes(file);
 
     // Collect each class's own locally-declared custom properties first...
     const locallyDeclaredByClass = new Map<string, Set<string>>();
@@ -191,7 +212,7 @@ describe('theme tokens', () => {
         continue;
       }
       const declared = Array.from(
-        rule.body.matchAll(/(--[a-z0-9-]+)\s*:/g),
+        rule.body.matchAll(/(--[a-z0-9_-]+)\s*:/g),
         (match) => match[1] ?? '',
       );
       const set = locallyDeclaredByClass.get(cls) ?? new Set<string>();
@@ -213,7 +234,7 @@ describe('theme tokens', () => {
       // runtime if nobody sets it) must still be flagged for that second
       // usage even though the first is exempt.
       const used = Array.from(
-        rule.body.matchAll(/var\((--[a-z0-9-]+)\s*([,)])/g),
+        rule.body.matchAll(/var\((--[a-z0-9_-]+)\s*([,)])/g),
         (match) => ({ token: match[1] ?? '', hasFallback: match[2] === ',' }),
       );
       const seen = new Set<string>();
@@ -237,12 +258,79 @@ describe('theme tokens', () => {
         // never does. The component-name prefix (not "any fallback var is
         // exempt") keeps this from also waving through a typoed theme
         // token that happens to carry a fallback.
-        if (hasFallback && token.startsWith(hookPrefix)) {
+        if (hasFallback && hookPrefixes.some((prefix) => token.startsWith(prefix))) {
           continue;
         }
-        expect(definedTokens.has(token), `${token} is not defined in theme.css`).toBe(true);
+        if (!definedTokens.has(token)) {
+          undefinedTokens.push(token);
+        }
       }
     }
+    return undefinedTokens;
+  }
+
+  it.each(moduleFiles)('%s consumes only theme-defined or same-part local variables', (file) => {
+    expect(undefinedVariables(file, readFileSync(file, 'utf8'))).toEqual([]);
+  });
+
+  // Synthetic modules for the two variable namespaces (see `overrideHookPrefixes`), run through the
+  // same function the real guard uses. The real modules only exercise the happy path (a variable
+  // that IS accepted); nothing in them would notice the rule widening to a prefix it should refuse.
+  describe('component variable namespaces', () => {
+    const nested = join(componentsDir, 'data-grid', 'services', 'table', 'cell.module.css');
+
+    it('accepts a hook named after the component directory, read with a fallback', () => {
+      expect(
+        undefinedVariables(nested, '.cell { color: var(--data-grid-header-background, red); }'),
+      ).toEqual([]);
+    });
+
+    it('requires the fallback of a hook', () => {
+      expect(
+        undefinedVariables(nested, '.cell { color: var(--data-grid-header-background); }'),
+      ).toEqual(['--data-grid-header-background']);
+    });
+
+    it("does not accept another component's hook", () => {
+      expect(undefinedVariables(nested, '.cell { color: var(--table-header-fill, red); }')).toEqual(
+        ['--table-header-fill'],
+      );
+    });
+
+    it('accepts a private variable of the component, read with a fallback', () => {
+      expect(
+        undefinedVariables(nested, '.cell { max-inline-size: var(--_data-grid-col-max, none); }'),
+      ).toEqual([]);
+    });
+
+    it('requires the fallback of a private variable', () => {
+      expect(
+        undefinedVariables(nested, '.cell { max-inline-size: var(--_data-grid-col-max); }'),
+      ).toEqual(['--_data-grid-col-max']);
+    });
+
+    it("does not accept another component's private variable", () => {
+      expect(undefinedVariables(nested, '.cell { margin: var(--_table-gap, 0); }')).toEqual([
+        '--_table-gap',
+      ]);
+    });
+
+    it("accepts a private variable the part declares itself, even without a fallback", () => {
+      expect(
+        undefinedVariables(nested, '.cell { --_cell-pad: 0; margin: var(--_cell-pad); }'),
+      ).toEqual([]);
+    });
+
+    it('no longer takes the reader\'s own filename as a namespace', () => {
+      expect(undefinedVariables(nested, '.cell { color: var(--cell-color, red); }')).toEqual([
+        '--cell-color',
+      ]);
+    });
+
+    it('keeps the hook namespace of a top-level module', () => {
+      const topLevel = join(componentsDir, 'button', 'button.module.css');
+      expect(undefinedVariables(topLevel, '.button { color: var(--button-fg, red); }')).toEqual([]);
+    });
   });
 
   // Policy: the token system wins over hand-set values — spacing sits on
@@ -383,7 +471,7 @@ describe('theme tokens', () => {
             continue;
           }
           const leftover = value
-            .replace(/var\(--[a-z0-9-]+\)/g, ' ')
+            .replace(/var\(--[a-z0-9_-]+\)/g, ' ')
             .replace(/calc\(|\)|[+*]|-1\b/g, ' ')
             .replace(/\b(?:0|auto|normal)\b/g, ' ')
             .trim();
