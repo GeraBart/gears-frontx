@@ -112,10 +112,26 @@ const GUARDED_PROP =
 //     inline) sets and another reads; not API, never documented, free to rename. The leading
 //     underscore is the kit's existing private form (utilities.css's `--_scroll-fade-size-*`).
 // Only the component's own namespaces match: `--table-*` and `--_table-*` are no variables of a
-// data-grid module's to read, whatever the fallback.
-function overrideHookPrefixes(file: string): string[] {
-  const component = relative(componentsDir, file).split(sep)[0];
+// data-grid module's to read, whatever the fallback. A component whose name extends another's
+// (`input` / `input-group`, `button` / `button-group`) owns the longer namespace, so the shorter
+// name's prefix, which also matches it, does not: `input/` may not read `--input-group-*`.
+const componentNames = readdirSync(componentsDir, { withFileTypes: true })
+  .filter((entry) => entry.isDirectory())
+  .map((entry) => entry.name);
+
+function namespacesOf(component: string): string[] {
   return [`--${component}-`, `--_${component}-`];
+}
+
+function ownsVariable(file: string, token: string): boolean {
+  const component = relative(componentsDir, file).split(sep)[0] ?? '';
+  const startsWithNamespaceOf = (name: string) =>
+    namespacesOf(name).some((prefix) => token.startsWith(prefix));
+
+  return (
+    startsWithNamespaceOf(component) &&
+    !componentNames.some((other) => other.startsWith(`${component}-`) && startsWithNamespaceOf(other))
+  );
 }
 
 describe('theme tokens', () => {
@@ -201,8 +217,7 @@ describe('theme tokens', () => {
     // are named `--<component>-*` — NOT declared anywhere in the module, by
     // design: the kit never sets them, a consumer class does. Its private
     // variables, `--_<component>-*`, are read the same way. See
-    // `overrideHookPrefixes` for the two forms.
-    const hookPrefixes = overrideHookPrefixes(file);
+    // `ownsVariable` for the two forms.
 
     // Collect each class's own locally-declared custom properties first...
     const locallyDeclaredByClass = new Map<string, Set<string>>();
@@ -258,7 +273,7 @@ describe('theme tokens', () => {
         // never does. The component-name prefix (not "any fallback var is
         // exempt") keeps this from also waving through a typoed theme
         // token that happens to carry a fallback.
-        if (hasFallback && hookPrefixes.some((prefix) => token.startsWith(prefix))) {
+        if (hasFallback && ownsVariable(file, token)) {
           continue;
         }
         if (!definedTokens.has(token)) {
@@ -273,7 +288,7 @@ describe('theme tokens', () => {
     expect(undefinedVariables(file, readFileSync(file, 'utf8'))).toEqual([]);
   });
 
-  // Synthetic modules for the two variable namespaces (see `overrideHookPrefixes`), run through the
+  // Synthetic modules for the two variable namespaces (see `ownsVariable`), run through the
   // same function the real guard uses. The real modules only exercise the happy path (a variable
   // that IS accepted); nothing in them would notice the rule widening to a prefix it should refuse.
   describe('component variable namespaces', () => {
@@ -325,6 +340,44 @@ describe('theme tokens', () => {
       expect(undefinedVariables(nested, '.cell { color: var(--cell-color, red); }')).toEqual([
         '--cell-color',
       ]);
+    });
+
+    // Every pair of kit components where one name extends the other. The prefix of the shorter
+    // name also matches the longer one's variables, and the longer component owns them. A pair
+    // that stops being two directories fails here, so the list cannot go stale unnoticed.
+    const siblingPairs = [
+      ['alert', 'alert-dialog'],
+      ['button', 'button-group'],
+      ['input', 'input-group'],
+      ['input', 'input-otp'],
+      ['message', 'message-scroller'],
+      ['toggle', 'toggle-group'],
+    ];
+
+    describe.each(siblingPairs)('%s and %s', (shorter, longer) => {
+      const shorterModule = join(componentsDir, shorter, `${shorter}.module.css`);
+      const longerModule = join(componentsDir, longer, `${longer}.module.css`);
+
+      it("does not let the shorter component read the longer one's hook or private variable", () => {
+        expect(
+          undefinedVariables(shorterModule, `.x { color: var(--${longer}-fill, red); }`),
+        ).toEqual([`--${longer}-fill`]);
+        expect(
+          undefinedVariables(shorterModule, `.x { gap: var(--_${longer}-gap, 0); }`),
+        ).toEqual([`--_${longer}-gap`]);
+      });
+
+      it('still lets each read its own', () => {
+        expect(
+          undefinedVariables(shorterModule, `.x { color: var(--${shorter}-fill, red); }`),
+        ).toEqual([]);
+        expect(
+          undefinedVariables(longerModule, `.x { color: var(--${longer}-fill, red); }`),
+        ).toEqual([]);
+        expect(undefinedVariables(longerModule, `.x { gap: var(--_${longer}-gap, 0); }`)).toEqual(
+          [],
+        );
+      });
     });
 
     it('keeps the hook namespace of a top-level module', () => {
