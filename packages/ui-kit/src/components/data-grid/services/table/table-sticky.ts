@@ -67,8 +67,15 @@ export function prepareTableSticky<TItem extends DataGridItem = DataGridItem>(
     return [...sticky, ...nonSticky];
   }
 
+  // Skips the write when the width is unchanged. This is what ends the header's observer cycle: a
+  // new `columnWidths` Map is a new store state, which gives `useFirstRowHeaderCells` a new array,
+  // which re-creates the header's ResizeObserver, and a fresh observer always reports once on
+  // `observe()` -- so an unconditional write here would rebuild the observer on every frame.
   function onResizeColumn(columnId: string, width: number) {
-    const newWidths = new Map(useTableStore.getState().columnWidths);
+    const current = useTableStore.getState().columnWidths;
+    if (current.get(columnId) === width) return;
+
+    const newWidths = new Map(current);
     newWidths.set(columnId, width);
     useTableStore.setState({ columnWidths: newWidths });
   }

@@ -135,6 +135,20 @@ describe('tableSticky', () => {
 
       expect(useStore.getState().columnWidths.get('name')).toBe(200);
     });
+
+    // A write of an unchanged width is a new store state, which re-creates the header's
+    // ResizeObserver, whose first report writes the same width again: an observer per frame.
+    it('leaves the store state alone when the width is unchanged', () => {
+      const useStore = createTestStore({
+        columnWidths: new Map([['name', 100]]),
+      });
+      const { onResizeColumn } = prepareTableSticky(useStore);
+      const before = useStore.getState();
+
+      onResizeColumn('name', 100);
+
+      expect(useStore.getState()).toBe(before);
+    });
   });
 
   describe('isColumnSticky / isGroupSticky', () => {

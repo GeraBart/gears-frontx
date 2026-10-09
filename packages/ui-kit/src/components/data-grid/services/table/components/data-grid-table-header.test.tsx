@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { describe, expect, it, vi } from 'vitest';
-import { screen, within } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { act, screen, within } from '@testing-library/react';
 import { render } from '../../../../../__test-utils__/render-with-user';
 import { DataGrid } from '../../../data-grid';
 import type { DataGridLoadResult } from '../../../data-grid-types';
@@ -134,5 +134,72 @@ describe('DataGridTableHeader -- grouped header', () => {
         .getAllByRole('columnheader')
         .map((cell) => cell.textContent),
     ).toEqual(['Name', 'Role']);
+  });
+});
+
+// A real ResizeObserver reports once as soon as it starts observing an element it has a size for.
+// This stand-in does the same, on the next tick, and counts how many observers were created -- the
+// no-op stub above never reports, so it cannot show a loop that runs through the report.
+function installReportingResizeObserver() {
+  const created = { observers: 0, reports: 0 };
+
+  vi.stubGlobal(
+    'ResizeObserver',
+    class implements ResizeObserver {
+      private disconnected = false;
+
+      constructor(private callback: ResizeObserverCallback) {
+        created.observers += 1;
+      }
+
+      observe(target: Element) {
+        setTimeout(() => {
+          if (this.disconnected) return;
+          created.reports += 1;
+          const size: ResizeObserverSize = { inlineSize: 120, blockSize: 20 };
+          const entry: ResizeObserverEntry = {
+            target,
+            contentRect: new DOMRect(0, 0, 120, 20),
+            borderBoxSize: [size],
+            contentBoxSize: [size],
+            devicePixelContentBoxSize: [size],
+          };
+          act(() => this.callback([entry], this));
+        }, 0);
+      }
+
+      unobserve() {}
+
+      disconnect() {
+        this.disconnected = true;
+      }
+    },
+  );
+
+  return created;
+}
+
+describe('DataGridTableHeader -- measuring the columns', () => {
+  const noopObserver = globalThis.ResizeObserver;
+
+  afterEach(() => {
+    vi.stubGlobal('ResizeObserver', noopObserver);
+  });
+
+  // Each report writes the column's width to the store, and a new store state rebuilds the header's
+  // observer, which reports again. Unless an unchanged width is dropped, that is one new observer
+  // per frame for as long as the grid is mounted.
+  it('stops re-creating its ResizeObserver once the column widths are known', async () => {
+    const created = installReportingResizeObserver();
+
+    render(<DataGrid name="header_measure" load={load} columns={testColumns} persistent="memory" />);
+    await screen.findByRole('table');
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const settled = created.observers;
+    await new Promise((resolve) => setTimeout(resolve, 200));
+
+    expect(created.reports).toBeGreaterThan(0);
+    expect(created.observers).toBe(settled);
   });
 });
