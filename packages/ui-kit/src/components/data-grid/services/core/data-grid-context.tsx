@@ -14,7 +14,7 @@ export function useDataGrid<
 >(): DataGridInstance<TItem, TPlugins> {
   const grid = useContext(DataGridContext);
   if (!grid) {
-    throw new Error('useDataGrid must be used within DataGridProvider');
+    throw new Error('useDataGrid must be used within a DataGrid');
   }
 
   return grid;

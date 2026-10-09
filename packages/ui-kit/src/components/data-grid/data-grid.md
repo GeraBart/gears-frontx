@@ -31,7 +31,7 @@ code or CSS:
 
 | Entry | Exports |
 |-------|---------|
-| `@gears-frontx/ui-kit/data-grid` | `DataGrid`, `createDataGrid`, `createDataGridPlugin`, `useDataGrid`, `useDataGridPluginContext`, `useDataGridRecord`, `useDataGridActiveView`, `DATA_GRID_VIEW`, and the types |
+| `@gears-frontx/ui-kit/data-grid` | `DataGrid`, `createDataGridPlugin`, `useDataGrid`, `useDataGridPluginContext`, `useDataGridRecord`, `useDataGridActiveView`, `DATA_GRID_VIEW`, and the types |
 | `@gears-frontx/ui-kit/data-grid/pagination` | `DataGridPaginationPlugin` |
 | `@gears-frontx/ui-kit/data-grid/text-search` | `DataGridTextSearchPlugin` |
 | `@gears-frontx/ui-kit/data-grid/order` | `DataGridOrderPlugin`, `createDataGridOrderOption` |

@@ -2,7 +2,6 @@
 // plugin: each plugin is its own entry (`@gears-frontx/ui-kit/data-grid/<plugin>`), so a grid
 // that uses none of them pulls in none of their code or CSS.
 export { DataGrid } from './data-grid.js';
-export { createDataGrid } from './create-data-grid.js';
 export { useDataGrid, useDataGridPluginContext } from './services/core/data-grid-context.js';
 export type {
   DataGridConfig,

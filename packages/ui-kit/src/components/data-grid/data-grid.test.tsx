@@ -393,6 +393,6 @@ describe('DataGrid', () => {
       return null;
     }
 
-    expect(() => render(<Orphan />)).toThrow('useDataGrid must be used within DataGridProvider');
+    expect(() => render(<Orphan />)).toThrow('useDataGrid must be used within a DataGrid');
   });
 });
