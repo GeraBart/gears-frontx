@@ -29,9 +29,20 @@ export function createPersistentStateService<TItem extends DataGridItem>(
     return `dataGrid:${gridName}:${key}`;
   }
 
+  // Browser storage can be unavailable in ways that throw instead of returning `null`: reading the
+  // `localStorage` property itself raises a SecurityError where storage is blocked (a sandboxed or
+  // third-party iframe, "block all cookies"), and a write raises once the quota is used up. Both
+  // mean "this view is not remembered", never "the grid cannot render" -- plugins read storage in
+  // render, so a throw here would take the whole grid down -- so each access below falls back to
+  // no persistence, the same way a stored value that is not JSON reads as absent.
   function getStorage(area: 'localStorage' | 'sessionStorage'): Storage | null {
     if (typeof window === 'undefined') return null;
-    return area === 'localStorage' ? localStorage : sessionStorage;
+
+    try {
+      return area === 'localStorage' ? localStorage : sessionStorage;
+    } catch {
+      return null;
+    }
   }
 
   function registerPersistentState<T>(
@@ -73,7 +84,7 @@ export function createPersistentStateService<TItem extends DataGridItem>(
       const storage = getStorage(mode);
       if (!storage) return undefined;
 
-      return parseStored<T>(storage.getItem(storageKey));
+      return parseStored<T>(readItem(storage, storageKey));
     }
 
     function setValue(value: T | undefined) {
@@ -100,10 +111,14 @@ export function createPersistentStateService<TItem extends DataGridItem>(
         const storage = getStorage(mode);
         if (!storage) return;
 
-        if (value === undefined) {
-          storage.removeItem(storageKey);
-        } else {
-          storage.setItem(storageKey, JSON.stringify(value));
+        try {
+          if (value === undefined) {
+            storage.removeItem(storageKey);
+          } else {
+            storage.setItem(storageKey, JSON.stringify(value));
+          }
+        } catch {
+          // Quota or blocked: the plugin keeps the state in its own store, it just is not remembered.
         }
       }
 
@@ -124,6 +139,14 @@ export function createPersistentStateService<TItem extends DataGridItem>(
       });
       return result;
     }
+  }
+}
+
+function readItem(storage: Storage, key: string): string | null {
+  try {
+    return storage.getItem(key);
+  } catch {
+    return null;
   }
 }
 

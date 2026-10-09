@@ -97,6 +97,28 @@ describe('DataGridPaginationPlugin', () => {
     );
   });
 
+  it('still goes to the page that was clicked when storage refuses the write', async () => {
+    // A full quota: the page is stored before the load starts, so a throw there would leave the pager
+    // on the new page with the old rows.
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('full', 'QuotaExceededError');
+    });
+
+    try {
+      const load = createLoad();
+      const { user } = renderGrid('pg_full_storage', load);
+      await screen.findByText('Item 1');
+
+      await user.click(screen.getByRole('button', { name: messages.pagination.goToPage(3) }));
+
+      expect(await screen.findByText('Item 25')).toBeInTheDocument();
+      expect(lastPagination(load)).toEqual({ page: 3, limit: 12 });
+      expect(setItem).toHaveBeenCalled();
+    } finally {
+      setItem.mockRestore();
+    }
+  });
+
   it('steps with Previous and Next, and disables each at its end of the range', async () => {
     const load = createLoad();
     const { user } = renderGrid('pg_step', load);

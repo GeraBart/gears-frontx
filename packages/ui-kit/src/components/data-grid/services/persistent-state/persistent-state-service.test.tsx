@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen } from '@testing-library/react';
 import { render } from '../../../../__test-utils__/render-with-user';
 import { DataGrid } from '../../data-grid';
@@ -221,6 +221,73 @@ describe('persistentStateService', () => {
       await second.user.click(screen.getByRole('button', { name: 'Read probe' }));
 
       expect(screen.getByLabelText('Probe value')).toHaveTextContent('{"page":2}');
+    });
+  });
+
+  describe('browser storage that refuses', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    // Where storage is blocked (a sandboxed or third-party iframe, "block all cookies"), reading
+    // the `localStorage` property itself throws. Plugins read it while the grid renders, so an
+    // uncaught throw here is a grid that never appears.
+    it('renders and runs without persistence when reading localStorage throws', async () => {
+      const original = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+      expect(original).toBeDefined();
+      Object.defineProperty(globalThis, 'localStorage', {
+        configurable: true,
+        get() {
+          throw new DOMException('blocked', 'SecurityError');
+        },
+      });
+
+      try {
+        const { user } = await renderGrid('test_persistent_blocked');
+        expect(screen.getByLabelText('Probe value')).toHaveTextContent(emptyDisplay);
+
+        await user.click(screen.getByRole('button', { name: 'Set probe' }));
+        await user.click(screen.getByRole('button', { name: 'Read probe' }));
+
+        // Nothing is remembered, and nothing broke.
+        expect(screen.getByLabelText('Probe value')).toHaveTextContent(emptyDisplay);
+      } finally {
+        if (original) Object.defineProperty(globalThis, 'localStorage', original);
+      }
+    });
+
+    it('reads a stored value as absent when getItem itself throws', async () => {
+      localStorage.setItem('dataGrid:test_persistent_get_throws:probe', '{"page":2}');
+      vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+        throw new DOMException('denied', 'SecurityError');
+      });
+
+      await renderGrid('test_persistent_get_throws');
+
+      expect(screen.getByLabelText('Probe value')).toHaveTextContent(emptyDisplay);
+    });
+
+    it('does not throw out of setValue when a write is refused', async () => {
+      const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+        throw new DOMException('full', 'QuotaExceededError');
+      });
+      // An error thrown from a click handler is reported on the window, not to the caller.
+      const errors: unknown[] = [];
+      const onError = (event: ErrorEvent) => {
+        errors.push(event.error);
+        event.preventDefault();
+      };
+      window.addEventListener('error', onError);
+
+      try {
+        const { user } = await renderGrid('test_persistent_full');
+        await user.click(screen.getByRole('button', { name: 'Set probe' }));
+
+        expect(setItem).toHaveBeenCalled();
+        expect(errors).toEqual([]);
+      } finally {
+        window.removeEventListener('error', onError);
+      }
     });
   });
 
