@@ -20,6 +20,9 @@ export function createLoadService<TItem extends DataGridItem>(
   // rather than derived on read, so a child fetch outliving the root load still flips the state
   // back: `instances` alone stays non-empty and would never notify.
   const recordInstanceIds = new Set<LoadInstanceId>();
+  // The newest refresh, so a first load that a refresh superseded can wait for the load that
+  // replaces it.
+  let latestRefresh: Promise<void> | undefined;
 
   const useLoadStateStore = create<LoadStateStore>()(() => ({
     loadState: 'blank',
@@ -73,16 +76,60 @@ export function createLoadService<TItem extends DataGridItem>(
     }
   }
 
-  async function init() {
-    await context.hooked.callHook('init');
-    await triggerLoad().promise;
+  /**
+   * Waits for a load, and says whether this service aborted it itself (`true`) instead of it
+   * finishing. An abort counts as settled, not failed.
+   *
+   * The service aborts what is in flight when a refresh starts its own load, and when the grid is
+   * destroyed, so nobody is waiting for the aborted one's result any more. Its rejection (a `load`
+   * that honours `signal` rejects with an AbortError) is the abort doing its job: reported from
+   * `refresh()` it is an unhandled rejection at every call site that does not catch it (the plugins
+   * do not), and reported from the first load it latches the grid into its error view, or logs a
+   * failure for a grid that is simply gone.
+   *
+   * Only this service holds the controller, so `signal.aborted` means it aborted the load. An
+   * AbortError a consumer's own `load` raises (its own timeout, say) does not set it and still
+   * rejects, and so does any other failure.
+   */
+  async function settle(instance: LoadInstance<TItem>): Promise<boolean> {
+    try {
+      await instance.promise;
+      return false;
+    } catch (error) {
+      if (instance.signal.aborted) return true;
+      throw error;
+    }
   }
 
-  async function refresh(options: RefreshOptionsRaw = {}) {
+  /**
+   * The first load is done when the data the grid shows has arrived. A refresh that aborts it
+   * carries that data from then on, so it is followed instead of settled: the first load is done
+   * when that refresh's load is, through any refreshes that supersede it in turn. If that load
+   * fails, so has the first one, since nothing ever loaded. If `destroy()` aborts it, nothing is
+   * left to wait for, and the grid has not loaded: `destroy()` puts the core back to idle.
+   */
+  async function init() {
+    await context.hooked.callHook('init');
+    const refreshBefore = latestRefresh;
+    if (!(await settle(triggerLoad()))) return;
+
+    let followed = refreshBefore;
+    while (latestRefresh !== followed) {
+      followed = latestRefresh;
+      await followed;
+    }
+  }
+
+  function refresh(options: RefreshOptionsRaw = {}): Promise<void> {
+    latestRefresh = runRefresh(options);
+    return latestRefresh;
+  }
+
+  async function runRefresh(options: RefreshOptionsRaw) {
     abort();
     const refreshOptions: RefreshOptions = { resetFilters: options.resetFilters ?? true };
     await context.hooked.callHook('refresh', refreshOptions);
-    await triggerLoad({ refresh: refreshOptions }).promise;
+    await settle(triggerLoad({ refresh: refreshOptions }));
   }
 
   function triggerLoad(triggerConfig?: LoadTriggerConfig): LoadInstance<TItem> {

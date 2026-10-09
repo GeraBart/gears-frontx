@@ -9,6 +9,8 @@ export interface ExternalLoadingStore {
 export interface CoreService {
   useLoadStateStore: UseLoadStateStore;
   loadPromise: <T>(promise: Promise<T>) => Promise<T>;
+  /** Back to idle, so the next `init()` runs the first load again. */
+  resetLoadState: () => void;
   /**
    * Consumer-driven loading state. Kept in its own store rather than in either load-state machine:
    * the load service derives its state from the in-flight instance map, so a value written there

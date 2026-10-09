@@ -15,6 +15,8 @@ export interface LoadStateManager {
   setLoaded: () => void;
   setError: () => void;
   setBlank: () => void;
+  /** Back to idle, and detaches the `loadPromise` in flight so its outcome no longer writes. */
+  reset: () => void;
   loadPromise: <T>(promise: Promise<T>) => Promise<T>;
 }
 
@@ -26,6 +28,10 @@ export function createLoadStateManager(): LoadStateManager {
   const useLoadStateStore = create<LoadStateStore>()(() => ({
     loadState: 'blank',
   }));
+  // Which `loadPromise` owns the state. A later one, or a `reset`, takes it over, and the outcome
+  // of the one it replaced no longer writes: a load that was cut off must not come back later and
+  // mark the state loaded, or failed, over whatever the state has become since.
+  let owner = 0;
 
   return {
     useLoadState: useLoadStateStore,
@@ -33,6 +39,7 @@ export function createLoadStateManager(): LoadStateManager {
     setLoaded,
     setError,
     setBlank,
+    reset,
     loadPromise,
   };
 
@@ -52,14 +59,20 @@ export function createLoadStateManager(): LoadStateManager {
     useLoadStateStore.setState({ loadState: 'blank' });
   }
 
+  function reset() {
+    owner += 1;
+    setBlank();
+  }
+
   async function loadPromise<T>(promise: Promise<T>): Promise<T> {
+    const mine = ++owner;
     setLoading();
     try {
       const result = await promise;
-      setLoaded();
+      if (mine === owner) setLoaded();
       return result;
     } catch (error) {
-      setError();
+      if (mine === owner) setError();
       throw error;
     }
   }

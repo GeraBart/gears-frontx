@@ -1,8 +1,9 @@
 import { screen, within } from '@testing-library/react';
-import { useState } from 'react';
+import { Activity, StrictMode, useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { render } from '../../__test-utils__/render-with-user';
+import { createSignalAwareLoad } from '../../__test-utils__/signal-aware-load';
 import { DataGrid } from './data-grid';
 import type { DataGridLoadContext, DataGridLoadResult } from './data-grid-types';
 import { messages } from './messages';
@@ -35,6 +36,15 @@ const items: Item[] = [
 
 function loadItems(): Promise<DataGridLoadResult<Item>> {
   return Promise.resolve({ results: items, total: items.length });
+}
+
+function RefreshButton() {
+  const context = useDataGridPluginContext();
+  return (
+    <button type="button" onClick={() => void context.refresh({ resetFilters: false })}>
+      refresh
+    </button>
+  );
 }
 
 describe('DataGrid', () => {
@@ -151,6 +161,172 @@ describe('DataGrid', () => {
       );
 
       expect(await screen.findByText(messages.loadError.headerDefault)).toBeInTheDocument();
+    });
+  });
+
+  describe('a load that the grid aborts itself', () => {
+    // A refresh aborts the first load. That is the refresh doing its job, so the grid waits for the
+    // newer load instead of showing the error view for good.
+    it('shows the newer load, not the error view, when a refresh supersedes the first load', async () => {
+      const { load, pending } = createSignalAwareLoad(items);
+      const { user } = render(
+        <DataGrid name="dg_refresh_first_load" load={load} columns={columns} persistent="memory">
+          <RefreshButton />
+        </DataGrid>,
+      );
+      await vi.waitFor(() => expect(pending).toHaveLength(1));
+
+      await user.click(screen.getByRole('button', { name: 'refresh' }));
+      await vi.waitFor(() => expect(pending).toHaveLength(2));
+      pending[1].succeed();
+
+      expect(await screen.findByText('Alice')).toBeInTheDocument();
+      expect(screen.queryByText(messages.loadError.headerDefault)).not.toBeInTheDocument();
+    });
+
+    // Until the refresh lands nothing has loaded, so the grid keeps its first-load loader. Marked
+    // loaded while it waits, the grid would say "No results found" under the overlay first.
+    it('keeps the loader, not "No results found", while the refresh that superseded the first load runs', async () => {
+      const { load, pending } = createSignalAwareLoad(items);
+      const { user } = render(
+        <DataGrid name="dg_refresh_loader" load={load} columns={columns} persistent="memory">
+          <RefreshButton />
+        </DataGrid>,
+      );
+      await vi.waitFor(() => expect(pending).toHaveLength(1));
+
+      await user.click(screen.getByRole('button', { name: 'refresh' }));
+      await vi.waitFor(() => expect(pending).toHaveLength(2));
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(screen.queryByText(messages.emptyState.noResultsFound)).not.toBeInTheDocument();
+
+      pending[1].succeed();
+
+      expect(await screen.findByText('Alice')).toBeInTheDocument();
+      expect(screen.queryByText(messages.emptyState.noResultsFound)).not.toBeInTheDocument();
+    });
+
+    it('does not log a failed first load when the grid unmounts during it', async () => {
+      const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const { load, pending } = createSignalAwareLoad(items);
+      const { unmount } = render(
+        <DataGrid name="dg_unmount_first_load" load={load} columns={columns} persistent="memory" />,
+      );
+      await vi.waitFor(() => expect(pending).toHaveLength(1));
+
+      unmount();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      expect(logged).not.toHaveBeenCalledWith('[DataGrid] Initial load failed:', expect.anything());
+    });
+
+    // Search and sort start a refresh without a catch, so a rejection left over when the grid goes
+    // away is one the host's global handler would report.
+    it('leaks no rejection when the grid unmounts during a refresh', async () => {
+      const rejections: unknown[] = [];
+      const onRejection = (reason: unknown) => rejections.push(reason);
+      process.on('unhandledRejection', onRejection);
+
+      try {
+        const { load, pending } = createSignalAwareLoad(items);
+        const { user, unmount } = render(
+          <DataGrid name="dg_unmount_refresh" load={load} columns={columns} persistent="memory">
+            <RefreshButton />
+          </DataGrid>,
+        );
+        await vi.waitFor(() => expect(pending).toHaveLength(1));
+        pending[0].succeed();
+        await screen.findByText('Alice');
+        await user.click(screen.getByRole('button', { name: 'refresh' }));
+        await vi.waitFor(() => expect(pending).toHaveLength(2));
+
+        unmount();
+        await new Promise((resolve) => setTimeout(resolve, 50));
+
+        expect(rejections).toEqual([]);
+      } finally {
+        process.off('unhandledRejection', onRejection);
+      }
+    });
+  });
+
+  describe('a grid that goes away while its first load is in flight', () => {
+    function HideableGrid({ load }: { load: (context: DataGridLoadContext) => Promise<DataGridLoadResult<Item>> }) {
+      const [visible, setVisible] = useState(true);
+      return (
+        <>
+          <button type="button" onClick={() => setVisible((value) => !value)}>
+            toggle
+          </button>
+          <Activity mode={visible ? 'visible' : 'hidden'}>
+            <DataGrid name="dg_activity" load={load} columns={columns} persistent="memory">
+              <RefreshButton />
+            </DataGrid>
+          </Activity>
+        </>
+      );
+    }
+
+    // `Activity` runs the grid's effect cleanup when it hides, which aborts the load in flight, and
+    // its effects again when it shows. The grid has to ask again then: what was aborted never
+    // loaded, so there is nothing to show until it does.
+    it('loads again when it is shown after being hidden mid-load', async () => {
+      const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const { load, pending } = createSignalAwareLoad(items);
+      const { user } = render(<HideableGrid load={load} />);
+      await vi.waitFor(() => expect(pending).toHaveLength(1));
+
+      await user.click(screen.getByRole('button', { name: 'toggle' }));
+      expect(pending[0].signal?.aborted).toBe(true);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      await user.click(screen.getByRole('button', { name: 'toggle' }));
+
+      await vi.waitFor(() => expect(pending).toHaveLength(2));
+      pending[1].succeed();
+      expect(await screen.findByText('Alice')).toBeInTheDocument();
+      expect(screen.queryByText(messages.loadError.headerDefault)).not.toBeInTheDocument();
+      expect(logged).not.toHaveBeenCalledWith('[DataGrid] Initial load failed:', expect.anything());
+    });
+
+    // The first load was superseded by a refresh, which is what carries the data now. Hiding the
+    // grid cuts that refresh off, so the grid has loaded nothing, and showing it has to ask again.
+    it('loads again when it is shown after being hidden during the refresh that superseded the first load', async () => {
+      const { load, pending } = createSignalAwareLoad(items);
+      const { user } = render(<HideableGrid load={load} />);
+      await vi.waitFor(() => expect(pending).toHaveLength(1));
+      await user.click(screen.getByRole('button', { name: 'refresh' }));
+      await vi.waitFor(() => expect(pending).toHaveLength(2));
+
+      await user.click(screen.getByRole('button', { name: 'toggle' }));
+      expect(pending[1].signal?.aborted).toBe(true);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      await user.click(screen.getByRole('button', { name: 'toggle' }));
+
+      await vi.waitFor(() => expect(pending).toHaveLength(3));
+      expect(screen.queryByText(messages.emptyState.noResultsFound)).not.toBeInTheDocument();
+      pending[2].succeed();
+      expect(await screen.findByText('Alice')).toBeInTheDocument();
+    });
+
+    // The reverse order: React mounts, unmounts and mounts a component again in development. The
+    // cleanup comes before the first load has started, so nothing is aborted and nothing has to be
+    // asked twice.
+    it('asks for the first load once under StrictMode', async () => {
+      const { load, pending } = createSignalAwareLoad(items);
+      render(
+        <StrictMode>
+          <DataGrid name="dg_strict" load={load} columns={columns} persistent="memory" />
+        </StrictMode>,
+      );
+      await vi.waitFor(() => expect(pending).toHaveLength(1));
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(pending).toHaveLength(1);
+      expect(pending[0].signal?.aborted).toBe(false);
+
+      pending[0].succeed();
+
+      expect(await screen.findByText('Alice')).toBeInTheDocument();
+      expect(pending).toHaveLength(1);
     });
   });
 

@@ -70,7 +70,20 @@ export function createDataGrid<
 
   function destroy() {
     hooked.callHookSync('destroy');
+
+    // A first load that is under way, and so about to be aborted, never delivers: the grid is back
+    // to idle, so the next `init()` (an `Activity` showing it again) runs the load once more.
+    // Without an instance the first load has not started yet -- React's development remount runs
+    // this cleanup between two `init()` calls, and the second must not start another -- so there
+    // is nothing to cut off.
+    const firstLoadCutOff =
+      context.core.useLoadStateStore.getState().loadState === 'loading' &&
+      context.load.getLoadInstances().length > 0;
+
     context.load.abort();
+    if (firstLoadCutOff) {
+      context.core.resetLoadState();
+    }
   }
 
   async function init() {

@@ -3,7 +3,7 @@ import { createLoadStateManager } from '../../utils/load-state';
 import type { CoreService, ExternalLoadingStore } from './core-types';
 
 export function createCoreService(): CoreService {
-  const { useLoadState, loadPromise } = createLoadStateManager();
+  const { useLoadState, loadPromise, reset } = createLoadStateManager();
 
   const useExternalLoadingStore = create<ExternalLoadingStore>()(() => ({
     loading: false,
@@ -12,6 +12,7 @@ export function createCoreService(): CoreService {
   return {
     useLoadStateStore: useLoadState,
     loadPromise,
+    resetLoadState: reset,
     useExternalLoadingStore,
     updateLoading,
   };
