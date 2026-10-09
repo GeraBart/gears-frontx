@@ -52,7 +52,7 @@ export interface DataGridPluginApi<TProps extends Record<string, unknown> = Reco
 export function createDataGridPlugin<
   TItem extends DataGridItem = DataGridItem,
   TName extends string = string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- public type, kept as in the source: `unknown` would refuse interface-typed props, which have no index signature (follow-up: tighten public any)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- `unknown` would refuse interface-typed props, which have no index signature
   TProps extends Record<string, any> = Record<string, any>,
   TApi extends DataGridPluginApi<TProps> = DataGridPluginApi<TProps>,
 >(

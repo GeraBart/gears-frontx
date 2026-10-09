@@ -51,9 +51,9 @@ export function createLoadService<TItem extends DataGridItem>(
   /**
    * Whether this load ends up replacing what the grid is showing.
    *
-   * `store: false` opts out of storage entirely -- the export loops page through the whole set that
-   * way -- and a load scoped to a tree parent appends a section beneath that row instead of
-   * clearing the rest. Both leave the visible rows usable, so neither should raise the overlay.
+   * `store: false` opts out of storage entirely -- a load that pages through the whole data set
+   * runs that way -- and a load scoped to a tree parent appends a section beneath that row instead
+   * of clearing the rest. Both leave the visible rows usable, so neither should raise the overlay.
    */
   function replacesRecords(triggerConfig?: LoadTriggerConfig): boolean {
     if (triggerConfig?.store === false) {

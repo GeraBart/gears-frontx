@@ -1,7 +1,5 @@
 /*
- * The grid's hook bus, a private port of the sync / serial / parallel subset of
- * `createHooked` that the grid uses. The semantics are copied on purpose, because plugins
- * depend on them:
+ * The grid's hook bus: sync, serial and parallel calls. Plugins depend on these semantics:
  *
  * - a handler list is copied when a hook is called, so a handler may unsubscribe itself (or
  *   register another) while the hook runs without changing this run;

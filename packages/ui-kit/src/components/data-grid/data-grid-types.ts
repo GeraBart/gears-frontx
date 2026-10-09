@@ -20,7 +20,7 @@ import type {
 
 export interface DataGridItem {
   id: string | number;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- public type, kept as in the source: an item is whatever the consumer's API returns, and `any` is what lets a column's `key` read its field (follow-up: tighten public any)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- an item is whatever the consumer's API returns, and `any` is what lets a column's `key` read its field
   [key: string]: any;
 }
 
@@ -39,14 +39,14 @@ export interface DataGridLoadContext {
     page: number;
     limit: number;
   };
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- public type, kept as in the source: each plugin contributes a filter of its own shape (follow-up: tighten public any)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- each plugin contributes a filter of its own shape
   filters?: Record<string, any>;
   order?: {
     column: string;
     direction: 'asc' | 'desc';
   }[];
   signal?: AbortSignal;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- public type, kept as in the source: lets `load` read the fields a plugin adds beyond the ones typed here (follow-up: tighten public any)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- lets `load` read the fields a plugin adds beyond the ones typed here
   [key: string]: any;
 }
 
@@ -66,7 +66,7 @@ export interface DataGridConfig<TItem extends DataGridItem> {
    *
    * - `'localStorage'` - Browser localStorage (persists across sessions)
    * - `'sessionStorage'` - Browser sessionStorage (cleared when tab closes)
-   * - `'router'` - URL query parameters (future feature)
+   * - `'router'` - URL query parameters (`history.replaceState`, one query key per state)
    * - `'memory'` - In-memory only; state survives re-renders within one mount
    *   and resets on remount or page reload
    */
@@ -94,14 +94,14 @@ export interface DataGridProps<TItem extends DataGridItem> extends Pick<
   columns: (DataGridTableColumn<TItem> | DataGridTableGroup<TItem>)[];
   /**
    * The table's `table-layout` algorithm. Default `'fixed'` — columns share a stable, weighted
-   * track, matching today's behavior. `'auto'` opts into content-fit sizing with independent
+   * track. `'auto'` opts into content-fit sizing with independent
    * `minWidth`/`maxWidth` per column (see `DataGridTableColumn`); it fills the same container width
    * `'fixed'` does, but rows re-layout as content changes.
    */
   tableLayout?: DataGridTableLayout;
   /**
    * Keeps the header row(s) pinned to the top of the grid's own scroll area while the rows
-   * scroll. Header controls (sorting, column filters, select-all) stay reachable, pinned
+   * scroll. Header controls (the sort button, a custom `headerComponent`) stay reachable, pinned
    * (`sticky`) columns keep working, and the corner cells stick on both axes.
    *
    * Only takes effect when the grid is height-bounded by its layout so that the grid scrolls

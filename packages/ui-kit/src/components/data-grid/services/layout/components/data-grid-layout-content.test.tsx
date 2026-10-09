@@ -247,9 +247,9 @@ describe('DataGridLayoutContent', () => {
     );
 
     await settle(twoRows);
-    // The row-select plugin swaps the top slot for its action bar once a row is selected, which is
-    // where a consumer's bulk action lives. That plugin lands in a later change, so a stand-in
-    // plugin puts the same kind of control into the same slot.
+    // A plugin can swap the top slot for an action bar of its own, which is where a consumer's
+    // bulk action would live. A stand-in plugin registers the same kind of control into the same
+    // slot.
     const bulkAction = await screen.findByRole('button', { name: 'Copy to term' });
 
     await user.click(screen.getByRole('button', { name: 'refresh' }));
@@ -523,8 +523,8 @@ describe('DataGridLayoutContent', () => {
     await user.click(screen.getByRole('button', { name: 'export page' }));
     await started();
 
-    // `store: false` is how the export walks the whole data set page by page. Nothing on screen
-    // changes, so the rows stay live while it runs.
+    // `store: false` is how a load pages through the whole data set. Nothing on screen changes, so
+    // the rows stay live while it runs.
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
     expect(table.closest('[aria-busy="true"]')).toBeNull();
   });

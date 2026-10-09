@@ -11,7 +11,7 @@ export interface SegmentProps
 /**
  * A single-choice segmented control: `ToggleGroup` in its joined, outlined look, with its array
  * value narrowed to one. The grid reads and writes one value everywhere it uses a segmented
- * control (the page-size selector, the view switch, the segment filter), and an array that is
+ * control (the page-size selector, the view switch), and an array that is
  * always zero or one long is a trap for each of those callers.
  */
 export function Segment({ value, onValueChange, ...props }: SegmentProps) {

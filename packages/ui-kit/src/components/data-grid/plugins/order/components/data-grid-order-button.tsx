@@ -76,8 +76,7 @@ export function DataGridOrderButton() {
       <PopoverTrigger render={triggerButton} />
       <PopoverContent side="bottom" align="end">
         {/* The menu parts without a popup of their own: the popover is the popup, and the menu
-            only supplies the items. Like the source's inline menu list, this has no arrow-key
-            navigation between the items. */}
+            only supplies the items, so there is no arrow-key navigation between them. */}
         <DropdownMenu open modal={false}>
           <div className={styles.orderPopover} style={popoverStyle}>
             <DropdownMenuGroup>

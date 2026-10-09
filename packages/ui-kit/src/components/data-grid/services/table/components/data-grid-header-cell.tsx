@@ -67,14 +67,13 @@ export function DataGridHeaderCell<TItem extends DataGridItem>({
   // `fillContent`'s doc on `DataGridCell`. `headerCellEndSlots` is table-wide (non-empty for every
   // column once a plugin like order registers a slot, even though `DataGridOrderIcon` only
   // renders for the one actively-sorted column), so it's the wrong signal for this: gating on it
-  // would leave a custom header shrink-wrapped on any grid that also happens to have the order or
-  // column-filters plugin registered (the reported bug -- a consumer's Users grid had
-  // exactly this combination). `column.headerComponent` doesn't depend on which plugins are
-  // registered, so it fixes both the no-plugin and the with-plugin cases the same way. Excluded
-  // for min-content columns, whose `.contentRow` must keep shrink-wrapping to stay an accurate
-  // ResizeObserver measurement target. Edge case: a custom header on the actively-sorted column
-  // still gets a real end slot (the sort arrow), which then sits at the filled row's far end
-  // instead of snug against the label -- accepted as a minor cosmetic tradeoff.
+  // would leave a custom header shrink-wrapped on any grid where such a plugin is registered.
+  // `column.headerComponent` doesn't depend on which plugins are registered, so it handles both
+  // the no-plugin and the with-plugin cases the same way. Excluded for min-content columns, whose
+  // `.contentRow` must keep shrink-wrapping to stay an accurate ResizeObserver measurement target.
+  // Edge case: a custom header on the actively-sorted column still gets a real end slot (the sort
+  // arrow), which then sits at the filled row's far end instead of snug against the label --
+  // accepted as a minor cosmetic tradeoff.
   const fillContent = Boolean(column.headerComponent) && !isMinContentColumn;
 
   // Measures `.contentRow`'s own natural (`inline-size: min-content`) width whenever it changes

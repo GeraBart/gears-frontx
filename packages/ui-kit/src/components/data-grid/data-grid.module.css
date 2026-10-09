@@ -6,10 +6,9 @@
  * the whole grid -- toolbar, rows and pagination -- which is what the loading treatment has to
  * cover (see data-grid-layout-content.module.css for the overlay itself).
  *
- * The source relied on a host-wide stylesheet for its base rules (border-box sizing, a button
- * reset, a table width). This kit ships no global preflight, so each grid-owned element that
- * needs one of them states it on its own class, and what is left for the root to say is its own
- * layout.
+ * The kit ships no global preflight (border-box sizing, a button reset, a table width), so each
+ * grid-owned element that needs one of them states it on its own class, and what is left for the
+ * root to say is its own layout.
  */
 .root {
   position: relative;

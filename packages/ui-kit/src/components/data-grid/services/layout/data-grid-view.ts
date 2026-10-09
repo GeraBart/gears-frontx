@@ -14,7 +14,7 @@ export const DATA_GRID_VIEW = {
 export type DataGridViewId = (typeof DATA_GRID_VIEW)[keyof typeof DATA_GRID_VIEW];
 
 /**
- * Reactively read the id of the currently active DataGrid main view (e.g. the table or cards view).
+ * Reactively read the id of the currently active DataGrid main view (e.g. the table view, or a cards view that a plugin registers).
  * Re-renders when the active view changes. Returns `undefined` before any main view is active.
  */
 export function useDataGridActiveView(): string | undefined {

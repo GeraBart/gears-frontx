@@ -159,10 +159,10 @@ export function getEndStickyOffset(s: EndStickyState, columnId: string): number 
 }
 
 /**
- * The measured header width wins over the registered one: an auto-sized extra column (the row
- * actions one) registers a width computed from its own content, while the header's
- * ResizeObserver reports the track the table actually gave the cell. Stacking on the registered
- * value would drift the outer pinned columns by the difference.
+ * The measured header width wins over the registered one: an auto-sized extra column registers a
+ * width computed from its own content, while the header's ResizeObserver reports the track the
+ * table actually gave the cell. Stacking on the registered value would drift the outer pinned
+ * columns by the difference.
  *
  * The registered value is used only when it is a plain px length. `width` is handed straight to
  * CSS, where `4rem` and `10%` are perfectly good column widths, so the field cannot be narrowed to

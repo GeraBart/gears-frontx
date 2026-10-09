@@ -1,8 +1,7 @@
 /*
- * Every user-facing string the grid renders, in one place. The kit has no i18n layer (a kit-wide
- * one is a follow-up), so these are English literals; one module keeps them findable and lets the
- * tests assert against `messages.*` instead of repeating the text. Strings that took a count or a
- * name in the source's translation catalogue are functions of it.
+ * Every user-facing string the grid renders, in one place. The kit has no i18n layer, so these are
+ * English literals; one module keeps them findable and lets the tests assert against `messages.*`
+ * instead of repeating the text. A string that embeds a count or a name is a function of it.
  */
 export const messages = {
   emptyState: {

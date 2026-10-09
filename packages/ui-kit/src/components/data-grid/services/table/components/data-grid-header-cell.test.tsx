@@ -345,8 +345,8 @@ describe('DataGridHeaderCell — headerComponent fills the row', () => {
   // the `<th>` is the signal DataGridCell's CSS reads to fill it instead -- driven by
   // `column.headerComponent` alone, deliberately NOT by whether the grid has a `header-cell-end`
   // slot registered (that array is table-wide, not per-column -- see DataGridHeaderCell's
-  // `fillContent` comment), so it fires identically whether or not the order/column-filters
-  // plugin happens to be registered on the grid.
+  // `fillContent` comment), so it fires identically whether or not the order plugin (or any
+  // other that adds a header-cell-end slot) happens to be registered on the grid.
 
   it('marks a custom headerComponent header with data-header-fill on a plugin-less grid', async () => {
     const columns: DataGridTableColumn<TestItem>[] = [

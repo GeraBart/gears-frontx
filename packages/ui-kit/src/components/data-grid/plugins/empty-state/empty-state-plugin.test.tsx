@@ -32,8 +32,8 @@ function loadNothing(): Promise<DataGridLoadResult<Item>> {
   return Promise.resolve({ results: [], total: 0 });
 }
 
-// Stands in for the filters plugin's team scope: a filter the grid always sends and nothing in the
-// toolbar can clear, which is what `implicitFilterKeys` is for.
+// Stands in for a plugin that scopes the grid to a team: a filter the grid always sends and
+// nothing in the toolbar can clear, which is what `implicitFilterKeys` is for.
 const TeamScopePlugin = createDataGridPlugin('teamScope', (context) => {
   context.hook('load:context', () => ({ filters: { teamId: { value: 'team-1' } } }));
   return {};

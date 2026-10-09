@@ -4,8 +4,8 @@ import { useDataGridContext } from '../core/data-grid-context';
  * Whether the grid should be showing load feedback.
  *
  * Reads `recordsLoadState` rather than the load service's overall state: that one counts every
- * in-flight instance, so expanding a tree row or running an export's page loop would dim and block
- * the whole grid over rows the user can still work with. The core service's state is no use here
+ * in-flight instance, so loading the children of a tree row or paging through the whole data set
+ * would dim and block the whole grid over rows the user can still work with. The core service's state is no use here
  * either -- it latches at `'loaded'` after the first load and would never report a refetch. The
  * idle value is `'blank'`, not `'loaded'`, so the test is an equality check.
  *

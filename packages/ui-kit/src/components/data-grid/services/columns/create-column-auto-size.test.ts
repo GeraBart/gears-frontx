@@ -229,10 +229,10 @@ describe('createColumnAutoSize', () => {
     expect(onWidthChange).toHaveBeenCalledWith('0px');
   });
 
-  // The regression guard for a squeezed parent. Validated in a real browser (chrome-devtools, 2026-05-15)
-  // that setting `style.inlineSize = 'max-content'` on a squeezed `.rowActions` element and
-  // reading `offsetWidth` returns the intrinsic value rather than the parent-constrained
-  // rendered value. This test pins the fix's invariant.
+  // The regression guard for a squeezed parent. In a real browser, setting
+  // `style.inlineSize = 'max-content'` on an element inside a squeezed parent and reading
+  // `offsetWidth` returns the intrinsic value rather than the parent-constrained rendered value.
+  // This test pins that invariant.
   describe('intrinsic measurement under squeezed parent', () => {
     it('uses intrinsic (max-content) offsetWidth, not the parent-constrained rendered width', () => {
       installMockObserver();

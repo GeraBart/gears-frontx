@@ -52,7 +52,7 @@ const users: User[] = Array.from({ length: 57 }, (_, index) => {
   return {
     id: index + 1,
     name,
-    email: `${name.toLowerCase().replace(/[^a-z0-9]+/g, '.')}@constructor.dev`,
+    email: `${name.toLowerCase().replace(/[^a-z0-9]+/g, '.')}@example.com`,
     role: ROLES[index % ROLES.length],
     status: STATUSES[index % STATUSES.length],
     createdAt: new Date(Date.UTC(2026, index % 12, (index % 27) + 1)).toISOString().slice(0, 10),

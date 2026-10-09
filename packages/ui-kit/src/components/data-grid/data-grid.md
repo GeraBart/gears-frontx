@@ -3,15 +3,12 @@
 A server-driven data grid: a `DataGrid` that renders rows through the kit's
 `Table`, a `load(ctx)` callback that fetches them, a slot-based layout around
 the table, and plugins that add behavior (paging, search, sorting, a custom
-empty state) by registering into those slots and hooking the load. It is a port
-of the grid in Constructor's internal component library, kept 1:1 in
-architecture and public API: a store per service, a plugin registry, and the
-same `load` shape.
+empty state) by registering into those slots and hooking the load. Each concern
+(load, layout, table, storage, persistence) is a service with its own store, and
+a plugin reaches all of them through one context object.
 
-What this version ships: the core, the table renderer, and four plugins -
-pagination, text search, order and empty state. The rest of the original's
-plugins (filters, row selection and actions, table configuration, cards, tree,
-drag and drop, export, column filters) are not in the kit yet.
+Built-in plugins: pagination, text search, order and empty state, each its own
+entry (see below).
 
 ## When to use
 
@@ -150,7 +147,10 @@ under a spanning header cell.
 | `groupId` | `string` | Set by the grid on columns inside a `DataGridTableGroup`; do not set it. |
 
 A `DataGridTableGroup` is `{ id, label, columns, component?, visible?, sticky? }`; a
-group's `sticky` pins all its columns unless a column says otherwise.
+group's `sticky` pins all its columns. Pin a group as a whole or none of its
+columns: a column pinned or unpinned on its own inside a group moves in the body
+but not under the group's header, so the header labels stop matching their
+columns (see "Known limitations").
 
 Pass a component to a column as its own module-level component, not an inline
 function: an inline component is a new component on every render and loses its
@@ -330,8 +330,8 @@ page, and does not listen for `popstate`; a plugin can opt a state out of it
 backend (`{ storage: 'localStorage' }`).
 
 `persistentColumnVisibility` remembers which columns the user showed or hid, in
-`localStorage` whatever `persistent` says. The control that changes it ships with
-the table configuration plugin, which is not in the kit yet.
+`localStorage` whatever `persistent` says. The grid ships no control that changes
+it; a plugin of your own calls `updateColumnVisibility`.
 
 ## Plugins
 
@@ -475,7 +475,7 @@ export const StatusPlugin = createDataGridPlugin<DataGridItem, 'status', Record<
 |------|---------|
 | Plugins | `hook(name, handler)`, `getPlugin<Api>(name)` |
 | Layout | `registerSlot(name, options)`, `setActiveSlotId(name, id)`, `getActiveSlotId(name)` |
-| Table | `registerTableSlot(name, options)` (`subheader`, `footer`, `header-cell-end`), `registerExtraColumn(options)`, `updateExtraColumnWidth` / `Order` / `Sticky`, `registerComponent(name, component)` (override `row`, `header-cell-label`, ...), `updateColumns`, `updateColumnVisibility`, `updateColumnSticky`, `updateTableLayout`, `updateStickyHeader` |
+| Table | `registerTableSlot(name, options)` (`subheader`, `footer`, `header-cell-end`), `registerExtraColumn(options)`, `updateExtraColumnWidth` / `Order` / `Sticky`, `registerComponent(name, component)` (override `row`, `header-cell-label`, `body-cell-content` or `content`), `updateColumns`, `updateColumnVisibility`, `updateColumnSticky`, `updateTableLayout`, `updateStickyHeader` |
 | Persistent state | `registerPersistentState(key, options?)` |
 | Storage | `useStore(selector)` (`visibleRecords`, `rootSections`, `hasActiveFilters`, ...), `createSection`, `clearSections`, `getRecord`, `getItemId`, ... |
 | Load | `triggerLoad(config?)`, `refresh(options?)`, `abort()`, `getLoadInstances()`, `useLoadStateStore` |
@@ -544,16 +544,28 @@ columns' minimum content widths.
 
 ## Known limitations
 
-These match the original grid and are tracked as follow-ups, not fixed here:
-
-- Data loading has no stale-response guard: a load that finishes late can replace
-  a newer result, and `refresh()` defaults to `resetFilters: true`.
+- Data loading has no stale-response guard: `triggerLoad` neither aborts the load
+  in flight nor ignores a late result, so when two loads overlap (two quick page
+  clicks, a page-size change, a refresh over a page change) the older result can
+  replace the newer one. A `load` that ignores `signal` is not protected even by
+  the abort `refresh()` sends. `refresh()` also defaults to `resetFilters: true`.
 - Changing the page size from a later page fires two loads.
-- A failed first load has no retry; a failed refetch has no UI.
+- A failed first load has no retry; a failed refetch has no UI, and when search or
+  sort started it, the failure also reaches the host as an unhandled rejection.
+- A search still waiting out its debounce when the grid unmounts is flushed: its
+  refresh runs after the grid is gone, and its load's `signal` is not aborted.
 - The loading overlay blocks the pointer only, not the keyboard.
 - No `aria-sort`; Previous and Next drop keyboard focus at the ends of the range.
 - Renderer overrides (`registerComponent`) are last registered wins.
-- Router persistence shares bare keys across grids and does not follow `popstate`.
+- `registerComponent` accepts `'header-cell'` and `'header-group'`, but the header
+  always renders its own cell and group components, so those two overrides have no
+  effect.
+- A column pinned on its own inside a group, or a pinned group with one column
+  unpinned, moves in the body but not under the group's header, so the header
+  labels sit over the wrong columns. Pin a group as a whole.
+- Router persistence shares bare keys across grids and does not follow `popstate`;
+  it also drops `history.state` and the `#hash` when it writes the URL, and it does
+  not work during server rendering.
 - A new `columns` array identity resets user pins and visibility.
 - There is no plugin unregister.
 

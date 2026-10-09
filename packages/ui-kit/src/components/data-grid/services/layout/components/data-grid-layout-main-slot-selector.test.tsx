@@ -38,8 +38,7 @@ function loadData(): Promise<DataGridLoadResult<TestItem>> {
   return Promise.resolve({ results: testData, total: testData.length });
 }
 
-// The cards plugin lands in a later change; this registers a second main view under its slot id,
-// which is all the selector needs to see.
+// A second main view registered under the cards slot id, which is all the selector needs to see.
 function CardsView() {
   const { useStore } = useDataGrid<TestItem>();
   const records = useStore((s) => s.visibleRecords);

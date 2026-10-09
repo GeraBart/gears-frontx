@@ -54,8 +54,7 @@ export interface DataGridTableColumn<TItem extends DataGridItem = DataGridItem> 
    */
   headerOverflow?: DataGridTableColumnOverflow;
   /**
-   * Body-cell overflow handling. Default `'wrap'` (today's behavior — the value wraps across
-   * lines). `'nowrap'` keeps the value on one line and clips it with an ellipsis ("…") on
+   * Body-cell overflow handling. Default `'wrap'`: the value wraps across lines. `'nowrap'` keeps the value on one line and clips it with an ellipsis ("…") on
    * overflow, auto-setting `title` with the formatted value for the default value renderer; when
    * `component` or `render` is set the kit cannot supply that fallback and the consumer is
    * responsible for it.
@@ -93,13 +92,13 @@ export type TableSlotName = 'subheader' | 'footer' | 'header-cell-end';
 export interface TableSlot {
   id: string;
   name: TableSlotName;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- public type, kept as in the source (D5): it is what `registerTableSlot` takes (a `header-cell-end` slot gets the column, the others nothing); follow-up: tighten public any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- what `registerTableSlot` takes: a `header-cell-end` slot gets the column, the others nothing
   component: ComponentType<any>;
   order: number;
 }
 
 export interface TableSlotOption {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- public type, kept as in the source (D5): the option `registerTableSlot` takes (follow-up: tighten public any)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the option `registerTableSlot` takes
   component: ComponentType<any>;
   order?: number;
 }
@@ -134,7 +133,7 @@ export interface ExtraColumn {
   sticky?: boolean;
   /**
    * When `true`, the rendered header and body cells for this column carry
-   * `data-grid-row-ignore-click`, so the row-click plugin suppresses clicks
+   * `data-grid-row-ignore-click`, so a plugin that reacts to row clicks can skip clicks
    * anywhere in the cell (including its padding, not just the inner content).
    */
   ignoreRowClick?: boolean;
@@ -222,7 +221,7 @@ export interface TablePublicApi<TItem extends DataGridItem = DataGridItem> {
   updateExtraColumnWidth: (columnId: string, width: string) => void;
   updateExtraColumnOrder: (columnId: string, order: number) => void;
   updateExtraColumnSticky: (columnId: string, sticky: boolean) => void;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- public type, kept as in the source (D5): `ComponentType<never>` would refuse a class component, which this accepted (follow-up: tighten public any)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- `ComponentType<never>` would refuse a class component
   registerComponent: (name: TableComponentName, component: ComponentType<any>) => void;
   updateColumns: (columns: (DataGridTableColumn<TItem> | DataGridTableGroup<TItem>)[]) => void;
   updateColumnVisibility: (columnId: string, visible: boolean) => void;

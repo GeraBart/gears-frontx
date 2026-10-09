@@ -52,9 +52,9 @@ interface DataGridCellProps {
    */
   fillContent?: boolean;
   /**
-   * When `true`, stamps `data-grid-row-ignore-click` onto the cell element so the row-click plugin
-   * suppresses clicks anywhere in the cell. Set by extra columns that opt out of row clicks (e.g.
-   * the row-select checkbox column).
+   * When `true`, stamps `data-grid-row-ignore-click` onto the cell element so a plugin that reacts
+   * to row clicks can skip clicks anywhere in the cell. Set by extra columns that opt out of row
+   * clicks (e.g. a column holding a checkbox).
    */
   ignoreRowClick?: boolean;
 }

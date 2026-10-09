@@ -8,10 +8,10 @@ import type { TablePublicApi } from '../table/table-types';
 
 export type LoadContextFilterKey = string;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- public type, kept as in the source: the value a filter carries is whatever its plugin stores (follow-up: tighten public any)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- the value a filter carries is whatever its plugin stores
 export type LoadContextFiltersState<Value = any> = {
   value: Value;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- public type, kept as in the source: a filter may carry fields beyond `value` (follow-up: tighten public any)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- a filter may carry fields beyond `value`
 } & Record<PropertyKey, any>;
 
 export type OrderDirection = 'asc' | 'desc';

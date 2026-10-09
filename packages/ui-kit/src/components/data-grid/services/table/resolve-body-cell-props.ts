@@ -16,10 +16,8 @@ export interface ResolvedBodyCellProps {
 }
 
 /**
- * Single source of the per-cell overflow/width props every body-row renderer forwards to
- * `DataGridCell` (`DataGridRow` and its row-click / drag-drop / table-tree variants) -- shared so
- * the four renderers can never again drift out of sync on this derivation, the way three of them
- * did before this was extracted.
+ * Single source of the per-cell overflow/width props a body row forwards to `DataGridCell`, kept
+ * apart from `DataGridRow` so the derivation is pure and can be tested without rendering a row.
  *
  * Pure: `useTableLayout()` stays a hook call at each call site, its result passed in here.
  */

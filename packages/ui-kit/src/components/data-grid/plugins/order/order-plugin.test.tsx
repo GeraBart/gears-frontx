@@ -328,9 +328,9 @@ describe('DataGridOrderPlugin order resolution', () => {
       await screen.findByRole('table');
 
       // A sorted, sortable header renders two controls, the label button and the direction icon,
-      // and the two now share one name (the key the source used for each reads the same text), so
-      // they are counted rather than looked up one by one. The icon's arrow has no accessible
-      // handle, so the direction itself is asserted through the plugin's own state.
+      // and the two share one name, so they are counted rather than looked up one by one. The
+      // icon's arrow has no accessible handle, so the direction itself is asserted through the
+      // plugin's own state.
       expect(
         screen.getAllByRole('button', { name: messages.order.changeSorting('Name') }),
       ).toHaveLength(2);
@@ -854,7 +854,7 @@ describe('DataGridOrderPlugin order resolution', () => {
       expect(await screen.findByLabelText('Order state')).toHaveTextContent('name:asc');
 
       // Now the applied order stops being reachable, so the fallback runs and takes the default as
-      // it stands today rather than the one that seeded the original order.
+      // it stands today rather than the one that seeded the initial order.
       act(() => {
         setPluginProps!({
           defaultOrder: { id: 'code', direction: 'desc' },

@@ -9,10 +9,10 @@ export interface LoadStateStore {
   /** Every in-flight load instance, whatever it is loading. */
   loadState: LoadState;
   /**
-   * Only the loads that replace what is on screen. A tree child fetch appends a section under its
-   * parent, and a `store: false` load (the export page loops) never reaches storage at all, so
-   * neither changes the visible record set -- and neither should put the grid's loading treatment
-   * up over rows the user can still work with.
+   * Only the loads that replace what is on screen. A load scoped to a tree parent appends a section
+   * under that row, and a `store: false` load (one that pages through the whole data set) never
+   * reaches storage at all, so neither changes the visible record set -- and neither should put the
+   * grid's loading treatment up over rows the user can still work with.
    */
   recordsLoadState: LoadState;
 }

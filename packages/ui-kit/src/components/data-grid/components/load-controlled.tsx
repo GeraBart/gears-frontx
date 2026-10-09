@@ -16,7 +16,7 @@ interface LoadControlledProps {
 /**
  * Shows the grid's first load: its content when loaded, an error view when the load failed, and
  * the delayed spinner for everything else. Both stand-ins are centred in the space the grid
- * occupies. The error view has no retry, as in the source; a failed first load stays failed.
+ * occupies. The error view has no retry: a failed first load stays failed.
  */
 export function LoadControlled({ loadState, children }: LoadControlledProps) {
   if (loadState === 'loaded') {
