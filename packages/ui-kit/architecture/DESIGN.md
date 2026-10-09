@@ -316,7 +316,7 @@ A consuming application needs components whose behaviour it does not have to imp
 
 - Owns no appearance value: every one is a reference to the token system (UIKIT-2).
 - Owns no interaction mechanics that the primitive it wraps already provides.
-- Owns no application domain content and no data access. A component may hold view state and, where the consumer opts in, persist it to the browser's storage or the URL; the data it shows always arrives through a consumer-supplied callback.
+- Owns no application domain content and no data access. A component may hold view state and persist it to the browser's storage or the URL (DataGrid, for one, writes to `localStorage` unless the consumer picks another backend with `persistent`, including memory only); the data it shows always arrives through a consumer-supplied callback.
 - Does not decide how it is bundled or published; that is the package build's responsibility.
 
 ##### Related components (by ID)
