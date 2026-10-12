@@ -119,7 +119,7 @@ describe('occupant value — standalone registry (no router)', () => {
 
     expect(associateSpy).not.toHaveBeenCalled();
 
-    registry.dispose();
+    await registry.dispose();
     associateSpy.mockRestore();
   });
 });

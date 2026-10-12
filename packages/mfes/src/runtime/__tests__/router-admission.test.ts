@@ -137,7 +137,7 @@ function createRouterSpy(): RouterPort & { calls: string[] } {
     releaseDomain: vi.fn((domainId: string) => { calls.push(`releaseDomain:${domainId}`); }),
     releaseExtension: vi.fn((extensionId: string) => { calls.push(`releaseExtension:${extensionId}`); }),
     assignOccupantValue: vi.fn(() => undefined),
-    reportSettled: vi.fn(() => { calls.push('reportSettled'); }),
+    reflect: vi.fn((domainId: string, extensionIds: string[], verb: 'push' | 'replace') => { calls.push(`reflect:${domainId}:${verb}:${extensionIds.join(',')}`); }),
     supplyNavigation: vi.fn(() => {}),
   };
 }
@@ -152,7 +152,7 @@ function freshRegistry(
 }
 
 describe('router admission', () => {
-  it('presents the domain declaration to the router after the runtime\'s own checks pass and before it becomes durable', () => {
+  it('presents the domain declaration to the router after the runtime\'s own checks pass and before it becomes durable', async () => {
     const plugin = createPlugin();
     const router = createRouterSpy();
     const registry = freshRegistry(plugin, router);
@@ -163,10 +163,10 @@ describe('router admission', () => {
     expect(router.registerDomain).toHaveBeenCalledTimes(1);
     expect(router.registerDomain).toHaveBeenCalledWith(expect.objectContaining({ id: DOMAIN_ID }));
 
-    registry.dispose();
+    await registry.dispose();
   });
 
-  it('a router that rejects a domain registration leaves it registered nowhere; re-registering the same id afterward succeeds', () => {
+  it('a router that rejects a domain registration leaves it registered nowhere; re-registering the same id afterward succeeds', async () => {
     const plugin = createPlugin();
     const router = createRouterSpy();
     (router.registerDomain as ReturnType<typeof vi.fn>).mockImplementationOnce(() => {
@@ -183,7 +183,7 @@ describe('router admission', () => {
     expect(() => registry.registerDomain(makeDomain(), new ConcurrentDomainFactory())).not.toThrow();
     expect(router.registerDomain).toHaveBeenCalledTimes(2);
 
-    registry.dispose();
+    await registry.dispose();
   });
 
   it('presents the extension declaration to the router after every runtime check passes and before its state is stored', async () => {
@@ -197,10 +197,10 @@ describe('router admission', () => {
     expect(router.registerExtension).toHaveBeenCalledTimes(1);
     expect(router.registerExtension).toHaveBeenCalledWith(expect.objectContaining({ id: EXTENSION_ID }));
 
-    registry.dispose();
+    await registry.dispose();
   });
 
-  it('registering an already-registered domain id throws before any router call and leaves the live domain unchanged', () => {
+  it('registering an already-registered domain id throws before any router call and leaves the live domain unchanged', async () => {
     const plugin = createPlugin();
     const router = createRouterSpy();
     const registry = freshRegistry(plugin, router);
@@ -215,7 +215,7 @@ describe('router admission', () => {
     expect(router.releaseDomain).not.toHaveBeenCalled();
     expect(registry.getMounter(DOMAIN_ID)).toBe(mounter);
 
-    registry.dispose();
+    await registry.dispose();
   });
 
   it('registering an already-registered extension id throws before any router call and leaves the registered extension unchanged', async () => {
@@ -234,7 +234,7 @@ describe('router admission', () => {
     expect(router.releaseExtension).not.toHaveBeenCalled();
     expect(registry.getExtension(EXTENSION_ID)).toBe(original);
 
-    registry.dispose();
+    await registry.dispose();
   });
 
   it('a router that rejects an extension registration leaves no extension state, no handler, no advertisement, and no init trigger; re-registration afterward succeeds', async () => {
@@ -256,10 +256,11 @@ describe('router admission', () => {
     await expect(registry.registerExtension(makeExtension())).resolves.toBeUndefined();
     expect(registry.getExtension(EXTENSION_ID)).toBeDefined();
 
-    registry.dispose();
+    await registry.dispose();
   });
 
-  it('unregistering a MOUNTED admitted extension unmounts it, destroys its container, sends releaseExtension, and reports nothing', async () => {
+  it('unregistering a MOUNTED admitted extension unmounts it, destroys its container, sends releaseExtension, and issues no command', async () => {
+    // inst-me-no-command-outside-action, inst-algo-ra-cleanup-no-command
     const plugin = createPlugin();
     const router = createRouterSpy();
     const registry = freshRegistry(plugin, router);
@@ -277,12 +278,13 @@ describe('router admission', () => {
 
     expect(registry.getMountedExtensions(DOMAIN_ID)).not.toContain(EXTENSION_ID);
     expect(router.releaseExtension).toHaveBeenCalledWith(EXTENSION_ID);
-    expect(router.reportSettled).not.toHaveBeenCalled();
+    expect(router.reflect).not.toHaveBeenCalled();
 
-    registry.dispose();
+    await registry.dispose();
   });
 
   it('sends releaseExtension when an admitted extension is unregistered', async () => {
+    // inst-me-no-command-outside-action, inst-algo-ra-cleanup-no-command
     const plugin = createPlugin();
     const router = createRouterSpy();
     const registry = freshRegistry(plugin, router);
@@ -292,14 +294,15 @@ describe('router admission', () => {
     await registry.unregisterExtension(EXTENSION_ID);
 
     expect(router.releaseExtension).toHaveBeenCalledWith(EXTENSION_ID);
-    // The release never produces a settled-action report: unregistration is
+    // The release never issues a reflect command: unregistration is
     // resource cleanup, not an occupancy action.
-    expect(router.reportSettled).not.toHaveBeenCalled();
+    expect(router.reflect).not.toHaveBeenCalled();
 
-    registry.dispose();
+    await registry.dispose();
   });
 
   it('unregistering an admitted domain sends releaseExtension for each of its extensions, then releaseDomain', async () => {
+    // inst-me-no-command-outside-action, inst-algo-ra-cleanup-no-command
     const plugin = createPlugin();
     const router = createRouterSpy();
     const registry = freshRegistry(plugin, router);
@@ -314,8 +317,9 @@ describe('router admission', () => {
     expect(releaseCalls).toContain('releaseExtension:ext-a');
     expect(releaseCalls).toContain('releaseExtension:ext-b');
     expect(releaseCalls.indexOf('releaseDomain:' + DOMAIN_ID)).toBe(releaseCalls.length - 1);
+    expect(router.reflect).not.toHaveBeenCalled();
 
-    registry.dispose();
+    await registry.dispose();
   });
 
   it('an extension registration naming a domain being unregistered is rejected immediately, never admitted to the router', async () => {
@@ -363,10 +367,11 @@ describe('router admission', () => {
     registry.registerDomain(makeDomain(), new ConcurrentDomainFactory());
     await expect(registry.registerExtension(makeExtension('ext-c'))).resolves.toBeUndefined();
 
-    registry.dispose();
+    await registry.dispose();
   });
 
-  it('disposing the registry sends releaseExtension and releaseDomain for every admitted extension and domain it still holds', async () => {
+  it('disposing the registry sends releaseExtension and releaseDomain for every admitted extension and domain it still holds, and issues no command', async () => {
+    // inst-me-no-command-outside-action, inst-algo-ra-cleanup-no-command
     const plugin = createPlugin();
     const router = createRouterSpy();
     const registry = freshRegistry(plugin, router);
@@ -374,10 +379,11 @@ describe('router admission', () => {
     await registry.registerExtension(makeExtension());
     router.calls.length = 0;
 
-    registry.dispose();
+    await registry.dispose();
 
     expect(router.releaseExtension).toHaveBeenCalledWith(EXTENSION_ID);
     expect(router.releaseDomain).toHaveBeenCalledWith(DOMAIN_ID);
+    expect(router.reflect).not.toHaveBeenCalled();
   });
 
   it('a release that throws is logged and the cleanup completes', async () => {
@@ -395,7 +401,7 @@ describe('router admission', () => {
     expect(errorSpy).toHaveBeenCalled();
 
     errorSpy.mockRestore();
-    registry.dispose();
+    await registry.dispose();
   });
 
   it('a router that admits an extension the type system then rejects releases the admission, rethrows the type-system error unchanged, and leaves nothing registered even when the release itself throws', async () => {
@@ -426,7 +432,7 @@ describe('router admission', () => {
     expect(registry.getExtensionsForDomain(DOMAIN_ID)).toHaveLength(0);
 
     errorSpy.mockRestore();
-    registry.dispose();
+    await registry.dispose();
   });
 
   it('a registry built with no router presents nothing, releases nothing, and behaves exactly as without a router', async () => {
@@ -444,6 +450,6 @@ describe('router admission', () => {
     await registry.unregisterExtension(EXTENSION_ID);
     expect(registry.getExtension(EXTENSION_ID)).toBeUndefined();
 
-    registry.dispose();
+    await registry.dispose();
   });
 });

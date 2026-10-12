@@ -133,7 +133,7 @@ function createFakeRouter(): RouterPort {
     releaseDomain: () => {},
     releaseExtension: () => {},
     assignOccupantValue: () => undefined,
-    reportSettled: () => {},
+    reflect: () => {},
     supplyNavigation: () => {},
   };
 }

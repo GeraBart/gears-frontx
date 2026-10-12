@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ExclusiveMountStrategy } from '../ExclusiveMountStrategy';
-import type { MountStrategy } from '../MountStrategy';
 import { makePayload } from './helpers/make-payload';
 import { FakeMounter } from './helpers/FakeMounter';
 import { FakeContainerHooks } from './helpers/FakeContainerHooks';
@@ -54,15 +53,7 @@ describe('ExclusiveMountStrategy', () => {
     expect(mounter.mountCalls.map(c => c.extensionId)).toContain('ext-c');
   });
 
-  it('unmount rejects and changes nothing: the occupant stays mounted and nothing is released', async () => {
-    registry.setMounted(DOMAIN, ['ext-a']);
-    ExtensionReleaserProvider.for(mounter).registerDestroy('ext-a', () => hooks.destroy('ext-a'));
-
-    await expect((strategy as MountStrategy).unmount!(makePayload('ext-a'))).rejects.toThrow();
-
-    expect(registry.getMountedExtensions(DOMAIN)).toEqual(['ext-a']);
-    expect(mounter.unmountCalls).toHaveLength(0);
-    expect(mounter.mountCalls).toHaveLength(0);
-    expect(hooks.destroyed).toHaveLength(0);
+  it('exposes no unmount member', () => {
+    expect('unmount' in strategy).toBe(false);
   });
 });

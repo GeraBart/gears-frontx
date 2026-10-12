@@ -5,19 +5,20 @@ import { ExtensionReleaserProvider } from './ExtensionReleaserProvider';
 // @cpt-algo:cpt-frontx-algo-extension-domain-governance-slot-detach:p2
 
 /**
- * Pre-emptive single-mount whose explicit unmount does nothing and fails.
+ * Pre-emptive single-mount with no explicit unmount.
  *
  * Mounting always evicts any other extension currently mounted in the domain
- * before mounting the new one. `unmount` changes nothing and rejects: the
- * occupant stays mounted and nothing is released. The occupant leaves
- * through a replacing `mount_ext` that evicts it, through teardown of an
- * ancestor caused by that ancestor's own action, or through terminal
- * disposal of its registry, never through its own `unmount_ext`.
+ * before mounting the new one. The strategy has no `unmount`: an Exclusive
+ * domain declares no `unmount_ext` and registers no handler for it. The
+ * occupant leaves through a replacing `mount_ext` that evicts it, through
+ * teardown of an ancestor caused by that ancestor's own action, through
+ * release by unregistration, or through terminal disposal of its registry.
  *
  * Suitable for screen-domain-style use cases where exactly one extension is
  * ever active and navigation triggers a swap.
  *
- * Cardinality matrix: REQUIRES `mount_ext` AND `unmount_ext` in `declaration.actions`.
+ * Cardinality matrix: REQUIRES `mount_ext` and FORBIDS `unmount_ext` in
+ * `declaration.actions`.
  */
 export class ExclusiveMountStrategy extends MountStrategy {
   constructor(
@@ -36,7 +37,7 @@ export class ExclusiveMountStrategy extends MountStrategy {
     const mounted = this.registry.getMountedExtensions(this.domainId);
     // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-get-mounted
 
-    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-exclusive-idempotent
+    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-exclusive-already-occupant
     // The prologue's own at-turn evaluation
     // (`MountExtActionHandler.runMountAtTurn`, `inst-me-sole-occupant-at-turn`)
     // already settles a mount whose subject is still the domain's occupant
@@ -48,7 +49,7 @@ export class ExclusiveMountStrategy extends MountStrategy {
     if (mounted.length === 1 && mounted[0] === subject) {
       return;
     }
-    // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-exclusive-idempotent
+    // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-exclusive-already-occupant
 
     for (const siblingId of mounted) {
       if (siblingId !== subject) {
@@ -75,15 +76,4 @@ export class ExclusiveMountStrategy extends MountStrategy {
   }
   // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-exclusive-mount
   // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-exclusive-evict
-
-  // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-exclusive-unmount-fails
-  override async unmount(payload: ActionPayload): Promise<void> {
-    throw new Error(
-      `ExclusiveMountStrategy.unmount: domain '${this.domainId}' does not unmount '${payload.subject}'; ` +
-      'an Exclusive domain\'s occupant leaves through a replacing mount_ext that evicts it, ' +
-      'through teardown of an ancestor caused by that ancestor\'s own action, ' +
-      'or through terminal disposal of its registry, never through its own unmount_ext.'
-    );
-  }
-  // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-exclusive-unmount-fails
 }

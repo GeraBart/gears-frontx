@@ -11,7 +11,9 @@
  * the sentinel appears nowhere — then confirms the sentinel IS reachable
  * through the internal rendezvous accessor keyed by that exact child bridge.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, expectTypeOf, vi } from 'vitest';
+import type { MfeRegistry } from '../../registry/MfeRegistry';
+import type { ParentMfeBridge } from '../../handler/ParentMfeBridge';
 import { DefaultMfeRegistry } from '../DefaultMfeRegistry';
 import { readOccupantValue } from '../occupant-value-rendezvous';
 import type { TypeSystemPlugin } from '../../type-substrate';
@@ -22,6 +24,8 @@ import { MfeBridgeFactoryDefault } from '../../bridge/MfeBridgeFactoryDefault';
 import { ExtensionDomainImplementation } from '../ExtensionDomainImplementation';
 import { ExtensionDomainImplementationFactory } from '../ExtensionDomainImplementationFactory';
 import type { DomainContext } from '../DomainContext';
+import type { ExtensionMounter } from '../ExtensionMounter';
+import type { DomainLifecycleTrigger } from '../DomainLifecycleTrigger';
 import { ConcurrentMountStrategy } from '../ConcurrentMountStrategy';
 import type { ContainerHooks } from '../MountStrategy';
 import { ActionHandler } from '../../mediator/ActionHandler';
@@ -110,7 +114,12 @@ class ConcurrentDomainFactory extends ExtensionDomainImplementationFactory {
  * check only cares about structures this package's own code could place a
  * value into).
  */
-function collectReachable(root: unknown, seen = new Set<unknown>(), depth = 0): unknown[] {
+function collectReachable(
+  root: unknown,
+  seen = new Set<unknown>(),
+  depth = 0,
+  includeFunctions = false
+): unknown[] {
   const found: unknown[] = [];
   if (root === null || (typeof root !== 'object' && typeof root !== 'function')) {
     return found;
@@ -120,6 +129,9 @@ function collectReachable(root: unknown, seen = new Set<unknown>(), depth = 0): 
   }
   seen.add(root);
   found.push(root);
+  if (typeof root === 'function') {
+    return found;
+  }
 
   let proto: object | null = root as object;
   while (proto && proto !== Object.prototype && proto !== Function.prototype) {
@@ -131,8 +143,8 @@ function collectReachable(root: unknown, seen = new Set<unknown>(), depth = 0): 
       } catch {
         continue;
       }
-      if (typeof value === 'function') continue; // methods, not data
-      found.push(...collectReachable(value, seen, depth + 1));
+      if (typeof value === 'function' && !includeFunctions) continue; // methods, not data
+      found.push(...collectReachable(value, seen, depth + 1, includeFunctions));
     }
     for (const sym of Object.getOwnPropertySymbols(proto)) {
       let value: unknown;
@@ -141,7 +153,7 @@ function collectReachable(root: unknown, seen = new Set<unknown>(), depth = 0): 
       } catch {
         continue;
       }
-      found.push(...collectReachable(value, seen, depth + 1));
+      found.push(...collectReachable(value, seen, depth + 1, includeFunctions));
     }
     proto = Object.getPrototypeOf(proto) as object | null;
   }
@@ -174,7 +186,7 @@ describe('occupant value — no exposure on any interface', () => {
       releaseDomain: () => {},
       releaseExtension: () => {},
       assignOccupantValue,
-      reportSettled: () => {},
+      reflect: () => {},
       supplyNavigation: () => {},
     };
 
@@ -218,6 +230,125 @@ describe('occupant value — no exposure on any interface', () => {
     // exact child bridge the extension received.
     expect(readOccupantValue(capturedArgs.bridge)).toBe(sentinel);
 
-    registry.dispose();
+    await registry.dispose();
+  });
+  it('no interface handed to domain or MFE code exposes the injected router or its `reflect` member', async () => {
+    const PROPERTY_ID = 'cti.example.property~shared.v1';
+    const lifecycleArgs: unknown[] = [];
+    const delivered: unknown[] = [];
+    let bridge: ChildMfeBridge | undefined;
+
+    class CapturingHandler extends MfeHandler {
+      readonly bridgeFactory = new MfeBridgeFactoryDefault();
+      async load(): Promise<MfeEntryLifecycle<ChildMfeBridge>> {
+        return {
+          mount: (...args) => {
+            lifecycleArgs.push(...args);
+            bridge = args[1];
+            bridge.subscribeToProperty(PROPERTY_ID, (value) => delivered.push(value));
+          },
+          unmount: (...args) => { lifecycleArgs.push(...args); },
+        };
+      }
+    }
+
+    let domainContext: DomainContext | undefined;
+    let typeSystemMember: unknown;
+    const handledPayloads: unknown[] = [];
+    let probeHandled!: () => void;
+    const probeHandledPromise = new Promise<void>((resolve) => { probeHandled = resolve; });
+    class CapturingDomainFactory extends ConcurrentDomainFactory {
+      build(ctx: DomainContext): ConcurrentDomainImpl {
+        domainContext = ctx;
+        typeSystemMember = ctx.typeSystem;
+        ctx.registerHandler('probe.action', ActionHandler.fromFunction(async (_t, p) => { handledPayloads.push(p); probeHandled(); }));
+        return super.build(ctx);
+      }
+    }
+
+    const reflect = vi.fn();
+    const router: RouterPort = {
+      registerDomain: () => {},
+      registerExtension: () => {},
+      releaseDomain: () => {},
+      releaseExtension: () => {},
+      assignOccupantValue: () => undefined,
+      reflect,
+      supplyNavigation: () => {},
+    };
+
+    const plugin = createPlugin();
+    registerEntrySchema(plugin);
+    const registry = new DefaultMfeRegistry({
+      typeSystem: plugin,
+      mfeHandlers: [new CapturingHandler(ENTRY_ID)],
+      router,
+    });
+    const domain = { ...makeDomain(), sharedProperties: [PROPERTY_ID], actions: [ACTION_LOAD_EXT, ACTION_MOUNT_EXT, ACTION_UNMOUNT_EXT, 'probe.action'] } as ExtensionDomain;
+    registry.registerDomain(domain, new CapturingDomainFactory());
+    await registry.registerExtension(makeExtension());
+
+    const mounter = registry.getMounter(DOMAIN_ID);
+    mounter.attach(document.createElement('div'));
+    const probeChain = { action: { type: 'probe.action', target: DOMAIN_ID, payload: { note: 'probe' } } };
+    const mountChain = {
+      action: { type: ACTION_MOUNT_EXT, target: DOMAIN_ID, payload: { subject: EXTENSION_ID, history: 'push' as const } },
+      next: probeChain,
+    };
+    registry.executeActionsChain(mountChain);
+    await probeHandledPromise;
+    registry.updateSharedProperty(PROPERTY_ID, { shared: true });
+    await mounter.unmount(EXTENSION_ID);
+
+    expect(reflect).toHaveBeenCalled();
+    expect(bridge).toBeDefined();
+    expect(domainContext).toBeDefined();
+    expect(delivered.length).toBeGreaterThan(0);
+    // The inbound bridge link rides on the child bridge as a symbol-keyed property.
+    expect(Object.getOwnPropertySymbols(bridge!).length).toBeGreaterThan(0);
+
+    const forbidden = new Set<unknown>([router, reflect]);
+    // The runtime's own implementation classes (the mounter, the lifecycle
+    // trigger, the registry) hold the router in private state by design, so
+    // they are checked by their declared members below rather than walked.
+    // Everything handed to MFE code as data is walked in full.
+    const surfaces: Record<string, unknown> = {
+      domainContextMembers: [typeSystemMember],
+      registryReads: [
+        registry.getExtension(EXTENSION_ID),
+        registry.getDomain(DOMAIN_ID),
+        registry.getExtensionsForDomain(DOMAIN_ID),
+        registry.getMountedExtensions(DOMAIN_ID),
+        registry.getRegisteredPackages(),
+        registry.getDomainProperty(DOMAIN_ID, PROPERTY_ID),
+      ],
+      childBridge: bridge,
+      parentBridge: registry.getParentBridge(EXTENSION_ID),
+      lifecycleArguments: lifecycleArgs,
+      actionsAndChains: [mountChain, probeChain, handledPayloads],
+      sharedProperties: delivered,
+    };
+    for (const [name, surface] of Object.entries(surfaces)) {
+      const reachable = collectReachable(surface, new Set(), 0, true);
+      expect(reachable.some((value) => forbidden.has(value)), name).toBe(false);
+    }
+
+    // The declared members of every interface handed to domain or MFE code name neither.
+    expectTypeOf<Extract<keyof MfeRegistry, 'router'>>().toEqualTypeOf<never>();
+    expectTypeOf<Extract<keyof MfeRegistry, 'reflect'>>().toEqualTypeOf<never>();
+    expectTypeOf<Extract<keyof DomainContext, 'router'>>().toEqualTypeOf<never>();
+    expectTypeOf<Extract<keyof DomainContext, 'reflect'>>().toEqualTypeOf<never>();
+    expectTypeOf<Extract<keyof ExtensionMounter, 'router'>>().toEqualTypeOf<never>();
+    expectTypeOf<Extract<keyof ExtensionMounter, 'reflect'>>().toEqualTypeOf<never>();
+    expectTypeOf<Extract<keyof DomainLifecycleTrigger, 'router'>>().toEqualTypeOf<never>();
+    expectTypeOf<Extract<keyof DomainLifecycleTrigger, 'reflect'>>().toEqualTypeOf<never>();
+    expectTypeOf<Extract<keyof ChildMfeBridge, 'router'>>().toEqualTypeOf<never>();
+    expectTypeOf<Extract<keyof ChildMfeBridge, 'reflect'>>().toEqualTypeOf<never>();
+    expectTypeOf<Extract<keyof ParentMfeBridge, 'router'>>().toEqualTypeOf<never>();
+    expectTypeOf<Extract<keyof ParentMfeBridge, 'reflect'>>().toEqualTypeOf<never>();
+    expectTypeOf<Extract<keyof MfeMountContext, 'router'>>().toEqualTypeOf<never>();
+    expectTypeOf<Extract<keyof MfeMountContext, 'reflect'>>().toEqualTypeOf<never>();
+
+    await registry.dispose();
   });
 });

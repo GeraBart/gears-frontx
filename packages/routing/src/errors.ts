@@ -11,7 +11,7 @@
  * with no `window` at all (an SSR render, most commonly), is a recognized,
  * clearly-named failure rather than a raw `ReferenceError` reaching the
  * caller from deep inside the default `HistoryAdapter`'s own construction.
- * The re-entrancy bound both round-deferring drains share
+ * The re-entrancy bound the navigation fan-out applies
  * (`./diagnostics.js`) adds one more: a drain that has run past that
  * bound throws rather than continuing, since an unbounded one surfaces
  * nothing at all on its own.
@@ -259,9 +259,8 @@ export class RoutingError extends Error {
 
   /**
    * A re-entrancy drain ran `limit` consecutive rounds without the queue
-   * ever emptying — a callback that navigates, or mutates a
-   * registered-extensions source, every single time it is notified, feeding
-   * the drain a fresh round for each one it completes.
+   * ever emptying — a callback that navigates every single time it is
+   * notified, feeding the drain a fresh round for each one it completes.
    *
    * Thrown rather than reported and swallowed, because the alternative is
    * the behaviour this bound exists to end: the drain is a loop, not a

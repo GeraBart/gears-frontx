@@ -34,7 +34,7 @@ export class OptionalMountStrategy extends MountStrategy {
     const mounted = this.registry.getMountedExtensions(this.domainId);
     // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-get-mounted
 
-    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-optional-idempotent
+    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-optional-already-occupant
     // The prologue's own at-turn evaluation
     // (`MountExtActionHandler.runMountAtTurn`, `inst-me-sole-occupant-at-turn`)
     // already settles a mount whose subject is still the domain's occupant
@@ -46,7 +46,7 @@ export class OptionalMountStrategy extends MountStrategy {
     if (mounted.length === 1 && mounted[0] === subject) {
       return;
     }
-    // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-optional-idempotent
+    // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-optional-already-occupant
 
     if (mounted.length === 1 && mounted[0] !== subject) {
       const priorOccupant = mounted[0];

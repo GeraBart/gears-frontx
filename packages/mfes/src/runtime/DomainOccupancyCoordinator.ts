@@ -19,6 +19,7 @@
  */
 // @cpt-algo:cpt-frontx-algo-extension-domain-governance-mount-execution:p2
 
+import { StartedWorkTracker } from './StartedWorkTracker';
 import { OccupancyCaller } from './OccupancyCaller';
 import { OccupancyEntry, type OccupancyOperation } from './OccupancyEntry';
 
@@ -28,6 +29,7 @@ import { OccupancyEntry, type OccupancyOperation } from './OccupancyEntry';
 export class DomainOccupancyCoordinator {
   private running: OccupancyEntry | undefined;
   private pending: OccupancyEntry | undefined;
+  private readonly started = new StartedWorkTracker();
   /** Set by `close()`: the suffix every later request's failure message carries. */
   private closedReasonSuffix: string | undefined;
 
@@ -43,12 +45,78 @@ export class DomainOccupancyCoordinator {
   }
 
   /**
+   * Reads the running and the pending entry, each as its operation and its
+   * subject, for the domain's URL commands. The read adds no public surface
+   * and changes nothing in the queue.
+   */
+  // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-cmd-queue-read
+  readEntries(): {
+    running: { operation: OccupancyOperation; subject: string } | undefined;
+    pending: { operation: OccupancyOperation; subject: string } | undefined;
+  } {
+    const read = (entry: OccupancyEntry | undefined) =>
+      entry && { operation: entry.operation, subject: entry.subject };
+    return { running: read(this.running), pending: read(this.pending) };
+  }
+  // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-cmd-queue-read
+
+  /**
+   * Reads the running and the pending entry as they will be once a request
+   * for `operation` on `subject` is placed by `submit`, following the same
+   * placement rules; nothing in the queue changes. A closed queue places
+   * nothing, so it reads as it is.
+   */
+  // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-cmd-queue-read
+  readEntriesAfterPlacing(
+    operation: OccupancyOperation,
+    subject: string
+  ): ReturnType<DomainOccupancyCoordinator['readEntries']> {
+    const current = this.readEntries();
+    if (this.isClosed()) {
+      return current;
+    }
+    const placed = { operation, subject };
+    const { running, pending } = current;
+    if (!running) {
+      return { running: placed, pending: undefined };
+    }
+    if (pending && pending.operation === operation && pending.subject === subject) {
+      return current;
+    }
+    if (running.operation === operation && running.subject === subject) {
+      return { running, pending: undefined };
+    }
+    return { running, pending: placed };
+  }
+  // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-cmd-queue-read
+
+  /** Registers one request (its handling and settle command) as in flight until it settles. */
+  track(work: Promise<void>): void {
+    this.started.track(work);
+  }
+
+  /**
+   * Resolves once every request that reached a wrapper — the running entry's
+   * callers included — has settled with its own outcome and its settle
+   * command has been issued. After `close()` nothing is promoted, so the
+   * queue is empty once this resolves (`inst-me-queue-domain-unregister`).
+   */
+  whenAllSettled(): Promise<void> {
+    return this.started.whenAllSettled();
+  }
+
+  /**
    * Whether `close()` has run: the domain is being unregistered, and every
    * request submitted from now on fails at once
    * (`inst-me-queue-domain-unregister`).
    */
   isClosed(): boolean {
     return this.closedReasonSuffix !== undefined;
+  }
+
+  /** The suffix `close()` was given, or `undefined` while open. */
+  closedReason(): string | undefined {
+    return this.closedReasonSuffix;
   }
 
   /**
@@ -133,7 +201,8 @@ export class DomainOccupancyCoordinator {
   /**
    * Closes the queue. The pending entry leaves the queue without starting;
    * each of its callers fails and takes its own `fallback` — the running
-   * entry is not interrupted (`inst-me-queue-domain-unregister`). Every
+   * entry is not interrupted, and the unregistration waits for it
+   * (`whenAllSettled`) (`inst-me-queue-domain-unregister`). Every
    * request submitted after this call fails at once without entering a
    * slot, so when the running entry completes nothing is promoted.
    *

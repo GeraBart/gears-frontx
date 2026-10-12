@@ -512,7 +512,7 @@ describe('Cross-copy boundary: registration propagation, escalation, retraction 
 
     // Dispose the copy-B registry — the accepted sub-chain is untouched:
     // disposal acts on the ROUTE only.
-    nested.dispose();
+    await nested.dispose();
 
     // The shell's forwarding entry for D1 is gone.
     const forwardingEntries = (shell as unknown as { forwardingEntries: Map<string, unknown> })

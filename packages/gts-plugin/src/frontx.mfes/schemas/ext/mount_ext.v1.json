@@ -24,7 +24,7 @@
         "history": {
           "type": "string",
           "enum": ["none", "replace", "push"],
-          "$comment": "Optional history intent passed to the router uninterpreted; absent means push"
+          "$comment": "Optional history intent; the runtime reads it only to choose the acceptance command's verb and never passes it to the router"
         }
       },
       "required": ["subject"],

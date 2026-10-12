@@ -54,12 +54,12 @@ export interface ContainerHooks {
  * Abstract base class for domain mount strategies.
  *
  * - `mount` is abstract — every concrete strategy must implement it.
- * - `unmount` is declared optional on the base class; every shipped strategy
- *   implements it:
- *   `ConcurrentMountStrategy` and `OptionalMountStrategy` release the
- *   subject; `ExclusiveMountStrategy` changes nothing and rejects. The strict
- *   cardinality matrix requires `mount_ext` and `unmount_ext` for every
- *   strategy.
+ * - `unmount` is declared optional on the base class:
+ *   `ConcurrentMountStrategy` and `OptionalMountStrategy` implement it and
+ *   release the subject; `ExclusiveMountStrategy` has none. The strict
+ *   cardinality matrix is per row: Concurrent and Optional require `mount_ext`
+ *   and `unmount_ext`; Exclusive requires `mount_ext` and forbids
+ *   `unmount_ext`.
  */
 export abstract class MountStrategy {
   /**
@@ -72,8 +72,8 @@ export abstract class MountStrategy {
   /**
    * Unmount the extension described in `payload`.
    *
-   * Every shipped strategy implements this method; `ExclusiveMountStrategy`'s
-   * changes nothing and rejects.
+   * `ConcurrentMountStrategy` and `OptionalMountStrategy` implement this
+   * method; `ExclusiveMountStrategy` has none.
    *
    * @param payload - Action payload; `payload.subject` carries the extension ID.
    */

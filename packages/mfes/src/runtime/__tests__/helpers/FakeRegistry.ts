@@ -33,5 +33,5 @@ export class FakeRegistry extends MfeRegistry {
   getExtensionsForPackage(_id: string): Extension[] { return []; }
   getParentBridge(_id: string): ParentMfeBridge | null { return null; }
   setTheme(_v: Record<string, string>): void {}
-  dispose(): void {}
+  async dispose(): Promise<void> {}
 }

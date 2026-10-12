@@ -631,6 +631,6 @@ describe('inst-um-failure-bridge-released', () => {
     expect(handler.mountCalls).toBe(2);
 
     deactivateSpy.mockRestore();
-    registry.dispose();
+    await registry.dispose();
   });
 });

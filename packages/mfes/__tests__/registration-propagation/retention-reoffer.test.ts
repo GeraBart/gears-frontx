@@ -183,7 +183,7 @@ function fakeRouter(overrides: Partial<RouterPort> = {}): RouterPort {
     releaseDomain: () => {},
     releaseExtension: () => {},
     assignOccupantValue: () => undefined,
-    reportSettled: () => {},
+    reflect: () => {},
     supplyNavigation: () => {},
     ...overrides,
   };
@@ -493,7 +493,7 @@ describe('retention and re-offer of a nested registry adoption', () => {
     expect(deepLeaf.count).toBe(2);
   });
 
-  it('a registry constructed outside every mount window is a root: no inbound link, no diagnostic (inst-registry-is-root)', () => {
+  it('a registry constructed outside every mount window is a root: no inbound link, no diagnostic (inst-registry-is-root)', async () => {
     const debugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {});
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -504,7 +504,7 @@ describe('retention and re-offer of a nested registry adoption', () => {
     expect(debugSpy).not.toHaveBeenCalled();
     expect(warnSpy).not.toHaveBeenCalled();
     expect(errorSpy).not.toHaveBeenCalled();
-    registry.dispose();
+    await registry.dispose();
   });
 
   it('a failed occupant-value assignment leaves the retained adopters unlinked; the retried mount mints the link again and re-links them (inst-reoffer-retained-adoption)', async () => {

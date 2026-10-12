@@ -233,10 +233,11 @@ export interface LoadExtPayload {
 }
 
 /**
- * The history intent a `mount_ext` or `unmount_ext` action carries, passed to
- * the router uninterpreted: the runtime reads, defaults, and rewrites none of
- * it. An absent intent means `push`, but that reading is the router's, never
- * the runtime's (`cpt-frontx-algo-mfe-host-communication-history-intent`).
+ * The history intent a `mount_ext` or `unmount_ext` action carries. The
+ * runtime reads it only to choose the acceptance command's verb (`push` for
+ * `push` or absent, `replace` for `replace`, no acceptance command for
+ * `none`); it is never passed to the router
+ * (`cpt-frontx-algo-mfe-host-communication-history-intent`).
  * GTS Type: enum declared on the `history` field of
  * gts.frontx.mfes.ext.mount_ext.v1~ and gts.frontx.mfes.ext.unmount_ext.v1~
  */
@@ -254,8 +255,9 @@ export interface MountExtPayload {
   /** The extension ID to mount (GTS subject reference) */
   subject: string;
   /**
-   * Optional history intent, admitted by the closed `mount_ext` schema and
-   * passed to the router uninterpreted; absent means push.
+   * Optional history intent, admitted by the closed `mount_ext` schema. The
+   * runtime reads it only to choose the acceptance command's verb; it is
+   * never passed to the router.
    */
   history?: HistoryIntent;
 }
@@ -268,8 +270,9 @@ export interface UnmountExtPayload {
   /** The extension ID to unmount (GTS subject reference) */
   subject: string;
   /**
-   * Optional history intent, admitted by the closed `unmount_ext` schema and
-   * passed to the router uninterpreted; absent means push.
+   * Optional history intent, admitted by the closed `unmount_ext` schema. The
+   * runtime reads it only to choose the acceptance command's verb; it is
+   * never passed to the router.
    */
   history?: HistoryIntent;
 }
