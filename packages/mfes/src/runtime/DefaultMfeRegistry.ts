@@ -195,6 +195,9 @@ export class DefaultMfeRegistry extends MfeRegistry {
    */
   private readonly occupancyCoordinatorsByDomain = new Map<string, DomainOccupancyCoordinator>();
 
+  /** Each Concurrent domain's joiner, which tracks its `mount_ext` / `unmount_ext` executions in flight. */
+  private readonly concurrentJoinersByDomain = new Map<string, ConcurrentMountJoiner>();
+
   /**
    * Domain ids currently inside `unregisterDomain`, from the moment
    * unregistration starts until the domain id is fully freed (even on
@@ -205,6 +208,14 @@ export class DefaultMfeRegistry extends MfeRegistry {
    * `inst-algo-du-close-first`).
    */
   private readonly domainsUnregistering = new Set<string>();
+
+  /**
+   * Per domain id, the number of `unregisterDomain` calls made and not yet
+   * finished. A domain closed by one unregistration reopens after a failure
+   * only when no other unregistration of it is pending
+   * (`inst-me-queue-domain-unregister`, `inst-me-concurrent-domain-unregister`).
+   */
+  private readonly pendingUnregistrations = new Map<string, number>();
 
   /**
    * Operation serializer for per-entity concurrency control.
@@ -274,7 +285,7 @@ export class DefaultMfeRegistry extends MfeRegistry {
   private readonly packages = new Map<string, Set<string>>();
 
   /**
-   * Set by `dispose()`. A disposed registry refuses every hand-over across a
+   * Set at the start of `dispose()`. A disposed registry refuses every hand-over across a
    * hop (`inst-receive-refusal-check`).
    */
   private disposed = false;
@@ -314,8 +325,8 @@ export class DefaultMfeRegistry extends MfeRegistry {
     // `undefined` when the factory's config omitted `router`: every
     // `if (this.router)` branch in this class is then skipped for this
     // registry's whole life — it presents no registration, sends no
-    // release notification, assigns no occupant value, and reports no
-    // settled action to anyone.
+    // release notification, assigns no occupant value, and issues no
+    // command to anyone.
     this.router = config.router;
     // @cpt-end:cpt-frontx-flow-mfe-registry-factory-build:p2:inst-flow-fb-standalone
 
@@ -839,6 +850,15 @@ export class DefaultMfeRegistry extends MfeRegistry {
     declaration: ExtensionDomain,
     factory: ExtensionDomainImplementationFactory
   ): void {
+    // Once disposal has begun no fresh domain opens
+    // (`inst-me-registry-dispose-wait`).
+    if (this.disposed) {
+      throw new DomainValidationError(
+        declaration.id,
+        new Error(`domain '${declaration.id}' cannot be registered: the registry has been disposed`)
+      );
+    }
+
     // An already-registered id is refused before anything is changed or
     // presented to the router; the live registration stays as it is.
     if (this.extensionManager.getDomainState(declaration.id)) {
@@ -1010,15 +1030,13 @@ export class DefaultMfeRegistry extends MfeRegistry {
     // `DomainOccupancyCoordinator` instead — its own two-slot occupancy
     // queue, shared by the `mount_ext` and `unmount_ext` handlers the domain
     // registers below, so joining, replacement, and at-turn evaluation hold
-    // across both.
+    // across both. An Exclusive domain declares no `unmount_ext`
+    // (`inst-sc-exclusive-row`), so it registers only the `mount_ext` wrapper.
     const isConcurrent = mountStrategies[0] instanceof ConcurrentMountStrategy;
-    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-exclusive-unmount-fails
-    // An Exclusive domain's `unmount_ext` is passed straight to the domain's
-    // registered handler — outside the occupancy queue and the settled-action
-    // report — and the Exclusive strategy's unmount changes nothing and fails.
-    const isExclusive = mountStrategies[0] instanceof ExclusiveMountStrategy;
-    // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-exclusive-unmount-fails
     const concurrentJoiner = isConcurrent ? new ConcurrentMountJoiner() : undefined;
+    if (concurrentJoiner) {
+      this.concurrentJoinersByDomain.set(declaration.id, concurrentJoiner);
+    }
     const queue = isConcurrent ? undefined : new DomainOccupancyCoordinator(declaration.id);
     if (queue) {
       this.occupancyCoordinatorsByDomain.set(declaration.id, queue);
@@ -1035,6 +1053,7 @@ export class DefaultMfeRegistry extends MfeRegistry {
       this.extensionManager.getDomainState(declaration.id)?.domain;
     const mountExtActionId = this.typeSystem.resolveMountExtActionId();
     const unmountExtActionId = this.typeSystem.resolveUnmountExtActionId();
+    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-cmd-wrapper
     for (const [actionType, handler] of ctx.getCollectedHandlers()) {
       let wrapped = handler;
       if (actionType === mountExtActionId) {
@@ -1055,9 +1074,7 @@ export class DefaultMfeRegistry extends MfeRegistry {
           this.router,
           () => this.extensionManager.getMountedExtensions(declaration.id)
         );
-      // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-exclusive-unmount-fails
-      } else if (actionType === unmountExtActionId && !isExclusive) {
-      // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-exclusive-unmount-fails
+      } else if (actionType === unmountExtActionId) {
         wrapped = new UnmountExtActionHandler(
           handler,
           declaration.id,
@@ -1071,8 +1088,11 @@ export class DefaultMfeRegistry extends MfeRegistry {
           () => this.extensionManager.getMountedExtensions(declaration.id)
         );
       }
+      // @cpt-begin:cpt-frontx-algo-mfe-host-communication-history-intent:p1:inst-hi-through-actions
       this.mediator.registerHandler(declaration.id, actionType, wrapped);
+      // @cpt-end:cpt-frontx-algo-mfe-host-communication-history-intent:p1:inst-hi-through-actions
     }
+    // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-cmd-wrapper
 
     // Step 7: Persist domain implementation references.
     this.extensionManager.setDomainImplementation(
@@ -1136,19 +1156,33 @@ export class DefaultMfeRegistry extends MfeRegistry {
 
     // Identify strategy class and look up cardinality row.
     let strategyName: string;
+    const mountExtActionId = this.typeSystem.resolveMountExtActionId();
+    const unmountExtActionId = this.typeSystem.resolveUnmountExtActionId();
+    // The actions the matched row requires and the actions it forbids; the
+    // Concurrent and Optional rows forbid none. The framework's well-known
+    // lifecycle action IDs come through the injected plugin — the runtime
+    // never spells a concrete type-format literal for these concepts (MFES-1).
+    let requiredActions: string[];
+    let forbiddenActions: string[];
 
     // @cpt-begin:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-match-strategy
     if (strategy instanceof ConcurrentMountStrategy) {
       // @cpt-begin:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-concurrent-row
       strategyName = 'ConcurrentMountStrategy';
+      requiredActions = [mountExtActionId, unmountExtActionId];
+      forbiddenActions = [];
       // @cpt-end:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-concurrent-row
     } else if (strategy instanceof OptionalMountStrategy) {
       // @cpt-begin:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-optional-row
       strategyName = 'OptionalMountStrategy';
+      requiredActions = [mountExtActionId, unmountExtActionId];
+      forbiddenActions = [];
       // @cpt-end:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-optional-row
     } else if (strategy instanceof ExclusiveMountStrategy) {
       // @cpt-begin:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-exclusive-row
       strategyName = 'ExclusiveMountStrategy';
+      requiredActions = [mountExtActionId];
+      forbiddenActions = [unmountExtActionId];
       // @cpt-end:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-exclusive-row
     } else {
       // @cpt-begin:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-unknown-reject
@@ -1163,35 +1197,33 @@ export class DefaultMfeRegistry extends MfeRegistry {
 
     const declaredActions = declaration.actions;
 
-    // Resolve the framework's well-known lifecycle action IDs through the
-    // injected plugin — the runtime never spells a concrete type-format
-    // literal for these concepts (MFES-1).
-    const mountExtActionId = this.typeSystem.resolveMountExtActionId();
-    const unmountExtActionId = this.typeSystem.resolveUnmountExtActionId();
-
     // @cpt-begin:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-required-check-loop
-    // Enforce REQUIRED actions in declaration.
-    const hasMountExt = declaredActions.includes(mountExtActionId);
-    const hasUnmountExt = declaredActions.includes(unmountExtActionId);
-    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-missing-required
-    if (!hasMountExt) {
-      // @cpt-begin:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-required-fail
-      throw new Error(
-        `Domain '${declaration.id}': ${strategyName} requires '${mountExtActionId}' in declaration.actions.`
-      );
-      // @cpt-end:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-required-fail
+    for (const requiredAction of requiredActions) {
+      // @cpt-begin:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-missing-required
+      if (!declaredActions.includes(requiredAction)) {
+        // @cpt-begin:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-required-fail
+        throw new Error(
+          `Domain '${declaration.id}': ${strategyName} requires '${requiredAction}' in declaration.actions.`
+        );
+        // @cpt-end:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-required-fail
+      }
+      // @cpt-end:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-missing-required
     }
-    // @cpt-end:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-missing-required
-    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-missing-required
-    if (!hasUnmountExt) {
-      // @cpt-begin:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-required-fail
-      throw new Error(
-        `Domain '${declaration.id}': ${strategyName} requires '${unmountExtActionId}' in declaration.actions.`
-      );
-      // @cpt-end:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-required-fail
-    }
-    // @cpt-end:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-missing-required
     // @cpt-end:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-required-check-loop
+
+    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-forbidden-check-loop
+    for (const forbiddenAction of forbiddenActions) {
+      // @cpt-begin:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-forbidden-declared
+      if (declaredActions.includes(forbiddenAction)) {
+        // @cpt-begin:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-forbidden-fail
+        throw new Error(
+          `Domain '${declaration.id}': ${strategyName} forbids '${forbiddenAction}' in declaration.actions.`
+        );
+        // @cpt-end:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-forbidden-fail
+      }
+      // @cpt-end:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-forbidden-declared
+    }
+    // @cpt-end:cpt-frontx-algo-extension-domain-governance-strategy-cardinality:p1:inst-sc-forbidden-check-loop
 
     const collectedHandlers = ctx.getCollectedHandlers();
 
@@ -1412,8 +1444,22 @@ export class DefaultMfeRegistry extends MfeRegistry {
   }
 
   async unregisterDomain(domainId: string): Promise<void> {
+    // The unregistration names the domain registered when it is called.
+    const targetState = this.extensionManager.getDomainState(domainId);
+    this.pendingUnregistrations.set(domainId, (this.pendingUnregistrations.get(domainId) ?? 0) + 1);
+    this.closeDomainToRequests(domainId);
     return this.operationSerializer.serializeOperation(domainId, async () => {
       // @cpt-begin:cpt-frontx-algo-mfe-registry-domain-unregister-closes-admission:p1:inst-algo-du-close-first
+      // A domain unregistered by an earlier call, and registered again since,
+      // is a different domain: this call named the one that is gone and has
+      // nothing left to unregister.
+      if (targetState && this.extensionManager.getDomainState(domainId) !== targetState) {
+        this.finishUnregistrationCall(domainId);
+        return;
+      }
+      // Closed again at the start of this operation, so the domain is closed
+      // for as long as any unregistration of it is pending.
+      this.closeDomainToRequests(domainId);
       // Closed to new `registerExtension` calls (checked there, not here)
       // from this point on — before the drain loop below runs even its
       // first query — so the loop's "re-query until a pass finds nothing"
@@ -1422,17 +1468,22 @@ export class DefaultMfeRegistry extends MfeRegistry {
       this.domainsUnregistering.add(domainId);
       // @cpt-end:cpt-frontx-algo-mfe-registry-domain-unregister-closes-admission:p1:inst-algo-du-close-first
       try {
-        // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-queue-domain-unregister
-        // The queue closes: the pending entry (if any) leaves it without
-        // starting and each of its callers fails and takes its own
-        // `fallback`; the running entry is not interrupted. A request
-        // dispatched while the teardown below is in progress fails at once
-        // without entering a slot — unregistration otherwise proceeds exactly
-        // as it does for a domain whose queue is empty.
-        this.occupancyCoordinatorsByDomain
-          .get(domainId)
-          ?.close('was unregistered while the request was queued.');
-        // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-queue-domain-unregister
+        const coordinator = this.occupancyCoordinatorsByDomain.get(domainId);
+
+        // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-queue-running-never-interrupted
+        // The running entry is never interrupted: the extensions are released
+        // and the domain's handlers removed only after it has finished with
+        // its own outcome, so that outcome and its callers' chain
+        // continuations are unaffected by the unregistration.
+        await coordinator?.whenAllSettled();
+        // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-queue-running-never-interrupted
+
+        // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-concurrent-domain-unregister
+        // A Concurrent domain's executions in flight are never interrupted
+        // either: each settles with its own outcome before any extension is
+        // released.
+        await this.concurrentJoinersByDomain.get(domainId)?.whenAllSettled();
+        // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-concurrent-domain-unregister
 
         // @cpt-begin:cpt-frontx-algo-mfe-registry-router-admission:p1:inst-algo-ra-release-domain
         // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-retract-advertisements
@@ -1469,6 +1520,7 @@ export class DefaultMfeRegistry extends MfeRegistry {
         await this.extensionManager.unregisterDomain(domainId);
         this.mediator.unregisterAllHandlers(domainId);
         this.occupancyCoordinatorsByDomain.delete(domainId);
+        this.concurrentJoinersByDomain.delete(domainId);
 
         // @cpt-begin:cpt-frontx-algo-mfe-registry-router-admission:p1:inst-algo-ra-release-domain
         this.releaseRouterDomain(domainId);
@@ -1488,9 +1540,9 @@ export class DefaultMfeRegistry extends MfeRegistry {
         // its occupancy queue reopened, so it stays usable.
         this.domainsUnregistering.delete(domainId);
         // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-queue-domain-unregister
-        if (this.extensionManager.getDomainState(domainId)) {
-          this.occupancyCoordinatorsByDomain.get(domainId)?.reopen();
-        }
+        // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-concurrent-domain-unregister
+        this.finishUnregistrationCall(domainId);
+        // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-concurrent-domain-unregister
         // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-queue-domain-unregister
         // @cpt-end:cpt-frontx-algo-mfe-registry-domain-unregister-closes-admission:p1:inst-algo-du-reopen-on-failure
         // @cpt-end:cpt-frontx-algo-mfe-registry-domain-unregister-closes-admission:p1:inst-algo-du-reopen
@@ -1499,16 +1551,49 @@ export class DefaultMfeRegistry extends MfeRegistry {
   }
 
   /**
+   * Closes the domain's occupancy queue and Concurrent joiner to new
+   * requests: pending queue entries fail and take their own `fallback`, and
+   * every later request is refused at once.
+   */
+  private closeDomainToRequests(domainId: string): void {
+    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-queue-domain-unregister
+    this.occupancyCoordinatorsByDomain.get(domainId)?.close('was unregistered while the request was queued.');
+    // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-queue-domain-unregister
+    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-concurrent-domain-unregister
+    this.concurrentJoinersByDomain.get(domainId)?.close('was unregistered while the request was arriving.');
+    // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-concurrent-domain-unregister
+  }
+
+  /**
+   * Ends one `unregisterDomain` call. The domain reopens only when no other
+   * unregistration of it is pending, it is still registered, and the registry
+   * is not being disposed.
+   */
+  private finishUnregistrationCall(domainId: string): void {
+    const remaining = (this.pendingUnregistrations.get(domainId) ?? 1) - 1;
+    if (remaining > 0) {
+      this.pendingUnregistrations.set(domainId, remaining);
+      return;
+    }
+    this.pendingUnregistrations.delete(domainId);
+    if (!this.disposed && this.extensionManager.getDomainState(domainId)) {
+      this.occupancyCoordinatorsByDomain.get(domainId)?.reopen();
+      this.concurrentJoinersByDomain.get(domainId)?.reopen();
+    }
+  }
+
+  /**
    * Release notification helpers shared by `unregisterExtension`,
    * `unregisterDomain`, and `dispose` — sent only for an id the router
    * actually admitted, and never allowed to throw past this point: a
    * release is resource cleanup, never refused
    * (`inst-algo-ra-release-failure`). Resource cleanup, not an occupancy
-   * action: these releases dispatch no `unmount_ext` and send no
-   * settled-action report, so they give the router no occupancy action to
-   * reflect into the URL (`inst-algo-ra-cleanup-no-report`).
+   * action: these releases dispatch no `unmount_ext` and issue no command,
+   * so the router writes nothing to the URL for them
+   * (`inst-algo-ra-cleanup-no-command`).
    */
-  // @cpt-begin:cpt-frontx-algo-mfe-registry-router-admission:p1:inst-algo-ra-cleanup-no-report
+  // @cpt-begin:cpt-frontx-algo-mfe-registry-router-admission:p1:inst-algo-ra-cleanup-no-command
+  // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-no-command-outside-action
   // @cpt-begin:cpt-frontx-algo-mfe-registry-router-admission:p1:inst-algo-ra-release-failure
   private releaseRouterExtension(extensionId: string): void {
     if (!this.router || !this.routerAdmittedExtensionIds.delete(extensionId)) {
@@ -1532,7 +1617,8 @@ export class DefaultMfeRegistry extends MfeRegistry {
     }
   }
   // @cpt-end:cpt-frontx-algo-mfe-registry-router-admission:p1:inst-algo-ra-release-failure
-  // @cpt-end:cpt-frontx-algo-mfe-registry-router-admission:p1:inst-algo-ra-cleanup-no-report
+  // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-no-command-outside-action
+  // @cpt-end:cpt-frontx-algo-mfe-registry-router-admission:p1:inst-algo-ra-cleanup-no-command
 
   getExtension(extensionId: string): Extension | undefined {
     return this.extensionManager.getExtensionState(extensionId)?.extension;
@@ -1580,8 +1666,25 @@ export class DefaultMfeRegistry extends MfeRegistry {
   }
 
   // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-retract-own-advertisements
-  dispose(): void {
+  async dispose(): Promise<void> {
     this.disposed = true;
+
+    // Every queue closes first: pending entries fail and take their fallback.
+    // Work that has started is never interrupted — the teardown below runs
+    // only after each domain's running entry and every Concurrent execution
+    // in flight has settled with its own outcome.
+    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-registry-dispose-wait
+    for (const coordinator of this.occupancyCoordinatorsByDomain.values()) {
+      coordinator.close('was disposed with the registry while the request was queued.');
+    }
+    for (const joiner of this.concurrentJoinersByDomain.values()) {
+      joiner.close('was disposed with the registry while the request was arriving.');
+    }
+    await Promise.all([
+      ...Array.from(this.occupancyCoordinatorsByDomain.values(), (c) => c.whenAllSettled()),
+      ...Array.from(this.concurrentJoinersByDomain.values(), (j) => j.whenAllSettled()),
+    ]);
+    // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-registry-dispose-wait
 
     // Retract every advertisement this registry (and, transitively, its own
     // descendants — already re-propagated through it) previously propagated
@@ -1618,11 +1721,8 @@ export class DefaultMfeRegistry extends MfeRegistry {
     this.packages.clear();
     this.handlers.length = 0;
 
-    // Pending callers settle and their timers clear at disposal.
-    for (const coordinator of this.occupancyCoordinatorsByDomain.values()) {
-      coordinator.close('was disposed with the registry while the request was queued.');
-    }
     this.occupancyCoordinatorsByDomain.clear();
+    this.concurrentJoinersByDomain.clear();
 
     void this.coordinator;
   }

@@ -4,9 +4,9 @@
  * The abstract contract an injected router implements, accepted through the
  * optional `MfeRegistryConfig.router`. The runtime presents each domain and
  * extension registration to it, obtains each extension's opaque occupant
- * value from it at mount, reports each settled `mount_ext`/`unmount_ext`
- * execution to it, and hands it a reader for an extension's navigable
- * occupant value. The router owns routing identity and page-wide
+ * value from it at mount, commands it to reflect a domain's projected
+ * occupancy in the URL (`reflect`), and hands it a reader for an extension's
+ * navigable occupant value. The router owns routing identity and page-wide
  * domain-route uniqueness; this package keeps no routing grammar of its own
  * (`cpt-frontx-adr-extension-routing-port`).
  *
@@ -19,7 +19,7 @@
  */
 // @cpt-dod:cpt-frontx-dod-mfe-host-communication-router-port-contract:p1
 
-import type { ExtensionDomain, Extension, HistoryIntent } from '../types';
+import type { ExtensionDomain, Extension } from '../types';
 
 /**
  * The opaque value a router assigns an extension at mount. The runtime
@@ -42,28 +42,6 @@ export interface OccupantValueAssignment {
 }
 
 /**
- * The settled-action report a domain's handler path makes to the router,
- * exactly once per executed `mount_ext`/`unmount_ext` — a request for which
- * the domain's strategy ran
- * (`cpt-frontx-algo-extension-domain-governance-mount-execution`
- * `inst-me-report-settled`). It states what physically happened: the router
- * reads neither the action type nor the domain's cardinality, and the report
- * carries no outcome. Displacements and evictions appear among `unmounted`;
- * occupants nested in a hosted extension's own registry appear in no report
- * of this registry.
- */
-export interface SettledActionReport {
-  /** The domain the executed action's handler belongs to. */
-  domainId: string;
-  /** The executed action's history intent, absent when the action carries none. */
-  history?: HistoryIntent;
-  /** The ids of the extensions the execution physically mounted. */
-  mounted: string[];
-  /** The ids of the extensions the execution physically unmounted. */
-  unmounted: string[];
-}
-
-/**
  * The router port: the abstract contract an injected router implements.
  * Every member is synchronous. Adds no member to `MfeRegistry`,
  * `ChildMfeBridge`, or `ParentMfeBridge`.
@@ -79,8 +57,15 @@ export interface RouterPort {
   releaseExtension(extensionId: string): void;
   /** The value assignment at mount. */
   assignOccupantValue(assignment: OccupantValueAssignment): OccupantValue;
-  /** The settled-action report. */
-  reportSettled(report: SettledActionReport): void;
+  /**
+   * The URL command: the URL entries of the domain `domainId` must show
+   * exactly the extensions `extensionIds`, written with the history verb
+   * `verb`. The runtime issues it from the wrappers around a domain's
+   * `mount_ext` and `unmount_ext` handlers, at a request's acceptance and at
+   * its settle; it carries no action type, payload, history intent, or
+   * outcome.
+   */
+  reflect(domainId: string, extensionIds: string[], verb: 'push' | 'replace'): void;
   /** The supply of an extension's navigation from its occupant value. */
   supplyNavigation(readOccupantValue: () => OccupantValue | undefined): void;
 }

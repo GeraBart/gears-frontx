@@ -99,7 +99,7 @@ function fakeRouter(overrides: Partial<RouterPort> = {}): RouterPort {
     releaseDomain: () => {},
     releaseExtension: () => {},
     assignOccupantValue: () => undefined,
-    reportSettled: () => {},
+    reflect: () => {},
     supplyNavigation: () => {},
     ...overrides,
   };
@@ -141,7 +141,7 @@ describe('occupant value — failure, release, and nested supplyNavigation', () 
     expect(lifecycleMountCalls).toBe(0);
     expect(registry.getMountedExtensions(DOMAIN_ID)).not.toContain(EXTENSION_ID);
 
-    registry.dispose();
+    await registry.dispose();
   });
 
   it('the occupant-value association is released when the extension is permanently unregistered', async () => {
@@ -177,7 +177,7 @@ describe('occupant value — failure, release, and nested supplyNavigation', () 
 
     expect(readOccupantValue(capturedBridge)).toBeUndefined();
 
-    registry.dispose();
+    await registry.dispose();
   });
 
   it('a registry built with a router that adopts an inbound bridge calls supplyNavigation once, with a reader returning the current occupant value', async () => {
@@ -223,7 +223,7 @@ describe('occupant value — failure, release, and nested supplyNavigation', () 
     const reader = nestedSupplyNavigation.mock.calls[0][0] as () => unknown;
     expect(reader()).toBe(parentAssignedValue);
 
-    nestedRegistry?.dispose();
-    registry.dispose();
+    await nestedRegistry?.dispose();
+    await registry.dispose();
   });
 });

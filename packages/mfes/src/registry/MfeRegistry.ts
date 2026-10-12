@@ -79,8 +79,14 @@ export abstract class MfeRegistry {
 
   /**
    * Unregister a domain from the registry.
-   * All extensions in the domain are cascade-unregistered first.
-   * The domain is removed from the registry.
+   * Started work is never interrupted: the unregistration waits for the
+   * running occupancy-queue entry and for every in-flight Concurrent
+   * `mount_ext` / `unmount_ext` execution, each settling with its own outcome.
+   * Pending queue entries fail and take their own `fallback`. From the moment
+   * the unregistration begins, a new `mount_ext` or `unmount_ext` request in
+   * the domain is refused at once.
+   * Then all extensions in the domain are cascade-unregistered, and the
+   * domain is removed from the registry.
    *
    * @param domainId - ID of the domain to unregister
    * @returns Promise resolving when unregistration is complete
@@ -229,7 +235,13 @@ export abstract class MfeRegistry {
   /**
    * Dispose the registry and clean up resources.
    * Cleans up all bridges, runtime connections, and internal state.
+   *
+   * Pending queued requests fail and take their fallback; work that has
+   * started is never interrupted — the returned promise resolves once every
+   * running or in-flight execution has settled with its own outcome and the
+   * teardown has completed. From the moment disposal begins, a new
+   * `mount_ext` or `unmount_ext` request in any domain is refused at once.
    */
-  abstract dispose(): void;
+  abstract dispose(): Promise<void>;
 }
 // @cpt-end:cpt-frontx-dod-mfe-registry-registry-contract:p1:inst-1

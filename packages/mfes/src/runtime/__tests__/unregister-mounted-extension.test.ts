@@ -225,6 +225,6 @@ describe('unregisterExtension of a MOUNTED extension', () => {
     expect(factory.hooks).toBeDefined();
     expect(log).toEqual(['lifecycle-unmount', 'container-destroy', 'destroyed-stage']);
 
-    registry.dispose();
+    await registry.dispose();
   });
 });

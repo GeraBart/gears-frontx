@@ -30,10 +30,9 @@
  * dispatch, before the drain is treated as a runaway feedback loop rather
  * than a legitimate cascade.
  *
- * Both places that defer a re-entrant round — the navigation fan-out
- * (`./history/fanout-dispatch.js`) and the transition observer
- * (`./signal/observe-change.js`) — share this one bound, so a consumer that
- * trips the loop through either one meets the identical rule.
+ * The navigation fan-out (`./history/fanout-dispatch.js`) is the one place
+ * that defers a re-entrant round, and so the one place that applies this
+ * bound.
  *
  * A legitimate cascade is short and terminates by construction: a guard that
  * redirects once, a canonicalizer that rewrites once, or one round per

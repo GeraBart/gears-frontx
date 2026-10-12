@@ -66,12 +66,12 @@ export interface MfeRegistryConfig {
    * Optional router implementing the router port (`cpt-frontx-mfes-interface-router-port`).
    * Where present, the registry presents each domain and extension
    * registration to it before the registration becomes durable, obtains
-   * each extension's occupant value from it at mount, reports each settled
-   * `mount_ext`/`unmount_ext` execution to it, and sends it release
+   * each extension's occupant value from it at mount, issues URL commands to
+   * it at a request's acceptance and at its settle, and sends it release
    * notifications on unregistration and disposal. Where absent, the
    * registry runs every extension standalone: it presents no registration,
-   * sends no release notification, assigns no occupant value, and reports
-   * no settled action to anyone (`cpt-frontx-dod-mfe-registry-router-configuration`).
+   * sends no release notification, assigns no occupant value, and issues no
+   * command (`cpt-frontx-dod-mfe-registry-router-configuration`).
    */
   router?: RouterPort;
 }

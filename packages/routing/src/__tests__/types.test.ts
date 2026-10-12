@@ -129,12 +129,9 @@ describe('ParseResult / SerializeInput', () => {
 });
 
 describe('RegisteredExtensionsSource', () => {
-  it('is a plain-argument getter, with an optional change subscription', () => {
+  it('is a plain-argument getter with no change-notification member', () => {
     expectTypeOf<RegisteredExtensionsSource>().toHaveProperty('getRegistrations');
-    type OnChange = RegisteredExtensionsSource['onChange'];
-    expectTypeOf<OnChange>().toEqualTypeOf<
-      ((callback: () => void) => ReleaseFunction) | undefined
-    >();
+    expectTypeOf<keyof RegisteredExtensionsSource>().toEqualTypeOf<'getRegistrations'>();
   });
 
   it('is generic over an opaque route-owner identity', () => {
@@ -148,14 +145,14 @@ describe('RegisteredExtensionsSource', () => {
 });
 
 describe('Transition', () => {
-  it('carries domainKey, entries, and a five-plus-one-field diff', () => {
+  it('carries domainKey, cause, entries, and a diff of four change categories plus the unresolved subset', () => {
     expectTypeOf<Transition>().toHaveProperty('domainKey').toEqualTypeOf<DomainKey>();
+    expectTypeOf<Transition>().toHaveProperty('cause').toEqualTypeOf<'initial' | 'push' | 'replace' | 'history'>();
     expectTypeOf<TransitionDiff>().toEqualTypeOf<{
       readonly added: readonly ExtensionToken[];
       readonly removed: readonly ExtensionToken[];
       readonly payloadChanged: readonly ExtensionToken[];
       readonly reordered: boolean;
-      readonly resolutionChanged: readonly ExtensionToken[];
       readonly unresolved: readonly ExtensionToken[];
     }>();
   });

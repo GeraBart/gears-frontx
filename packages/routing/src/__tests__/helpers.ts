@@ -67,7 +67,6 @@ import type {
   Entry,
   ExtensionToken,
   Param,
-  ReleaseFunction,
   RegisteredExtensionsSource,
 } from '../types/index.js';
 
@@ -127,9 +126,8 @@ export function expectRoutingError(fn: () => void): RoutingError {
   throw new Error('expected a RoutingError to be thrown');
 }
 
-/** A registered-extensions source that never changes after creation — no
- * `onChange`, per FEATURE §1.5: "a consumer whose set never changes ... may
- * supply a static snapshot with no change notification". */
+/** A registered-extensions source exposing only `getRegistrations` — the
+ * whole of the source contract (FEATURE §1.5). */
 export function staticSource(
   registrations: { extension: string; routeOwner: string }[] = [],
 ): RegisteredExtensionsSource<string> {
@@ -139,61 +137,21 @@ export function staticSource(
   };
 }
 
-/** A registered-extensions source whose own set can be replaced after
- * creation via `set`, firing the one `onChange` callback a consumer
- * registered — the shape FEATURE §3, Observable Transition Signal, step 3
- * describes.
- *
- * `fireChange()` and `sourceReleaseCallCount` exist for the release-path
- * suite (FEATURE §3, Observer Release): `fireChange` replays the registered
- * callback without touching `current`, so a test can assert that a released
- * observer no longer reacts even though the source's own set is untouched;
- * `sourceReleaseCallCount` counts how many times the source's own release
- * function ran, so a test can assert it fires exactly once even across
- * repeated `release()` calls. */
-export function mutableSource(
+/** A registered-extensions source whose answer can be replaced after
+ * creation via `set`. It notifies nobody: the observer reads the set once
+ * when it starts, so a test uses `set` to prove what the source would return
+ * later has no effect on how a navigation resolves. */
+export function swappableSource(
   registrations: { extension: string; routeOwner: string }[] = [],
 ): RegisteredExtensionsSource<string> & {
   set(next: typeof registrations): void;
-  fireChange(): void;
-  readonly sourceReleaseCallCount: number;
 } {
   let current = registrations;
-  // A `Set`, not a single binding: the registered-extensions-source axis
-  // isolation suite (`observe-change.test.ts`) needs more than one observer
-  // subscribed to the identical source at once, to prove one observer's own
-  // callback throw does not
-  // stop this emitter from notifying the others — a single-callback source
-  // could never exercise that. Deliberately no isolation of its own here
-  // (no try/catch around an individual `cb()` call): this is the naive
-  // multi-listener emitter shape the fix defends against, so a test can
-  // prove the *observer's* own subscription is what isolates a throw, not
-  // this helper quietly doing it first.
-  const onChangeCallbacks = new Set<() => void>();
-  let sourceReleaseCallCount = 0;
   return {
     getRegistrations: () =>
       current.map((r) => ({ extension: r.extension as ExtensionToken, routeOwner: r.routeOwner })),
-    onChange(callback: () => void): ReleaseFunction {
-      onChangeCallbacks.add(callback);
-      return () => {
-        sourceReleaseCallCount += 1;
-        onChangeCallbacks.delete(callback);
-      };
-    },
     set(next: typeof registrations): void {
       current = next;
-      for (const callback of onChangeCallbacks) {
-        callback();
-      }
-    },
-    fireChange(): void {
-      for (const callback of onChangeCallbacks) {
-        callback();
-      }
-    },
-    get sourceReleaseCallCount() {
-      return sourceReleaseCallCount;
     },
   };
 }

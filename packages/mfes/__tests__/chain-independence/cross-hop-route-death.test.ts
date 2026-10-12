@@ -226,9 +226,9 @@ describe('an unrecognized envelope version', () => {
 });
 
 describe('a disposed receiving registry', () => {
-  it('refuses the hand-over at the call', () => {
+  it('refuses the hand-over at the call', async () => {
     const farRegistry = new DefaultMfeRegistry({ typeSystem: createMockPlugin() });
-    farRegistry.dispose();
+    await farRegistry.dispose();
     const receive = receiverOf(farRegistry);
 
     expect(() =>

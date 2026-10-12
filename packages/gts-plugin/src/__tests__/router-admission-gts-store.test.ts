@@ -135,7 +135,7 @@ describe('extension registration leaves nothing in the real GTS store when the r
       releaseDomain: () => { /* unused */ },
       releaseExtension: () => { /* unused */ },
       assignOccupantValue: () => undefined,
-      reportSettled: () => { /* unused */ },
+      reflect: () => { /* unused */ },
       supplyNavigation: () => { /* unused */ },
     };
     const registry = buildRegistry(plugin, router);
@@ -157,7 +157,7 @@ describe('extension registration leaves nothing in the real GTS store when the r
       releaseDomain: () => { /* unused */ },
       releaseExtension: () => { /* unused */ },
       assignOccupantValue: () => undefined,
-      reportSettled: () => { /* unused */ },
+      reflect: () => { /* unused */ },
       supplyNavigation: () => { /* unused */ },
     };
     const registry = buildRegistry(plugin, router);
@@ -177,7 +177,7 @@ describe('domain registration leaves nothing in the real GTS store when the rout
       releaseDomain: () => { /* unused */ },
       releaseExtension: () => { /* unused */ },
       assignOccupantValue: () => undefined,
-      reportSettled: () => { /* unused */ },
+      reflect: () => { /* unused */ },
       supplyNavigation: () => { /* unused */ },
     };
     const registry = createMfeRegistryFactory().build({ typeSystem: plugin, router });
@@ -201,7 +201,7 @@ describe('domain registration leaves nothing in the real GTS store when the rout
       releaseDomain: () => { /* unused */ },
       releaseExtension: () => { /* unused */ },
       assignOccupantValue: () => undefined,
-      reportSettled: () => { /* unused */ },
+      reflect: () => { /* unused */ },
       supplyNavigation: () => { /* unused */ },
     };
     const registry = createMfeRegistryFactory().build({ typeSystem: plugin, router });
@@ -236,7 +236,7 @@ describe('router admission is released when the router admits but type-system re
       releaseDomain: () => { /* unused */ },
       releaseExtension: (extensionId) => { released.push(extensionId); },
       assignOccupantValue: () => undefined,
-      reportSettled: () => { /* unused */ },
+      reflect: () => { /* unused */ },
       supplyNavigation: () => { /* unused */ },
     };
     // The hook's `stage` must be one the domain actually declares (governance's
@@ -279,7 +279,7 @@ describe('router admission is released when the router admits but type-system re
       releaseDomain: (domainId) => { released.push(domainId); },
       releaseExtension: () => { /* unused */ },
       assignOccupantValue: () => undefined,
-      reportSettled: () => { /* unused */ },
+      reflect: () => { /* unused */ },
       supplyNavigation: () => { /* unused */ },
     };
     const registry = createMfeRegistryFactory().build({ typeSystem: plugin, router });

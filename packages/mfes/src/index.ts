@@ -59,7 +59,6 @@ export type {
   RouterPort,
   OccupantValue,
   OccupantValueAssignment,
-  SettledActionReport,
 } from './router/RouterPort';
 
 // Runtime abstractions (Phase 3)

@@ -10,6 +10,7 @@ import { ExtensionDomainImplementation } from '../ExtensionDomainImplementation'
 import { ExtensionDomainImplementationFactory } from '../ExtensionDomainImplementationFactory';
 import { ConcurrentMountStrategy } from '../ConcurrentMountStrategy';
 import { ExclusiveMountStrategy } from '../ExclusiveMountStrategy';
+import { OptionalMountStrategy } from '../OptionalMountStrategy';
 import type { ContainerHooks, ActionPayload, MountStrategy } from '../MountStrategy';
 import { ActionHandler } from '../../mediator/ActionHandler';
 import { ExtensionMounter } from '../ExtensionMounter';
@@ -96,6 +97,7 @@ function freshRegistry(): DefaultMfeRegistry {
 
 const DOMAIN_ID = 'test.domain.concurrent.v1';
 const DOMAIN_EXCL_ID = 'test.domain.exclusive.v1';
+const DOMAIN_OPT_ID = 'test.domain.optional.v1';
 
 function makeConcurrentDomain(id: string = DOMAIN_ID): ExtensionDomain {
   return {
@@ -113,8 +115,8 @@ function makeConcurrentDomain(id: string = DOMAIN_ID): ExtensionDomain {
 function makeExclusiveDomain(id: string = DOMAIN_EXCL_ID): ExtensionDomain {
   return {
     id,
-    // ExclusiveMountStrategy REQUIRES mount_ext AND unmount_ext
-    actions: [FRONTX_ACTION_LOAD_EXT, FRONTX_ACTION_MOUNT_EXT, FRONTX_ACTION_UNMOUNT_EXT],
+    // ExclusiveMountStrategy requires mount_ext and forbids unmount_ext
+    actions: [FRONTX_ACTION_LOAD_EXT, FRONTX_ACTION_MOUNT_EXT],
     extensionsActions: [],
     sharedProperties: [],
     defaultActionTimeout: 5000,
@@ -194,10 +196,6 @@ class ExclusiveDomainImpl extends ExtensionDomainImplementation {
       FRONTX_ACTION_MOUNT_EXT,
       ActionHandler.fromFunction((_t, p) => this.strategy.mount(p as ActionPayload))
     );
-    ctx.registerHandler(
-      FRONTX_ACTION_UNMOUNT_EXT,
-      ActionHandler.fromFunction((_t, p) => this.strategy.unmount!(p as ActionPayload))
-    );
   }
 
   protected getMountStrategies(): MountStrategy[] {
@@ -210,6 +208,37 @@ class ExclusiveDomainFactory extends ExtensionDomainImplementationFactory {
 
   build(ctx: DomainContext): ExclusiveDomainImpl {
     return new ExclusiveDomainImpl(ctx, this.reg);
+  }
+}
+
+// ─── Optional domain implementation ──────────────────────────────────────────
+
+class OptionalDomainImpl extends ExtensionDomainImplementation {
+  private readonly strategy: OptionalMountStrategy;
+
+  constructor(ctx: DomainContext, registry: MfeRegistry) {
+    super();
+    this.strategy = new OptionalMountStrategy(ctx.mounter, new TestHooks(), registry, DOMAIN_OPT_ID);
+    ctx.registerHandler(
+      FRONTX_ACTION_MOUNT_EXT,
+      ActionHandler.fromFunction((_t, p) => this.strategy.mount(p as ActionPayload))
+    );
+    ctx.registerHandler(
+      FRONTX_ACTION_UNMOUNT_EXT,
+      ActionHandler.fromFunction((_t, p) => this.strategy.unmount!(p as ActionPayload))
+    );
+  }
+
+  protected getMountStrategies(): MountStrategy[] {
+    return [this.strategy];
+  }
+}
+
+class OptionalDomainFactory extends ExtensionDomainImplementationFactory {
+  constructor(private readonly reg: MfeRegistry) { super(); }
+
+  build(ctx: DomainContext): OptionalDomainImpl {
+    return new OptionalDomainImpl(ctx, this.reg);
   }
 }
 
@@ -242,30 +271,33 @@ describe('DefaultMfeRegistry', () => {
       expect(mounter).toBeInstanceOf(ExtensionMounter);
     });
 
-    it('ExclusiveMountStrategy factory with mount_ext and unmount_ext declared is admitted', () => {
+    it('ExclusiveMountStrategy factory with only mount_ext (and load_ext) declared is admitted', () => {
       const reg = freshRegistry();
       expect(() => reg.registerDomain(makeExclusiveDomain(), new ExclusiveDomainFactory(reg))).not.toThrow();
       expect(reg.getMounter(DOMAIN_EXCL_ID)).toBeTruthy();
     });
 
-    it('ExclusiveMountStrategy factory without unmount_ext declared throws naming the missing action (REQUIRE rule)', () => {
+    it('ExclusiveMountStrategy factory without mount_ext declared throws naming the missing action (REQUIRE rule)', () => {
+      // inst-sc-exclusive-row, inst-sc-required-fail
       const reg = freshRegistry();
       const illegalDomain: ExtensionDomain = {
         ...makeExclusiveDomain(),
-        actions: [FRONTX_ACTION_LOAD_EXT, FRONTX_ACTION_MOUNT_EXT], // missing unmount_ext
+        actions: [FRONTX_ACTION_LOAD_EXT],
       } as unknown as ExtensionDomain;
       expect(() => reg.registerDomain(illegalDomain, new ExclusiveDomainFactory(reg))).toThrow(
-        FRONTX_ACTION_UNMOUNT_EXT
+        FRONTX_ACTION_MOUNT_EXT
       );
     });
 
-    it('ExclusiveMountStrategy factory without mount_ext declared throws (REQUIRE rule)', () => {
+    it('OptionalMountStrategy factory without unmount_ext declared throws naming the missing action (REQUIRE rule)', () => {
       const reg = freshRegistry();
       const illegalDomain: ExtensionDomain = {
-        ...makeExclusiveDomain(),
-        actions: [FRONTX_ACTION_LOAD_EXT], // missing mount_ext
+        ...makeConcurrentDomain(DOMAIN_OPT_ID),
+        actions: [FRONTX_ACTION_LOAD_EXT, FRONTX_ACTION_MOUNT_EXT],
       } as unknown as ExtensionDomain;
-      expect(() => reg.registerDomain(illegalDomain, new ExclusiveDomainFactory(reg))).toThrow();
+      expect(() => reg.registerDomain(illegalDomain, new OptionalDomainFactory(reg))).toThrow(
+        FRONTX_ACTION_UNMOUNT_EXT
+      );
     });
 
     it('ConcurrentMountStrategy factory without unmount_ext declared throws (REQUIRE rule)', () => {
@@ -277,14 +309,6 @@ describe('DefaultMfeRegistry', () => {
       expect(() => reg.registerDomain(illegalDomain, new ConcurrentDomainFactory())).toThrow();
     });
 
-    it('ExclusiveMountStrategy factory without mount_ext declared still throws (REQUIRE rule)', () => {
-      const reg = freshRegistry();
-      const illegalDomain: ExtensionDomain = {
-        ...makeExclusiveDomain(),
-        actions: [FRONTX_ACTION_LOAD_EXT, 'totally.unrelated.action.v1~'], // no mount_ext
-      } as unknown as ExtensionDomain;
-      expect(() => reg.registerDomain(illegalDomain, new ExclusiveDomainFactory(reg))).toThrow();
-    });
   });
 
   describe('getMountedExtensions', () => {

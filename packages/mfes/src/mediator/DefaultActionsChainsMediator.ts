@@ -197,7 +197,9 @@ export class DefaultActionsChainsMediator extends ActionsChainsMediator {
 
       // @cpt-begin:cpt-frontx-flow-mfe-host-communication-dispatch-chain:p1:inst-admit-action
       // @cpt-begin:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-delegate-admit
+      // @cpt-begin:cpt-frontx-algo-mfe-host-communication-history-intent:p1:inst-hi-return
       this.typeSystem.register(action);
+      // @cpt-end:cpt-frontx-algo-mfe-host-communication-history-intent:p1:inst-hi-return
       // @cpt-end:cpt-frontx-algo-mfe-host-communication-mediator-dispatch:p1:inst-delegate-admit
       // @cpt-end:cpt-frontx-flow-mfe-host-communication-dispatch-chain:p1:inst-admit-action
 

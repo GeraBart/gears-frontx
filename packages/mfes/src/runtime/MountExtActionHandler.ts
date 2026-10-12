@@ -21,16 +21,15 @@
  * @internal
  */
 // @cpt-algo:cpt-frontx-algo-extension-domain-governance-mount-execution:p2
-// @cpt-dod:cpt-frontx-dod-extension-domain-governance-settled-action-report:p1
+// @cpt-dod:cpt-frontx-dod-extension-domain-governance-url-commands:p1
 
 import type { ActionHandler } from '../mediator/ActionHandler';
 import { DeclaredTimeoutActionHandler } from '../mediator/DeclaredTimeoutActionHandler';
 import type { ActionTimeoutResolver } from '../mediator/ActionTimeoutResolver';
 import type { DomainOccupancyCoordinator } from './DomainOccupancyCoordinator';
 import type { ConcurrentMountJoiner } from './ConcurrentMountJoiner';
-import type { HistoryIntent } from '../types';
 import type { RouterPort } from '../router/RouterPort';
-import { executionChange } from './ExecutionChange';
+import { DomainReflectCommands, type ReflectRequest } from './DomainReflectCommands';
 
 /**
  * Resolves the domain an extension is admitted to. None of these ports are
@@ -105,8 +104,8 @@ export class MountExtActionHandler extends DeclaredTimeoutActionHandler {
    *   (Concurrent), or `undefined` for an Optional/Exclusive domain.
    * @param router - The injected router, or `undefined` for a standalone
    *   registry.
-   * @param readMounted - Reads the domain's current mount set; an execution's
-   *   report lists what changed in it while the execution ran.
+   * @param readMountSet - Reads the domain's current mount set, which the
+   *   domain's URL commands project from.
    */
   constructor(
     private readonly inner: ActionHandler,
@@ -118,152 +117,97 @@ export class MountExtActionHandler extends DeclaredTimeoutActionHandler {
     private readonly domainReader: () => { id: string; defaultActionTimeout: number } | undefined,
     private readonly queue: DomainOccupancyCoordinator | undefined,
     private readonly concurrentJoiner: ConcurrentMountJoiner | undefined,
-    private readonly router: RouterPort | undefined,
-    private readonly readMounted: () => readonly string[]
+    router: RouterPort | undefined,
+    readMountSet: () => readonly string[]
   ) {
     super();
+    this.commands = new DomainReflectCommands(domainId, router, readMountSet, queue, concurrentJoiner);
   }
 
-  /**
-   * Runs the domain's registered `mount_ext` handler and, where a router is
-   * injected, reports what the execution physically mounted and unmounted
-   * (and the action's history intent) to it exactly once — after the
-   * handler settles and before this method's own caller (the occupancy
-   * queue's turn, or the Concurrent joiner's task) returns control to the
-   * mediator, so the report precedes the chain's `next`/`fallback`
-   * (`inst-me-report-settled`, `inst-me-report-before-next`). The report
-   * never changes the outcome: a throwing `reportSettled` is logged and
-   * swallowed (`inst-me-report-failure-isolated`).
-   */
-  // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-report-settled
-  // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-report-once-per-execution
-  // Called exactly once per execution — a request for which the domain's
-  // strategy ran, through `this.inner`, the domain's own registered
-  // `mount_ext` handler — from each of this
-  // class's two fresh-mount call sites; every caller that joined or shared
-  // that one execution settles on its outcome without this method running
-  // again, so one execution produces exactly one `reportSettled` call.
-  private async runAndReportSettled(
-    actionTypeId: string,
-    payload: Record<string, unknown> | undefined
-  ): Promise<void> {
-    let failed = false;
-    let failure: unknown;
-    const before = this.readMounted();
-    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-report-internal-releases
-    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-report-nested-excluded
-    // Whatever the strategy does inside this call — an Optional
-    // displacement or an Exclusive eviction of a different extension — is
-    // internal to this one execution: it produces no report of its own and
-    // dispatches no `unmount_ext`; it reaches the router only among the
-    // `unmounted` ids of the one report below. The teardown of a departing
-    // host extension's own nested occupants happens in that extension's own
-    // registry and is not part of this domain's mount set.
-    // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-report-nested-excluded
-    try {
-      await this.inner.handleAction(actionTypeId, payload);
-    } catch (error) {
-      failed = true;
-      failure = error;
-    }
-    // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-report-internal-releases
-    // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-report-once-per-execution
-    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-report-before-next
-    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-report-standalone
-    // `this.router` is `undefined` for a domain held by a standalone
-    // registry, so this whole branch — and therefore every report — is
-    // skipped for that registry's whole life.
-    if (this.router) {
-      try {
-        // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-report-mounted-unmounted
-        // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-no-report-outside-action
-        // Only the difference across this one execution is reported; a slot
-        // detach, an unregistration release or a terminal disposal outside an
-        // execution is never reported.
-        // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-report-failed-execution
-        // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-report-empty-execution
-        // The mount set read before and after the strategy ran gives what
-        // the execution physically mounted and unmounted, for a failed
-        // execution too: a rolled-back mount is not in the set afterwards,
-        // an eviction that preceded a failed mount is gone from it, and an
-        // execution that changed nothing yields two empty lists. A domain
-        // without an occupancy queue (Concurrent) runs overlapping
-        // executions, each addressing only its own subject.
-        const { mounted, unmounted } = executionChange(
-          before,
-          this.readMounted(),
-          this.queue ? undefined : (payload as { subject: string }).subject
-        );
-        // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-report-empty-execution
-        // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-report-failed-execution
-        // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-no-report-outside-action
-        // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-report-mounted-unmounted
-        // @cpt-begin:cpt-frontx-algo-mfe-host-communication-history-intent:p1:inst-hi-reach-router
-        // @cpt-begin:cpt-frontx-algo-mfe-host-communication-history-intent:p1:inst-hi-uninterpreted
-        // The history intent is passed exactly as the executed action carries
-        // it — never interpreted, defaulted, or rewritten here — and stays absent
-        // when the action carries none.
-        const history = (payload as { history?: HistoryIntent } | undefined)?.history;
-        this.router.reportSettled({
-          domainId: this.domainId,
-          ...(history === undefined ? {} : { history }),
-          mounted,
-          unmounted,
-        });
-        // @cpt-end:cpt-frontx-algo-mfe-host-communication-history-intent:p1:inst-hi-uninterpreted
-        // @cpt-end:cpt-frontx-algo-mfe-host-communication-history-intent:p1:inst-hi-reach-router
-      } catch (reportError) {
-        // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-report-failure-isolated
-        console.error(
-          `[MountExtActionHandler] reportSettled failed for domain '${this.domainId}', ` +
-          `subject '${String((payload as { subject?: unknown } | undefined)?.subject)}':`,
-          reportError
-        );
-        // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-report-failure-isolated
-      }
-    }
-    // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-report-standalone
-    // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-report-before-next
-    if (failed) {
-      throw failure;
-    }
-  }
-  // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-report-settled
+  /** The domain's URL commands, issued from this wrapper at acceptance and at settle. */
+  private readonly commands: DomainReflectCommands;
 
-  async handleActionWithDeclaredTimeout(
+  handleActionWithDeclaredTimeout(
     actionTypeId: string,
     payload: Record<string, unknown> | undefined,
     declaredTimeout: number | undefined
   ): Promise<void> {
     const subject = (payload as { subject?: unknown } | undefined)?.subject;
     if (typeof subject !== 'string') {
-      // A malformed payload is not this prologue's concern — let the
-      // wrapped handler's own validation (or the mediator's admission
-      // check upstream of it) report the failure exactly as it would
-      // without this decorator in place.
-      return this.inner.handleAction(actionTypeId, payload);
+      // A malformed payload is not this prologue's concern: a request into an
+      // open domain is passed to the wrapped handler, whose own validation
+      // reports the failure; a request into a closed domain is refused like
+      // any other. The request has no projection change, so it issues no
+      // acceptance command, but it is settled like any other.
+      const handling = this.handleUnaddressed(actionTypeId, payload);
+      this.startedWork().track(this.commands.settleAfter(undefined, handling));
+      return handling;
     }
-    const extensionId = subject;
+    // The request's outcome and its chain's continuation come from its own
+    // handling alone; the settle command follows that handling in a separate
+    // asynchronous call and is never awaited by the promise returned here.
+    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-cmd-chain-independent
+    const request = this.commands.request('mount', subject, payload);
+    const handling = this.handleRequest(request, actionTypeId, payload, declaredTimeout);
+    this.startedWork().track(this.commands.settleAfter(request, handling));
+    return handling;
+    // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-cmd-chain-independent
+  }
+
+  /** The tracker of this domain's started work: its queue or its Concurrent joiner. */
+  private startedWork(): DomainOccupancyCoordinator | ConcurrentMountJoiner {
+    return (this.queue ?? this.concurrentJoiner)!;
+  }
+
+  /**
+   * Handling of a request without a string subject. An `async` method, so a
+   * synchronous throw from the wrapped handler becomes a rejection.
+   */
+  private async handleUnaddressed(
+    actionTypeId: string,
+    payload: Record<string, unknown> | undefined
+  ): Promise<void> {
+    // A closed domain refuses every request, this one included.
+    const closedReason = this.queue?.closedReason() ?? this.concurrentJoiner?.closedReason();
+    if (closedReason !== undefined) {
+      throw new Error(`mount_ext: request in domain '${this.domainId}' ${closedReason}`);
+    }
+    return this.inner.handleAction(actionTypeId, payload);
+  }
+
+  /**
+   * The request's own handling. An `async` method, so a synchronous throw
+   * becomes a rejected promise before the caller awaits it.
+   */
+  private async handleRequest(
+    request: ReflectRequest,
+    actionTypeId: string,
+    payload: Record<string, unknown> | undefined,
+    declaredTimeout: number | undefined
+  ): Promise<void> {
+    const extensionId = request.subject;
 
     // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-eligibility-check
+    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-cmd-accept-refused
+    // A refused mount issues no acceptance command; its settle command
+    // follows its own failure.
     if (this.admissionReader.domainOf(extensionId) !== this.domainId) {
       throw new Error(
         `mount_ext: extension '${extensionId}' is not admitted to domain '${this.domainId}'.`
       );
     }
+    // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-cmd-accept-refused
     // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-eligibility-check
 
     if (!this.queue) {
-      return this.handleConcurrentMount(actionTypeId, payload, extensionId);
+      return this.handleConcurrentMount(request, actionTypeId, payload);
     }
 
     // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-occupancy-queue
     // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-already-mounted-complete
-    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-no-report-unexecuted
-    // An already-mounted request returning here (and a request that joins
-    // an entry already queued or running, below) never runs the strategy
-    // — and therefore never reaches `runAndReportSettled` — so it reports
-    // nothing to any router.
+    // An already-mounted request returning here completes at once: it is
+    // accepted like any placed request, never runs the strategy, and its
+    // settle command follows its own settlement.
     // @cpt-begin:cpt-frontx-state-extension-domain-governance-admission:p1:inst-adm-t9
     // While the domain is being unregistered the queue is closed, so the
     // request goes to `submit` and fails at once
@@ -282,19 +226,30 @@ export class MountExtActionHandler extends DeclaredTimeoutActionHandler {
       !this.queue.isClosed() &&
       !unmountInFlight
     ) {
+      this.commands.accept(request);
       return;
     }
     // @cpt-end:cpt-frontx-state-extension-domain-governance-admission:p1:inst-adm-t9
-    // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-no-report-unexecuted
     // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-already-mounted-complete
 
     // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-queue-caller-timer
     const timeoutMs = this.actionTimeoutResolver.resolve(declaredTimeout, this.domainReader(), this.domainId);
     // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-queue-caller-timer
 
-    await this.queue.submit('mount', extensionId, timeoutMs, () =>
+    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-cmd-accept-refused
+    // A request arriving while its domain is being unregistered fails at once
+    // without being placed: it issues no acceptance command.
+    // The acceptance command is issued first, with the queue as it will be
+    // once the request is placed: a throw from the router fails the request
+    // before anything is queued.
+    if (!this.queue.isClosed()) {
+      this.commands.accept(request, this.queue.readEntriesAfterPlacing('mount', extensionId));
+    }
+    const placement = this.queue.submit('mount', extensionId, timeoutMs, () =>
       this.runMountAtTurn(extensionId, actionTypeId, payload)
     );
+    // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-cmd-accept-refused
+    await placement;
     // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-occupancy-queue
   }
 
@@ -352,7 +307,7 @@ export class MountExtActionHandler extends DeclaredTimeoutActionHandler {
     // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-sole-occupant-at-turn
 
     // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-queue-fresh-mount-at-turn
-    return this.runAndReportSettled(actionTypeId, payload);
+    return this.inner.handleAction(actionTypeId, payload);
     // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-queue-fresh-mount-at-turn
   }
   // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-queue-evaluate-at-turn
@@ -364,10 +319,32 @@ export class MountExtActionHandler extends DeclaredTimeoutActionHandler {
    * mounts are independent.
    */
   private async handleConcurrentMount(
+    request: ReflectRequest,
     actionTypeId: string,
-    payload: Record<string, unknown> | undefined,
-    extensionId: string
+    payload: Record<string, unknown> | undefined
   ): Promise<void> {
+    const extensionId = request.subject;
+    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-cmd-accept-refused
+    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-concurrent-domain-unregister
+    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-registry-dispose-wait
+    // A request arriving while its Concurrent domain is being unregistered,
+    // or its registry disposed, is refused at once: no acceptance command and
+    // no mount; its settle command follows its own failure.
+    const closedReason = this.concurrentJoiner!.closedReason();
+    if (closedReason !== undefined) {
+      throw new Error(`mount_ext: request for '${extensionId}' in domain '${this.domainId}' ${closedReason}`);
+    }
+    // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-registry-dispose-wait
+    // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-concurrent-domain-unregister
+    // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-cmd-accept-refused
+    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-cmd-concurrent-accept
+    // The request passed the eligibility check and is handed to the
+    // Concurrent mount path, whether it starts a mount, joins one in
+    // progress, or completes at once because its extension is already
+    // mounted: it is accepted here, with its record set first.
+    this.commands.accept(request);
+    // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-cmd-concurrent-accept
+
     // The whole wait-then-mount attempt runs INSIDE the joiner's task, so
     // this request's own placeholder is published in the joiner before it
     // ever waits on an in-progress unmount — a second request for the same
@@ -410,7 +387,7 @@ export class MountExtActionHandler extends DeclaredTimeoutActionHandler {
         break;
       }
 
-      return this.runAndReportSettled(actionTypeId, payload);
+      return this.inner.handleAction(actionTypeId, payload);
       // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-fail-after-unmount-failure
       // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-fresh-mount-after-unmount
       // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-await-unmount-settle

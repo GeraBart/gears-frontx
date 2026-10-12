@@ -236,9 +236,11 @@ export class GtsPlugin implements TypeSystemPlugin<JSONSchema> {
       return;
     }
     // @cpt-end:cpt-frontx-algo-gts-type-provider-runtime-registration-v2:p1:inst-rrv2-register-schema
+    // @cpt-begin:cpt-frontx-algo-mfe-host-communication-history-intent:p1:inst-hi-admit-strict
     // @cpt-begin:cpt-frontx-algo-gts-type-provider-runtime-registration-v2:p1:inst-rrv2-register-instance
     writeInstance(this.pair, this.token, jsonEntity);
     // @cpt-end:cpt-frontx-algo-gts-type-provider-runtime-registration-v2:p1:inst-rrv2-register-instance
+    // @cpt-end:cpt-frontx-algo-mfe-host-communication-history-intent:p1:inst-hi-admit-strict
   }
 
   // @cpt-algo:cpt-frontx-algo-gts-type-provider-schema-validation:p1

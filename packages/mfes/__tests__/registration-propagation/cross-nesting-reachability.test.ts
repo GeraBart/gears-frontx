@@ -563,7 +563,7 @@ describe('Cross-nesting reachability: registration propagation, escalation, retr
 
       // Dispose registry1 — the accepted sub-chain is untouched: retraction
       // acts on the route only.
-      registry1.dispose();
+      await registry1.dispose();
 
       // After retraction the shell holds no forwarding entry for D2.
       const forwardingEntries = (registry0 as unknown as { forwardingEntries: Map<string, unknown> })

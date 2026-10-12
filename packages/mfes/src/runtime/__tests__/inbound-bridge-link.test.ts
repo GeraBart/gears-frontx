@@ -178,7 +178,7 @@ function makeRouter(supplyNavigation: RouterPort['supplyNavigation']): RouterPor
     releaseDomain: () => {},
     releaseExtension: () => {},
     assignOccupantValue: () => undefined,
-    reportSettled: () => {},
+    reflect: () => {},
     supplyNavigation,
   };
 }
@@ -254,7 +254,7 @@ describe('re-link of a registry that adopted an inbound bridge in a mount window
   it(
     'a registry re-linked through its published callback re-advertises its targets and receives its ' +
       'navigation supply through the new link (inst-relink-repropagate)',
-    () => {
+    async () => {
       const first = makeObservableLink();
       registerInboundBridgeLink(first.bridge, first.link);
       const supplyNavigation = vi.fn();
@@ -278,14 +278,14 @@ describe('re-link of a registry that adopted an inbound bridge in a mount window
       expect(next.propagateAdvertisement.mock.calls[0]![0]).toBe('mock.domain.live.v1');
       expect(supplyNavigation).toHaveBeenCalledTimes(2);
 
-      registry.dispose();
+      await registry.dispose();
     }
   );
 
   it(
     'a registry constructed outside any mount window stays a root: no inbound bridge, no adoption, no ' +
       'navigation supply, and no diagnostic (inst-no-ambient-bridge)',
-    () => {
+    async () => {
       const debugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {});
       const supplyNavigation = vi.fn();
 
@@ -293,7 +293,7 @@ describe('re-link of a registry that adopted an inbound bridge in a mount window
 
       expect(supplyNavigation).not.toHaveBeenCalled();
       expect(debugSpy).not.toHaveBeenCalled();
-      registry.dispose();
+      await registry.dispose();
     }
   );
 });

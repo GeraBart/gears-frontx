@@ -326,22 +326,12 @@ export interface ExtensionRegistration<TRouteOwner = unknown> {
 
 /**
  * A domain's own registered-extensions source, supplied by the consumer as
- * a plain argument — never an injected port (§1.5). Modelled as a getter,
- * not a static snapshot property, because `getRegistrations` is re-read at
- * observer creation and on every subsequent navigation (FEATURE §3,
- * Observable Transition Signal, step 2.1: "reading the consumer's own
- * registered-extensions source at this same moment") — a snapshot could not
- * reflect a set that changes after creation without the separate `onChange`
- * notification below.
- *
- * `onChange` is present only for a source whose own registered set can
- * change after observer creation; a source that never changes may omit it
- * entirely (§1.5: "a consumer whose set never changes after creation may
- * supply a static snapshot with no change notification").
+ * a plain argument — never an injected port (§1.5). The observer reads
+ * `getRegistrations` once, when it starts, and resolves every later
+ * navigation against that set; the source carries no change notification.
  */
 export interface RegisteredExtensionsSource<TRouteOwner = unknown> {
   getRegistrations(): readonly ExtensionRegistration<TRouteOwner>[];
-  onChange?(callback: () => void): ReleaseFunction;
 }
 
 /**
@@ -379,7 +369,7 @@ export interface ResolvedEntry<TRouteOwner = unknown> {
  * the FEATURE never asks which positions moved, only whether any did.
  * `unresolved` restates a subset of the *current* `Transition#entries`; it
  * is not itself computed against the previous report the way the other
- * five fields are (§1.5: "not itself a diff category against the previous
+ * four fields are (§1.5: "not itself a diff category against the previous
  * report, only a restated subset of the current Entries").
  */
 export interface TransitionDiff {
@@ -387,18 +377,22 @@ export interface TransitionDiff {
   readonly removed: readonly ExtensionToken[];
   readonly payloadChanged: readonly ExtensionToken[];
   readonly reordered: boolean;
-  readonly resolutionChanged: readonly ExtensionToken[];
   readonly unresolved: readonly ExtensionToken[];
 }
 
 /**
  * The value delivered to the callback a consumer registers when creating a
  * domain's own observer — never delivered at all when every one of the
- * diff's five change categories is empty or false (FEATURE §1.5,
- * "Transition").
+ * diff's four change categories (added, removed, payload-changed,
+ * reordered) is empty or false (FEATURE §1.5, "Transition").
+ *
+ * `cause` is why the entries changed: `'initial'` for the report made when
+ * the observer starts, otherwise the navigation kind of the history
+ * notification that triggered the report.
  */
 export interface Transition<TRouteOwner = unknown> {
   readonly domainKey: DomainKey;
+  readonly cause: 'initial' | NavigationKind;
   readonly entries: readonly ResolvedEntry<TRouteOwner>[];
   readonly diff: TransitionDiff;
 }
@@ -644,9 +638,8 @@ export type EngineProviderPort<TRouteTree = unknown, TRouter = unknown> = (
  *   a re-entrancy drain ran that many consecutive rounds without its queue
  *   ever emptying, because a callback triggers a fresh round from every
  *   round it receives (`../diagnostics.js`, `REENTRANT_ROUND_LIMIT`). Raised
- *   by the navigation fan-out (`../history/fanout-dispatch.js`) and by the
- *   transition observer (`../signal/observe-change.js`) alike, on the same
- *   bound. The only code here that reports a failure of a *consumer's* own
+ *   only by the navigation fan-out (`../history/fanout-dispatch.js`), the
+ *   one place that defers a re-entrant round. The only code here that reports a failure of a *consumer's* own
  *   callbacks rather than of a value that consumer passed in — thrown rather
  *   than reported and swallowed because the drain is a loop, not a
  *   recursion, so an unbounded one exhausts no stack and surfaces nothing at
