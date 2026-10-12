@@ -87,9 +87,10 @@ export function createLoadService<TItem extends DataGridItem>(
    * do not), and reported from the first load it latches the grid into its error view, or logs a
    * failure for a grid that is simply gone.
    *
-   * Only this service holds the controller, so `signal.aborted` means it aborted the load. An
-   * AbortError a consumer's own `load` raises (its own timeout, say) does not set it and still
-   * rejects, and so does any other failure.
+   * `signal.aborted` means the load was aborted through this service: by a refresh, by `destroy()`,
+   * or by the public `abort()`, which a consumer's code can call too, so a consumer's abort settles
+   * the same way. An AbortError a consumer's own `load` raises (its own timeout, say) does not set
+   * the signal and still rejects, and so does any other failure.
    */
   async function settle(instance: LoadInstance<TItem>): Promise<boolean> {
     try {

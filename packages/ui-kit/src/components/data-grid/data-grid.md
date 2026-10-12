@@ -500,7 +500,9 @@ export const StatusPlugin = createDataGridPlugin<DataGridItem, 'status', Record<
   `!== undefined` when you collect updates, or the guard is always true.
 - Call `triggerLoad()` or `refresh()` from user actions, not from a global store
   `subscribe`, which fires during initialization and adds loads on top of the
-  first. `triggerLoad` queues a load; `refresh` aborts the one in flight first.
+  first. `triggerLoad` queues a load; `refresh` aborts the loads already in flight
+  before it starts its own, but two `refresh()` calls in the same tick both load
+  (see Known limitations).
 - Functions that build plugin infrastructure but are not React hooks do not use
   the `use` prefix.
 - Do not import from another plugin's internals; share a utility through the
@@ -546,10 +548,14 @@ columns' minimum content widths.
 
 - Data loading has no stale-response guard: `triggerLoad` neither aborts the load
   in flight nor ignores a late result, so when two loads overlap (two quick page
-  clicks, a page-size change, a refresh over a page change) the older result can
-  replace the newer one. A `load` that ignores `signal` is not protected even by
-  the abort `refresh()` sends. `refresh()` also defaults to `resetFilters: true`.
+  clicks, a page-size change, a refresh over a page change, two `refresh()` calls
+  in the same tick) the older result can replace the newer one. A `load` that
+  ignores `signal` is not protected even by the abort `refresh()` sends. `refresh()` also defaults to `resetFilters: true`.
 - Changing the page size from a later page fires two loads.
+- `abort()` counts as the grid's own abort. Called during the first load, or during
+  the refresh the first load waits on, it ends the first load with nothing loaded:
+  the grid shows "No results found" and loads nothing more. A superseded
+  `refresh()` resolves without its data, so a caller cannot tell it was superseded.
 - A failed first load has no retry; a failed refetch has no UI, and when search or
   sort started it, the failure also reaches the host as an unhandled rejection.
 - A search still waiting out its debounce when the grid unmounts is flushed: its
