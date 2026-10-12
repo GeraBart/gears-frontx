@@ -174,6 +174,33 @@ describe('DataGridPaginationPlugin', () => {
     expect(screen.getByText(messages.pagination.pageInfo(2, 3, TOTAL))).toBeInTheDocument();
   });
 
+  it.each([
+    ['a zero limit', { limit: 0 }],
+    ['a negative limit', { limit: -5 }],
+    ['a fractional limit', { limit: 2.5 }],
+    ['a limit that is not a number', { limit: '24' }],
+    ['a zero page', { page: 0 }],
+    ['a negative page', { page: -1 }],
+    ['a fractional page', { page: 1.5 }],
+  ])('reads %s from storage as absent and starts from the defaults', async (_, stored) => {
+    localStorage.setItem('dataGrid:pg_bad_stored:pagination', JSON.stringify(stored));
+    const load = createLoad();
+    renderGrid('pg_bad_stored', load);
+
+    expect(await screen.findByText('Item 1')).toBeInTheDocument();
+    expect(load.mock.calls[0][0].pagination).toEqual({ page: 1, limit: 12 });
+    expect(screen.getByText(messages.pagination.pageInfo(1, 5, TOTAL))).toBeInTheDocument();
+  });
+
+  it('lets a defaultLimit prop apply when the stored limit is not usable', async () => {
+    localStorage.setItem('dataGrid:pg_bad_limit_prop:pagination', JSON.stringify({ limit: 0 }));
+    const load = createLoad();
+    renderGrid('pg_bad_limit_prop', load, { defaultLimit: 24, limits: [12, 24] });
+
+    expect(await screen.findByText('Item 1')).toBeInTheDocument();
+    expect(lastPagination(load)).toEqual({ page: 1, limit: 24 });
+  });
+
   it('hides itself when everything fits in the smallest page size, if asked to', async () => {
     const load = createLoad();
     const { rerender } = renderGrid('pg_autohide', load, { limits: [100, 200], autoHide: true });

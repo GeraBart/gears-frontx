@@ -44,6 +44,13 @@ export interface PaginationPluginApi {
   setTotal: (total: number) => void;
 }
 
+// A stored page or limit is user-editable (devtools, a shared link in router mode), so anything but
+// a positive whole number reads as absent: a zero limit would make the page count Infinity, and
+// listing the pages would throw from render.
+function positiveInteger(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : undefined;
+}
+
 // Plugin definition
 export const DataGridPaginationPlugin = createDataGridPlugin<
   DataGridItem,
@@ -67,8 +74,8 @@ export const DataGridPaginationPlugin = createDataGridPlugin<
 
     // State store for pagination
     const usePaginationStore = create<PaginationStore>(() => ({
-      page: persistent.value?.page ?? 1,
-      limit: persistent.value?.limit ?? useConfigStore.getState().defaultLimit,
+      page: positiveInteger(persistent.value?.page) ?? 1,
+      limit: positiveInteger(persistent.value?.limit) ?? useConfigStore.getState().defaultLimit,
       total: 0,
     }));
 
@@ -160,7 +167,7 @@ export const DataGridPaginationPlugin = createDataGridPlugin<
         useConfigStore.setState(updates);
 
         // Only set limit from props if there's no persisted value
-        if (props.defaultLimit !== undefined && persistent.value?.limit === undefined) {
+        if (props.defaultLimit !== undefined && positiveInteger(persistent.value?.limit) === undefined) {
           usePaginationStore.setState({ limit: props.defaultLimit });
         }
       }
