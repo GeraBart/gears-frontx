@@ -72,6 +72,7 @@ The package is a full member of the published-libraries layer that is deliberate
 
 - `cpt-frontx-adr-ai-tooling-framework-packaging` - establishes the kit mechanism this package is the second adopter of, and the reserved resource prefix its own kit is to carry. The kit itself is decided and unbuilt.
 - `cpt-frontx-adr-default-type-substrate-provider` - fixes the concrete type-definition specification the contract harness names its identifiers in and takes one of its three compatibility signals from. The dependency is on the specification's own build-time library, taken as a development dependency by the harness; nothing here reaches the runtime provider or the port it implements, and no published artifact carries it.
+- `cpt-frontx-ui-kit-adr-data-grid-port` - makes the data-grid component a port of an existing production grid, with its behaviour, public API and persisted storage keys kept and its appearance moved onto the token vocabulary, rather than a grid built here. It is the reason that component has an internal structure of its own (services, a plugin registry, a state store per instance), and the reason the data-table component and its model library leave the package once the port is complete.
 
 ### 1.3 Architecture Layers
 
@@ -487,6 +488,7 @@ The properties a consumer depends on most - that styles survive, that unimported
 | Per-plugin subpath | One opt-in plugin of a component that splits its extensions out (`<component>/<plugin>`), for a consumer that renders the component without paying for plugins it does not use. The package barrel re-exports these too. |
 | Global stylesheets | The token vocabulary, the utility layer and the type ramp, imported once by an application. |
 | Documentation index and per-component documents | The agent-facing description, read from the install. |
+| Persisted view state | What the data-grid component stores in the browser's storage or the URL, under `dataGrid:<name>:<key>`. The keys and the shape of what is stored under them are kept from the grid's source (`cpt-frontx-ui-kit-adr-data-grid-port`), so a user's saved choices survive; renaming a key or changing a stored shape is a breaking change. |
 
 Two path shapes are deliberately not public: the internal component module layout, which is blocked in the export map so it stays free to change, and the contract artifacts, which are not in the published artifact at all (UIKIT-4).
 
@@ -517,8 +519,8 @@ What the package may depend on, and which members may depend on it, is not yet s
 
 | Dependency Module | Interface Used | Purpose |
 |-------------------|----------------|---------|
-| Data-grid library | Table model, column definitions, row selection, pagination | Supplies the data-table component's model layer, which is why that component's props carry type parameters the contract compiler can only record as slots. |
-| State-store library | Store creation and selector hooks | Supplies the data-grid component's per-instance service stores. Its types appear in that component's published declarations, which is accepted rather than wrapped. |
+| Table-model library | Table model, column definitions, row selection, pagination | Supplies the data-table component's model layer, which is why that component's props carry type parameters the contract compiler can only record as slots. It leaves the package with that component once the data-grid component replaces it (`cpt-frontx-ui-kit-adr-data-grid-port`). |
+| State-store library | Store creation and selector hooks | Supplies the data-grid component's per-instance service stores, kept from the grid's source (`cpt-frontx-ui-kit-adr-data-grid-port`). Its types appear in that component's published declarations, which is accepted rather than wrapped. |
 | Charting library | Chart primitives | Supplies the chart component's rendering. |
 | Command-palette library | Filterable command list | Supplies the command component's matching and keyboard model. |
 | Date libraries | Calendar rendering and date arithmetic | Supply the calendar and date-picker components. |
@@ -592,7 +594,7 @@ sequenceDiagram
 
 ### 3.7 Database schemas & tables
 
-Not applicable. The package holds no database and no persistence. Its schemas are JSON Schema documents committed in the repository and read from disk.
+Not applicable. The package holds no database. The one thing it persists is the data-grid component's view state, in the browser's storage or the URL, under the keys in §3.3. Its schemas are JSON Schema documents committed in the repository and read from disk.
 
 ## 4. Additional context
 
@@ -609,7 +611,7 @@ Three questions the knowledge layer turns on are settled, and the answers are st
 ## 5. Traceability
 
 - **PRD**: [PRD.md](./PRD.md)
-- **ADRs**: [root ADR/](../../../architecture/ADR/) - this package owns no ADR of its own; the decisions it answers to are `cpt-frontx-adr-ai-tooling-framework-packaging` and `cpt-frontx-adr-default-type-substrate-provider`, both root-owned.
+- **ADRs**: [ADR/](./ADR/) - this package owns one decision, `cpt-frontx-ui-kit-adr-data-grid-port`. It also answers to two root-owned decisions in the [root ADR/](../../../architecture/ADR/), `cpt-frontx-adr-ai-tooling-framework-packaging` and `cpt-frontx-adr-default-type-substrate-provider`.
 - **Features**: [features/](./features/)
 - **Root chain**: [PRD](../../../architecture/PRD.md), [DESIGN](../../../architecture/DESIGN.md), [DECOMPOSITION](../../../architecture/DECOMPOSITION.md)
 

@@ -380,8 +380,10 @@ extensions = [".ts"]
 # gts-plugin above. This entry is what lifted the package-wide `packages/ui-kit/**` [[ignore]]: the
 # ignore's own removal criterion was this registration, in the autodetect form with PRD, DESIGN and
 # FEATURE required, because `required` flags do not inherit and the explicit-artifact-list form
-# validates while enforcing nothing. DECOMPOSITION and ADR are omitted rather than declared
-# optional: a member never owns a DECOMPOSITION, and this member owns no decision of its own yet.
+# validates while enforcing nothing. DECOMPOSITION is omitted: a member never owns one. ADR is
+# declared `required = false`, as for Routing and the CLI above, and numbered from 0001 in the
+# member's own ADR/ as Routing's are: the decision to port the data grid
+# (cpt-frontx-ui-kit-adr-data-grid-port) is the package's own, not the ecosystem's.
 # One codebase path: `scripts` holds the contract harness, which carries the markers today. `src`
 # holds the components those contracts describe and is deliberately NOT registered here - nothing
 # under it is marked, and no FEATURE yet gives the component surface numbered instructions for a
@@ -419,6 +421,11 @@ required = true
 pattern = "features/*/FEATURE.md"
 traceability = "FULL"
 required = true
+
+[systems.children.autodetect.artifacts.ADR]
+pattern = "ADR/**/*.md"
+traceability = "FULL"
+required = false
 
 [[systems.children.codebase]]
 path = "packages/ui-kit/scripts"
