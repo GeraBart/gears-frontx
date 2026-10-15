@@ -10,6 +10,7 @@
  * unregistration and disposal; a registry built with no router presents and
  * releases nothing.
  */
+import { mountedIn } from './helpers/mounted-in';
 import { describe, it, expect, vi } from 'vitest';
 import { DefaultMfeRegistry } from '../DefaultMfeRegistry';
 import type { TypeSystemPlugin } from '../../type-substrate';
@@ -37,6 +38,8 @@ const STAGE_DESTROYED = 'cti.example.lifecycle.stage~destroyed';
 const ENTRY_ID = 'cti.example.entry~widget.v1';
 const EXTENSION_ID = 'cti.example.extension~widget.v1';
 const DOMAIN_ID = 'cti.example.domain.concurrent.v1';
+const DOMAIN_ROUTE = 'screens';
+const EXTENSION_ROUTE = 'home';
 
 interface MockSchema { $id?: string }
 
@@ -71,9 +74,12 @@ function registerEntrySchema(plugin: TypeSystemPlugin<MockSchema>): void {
   plugin.registerSchema(entry as unknown as MockSchema);
 }
 
-function makeDomain(id: string = DOMAIN_ID): ExtensionDomain {
+/** An explicit `undefined` route declares no route; an omitted one declares `DOMAIN_ROUTE`. */
+function makeDomain(id: string = DOMAIN_ID, ...routeArg: [route?: string | undefined]): ExtensionDomain {
+  const route = routeArg.length === 0 ? DOMAIN_ROUTE : routeArg[0];
   return {
     id,
+    ...(route === undefined ? {} : { route }),
     actions: [ACTION_LOAD_EXT, ACTION_MOUNT_EXT, ACTION_UNMOUNT_EXT],
     extensionsActions: [],
     sharedProperties: [],
@@ -83,8 +89,14 @@ function makeDomain(id: string = DOMAIN_ID): ExtensionDomain {
   } as unknown as ExtensionDomain;
 }
 
-function makeExtension(id: string = EXTENSION_ID, domain: string = DOMAIN_ID): Extension {
-  return { id, domain, entry: ENTRY_ID } as Extension;
+/** An explicit `undefined` route declares no route; an omitted one declares `EXTENSION_ROUTE`. */
+function makeExtension(
+  id: string = EXTENSION_ID,
+  domain: string = DOMAIN_ID,
+  ...routeArg: [route?: string | undefined]
+): Extension {
+  const route = routeArg.length === 0 ? EXTENSION_ROUTE : routeArg[0];
+  return { id, domain, entry: ENTRY_ID, ...(route === undefined ? {} : { route }) } as Extension;
 }
 
 class StubHandler extends MfeHandler {
@@ -132,11 +144,14 @@ function createRouterSpy(): RouterPort & { calls: string[] } {
   const calls: string[] = [];
   return {
     calls,
-    registerDomain: vi.fn((domain: ExtensionDomain) => { calls.push(`registerDomain:${domain.id}`); }),
-    registerExtension: vi.fn((extension: Extension) => { calls.push(`registerExtension:${extension.id}`); }),
+    connect: vi.fn(() => { calls.push('connect'); }),
+    registerDomain: vi.fn((domainId: string, _route: string, _declaresUnmount: boolean) => { calls.push(`registerDomain:${domainId}`); }),
+    registerExtension: vi.fn((extensionId: string, _domainId: string, _route: string) => { calls.push(`registerExtension:${extensionId}`); }),
+    startDomain: vi.fn(() => {}),
+    stopDomain: vi.fn(() => {}),
     releaseDomain: vi.fn((domainId: string) => { calls.push(`releaseDomain:${domainId}`); }),
     releaseExtension: vi.fn((extensionId: string) => { calls.push(`releaseExtension:${extensionId}`); }),
-    assignOccupantValue: vi.fn(() => undefined),
+    assignOccupantValue: vi.fn((_domainId: string, _extensionId: string) => undefined),
     reflect: vi.fn((domainId: string, extensionIds: string[], verb: 'push' | 'replace') => { calls.push(`reflect:${domainId}:${verb}:${extensionIds.join(',')}`); }),
     supplyNavigation: vi.fn(() => {}),
   };
@@ -152,6 +167,60 @@ function freshRegistry(
 }
 
 describe('router admission', () => {
+  it('a domain and an extension declared without route never reach the router, and nothing is released for them', async () => {
+    const plugin = createPlugin();
+    const router = createRouterSpy();
+    const registry = freshRegistry(plugin, router);
+    registry.registerDomain(makeDomain(DOMAIN_ID, undefined), new ConcurrentDomainFactory());
+    await registry.registerExtension(makeExtension(EXTENSION_ID, DOMAIN_ID, undefined));
+
+    await registry.unregisterExtension(EXTENSION_ID);
+    await registry.unregisterDomain(DOMAIN_ID);
+    registry.dispose();
+
+    expect(router.registerDomain).not.toHaveBeenCalled();
+    expect(router.registerExtension).not.toHaveBeenCalled();
+    expect(router.releaseExtension).not.toHaveBeenCalled();
+    expect(router.releaseDomain).not.toHaveBeenCalled();
+  });
+
+  it('an unrouted extension in a routed domain is not registered with the router, and only the routed domain is released', async () => {
+    const plugin = createPlugin();
+    const router = createRouterSpy();
+    const registry = freshRegistry(plugin, router);
+    registry.registerDomain(makeDomain(), new ConcurrentDomainFactory());
+    await registry.registerExtension(makeExtension(EXTENSION_ID, DOMAIN_ID, undefined));
+
+    await registry.unregisterDomain(DOMAIN_ID);
+
+    expect(router.registerExtension).not.toHaveBeenCalled();
+    expect(router.releaseExtension).not.toHaveBeenCalled();
+    expect(router.releaseDomain).toHaveBeenCalledWith(DOMAIN_ID);
+    registry.dispose();
+  });
+
+  it('no router member receives a declaration object: every argument is a string or a boolean', async () => {
+    const plugin = createPlugin();
+    const router = createRouterSpy();
+    const registry = freshRegistry(plugin, router);
+    registry.registerDomain(makeDomain(), new ConcurrentDomainFactory());
+    await registry.registerExtension(makeExtension());
+    const mounter = registry.getMounter(DOMAIN_ID);
+    mounter.attach(document.createElement('div'));
+    await mounter.mount(EXTENSION_ID, document.createElement('div'));
+    await registry.unregisterExtension(EXTENSION_ID);
+    await registry.unregisterDomain(DOMAIN_ID);
+
+    const members = [
+      router.registerDomain, router.registerExtension, router.releaseDomain, router.releaseExtension,
+      router.assignOccupantValue, router.startDomain, router.stopDomain,
+    ] as Array<ReturnType<typeof vi.fn>>;
+    const args = members.flatMap((member) => member.mock.calls.flat());
+    expect(args.length).toBeGreaterThan(0);
+    for (const arg of args) expect(['string', 'boolean']).toContain(typeof arg);
+    registry.dispose();
+  });
+
   it('presents the domain declaration to the router after the runtime\'s own checks pass and before it becomes durable', async () => {
     const plugin = createPlugin();
     const router = createRouterSpy();
@@ -161,7 +230,7 @@ describe('router admission', () => {
     registry.registerDomain(makeDomain(), factory);
 
     expect(router.registerDomain).toHaveBeenCalledTimes(1);
-    expect(router.registerDomain).toHaveBeenCalledWith(expect.objectContaining({ id: DOMAIN_ID }));
+    expect(router.registerDomain).toHaveBeenCalledWith(DOMAIN_ID, DOMAIN_ROUTE, true);
 
     await registry.dispose();
   });
@@ -195,7 +264,7 @@ describe('router admission', () => {
     await registry.registerExtension(makeExtension());
 
     expect(router.registerExtension).toHaveBeenCalledTimes(1);
-    expect(router.registerExtension).toHaveBeenCalledWith(expect.objectContaining({ id: EXTENSION_ID }));
+    expect(router.registerExtension).toHaveBeenCalledWith(EXTENSION_ID, DOMAIN_ID, EXTENSION_ROUTE);
 
     await registry.dispose();
   });
@@ -232,7 +301,8 @@ describe('router admission', () => {
 
     expect(router.registerExtension).toHaveBeenCalledTimes(1);
     expect(router.releaseExtension).not.toHaveBeenCalled();
-    expect(registry.getExtension(EXTENSION_ID)).toBe(original);
+    const { route: _route, ...withoutRoute } = original;
+    expect(registry.getExtension(EXTENSION_ID)).toEqual(withoutRoute);
 
     await registry.dispose();
   });
@@ -271,12 +341,12 @@ describe('router admission', () => {
     const mounter = registry.getMounter(DOMAIN_ID);
     mounter.attach(document.createElement('div'));
     await mounter.mount(EXTENSION_ID, document.createElement('div'));
-    expect(registry.getMountedExtensions(DOMAIN_ID)).toContain(EXTENSION_ID);
+    expect(mountedIn(registry, DOMAIN_ID)).toContain(EXTENSION_ID);
     router.calls.length = 0;
 
     await registry.unregisterExtension(EXTENSION_ID);
 
-    expect(registry.getMountedExtensions(DOMAIN_ID)).not.toContain(EXTENSION_ID);
+    expect(mountedIn(registry, DOMAIN_ID)).not.toContain(EXTENSION_ID);
     expect(router.releaseExtension).toHaveBeenCalledWith(EXTENSION_ID);
     expect(router.reflect).not.toHaveBeenCalled();
 
@@ -353,9 +423,7 @@ describe('router admission', () => {
     expect(router.releaseExtension).not.toHaveBeenCalledWith('ext-b');
     expect(router.releaseDomain).toHaveBeenCalledWith(DOMAIN_ID);
     // Never admitted: the router never even saw `ext-b`'s registration.
-    expect(router.registerExtension).not.toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'ext-b' })
-    );
+    expect(router.calls).not.toContain('registerExtension:ext-b');
 
     // Not orphaned: no registry state (router admission or registry's own
     // bookkeeping) was ever created for the extension rejected mid-teardown.
@@ -445,7 +513,7 @@ describe('router admission', () => {
     const mounter = registry.getMounter(DOMAIN_ID);
     mounter.attach(document.createElement('div'));
     await mounter.mount(EXTENSION_ID, document.createElement('div'));
-    expect(registry.getMountedExtensions(DOMAIN_ID)).toContain(EXTENSION_ID);
+    expect(mountedIn(registry, DOMAIN_ID)).toContain(EXTENSION_ID);
 
     await registry.unregisterExtension(EXTENSION_ID);
     expect(registry.getExtension(EXTENSION_ID)).toBeUndefined();

@@ -73,7 +73,7 @@ This PRD uses the root PRD's shared vocabulary ([root PRD §1.4](../../../archit
 
 **ID**: `cpt-frontx-mfes-actor-microfrontend-developer`
 
-**Role**: Authors the independently developed units the runtime loads — their entry points, declared base types, and the contracts their extensions carry. Fills the root PRD's Template Developer role (`cpt-frontx-actor-template-developer`) where a template contributes a microfrontend.
+**Role**: Authors the independently developed units the runtime loads — their entry points, declared base types, and the contracts their extensions carry. Fills the root PRD's Project Developer role (`cpt-frontx-actor-project-developer`) where a project contributes a microfrontend.
 **Needs**: A narrow host-communication bridge, explicit domain contracts to develop against, and admission errors that name the violated contract.
 
 ### 2.2 System Actors
@@ -116,7 +116,7 @@ The runtime operates inside a composed FrontX application in the browser. The ho
 
 - The concrete type-definition specification and its validation engine (owned by the type-system provider, `packages/gts-plugin`).
 - Application-defined type registration requirements (owned by the [gts-plugin PRD](../../gts-plugin/architecture/PRD.md)).
-- Project scaffolding, templates, and lifecycle tooling (projects orchestration layer).
+- Project scaffolding and lifecycle tooling (projects orchestration layer).
 - UI component libraries, state management, and layout choices (root PRD §4.2).
 
 ## 5. Functional Requirements
@@ -131,7 +131,7 @@ The system **MUST** allow microfrontends to be registered with a running applica
 
 **Rationale**: Lets an application gain user-facing functionality from independently-developed units at runtime, without rebuilding or redeploying the host.
 
-**Actors**: `cpt-frontx-actor-template-developer`, `cpt-frontx-actor-project-developer`
+**Actors**: `cpt-frontx-actor-project-developer`
 
 #### Multiple microfrontends per extension domain
 
@@ -151,7 +151,7 @@ The system **MUST** allow a host application to define extension domains with ad
 
 **Rationale**: Domain governance lets applications compose independently developed units without turning extension points into unbounded or ambiguous placement areas.
 
-**Actors**: `cpt-frontx-actor-project-developer`, `cpt-frontx-actor-template-developer`
+**Actors**: `cpt-frontx-actor-project-developer`
 
 #### Microfrontend–host communication and host-state reaction
 
@@ -161,7 +161,7 @@ The system **MUST** allow microfrontends to communicate with the host applicatio
 
 **Rationale**: Enables coordinated behavior across independently-deployed units, so a composed application behaves as one product rather than disconnected fragments.
 
-**Actors**: `cpt-frontx-actor-template-developer`, `cpt-frontx-actor-project-developer`
+**Actors**: `cpt-frontx-actor-project-developer`
 
 #### On-demand load failure handling
 
@@ -181,7 +181,7 @@ The system **MUST** validate microfrontends and their extensions against type de
 
 **Rationale**: Surfaces contract violations at the moment of integration rather than later in front of users, lowering the cost and risk of composing third-party units.
 
-**Actors**: `cpt-frontx-actor-template-developer`, `cpt-frontx-actor-project-developer`
+**Actors**: `cpt-frontx-actor-project-developer`
 
 ## 6. Non-Functional Requirements
 
@@ -215,7 +215,15 @@ The system **MUST** meet measurable response-time and throughput targets for run
 
 ### 6.2 NFR Exclusions
 
-The ecosystem-wide NFRs — evolvability and scaling without an architectural ceiling — bind this package but are owned by the [root PRD §6.1](../../../architecture/PRD.md#61-nfr-inclusions) (`cpt-frontx-nfr-evolvability`, `cpt-frontx-nfr-scalability-ceiling`): they govern every published member equally, so no member owns them. The root PRD's §6.2 exclusions (safety, privacy, accessibility, internationalization, inclusivity, regulatory compliance) apply here for the same reasons stated there.
+The ecosystem-wide NFRs — evolvability and scaling without an architectural ceiling — bind this package but are owned by the [root PRD §6.1](../../../architecture/PRD.md#61-nfr-inclusions) (`cpt-frontx-nfr-evolvability`, `cpt-frontx-nfr-scalability-ceiling`): they govern every published member equally, so no member owns them. The root PRD's §6.2 exclusions (safety, privacy, accessibility, internationalization, inclusivity, regulatory compliance) apply here for the same reasons stated there. The categories this PRD does not address in §6.1 are dispositioned as follows:
+
+- **Safety** — Not applicable because this library is a pure information system with no physical interaction.
+- **Reliability (availability, recovery)** — Not applicable because this library runs inside the page and has no service of its own to keep available; what happens when an on-demand load fails is a functional requirement (`cpt-frontx-fr-mfe-load-failure-handling`).
+- **Usability (accessibility, internationalization, offline use, inclusivity)** — Not applicable because this library renders no user interface; what a microfrontend renders belongs to that microfrontend.
+- **Compliance (regulatory, industry standards, legal)** — Not applicable because this library handles no regulated or personal data.
+- **Data (ownership, quality, lifecycle)** — Not applicable because this library stores no durable data; its registrations live in memory for the page's lifetime.
+- **Maintainability (code quality, documentation, technical debt)** — Not applicable because this library sets no maintainability target of its own; evolvability is owned by the root PRD, as stated above.
+- **Operations (deployment, monitoring, support)** — Not applicable because this library is a published package with no deployed service of its own to run, monitor or support.
 
 ## 7. Public Library Interfaces
 

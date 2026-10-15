@@ -1,9 +1,7 @@
 // Composed-mode virtual-location source: reads and writes one occupant's
 // own entry, addressed by `{domainKey, extension}`, inside a larger
-// composed-application URL. The standalone-mode source (projecting directly
-// onto the page's own pathname/search, no entry involved) is a separate
-// algorithm — `cpt-frontx-algo-routing-engine-provider-standalone-deployment`
-// — not implemented here.
+// composed-application URL. The shell runtime's source, over the shell's
+// subroute (the pathname), is `./shell-history-source.js`.
 //
 // FEATURE (engine-provider) §3, "History Adaptation To The RouterHistory
 // Contract", steps 1 (entry resolution), 2 (write-back), 4 (`createHref`).
@@ -33,8 +31,8 @@ import type { RouterHistory } from '@tanstack/react-router';
 // @cpt-dod:cpt-frontx-dod-routing-engine-provider-adaptation-and-creation:p1
 // @cpt-begin:cpt-frontx-algo-routing-engine-provider-history-adaptation:p2:inst-project-virtual-location
 function resolveOwnEntry(navigationHistory: NavigationHistory, entryAddress: EntryAddress): Entry | undefined {
-  const { path, search, hash } = navigationHistory.location;
-  const { entries } = parseGrammar({ shellSubroute: path, search, hash });
+  const { path, search } = navigationHistory.location;
+  const { entries } = parseGrammar({ shellSubroute: path, search });
   return entries.find(
     (entry) => namesEqual(entry.domainKey, entryAddress.domainKey) && namesEqual(entry.extension, entryAddress.extension),
   );
@@ -47,17 +45,16 @@ function resolveOwnEntry(navigationHistory: NavigationHistory, entryAddress: Ent
  * (`undefined` when it is currently absent — FEATURE §3, step 8); writing
  * issues exactly one call to the core's own URL back-projection helper,
  * naming this occupant's own entry address and its full new parameter list
- * — never a sibling's entry, another domain's entry, or the shell subroute.
+ * — never a sibling's entry, another domain's entry, or the shell's
+ * subroute.
  */
 export function createComposedVirtualLocationSource(
   navigationHistory: NavigationHistory,
   entryAddress: EntryAddress,
 ): VirtualLocationSource {
   // Bound to the identical `navigationHistory` this source was itself
-  // constructed with, never the realm singleton — the seam that lets a
-  // caller supply its own `NavigationHistory` (a test double, an SSR
-  // instance) and have both reads (`resolveOwnEntry`, `createHref` below)
-  // and this write path observe it consistently.
+  // constructed with, so both reads (`resolveOwnEntry`, `createHref` below)
+  // and this write path observe the one history the caller supplied.
   const { backProjectEntries } = createRouteSignal(navigationHistory);
 
   return {
@@ -67,8 +64,8 @@ export function createComposedVirtualLocationSource(
     // Because `payloadChanged` replaces an entry's entire parameter list
     // rather than merging into it, any parameter of this occupant's own
     // entry that is not `route` and not a member of TanStack's own current
-    // search is dropped here for free — the new list is built purely from
-    // the virtual location just navigated to (FEATURE §3, step 2).
+    // search is dropped here — the new list is built purely from the
+    // virtual location just navigated to (FEATURE §3, step 2).
     //
     // Once this occupant's own entry is no longer present in the URL
     // (step 8's own absent-entry case), there is nothing of its own left to
@@ -79,28 +76,16 @@ export function createComposedVirtualLocationSource(
     // changes nothing (FEATURE §3, step 8.1: "no write-back runs, because
     // there is no longer an entry of this occupant's own to write to").
     //
-    // A caller-supplied `hash` is applied to the
-    // page's own hash, never to this entry. The core's own
-    // `backProjectEntries` now takes an optional page-hash parameter for
-    // exactly this — this call passes `hash` straight through instead of
-    // running its own parse → serialize → push sequence, so the single
-    // history write both operations need stays inside the helper's own
-    // "never through a separate parse/serialize/push sequence of this
-    // provider's own" guarantee (FEATURE (engine-provider) §3, step 2).
-    // `hash === undefined` omits the parameter so the helper preserves
-    // whatever hash is currently in the URL, matching this source's own
-    // given-versus-absent convention.
-    write: (pathname: string, search: string, verb: HistoryVerb, hash?: string): void => {
+    // The helper takes no hash: its single write copies the current page
+    // hash unchanged, so this write leaves the live hash untouched without
+    // reading it (FEATURE (engine-provider) §3, History Adaptation,
+    // `inst-expose-direct-members`).
+    write: (pathname: string, search: string, verb: HistoryVerb): void => {
       if (resolveOwnEntry(navigationHistory, entryAddress) === undefined) {
         return;
       }
       const params = projectVirtualLocationToParams(pathname, search);
-      backProjectEntries(
-        entryAddress.domainKey,
-        { payloadChanged: [{ extension: entryAddress.extension, params }] },
-        verb,
-        hash,
-      );
+      backProjectEntries(entryAddress.domainKey, { payloadChanged: [{ extension: entryAddress.extension, params }] }, verb);
     },
     // @cpt-end:cpt-frontx-algo-routing-engine-provider-history-adaptation:p2:inst-expose-direct-members
 
@@ -109,14 +94,13 @@ export function createComposedVirtualLocationSource(
     // substrate's own grammar serializer over the current entry list with
     // this occupant's own entry replaced by the one the target virtual
     // location projects back to — never by concatenating path fragments
-    // (FEATURE §3, step 4). `hash` follows `write`'s own given-versus-absent
-    // convention above.
-    createHref: (pathname: string, search: string, hash?: string): string => {
+    // (FEATURE §3, step 4). The current location is parsed without its
+    // hash, so the returned href carries none.
+    createHref: (pathname: string, search: string): string => {
       const newParams = projectVirtualLocationToParams(pathname, search);
-      const { shellSubroute, hash: currentHash, entries, foreignSegments } = parseGrammar({
+      const { shellSubroute, entries, foreignSegments } = parseGrammar({
         shellSubroute: navigationHistory.location.path,
         search: navigationHistory.location.search,
-        hash: navigationHistory.location.hash,
       });
       const updatedEntries = entries.map((entry) =>
         namesEqual(entry.domainKey, entryAddress.domainKey) && namesEqual(entry.extension, entryAddress.extension)
@@ -125,7 +109,7 @@ export function createComposedVirtualLocationSource(
       );
       return serializeGrammar({
         shellSubroute,
-        hash: hash ?? currentHash,
+        hash: undefined,
         entries: updatedEntries,
         // A foreign query segment is never this derivation's own business —
         // carried through unchanged, exactly as the core's own
@@ -139,19 +123,14 @@ export function createComposedVirtualLocationSource(
 
 /**
  * Convenience composition of `createComposedVirtualLocationSource` and
- * `adaptVirtualLocationHistory` (`./history-adaptation.js`) — the public
- * entry point for the composed case, where an entry address is always
- * supplied. The standalone case, where none is, is a separate algorithm
- * (`cpt-frontx-algo-routing-engine-provider-standalone-deployment`) with its
- * own entry point, `adaptStandaloneHistory`
- * (`./standalone-history-source.js`); `adaptProviderHistory`
- * (`./engine-provider-history.js`) is what chooses between the two.
+ * `adaptVirtualLocationHistory` (`./history-adaptation.js`) — the composed
+ * case, where an entry address is supplied. The shell runtime's case, where
+ * none is, is `adaptShellHistory` (`./shell-history-source.js`);
+ * `adaptProviderHistory` (`./engine-provider-history.js`) is what chooses
+ * between the two.
  *
- * `options` is forwarded straight through to
- * `adaptVirtualLocationHistory` — `reportError` in particular, so a
- * consumer building composed history through this entry point can set its
- * own error-reporting channel exactly as one calling
- * `adaptVirtualLocationHistory` directly could.
+ * `options` is forwarded straight through to `adaptVirtualLocationHistory`
+ * — `reportError` in particular.
  */
 export function adaptComposedHistory(
   navigationHistory: NavigationHistory,

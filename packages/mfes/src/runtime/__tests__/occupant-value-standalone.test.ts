@@ -102,7 +102,7 @@ class ConcurrentDomainFactory extends ExtensionDomainImplementationFactory {
   }
 }
 
-describe('occupant value — standalone registry (no router)', () => {
+describe('occupant value — registry built with no router', () => {
   it('never calls associateOccupantValue or supplyNavigation across registration, mount, and unmount', async () => {
     const associateSpy = vi.spyOn(occupantValueModule, 'associateOccupantValue');
     const plugin = createPlugin();

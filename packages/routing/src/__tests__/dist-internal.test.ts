@@ -4,15 +4,19 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { ROUTING_EXCLUDED_BUILDING_BLOCKS, ROUTING_RUNTIME_SURFACE, ROUTING_TYPE_ONLY_SURFACE } from './helpers.js';
+import {
+  ROUTING_EXCLUDED_BUILDING_BLOCKS,
+  ROUTING_INTERNAL_TYPES,
+  ROUTING_RUNTIME_SURFACE,
+  ROUTING_TYPE_ONLY_SURFACE,
+} from './helpers.js';
 import { buildFreshDts, cleanupBuiltDts } from './helpers/build-dts.js';
 import { declaresRuntimeExport, declaresType } from './helpers/surface-check.js';
 
 // `stripInternal` (`../../tsconfig.json`, the same
 // config `tsup` reads to build this package's own published declarations)
-// is what is supposed to keep an `@internal`-tagged export — `HistoryAdapter`
-// and `AdapterLocation` (`./history/adapter.ts`) were the concrete case —
-// out of `dist/index.d.ts`. Merely adding the tag does not guarantee that:
+// is what is supposed to keep an `@internal`-tagged export out of
+// `dist/index.d.ts`. Merely adding the tag does not guarantee that:
 // a multi-file re-export chain carries no `@internal` tag of its own at any
 // hop, so `stripInternal` (which only strips a declaration where the tag is
 // itself written) leaves it untouched regardless of the flag being enabled.
@@ -23,11 +27,10 @@ import { declaresRuntimeExport, declaresType } from './helpers/surface-check.js'
 // JSDoc silently drops the entire function
 // (the package's sole public construction path) from `dist/index.d.ts`
 // while the runtime `dist/index.js` still exports it — invisible to an
-// absence-only assertion. `HistoryAdapter`/`AdapterLocation` are
-// public types instead (they sit in that function's own signature), so
-// this file also asserts their *presence*, and runs a real consumer
-// type-check against the emitted declarations so a name TypeScript cannot
-// resolve fails loudly here instead of at a real consumer's own build.
+// absence-only assertion. This file therefore also asserts the *presence*
+// of every public name, and runs a real consumer type-check against the
+// emitted declarations so a name TypeScript cannot resolve fails loudly
+// here instead of at a real consumer's own build.
 //
 // This test runs the real build (`tsup`, not a bare `tsc` declaration emit —
 // the rollup-dts bundling step is exactly where a re-export chain either
@@ -63,6 +66,10 @@ describe('published dist/index.d.ts strips @internal declarations', () => {
       );
       expect(dts, `unexpected export of ${name}`).not.toMatch(new RegExp(`^export\\s*\\{[^}]*\\b${name}\\b`, 'm'));
     }
+  });
+
+  it.each(ROUTING_INTERNAL_TYPES)('does not export the package-internal contract %s', (name) => {
+    expect(declaresRuntimeExport(dts, name), `unexpected export of ${name}`).toBe(false);
   });
 });
 

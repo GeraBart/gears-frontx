@@ -52,11 +52,24 @@ A registered microfrontend must evaluate as its own module instance so distinct 
 
 ### 1.4 References
 
-- **PRD**: [PRD.md](../../../../../architecture/PRD.md)
+- **PRD**: [PRD.md](../../PRD.md)
 - **Design**: [DESIGN.md](../../DESIGN.md)
 - **ADR**: `cpt-frontx-adr-mfe-load-isolation`, `cpt-frontx-adr-shared-dep-dedup-key`, `cpt-frontx-adr-shared-dep-cache-reach`
 - **Component**: `cpt-frontx-component-mfe-runtime` (shared with F4, F5, F6, F7)
 - **Dependencies**: `cpt-frontx-feature-mfe-registry` (F4), `cpt-frontx-feature-mfe-loading` (F5)
+
+**Checklist applicability**:
+- PERF — Addressed in §5 (Realm-Shared Dependency Source-Text Cache), which addresses `cpt-frontx-nfr-runtime-performance`: shared-dependency source text is held in one bounded cache per realm.
+- SEC — Addressed in §5 (Audited Trust Kernel — Blob Core; Instance-Keyed Load Cache), which address `cpt-frontx-nfr-security`: one audited file is the sole site of dynamic import of inline content and accepts only `blob:` or `data:` URLs, and each extension evaluates as its own module instance.
+- REL — Addressed in §2 (Isolated MFE Load, Error Scenarios) and §4 (Isolated Module Lifecycle): a load that fails names its cause and evicts its cache entry, so a later load attempt starts fresh.
+- DATA — Not applicable because this feature stores nothing durable; load promises and shared-dependency source text live in memory for the page's and the realm's lifetime.
+- INT — Addressed in §3 (Shared-Dependency Blob URL Construction; Realm Shared-Dependency Cache Rendezvous) and §5 (Manifest Reference Resolution): the manifest's shared-dependency list and the version-namespaced rendezvous are the contracts this feature reads and shares.
+- OPS — Not applicable because this feature is library code with no deployed service, configuration or monitoring of its own.
+- MAINT — Not applicable because this feature sets no maintainability target of its own; the dynamic-code primitives stay in one lint-enforced file (§5, Audited Trust Kernel — Blob Core).
+- TEST — Addressed in §6: the acceptance criteria an implementation is tested against.
+- COMPL — Not applicable because this feature handles no regulated or personal data.
+- UX — Not applicable because this feature renders no user interface.
+- BIZ — Not applicable because this is an internal library feature; its requirements are cited by ID in §1.2.
 
 ## 2. Actor Flows (CDSL)
 
@@ -276,7 +289,7 @@ The system **MUST** maintain a single audited trust-kernel file that is the sole
 - `cpt-frontx-flow-mfe-isolation-load`
 - `cpt-frontx-algo-mfe-isolation-trust-kernel-import`
 
-**Constraints**: none owned (F8 owns no DESIGN constraint per DECOMPOSITION 2.7)
+**Constraints**: none owned
 
 **Addresses (NFR)**: `cpt-frontx-nfr-security`
 
@@ -295,7 +308,7 @@ The load cache **MUST** remain class-static within one evaluated copy of the pac
 - `cpt-frontx-flow-mfe-isolation-load`
 - `cpt-frontx-algo-mfe-isolation-blob-url-chain`
 
-**Constraints**: none owned (F8 owns no DESIGN constraint per DECOMPOSITION 2.7)
+**Constraints**: none owned
 
 **Addresses (NFR)**: `cpt-frontx-nfr-security`
 
@@ -335,7 +348,7 @@ The system **MUST** accept an entry's manifest either as the document itself or 
 **Implements**:
 - `cpt-frontx-flow-mfe-isolation-load`
 
-**Constraints**: none owned (F8 owns no DESIGN constraint per DECOMPOSITION 2.7)
+**Constraints**: none owned
 
 **Touches**:
 - Entities: `MfeEntry`

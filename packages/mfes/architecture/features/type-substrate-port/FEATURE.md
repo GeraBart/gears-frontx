@@ -48,10 +48,23 @@ The MFE Runtime must validate microfrontends and their extensions against type d
 
 ### 1.4 References
 
-- **PRD**: [PRD.md](../../../../../architecture/PRD.md)
+- **PRD**: [PRD.md](../../PRD.md)
 - **Design**: [DESIGN.md](../../DESIGN.md)
 - **ADRs**: `cpt-frontx-adr-runtime-type-system-coupling`, `cpt-frontx-adr-core-package-boundaries`, `cpt-frontx-gts-plugin-adr-type-store-scope`
 - **Dependencies**: None
+
+**Checklist applicability**:
+- PERF — Not applicable because this feature sets no latency or throughput target of its own.
+- SEC — Addressed in §2 (Register Application Type Definitions and Validate MFE) and §3 (Schema Validation Port Delegation): a microfrontend whose type validation or hierarchy check fails through the port is rejected.
+- REL — Not applicable because this feature defines no retry, timeout or recovery; a failed validation or hierarchy check is a rejection returned to the caller (§2, Error Scenarios).
+- DATA — Not applicable because this feature stores nothing durable; the port records schemas by identifier (§4, Schema Registration Lifecycle), and the runtime holds only opaque type identifiers.
+- INT — Addressed in §5 (Port Contract Extraction into @gears-frontx/mfes; Validation and Hierarchy Delegation): the `TypeSystemPlugin` port is the contract an injected provider implements.
+- OPS — Not applicable because this feature is library code with no deployed service, configuration or monitoring of its own.
+- MAINT — Addressed in §5 (Opaque Boundary Enforcement): the runtime carries no type-format literal, no schema field access beyond the identifier, and no format-specific dependency, checked in CI.
+- TEST — Addressed in §6: the acceptance criteria an implementation is tested against.
+- COMPL — Not applicable because this feature handles no regulated or personal data.
+- UX — Not applicable because this feature renders no user interface.
+- BIZ — Not applicable because this is an internal library feature; its requirements are cited by ID in §1.2.
 
 ## 2. Actor Flows (CDSL)
 

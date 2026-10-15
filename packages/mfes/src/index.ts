@@ -54,12 +54,8 @@ export { MfeRegistry } from './registry/MfeRegistry';
 export { MfeRegistryFactory } from './registry/MfeRegistryFactory';
 export type { MfeRegistryConfig } from './runtime/config';
 
-// Router port (Phase 6) — the concrete router stays outside this package
-export type {
-  RouterPort,
-  OccupantValue,
-  OccupantValueAssignment,
-} from './router/RouterPort';
+// The abstract router — the FrontX router in `@gears-frontx/routing` conforms to it structurally
+export { RouterPort } from './router/RouterPort';
 
 // Runtime abstractions (Phase 3)
 export { MountStrategy } from './runtime/MountStrategy';

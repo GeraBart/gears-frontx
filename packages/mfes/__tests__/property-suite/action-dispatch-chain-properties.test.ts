@@ -271,7 +271,9 @@ describe('P1 — Non-awaitable surface', () => {
   it('all three DomainLifecycleTrigger methods return exactly undefined at runtime', () => {
     const registry = new DefaultMfeRegistry({ typeSystem: createMockPlugin() });
     registry.registerDomain(makeDomain('d-p1-dlt'), new GenericDomainFactory());
-    const domainState = registry.getDomainState('d-p1-dlt');
+    const domainState = (registry as unknown as {
+      extensionManager: { getDomainState(domainId: string): ExtensionDomainState | undefined };
+    }).extensionManager.getDomainState('d-p1-dlt');
     expect(domainState?.lifecycleTrigger).toBeDefined();
     const trigger = domainState!.lifecycleTrigger!;
 

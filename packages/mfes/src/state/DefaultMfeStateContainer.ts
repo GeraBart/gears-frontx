@@ -68,7 +68,7 @@ export class DefaultMfeStateContainer<TState = unknown> extends MfeStateContaine
 
   dispose(): void {
     if (this.isDisposed) {
-      return; // Idempotent
+      return; // A second call is a no-op.
     }
 
     this.isDisposed = true;

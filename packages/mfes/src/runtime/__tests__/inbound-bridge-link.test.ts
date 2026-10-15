@@ -173,6 +173,9 @@ function createPlugin(): TypeSystemPlugin {
 
 function makeRouter(supplyNavigation: RouterPort['supplyNavigation']): RouterPort {
   return {
+    connect: () => {},
+    startDomain: () => {},
+    stopDomain: () => {},
     registerDomain: () => {},
     registerExtension: () => {},
     releaseDomain: () => {},

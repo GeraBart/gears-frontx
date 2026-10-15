@@ -16,7 +16,6 @@
 // @cpt-state:cpt-frontx-state-mfe-registry-entry-lifecycle:p2
 
 import type { TypeSystemPlugin } from '../type-substrate';
-import type { ParentMfeBridge } from '../handler/ParentMfeBridge';
 import type {
   ExtensionDomain,
   Extension,
@@ -152,44 +151,38 @@ export abstract class MfeRegistry {
 
   /**
    * Get a registered extension by its ID.
+   * The registration is returned without its declared `route`; only the
+   * injected router receives it.
    *
    * @param extensionId - ID of the extension to get
    * @returns Extension if registered, undefined otherwise
    */
-  abstract getExtension(extensionId: string): Extension | undefined;
+  abstract getExtension(extensionId: string): Omit<Extension, 'route'> | undefined;
 
   /**
    * Get a registered domain by its ID.
+   * The registration is returned without its declared `route`; only the
+   * injected router receives it.
    *
    * @param domainId - ID of the domain to get
    * @returns ExtensionDomain if registered, undefined otherwise
    */
-  abstract getDomain(domainId: string): ExtensionDomain | undefined;
+  abstract getDomain(domainId: string): Omit<ExtensionDomain, 'route'> | undefined;
 
   /**
    * Get all extensions registered for a specific domain.
+   * The registration is returned without its declared `route`; only the
+   * injected router receives it.
    *
    * @param domainId - ID of the domain
    * @returns Array of extensions in the domain (empty if domain not found or has no extensions)
    */
-  abstract getExtensionsForDomain(domainId: string): Extension[];
-
-  /**
-   * Get the insertion-ordered list of currently-mounted extension IDs for a domain.
-   * Returns an empty array for an unknown or empty domain — never throws.
-   *
-   * The registry is the canonical owner of mount-set state per
-   * `cpt-frontx-dod-mfe-registry-mount-contracts`.
-   *
-   * @param domainId - ID of the domain
-   * @returns Readonly insertion-ordered list of mounted extension IDs.
-   */
-  abstract getMountedExtensions(domainId: string): readonly string[];
+  abstract getExtensionsForDomain(domainId: string): Omit<Extension, 'route'>[];
 
   /**
    * Get the per-domain `ExtensionMounter` instance.
-   * Called by the React `ExtensionDomainSlot` to call
-   * `mounter.attach(element)` / `mounter.detach()`.
+   * A domain's slot reaches it to call `mounter.attach(element)` /
+   * `mounter.detach()`.
    *
    * @param domainId - ID of the domain
    * @returns The per-domain `ExtensionMounter`.
@@ -206,20 +199,13 @@ export abstract class MfeRegistry {
 
   /**
    * Get all extensions registered for a specific GTS package.
+   * The registration is returned without its declared `route`; only the
+   * injected router receives it.
    *
    * @param packageId - GTS package string (e.g., 'frontx.demo')
    * @returns Array of extensions in the package (empty if package not tracked)
    */
-  abstract getExtensionsForPackage(packageId: string): Extension[];
-
-  /**
-   * Returns the ParentMfeBridge for the given extension, or null if the extension
-   * is not mounted or does not exist.
-   *
-   * @param extensionId - ID of the extension
-   * @returns ParentMfeBridge if extension is mounted, null otherwise
-   */
-  abstract getParentBridge(extensionId: string): ParentMfeBridge | null;
+  abstract getExtensionsForPackage(packageId: string): Omit<Extension, 'route'>[];
 
   // --- Theme ---
 

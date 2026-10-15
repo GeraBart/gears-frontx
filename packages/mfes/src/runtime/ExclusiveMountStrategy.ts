@@ -1,7 +1,7 @@
 import { MountStrategy, type ActionPayload, type ContainerHooks } from './MountStrategy';
 import type { ExtensionMounter } from './ExtensionMounter';
-import type { MfeRegistry } from '../registry/MfeRegistry';
 import { ExtensionReleaserProvider } from './ExtensionReleaserProvider';
+import { MountSetLookup } from './MountSetLookup';
 // @cpt-algo:cpt-frontx-algo-extension-domain-governance-slot-detach:p2
 
 /**
@@ -23,9 +23,7 @@ import { ExtensionReleaserProvider } from './ExtensionReleaserProvider';
 export class ExclusiveMountStrategy extends MountStrategy {
   constructor(
     private readonly mounter: ExtensionMounter,
-    private readonly hooks: ContainerHooks,
-    private readonly registry: MfeRegistry,
-    private readonly domainId: string
+    private readonly hooks: ContainerHooks
   ) {
     super();
   }
@@ -34,7 +32,7 @@ export class ExclusiveMountStrategy extends MountStrategy {
   async mount(payload: ActionPayload): Promise<void> {
     const subject = payload.subject;
     // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-get-mounted
-    const mounted = this.registry.getMountedExtensions(this.domainId);
+    const mounted = MountSetLookup.of(this.mounter);
     // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-get-mounted
 
     // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-exclusive-already-occupant

@@ -2020,12 +2020,12 @@ class MfeHandlerMF extends MfeHandler<MfeEntryMF, ChildMfeBridge> {
     // @cpt-begin:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-for-each-dep
     // @cpt-begin:cpt-frontx-algo-mfe-isolation-blob-url-chain:p1:inst-recurse-dep
     // Siblings are fanned out concurrently instead of being awaited
-    // serially one at a time — a sibling's entire recursive subtree no
-    // longer blocks the next sibling from starting. The fan-out itself is
+    // serially one at a time — a sibling's entire recursive subtree does
+    // not block the next sibling from starting. The fan-out itself is
     // deliberately unbounded: what must be bounded is the number of
-    // FETCHES in flight for this build, and that bound now lives on the
+    // FETCHES in flight for this build, and that bound lives on the
     // build's own `fetchBudget` (see {@link FetchBudget}) rather than on a
-    // pool opened per sibling group, which multiplied the width by the
+    // pool opened per sibling group, which would multiply the width by the
     // graph's bushiness. Cross-sibling / cross-load dedup for a shared
     // filename still holds because `createBlobUrlChain`'s check-then-set
     // against `blobUrlMap`/`inFlight` is synchronous (the method itself is

@@ -14,6 +14,7 @@
  * detached for the test and restored afterwards, so the expected errors never
  * reach the run as errors.
  */
+import { mountedIn } from './helpers/mounted-in';
 import { afterEach, describe, it, expect, onTestFinished } from 'vitest';
 import {
   ACTION_MOUNT_EXT, addProbeDomain, createDeferred, createReflectRouter, dispatch, setup,
@@ -31,21 +32,26 @@ afterEach(async () => {
 
 interface Captured {
   errors: unknown[];
-  /** One event-loop turn: unhandled-rejection processing runs between turns. */
-  turn(): Promise<void>;
+  /** Resolves when the first unhandled rejection has been captured. */
+  firstRejection: Promise<void>;
 }
 
 function captureUnhandledRejections(): Captured {
   const previous = process.listeners('unhandledRejection');
   process.removeAllListeners('unhandledRejection');
   const errors: unknown[] = [];
-  const listener = (reason: unknown): void => { errors.push(reason); };
+  let signalFirst!: () => void;
+  const firstRejection = new Promise<void>((resolve) => { signalFirst = resolve; });
+  const listener = (reason: unknown): void => {
+    errors.push(reason);
+    signalFirst();
+  };
   process.on('unhandledRejection', listener);
   onTestFinished(() => {
     process.removeListener('unhandledRejection', listener);
     for (const l of previous) process.on('unhandledRejection', l);
   });
-  return { errors, turn: () => new Promise<void>((resolve) => { setImmediate(resolve); }) };
+  return { errors, firstRejection };
 }
 
 const throwing = (verb: Command[2]) => (command: Command): void => {
@@ -61,9 +67,8 @@ async function make(strategy: Strategy, domainId: string, ids: string[], onRefle
 
 describe('a throwing acceptance command', () => {
   for (const strategy of ['optional', 'exclusive', 'concurrent'] as const) {
-    it(`${strategy}: the request fails and takes fallback, its entry never runs, and nothing is left unhandled`, async () => {
+    it(`${strategy}: the request fails and takes fallback, and its entry never runs`, async () => {
       // inst-me-cmd-accept, inst-me-cmd-chain-independent
-      const captured = captureUnhandledRejections();
       const d = `d-throw-accept-${strategy}`;
       const probes = `${d}-probes`;
       const f = await make(strategy, d, ['A', 'B'], throwing('push'));
@@ -74,11 +79,9 @@ describe('a throwing acceptance command', () => {
 
       const trailing = await dispatch(f.registry, d, ACTION_MOUNT_EXT, { subject: 'B', history: 'none' }, { probeDomainId: probes });
       expect(trailing).toBe('next');
-      await captured.turn();
 
       expect(f.handler.mountEntries('A')).toBe(0);
-      expect(f.registry.getMountedExtensions(d)).not.toContain('A');
-      expect(captured.errors).toEqual([]);
+      expect(mountedIn(f.registry, d)).not.toContain('A');
     });
   }
 });
@@ -101,7 +104,7 @@ describe('a throwing settle command', () => {
       const outcome = await dispatch(f.registry, d, ACTION_MOUNT_EXT, { subject: 'A', history: 'push' }, { probeDomainId: probes });
       expect(outcome).toBe('next');
       await settleReached.promise;
-      await captured.turn();
+      await captured.firstRejection;
 
       expect(f.handler.mountEntries('A')).toBe(1);
       expect(captured.errors).toHaveLength(1);

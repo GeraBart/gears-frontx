@@ -27,7 +27,7 @@
   - [2.21 AI-Driven Project Scaffolding from Intent - HIGH](#221-ai-driven-project-scaffolding-from-intent---high)
   - [2.22 UI Kit Compatibility Anchor - MEDIUM](#222-ui-kit-compatibility-anchor---medium)
   - [2.23 Routing Navigation Substrate - MEDIUM](#223-routing-navigation-substrate---medium)
-  - [2.24 Routing Route Ownership Signal - MEDIUM](#224-routing-route-ownership-signal---medium)
+  - [2.24 Routing Route Ownership Signal And FrontX Router - MEDIUM](#224-routing-route-ownership-signal-and-frontx-router---medium)
   - [2.25 Routing Engine Provider - MEDIUM](#225-routing-engine-provider---medium)
 - [3. Feature Dependencies](#3-feature-dependencies)
 - [4. Known Validator Debt](#4-known-validator-debt)
@@ -43,7 +43,7 @@ The root owns two behaviors:
 - Ecosystem distribution and versioning policy.
 - Ecosystem layer-partition governance.
 
-The installed SDLC kit currently defines feature-entry identifiers only in DECOMPOSITION and routes DESIGN coverage through DECOMPOSITION. Compatibility anchors below are therefore limited to feature IDs, member owner pointers and compact ID-only coverage references for member-owned components, constraints and principles; the previous central member-detail index remains removed.
+The installed SDLC kit currently defines feature-entry identifiers only in DECOMPOSITION and routes DESIGN coverage through DECOMPOSITION. Compatibility anchors below are therefore limited to feature IDs, member owner pointers and compact ID-only coverage references for member-owned components, constraints and principles; DECOMPOSITION carries no central member-detail index.
 
 ## 2. Entries
 
@@ -86,6 +86,9 @@ The installed SDLC kit currently defines feature-entry identifiers only in DECOM
 - [ ] `p1` - **ID**: `cpt-frontx-feature-mfe-host-communication`
 
 **Owner**: Member-owned compatibility anchor only; behavior is defined in [FEATURE.md](../packages/mfes/architecture/features/mfe-host-communication/FEATURE.md).
+
+**Installed-kit coverage references**:
+- `cpt-frontx-constraint-mfes-router-port`
 
 ### 2.6 [Extension-Domain Governance: Mount Strategies, Cardinality & Contract Matching](../packages/mfes/architecture/features/extension-domain-governance/) - HIGH
 
@@ -292,8 +295,8 @@ The installed SDLC kit currently defines feature-entry identifiers only in DECOM
 
 <!-- The [x] below is the cfs coverage rollup - this entry's references resolve
      and its coverage holds - and NOT a claim that the feature is implemented.
-     Its FEATURE's own featstatus (`cpt-frontx-featstatus-ai-project-
-     scaffolding`) is unchecked and governs implementation status: both entry
+     Its FEATURE's own featstatus (`cpt-frontx-featstatus-ai-project-scaffolding`)
+     is unchecked and governs implementation status: both entry
      points ship as documents rather than compiled modules, so no code marker
      pairs with their CDSL instructions and none may be checked. -->
 - [x] `p1` - **ID**: `cpt-frontx-feature-ai-project-scaffolding`
@@ -328,10 +331,11 @@ The installed SDLC kit currently defines feature-entry identifiers only in DECOM
 **Installed-kit coverage references**:
 - `cpt-frontx-component-routing-navigation-substrate`
 - `cpt-frontx-routing-principle-single-history-authority`
+- `cpt-frontx-routing-principle-control-boundary`
 - `cpt-frontx-constraint-routing-no-intra-ecosystem-dependency`
 - `cpt-frontx-constraint-routing-no-engine-leak`
 
-### 2.24 [Routing Route Ownership Signal](../packages/routing/architecture/features/route-ownership-signal/) - MEDIUM
+### 2.24 [Routing Route Ownership Signal And FrontX Router](../packages/routing/architecture/features/route-ownership-signal/) - MEDIUM
 
 - [ ] `p2` - **ID**: `cpt-frontx-feature-routing-route-ownership-signal`
 
@@ -339,17 +343,23 @@ The installed SDLC kit currently defines feature-entry identifiers only in DECOM
 
 **Installed-kit coverage references**:
 - `cpt-frontx-component-routing-route-ownership-signal`
+- `cpt-frontx-component-routing-router`
 - `cpt-frontx-routing-principle-publishes-not-orchestrates`
+- `cpt-frontx-routing-principle-control-boundary`
 - `cpt-frontx-constraint-routing-no-intra-ecosystem-dependency`
+
+`cpt-frontx-routing-principle-control-boundary` and `cpt-frontx-constraint-routing-no-intra-ecosystem-dependency` are shared with §2.23: both features ship in the one standalone package (no intra-ecosystem dependency).
 
 ### 2.25 [Routing Engine Provider](../packages/routing-tanstack/architecture/features/engine-provider/) - MEDIUM
 
 - [ ] `p2` - **ID**: `cpt-frontx-feature-routing-engine-provider`
 
-**Owner**: Member-owned compatibility anchor only; behavior is defined in [FEATURE.md](../packages/routing-tanstack/architecture/features/engine-provider/FEATURE.md). This feature lives in the separately published `@gears-frontx/routing-tanstack`, under the package split recorded in `cpt-frontx-adr-core-package-boundaries`.
+**Owner**: Member-owned compatibility anchor only; behavior is defined in [FEATURE.md](../packages/routing-tanstack/architecture/features/engine-provider/FEATURE.md). This feature lives in the separately published `@gears-frontx/routing-tanstack`, under the package boundaries `cpt-frontx-adr-core-package-boundaries` records.
 
 **Installed-kit coverage references**:
 - `cpt-frontx-component-routing-engine-provider`
+- `cpt-frontx-component-routing-tanstack-extension-router`
+- `cpt-frontx-component-routing-tanstack-navigation`
 - `cpt-frontx-routing-tanstack-principle-engine-confined`
 - `cpt-frontx-constraint-routing-tanstack-sole-engine-import`
 
@@ -362,7 +372,7 @@ F2 type-substrate-port           (foundation)
    └─→ F4 mfe-registry
           ├─→ F5 mfe-loading ──────────────┐
           ├─→ F6 mfe-host-communication     │
-          ├─→ F7 extension-domain-governance (also ← F3)
+          ├─→ F7 extension-domain-governance (also ← F3, F6)
           └─→ F8 mfe-isolation ←────────────┘ (← F5)
 F9 api-protocol-surface          (foundation, standalone)
 F10 template-resolution          (foundation)
@@ -376,8 +386,8 @@ F18 cli-invocation               (aggregator ← F10, F11, F12, F13, F14 — dis
 F19 ecosystem-governance         (foundation, standalone)
 F20 ai-project-scaffolding       (← F10, F11, F12, F13, F15, F16)
 F21 routing-navigation-substrate (foundation, standalone)
-   ├─→ F22 routing-route-ownership-signal
-   └─→ F23 routing-engine-provider (cross-package: routing-tanstack ← routing)
+   ├─→ F22 routing-route-ownership-signal ──┐
+   └─→ F23 routing-engine-provider ←────────┘ (← F22; cross-package: routing-tanstack ← routing)
 ```
 
 **Dependency Rationale**:
@@ -385,9 +395,10 @@ F21 routing-navigation-substrate (foundation, standalone)
 - `cpt-frontx-feature-gts-type-provider` requires `cpt-frontx-feature-type-substrate-port`: the GTS provider implements the opaque type-substrate port the runtime defines.
 - `cpt-frontx-feature-mfe-registry` requires `cpt-frontx-feature-type-substrate-port`: the registry façade is built with the type-system provider injected through the port contract.
 - `cpt-frontx-feature-mfe-loading` requires `cpt-frontx-feature-mfe-registry`: on-demand loading is orchestrated from the registry.
-- `cpt-frontx-feature-mfe-host-communication` requires `cpt-frontx-feature-mfe-registry`: the capability bridge delegates to the registry.
+- `cpt-frontx-feature-mfe-host-communication` requires `cpt-frontx-feature-mfe-registry`: the capability bridge delegates to the registry. The registry FEATURE's mention of the abstract router contract owned by host communication is a pointer, not a dependency, so the graph stays acyclic.
 - `cpt-frontx-feature-extension-domain-governance` requires `cpt-frontx-feature-mfe-registry`: admission and mount strategies act on registry-resolved extensions.
 - `cpt-frontx-feature-extension-domain-governance` requires `cpt-frontx-feature-gts-type-provider`: action–behavior consistency validation at admission uses type-of resolution from the provider.
+- `cpt-frontx-feature-extension-domain-governance` requires `cpt-frontx-feature-mfe-host-communication`: governance uses the timeout rule, the abstract router contract and the history intent that host communication owns; host communication's mentions of governance are pointers, not a dependency.
 - `cpt-frontx-feature-mfe-isolation` requires `cpt-frontx-feature-mfe-registry`: isolated mounts are driven by the registry's load orchestration.
 - `cpt-frontx-feature-mfe-isolation` requires `cpt-frontx-feature-mfe-loading`: isolation wraps the load execution path.
 - `cpt-frontx-feature-template-manifest` requires `cpt-frontx-feature-template-resolution`: the manifest is read at install/scaffold through the resolver.
@@ -401,8 +412,9 @@ F21 routing-navigation-substrate (foundation, standalone)
 - `cpt-frontx-feature-ai-upgrade-orchestration` requires `cpt-frontx-feature-ai-kit-packaging`: the orchestration workflow ships inside the base AI kit.
 - `cpt-frontx-feature-cli-invocation` requires `cpt-frontx-feature-template-resolution`, `cpt-frontx-feature-template-manifest`, `cpt-frontx-feature-cli-scaffolding`, `cpt-frontx-feature-composed-provenance`, and `cpt-frontx-feature-upgrade-changeset`: the invocation surface is the cross-command aggregator that dispatches `frontx <command>` to each owning behavior; it sits above them in the graph and none depend back on it.
 - `cpt-frontx-feature-ai-project-scaffolding` requires `cpt-frontx-feature-ai-kit-packaging` (its entry points ship in the base kit), `cpt-frontx-feature-template-manifest` (selection matches intent against manifest-declared descriptions), `cpt-frontx-feature-template-resolution` (the local inventory it selects over), `cpt-frontx-feature-cli-scaffolding` (the seed/add assembly it drives over the command surface), `cpt-frontx-feature-composed-provenance` (the applied set is reported from provenance), and `cpt-frontx-feature-template-ai-extensions` (per-unit realization drives the applied templates' activated extension skills).
-- `cpt-frontx-feature-routing-route-ownership-signal` requires `cpt-frontx-feature-routing-navigation-substrate`: the entry-resolution primitive it exposes, and the observable signal it builds on top of that primitive, both bind against the single navigation history the substrate owns.
-- `cpt-frontx-feature-routing-engine-provider` requires `cpt-frontx-feature-routing-navigation-substrate`: the provider implements the engine port the substrate defines — a cross-package edge (`@gears-frontx/routing-tanstack` depends on `@gears-frontx/routing`) since the package split recorded in `cpt-frontx-adr-core-package-boundaries`.
+- `cpt-frontx-feature-routing-route-ownership-signal` requires `cpt-frontx-feature-routing-navigation-substrate`: the entry-resolution primitive it exposes, and the observable signal it builds on top of that primitive, both bind against the single navigation history the substrate owns. Its mention of the abstract router contract owned by `cpt-frontx-feature-mfe-host-communication`, to which the FrontX router conforms, is a pointer, not a dependency, so the graph stays acyclic.
+- `cpt-frontx-feature-routing-engine-provider` requires `cpt-frontx-feature-routing-navigation-substrate`: the provider implements the engine port the substrate defines — a cross-package edge (`@gears-frontx/routing-tanstack` depends on `@gears-frontx/routing`) under the package boundaries `cpt-frontx-adr-core-package-boundaries` records.
+- `cpt-frontx-feature-routing-engine-provider` requires `cpt-frontx-feature-routing-route-ownership-signal`: the provider reads its entry address from the router and writes its own entry through the back-projection helper; that feature depends only on the substrate, so the graph stays acyclic.
 
 ## 4. Known Validator Debt
 

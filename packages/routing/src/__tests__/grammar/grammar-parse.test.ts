@@ -346,7 +346,7 @@ describe('parseGrammar — an empty param name violates param-name = 1*(...) and
 describe('parseGrammar — an already-split input still carrying its leading delimiter', () => {
   // A `HistoryAdapter` is free to read the host's own location object, which
   // carries `?` on the query string and `#` on the fragment. Passed through
-  // verbatim, the `?` used to ride into the first raw entry string, fail its
+  // verbatim, the `?` would ride into the first raw entry string, fail its
   // candidate domain key, and take every entry in that query string down with
   // it — no entry, no warning, nothing to see.
   it('parses the entries a query string holds instead of losing them to the leading "?"', () => {

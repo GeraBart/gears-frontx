@@ -53,28 +53,22 @@ type EmptyRouterOptions = {};
 /**
  * Calls `createRouter({ ...options, routeTree, history })` with the microfrontend's own
  * route tree and the adapted, virtual history built by history adaptation
- * (`./history-adaptation.js`, `./composed-history-source.js`,
- * `./standalone-history-source.js`). The resulting router matches only its
+ * (`./engine-provider-history.js`). The resulting router matches only its
  * own virtual location — the pathname and search this package projected
- * from the occupant's own entry, or from the page's own address in
- * standalone mode — because `history` itself is already scoped to nothing
- * else; no separate code enforces that property. This same call is also
- * where FEATURE §3, Standalone Deployment, steps 4 and 5 land: the
- * standalone case runs through this identical function and
- * `EngineProvider` below, differing only in which `history` was adapted
- * (`./engine-provider-history.js`) — "the same construction path the
- * composed case uses" is this file, unmodified for standalone.
+ * from the occupant's own entry, or the shell's subroute (the pathname) in
+ * the shell runtime — because `history` itself is already scoped to nothing
+ * else; no separate code enforces that property.
  *
- * FEATURE §3, Router Creation, steps 1-2, 4; Standalone Deployment, steps
- * 4-5; Swap-The-Router-Engine flow, step 5 ("construct-router") for the
- * default provider's own instance of that step — this function only
- * constructs; the router it returns is mounted separately, by
- * `EngineProvider` below, via `RouterProvider`.
+ * Internal to this package: `ExtensionRouter` (`./extension-router.js`) is
+ * its one caller, and supplies no construction option.
+ *
+ * FEATURE §3, Router Creation, steps 1-2, 4; Swap-The-Router-Engine flow,
+ * step 5 ("construct-router") for the default provider's own instance of
+ * that step — this function only constructs; the router it returns is
+ * mounted separately, by `EngineProvider` below, via `RouterProvider`.
  */
 // @cpt-algo:cpt-frontx-algo-routing-engine-provider-router-creation:p2
-// @cpt-algo:cpt-frontx-algo-routing-engine-provider-standalone-deployment:p2
 // @cpt-dod:cpt-frontx-dod-routing-engine-provider-adaptation-and-creation:p1
-// @cpt-dod:cpt-frontx-dod-routing-engine-provider-redirect-and-standalone:p1
 // @cpt-flow:cpt-frontx-flow-routing-engine-provider-swap-engine:p1
 export function createProviderRouter<TRouteTree extends AnyRoute>(
   routeTree: TRouteTree,
@@ -142,27 +136,18 @@ export function createProviderRouter<TRouteTree extends AnyRoute>(
     Record<string, unknown>
   >;
   // @cpt-end:cpt-frontx-algo-routing-engine-provider-router-creation:p2:inst-scope-to-entry
-  // The construct call itself is the smallest fragment implementing both
-  // the swap-engine flow's own "constructs its engine's router" step and
-  // the standalone-deployment algo's "same `createRouter` call the composed
-  // case uses" step — neither instruction has code of its own beyond this
-  // one call. It returns the router constructed, not mounted: mounting
-  // (`RouterProvider`) is a separate instruction, performed by
-  // `EngineProvider` below, with its own marker at its own call site there —
-  // this call site's own ids were renamed off "…-and-mount"/"…-mounted-…"
-  // for exactly this reason: the port this function backs constructs a
-  // router the consumer mounts through the provider, it does not mount one
-  // itself.
+  // The construct call itself is the smallest fragment implementing the
+  // swap-engine flow's own "constructs its engine's router" step — that
+  // instruction has no code of its own beyond this one call. It returns the
+  // router constructed, not mounted: mounting (`RouterProvider`) is a
+  // separate instruction, performed by `EngineProvider` below, with its own
+  // marker at its own call site there.
   // @cpt-begin:cpt-frontx-flow-routing-engine-provider-swap-engine:p1:inst-construct-router
-  // @cpt-begin:cpt-frontx-algo-routing-engine-provider-standalone-deployment:p2:inst-construct-with-standalone-virtual-history
   // @cpt-begin:cpt-frontx-algo-routing-engine-provider-router-creation:p2:inst-call-create-router
   // @cpt-begin:cpt-frontx-algo-routing-engine-provider-router-creation:p2:inst-return-constructed-router
-  // @cpt-begin:cpt-frontx-algo-routing-engine-provider-standalone-deployment:p2:inst-return-standalone-router
   return createRouter(constructorOptions);
-  // @cpt-end:cpt-frontx-algo-routing-engine-provider-standalone-deployment:p2:inst-return-standalone-router
   // @cpt-end:cpt-frontx-algo-routing-engine-provider-router-creation:p2:inst-return-constructed-router
   // @cpt-end:cpt-frontx-algo-routing-engine-provider-router-creation:p2:inst-call-create-router
-  // @cpt-end:cpt-frontx-algo-routing-engine-provider-standalone-deployment:p2:inst-construct-with-standalone-virtual-history
   // @cpt-end:cpt-frontx-flow-routing-engine-provider-swap-engine:p1:inst-construct-router
 }
 
@@ -188,8 +173,8 @@ interface EngineProviderTreeProps<TRouteTree extends AnyRoute> {
  * so the two stay in lockstep by construction rather than by two authors
  * remembering to agree: `routerOptions` below is required, not optional,
  * whenever `TRouteTree` declares a router context. A plain optional field
- * here would repeat that function's own pre-fix gap one level up — a
- * consumer building this props shape directly, not only one calling that
+ * here would open the gap that function's own rest-parameter conditional
+ * closes, one level up — a caller building this props shape directly, not only one calling that
  * function, could otherwise omit `routerOptions` for a context-bearing tree
  * and have it type-check. The same caveat as that function's own trailing
  * parameter applies here too: a component still generic over its own
@@ -254,20 +239,19 @@ export interface EngineProviderFromRouterProps<TRouter extends AnyRouter> {
  * Mounts a router built over an adapted virtual history into the
  * microfrontend's own component tree via `RouterProvider` (FEATURE §3,
  * Router Creation, step 3). Either builds that router itself from
- * `{routeTree, history}` (the same adapted `RouterHistory` a caller built
- * once via `adaptComposedHistory`/`adaptStandaloneHistory`,
- * `./engine-provider-history.js`) or mounts one already constructed
- * elsewhere — `createProviderRouter`'s own output — via `{router}`.
- * Mounting a standalone-adapted history runs through this identical
- * component (FEATURE §3, Standalone Deployment, step 5).
+ * `{routeTree, history}` (an adapted `RouterHistory` built once via
+ * `adaptProviderHistory`, `./engine-provider-history.js`) or mounts one
+ * already constructed elsewhere — `createProviderRouter`'s own output — via
+ * `{router}`, the form `ExtensionRouter` (`./extension-router.js`) renders.
+ * Internal to this package.
  *
  * FEATURE §3, Teardown On Unmount, steps 1 and 2 (`inst-when-mount`,
  * `inst-when-unmount`): this component is the mount boundary the FEATURE
  * names, and its own effect below is both of those moments. Setup
  * establishes the adapted history's own internal `NavigationHistory`
  * registration (`attachAdaptedHistory`, a no-op when it is already active),
- * and cleanup releases it (`history.destroy()`, already documented
- * idempotent). The registration belongs to this pair and to nothing else —
+ * and cleanup releases it (`history.destroy()`, a no-op after its first
+ * call). The registration belongs to this pair and to nothing else —
  * an adapted history is not registered by the act of constructing it, so it
  * observes nothing until some mount boundary attaches it. That is what
  * makes constructing one safe: a history built for a mount that never
@@ -345,8 +329,6 @@ export function EngineProvider(
   // @cpt-end:cpt-frontx-algo-routing-engine-provider-teardown:p2:inst-when-mount
 
   // @cpt-begin:cpt-frontx-algo-routing-engine-provider-router-creation:p2:inst-mount-router-provider
-  // @cpt-begin:cpt-frontx-algo-routing-engine-provider-standalone-deployment:p2:inst-mount-standalone-router
   return <RouterProvider router={router} />;
-  // @cpt-end:cpt-frontx-algo-routing-engine-provider-standalone-deployment:p2:inst-mount-standalone-router
   // @cpt-end:cpt-frontx-algo-routing-engine-provider-router-creation:p2:inst-mount-router-provider
 }

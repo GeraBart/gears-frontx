@@ -6,6 +6,7 @@
  * controllable deferred promises (gates) inside the MFE lifecycle, never with
  * timers or polling.
  */
+import { mountedIn } from './mounted-in';
 import { expect, onTestFailed, vi } from 'vitest';
 import { DefaultMfeRegistry } from '../../DefaultMfeRegistry';
 import type { TypeSystemPlugin } from '../../../type-substrate';
@@ -185,7 +186,7 @@ class TestHooks implements ContainerHooks {
 }
 
 export function makeExtension(id: string, domain: string): Extension {
-  return { id, domain, entry: ENTRY_ID } as Extension;
+  return { id, domain, entry: ENTRY_ID, route: id } as Extension;
 }
 
 /** An Exclusive domain declares no `unmount_ext`; the other strategies declare it. */
@@ -201,6 +202,7 @@ export function makeDomain(id: string, declaresUnmount: boolean): ExtensionDomai
     lifecycleStages: [],
     extensionsLifecycleStages: [],
     extensionsTypeId: '',
+    route: id,
   } as unknown as ExtensionDomain;
 }
 
@@ -225,8 +227,6 @@ class DomainImpl extends ExtensionDomainImplementation {
 
 export function domainFactory(
   strategy: Strategy,
-  registry: DefaultMfeRegistry,
-  domainId: string,
   registerUnmount = strategy !== 'exclusive',
   unmountActions: string[] = []
 ): ExtensionDomainImplementationFactory {
@@ -235,8 +235,8 @@ export function domainFactory(
       const hooks = new TestHooks();
       const s: MountStrategy =
         strategy === 'concurrent' ? new ConcurrentMountStrategy(ctx.mounter, hooks)
-        : strategy === 'optional' ? new OptionalMountStrategy(ctx.mounter, hooks, registry, domainId)
-        : new ExclusiveMountStrategy(ctx.mounter, hooks, registry, domainId);
+        : strategy === 'optional' ? new OptionalMountStrategy(ctx.mounter, hooks)
+        : new ExclusiveMountStrategy(ctx.mounter, hooks);
       return new DomainImpl(ctx, s, registerUnmount, unmountActions);
     }
   })();
@@ -266,6 +266,9 @@ export function createReflectRouter(onReflect?: (command: Command) => void): Ref
   });
   let waiters: Array<{ count: number; resolve: () => void }> = [];
   const router = {
+    connect: () => {},
+    startDomain: () => {},
+    stopDomain: () => {},
     registerDomain: () => {},
     registerExtension: () => {},
     releaseDomain: (domainId: string) => { released.push(`releaseDomain:${domainId}`); },
@@ -335,7 +338,7 @@ export async function setup(
   const unmountActions: string[] = [];
   registry.registerDomain(
     makeDomain(domainId, strategy !== 'exclusive'),
-    domainFactory(strategy, registry, domainId, strategy !== 'exclusive', unmountActions)
+    domainFactory(strategy, strategy !== 'exclusive', unmountActions)
   );
   for (const id of extensionIds) {
     await registry.registerExtension(makeExtension(id, domainId));
@@ -354,7 +357,7 @@ function wireProbe(registry: DefaultMfeRegistry, domainId: string, actionType: s
 
 /** Registers a domain that holds no extension and stays registered, to host probe actions. */
 export function addProbeDomain(registry: DefaultMfeRegistry, probeDomainId: string): void {
-  registry.registerDomain(makeDomain(probeDomainId, false), domainFactory('exclusive', registry, probeDomainId, false));
+  registry.registerDomain(makeDomain(probeDomainId, false), domainFactory('exclusive', false));
 }
 
 let tagCounter = 0;
@@ -423,6 +426,6 @@ export async function expectCommands(f: Fixture, expected: Array<Command | Comma
   await f.rr.whenCalls(expected.length + 1);
   expect(f.rr.calls).toEqual([
     ...expected,
-    [f.domainId, [...f.registry.getMountedExtensions(f.domainId)], 'replace'],
+    [f.domainId, [...mountedIn(f.registry, f.domainId)], 'replace'],
   ]);
 }

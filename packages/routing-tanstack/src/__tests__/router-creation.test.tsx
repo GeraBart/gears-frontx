@@ -18,7 +18,6 @@ import {
   type ExtensionToken,
 } from '@gears-frontx/routing';
 import { adaptComposedHistory } from '../composed-history-source.js';
-import { adaptStandaloneHistory } from '../standalone-history-source.js';
 import { attachAdaptedHistory } from '../history-adaptation.js';
 import { adaptProviderHistory } from '../engine-provider-history.js';
 import { createProviderRouter, EngineProvider, type ProviderRouterOptions } from '../router-creation.js';
@@ -193,8 +192,8 @@ describe('EngineProvider', () => {
       const release = originalSubscribe(subscriber);
       let released = false;
       return () => {
-        // `release` is itself idempotent (`NavigationHistory`'s own
-        // `ReleaseFunction` contract); this counting wrapper mirrors that,
+        // `release` is a no-op after its first call (`NavigationHistory`'s
+        // own `ReleaseFunction` contract); this counting wrapper mirrors that,
         // so a second `destroy()` call — a case this same test exercises
         // below — does not double-decrement.
         if (released) {
@@ -228,8 +227,8 @@ describe('EngineProvider', () => {
 
     expect(activeSubscriptions).toBe(0);
 
-    // A second teardown (the adapter's own `destroy` idempotence) must stay
-    // safe even after the component's own unmount already called it once.
+    // A second teardown (a second call of the adapter's own `destroy` is a
+    // no-op) must stay safe even after the component's own unmount already called it once.
     expect(() => history.destroy()).not.toThrow();
     expect(activeSubscriptions).toBe(0);
   });
@@ -251,37 +250,6 @@ describe('EngineProvider', () => {
     const subscriptions = countSubscriptions(navigationHistory);
 
     const history = adaptComposedHistory(navigationHistory, ENTRY_ADDRESS);
-    expect(subscriptions.active()).toBe(0);
-
-    const routeTree = buildRouteTree();
-    const container = document.createElement('div');
-    document.body.appendChild(container);
-    const root = createRoot(container);
-
-    await act(async () => {
-      root.render(
-        <StrictMode>
-          <EngineProvider routeTree={routeTree} history={history} />
-        </StrictMode>,
-      );
-    });
-    expect(subscriptions.active()).toBe(1);
-    expect(container.textContent).toBe('root');
-
-    await act(async () => {
-      root.unmount();
-    });
-    container.remove();
-
-    expect(subscriptions.active()).toBe(0);
-  });
-
-  it('ends a StrictMode mount with exactly one live subscription, and unmount with zero — standalone mode', async () => {
-    resetRealm('/');
-    const navigationHistory = resolveNavigationHistory();
-    const subscriptions = countSubscriptions(navigationHistory);
-
-    const history = adaptStandaloneHistory(navigationHistory);
     expect(subscriptions.active()).toBe(0);
 
     const routeTree = buildRouteTree();

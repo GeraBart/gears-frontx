@@ -37,6 +37,8 @@ import { GtsPlugin } from '../plugin';
 const DOMAIN_ID = 'gts.frontx.mfes.ext.domain.v1~test.routeradmission.fixture.domain.v1';
 const ENTRY_ID = 'gts.frontx.mfes.mfe.entry.v1~test.routeradmission.fixture.entry.v1';
 const EXT_ID = 'gts.frontx.mfes.ext.extension.v1~test.routeradmission.fixture.ext.v1';
+const DOMAIN_ROUTE = 'screens';
+const EXTENSION_ROUTE = 'home';
 
 class NoopContainerHooks implements ContainerHooks {
   create(): Element { return document.createElement('div'); }
@@ -89,6 +91,7 @@ class StubHandler extends MfeHandler {
 function makeDomain(plugin: GtsPlugin, overrides: Partial<ExtensionDomain> = {}): ExtensionDomain {
   return {
     id: DOMAIN_ID,
+    route: DOMAIN_ROUTE,
     actions: [
       plugin.resolveLoadExtActionId(),
       plugin.resolveMountExtActionId(),
@@ -104,7 +107,7 @@ function makeDomain(plugin: GtsPlugin, overrides: Partial<ExtensionDomain> = {})
 }
 
 function makeExtension(): Extension {
-  return { id: EXT_ID, domain: DOMAIN_ID, entry: ENTRY_ID };
+  return { id: EXT_ID, domain: DOMAIN_ID, entry: ENTRY_ID, route: EXTENSION_ROUTE };
 }
 
 function makeEntry(): MfeEntry {
@@ -130,6 +133,7 @@ describe('extension registration leaves nothing in the real GTS store when the r
   it('a router rejection leaves the extension unregistered with the type system, not merely absent from the registry map', async () => {
     const plugin = new GtsPlugin({ isolated: true });
     const router: RouterPort = {
+      connect: () => { /* unused */ },
       registerDomain: () => { /* domain admitted */ },
       registerExtension: () => { throw new Error('router: route conflict'); },
       releaseDomain: () => { /* unused */ },
@@ -137,6 +141,8 @@ describe('extension registration leaves nothing in the real GTS store when the r
       assignOccupantValue: () => undefined,
       reflect: () => { /* unused */ },
       supplyNavigation: () => { /* unused */ },
+      startDomain: () => { /* unused */ },
+      stopDomain: () => { /* unused */ },
     };
     const registry = buildRegistry(plugin, router);
 
@@ -152,6 +158,7 @@ describe('extension registration leaves nothing in the real GTS store when the r
   it('a router that admits the extension lets it reach the real GTS store', async () => {
     const plugin = new GtsPlugin({ isolated: true });
     const router: RouterPort = {
+      connect: () => { /* unused */ },
       registerDomain: () => { /* domain admitted */ },
       registerExtension: () => { /* extension admitted */ },
       releaseDomain: () => { /* unused */ },
@@ -159,6 +166,8 @@ describe('extension registration leaves nothing in the real GTS store when the r
       assignOccupantValue: () => undefined,
       reflect: () => { /* unused */ },
       supplyNavigation: () => { /* unused */ },
+      startDomain: () => { /* unused */ },
+      stopDomain: () => { /* unused */ },
     };
     const registry = buildRegistry(plugin, router);
 
@@ -172,6 +181,7 @@ describe('domain registration leaves nothing in the real GTS store when the rout
   it('a router rejection leaves the domain unregistered with the type system, not merely absent from the registry map', () => {
     const plugin = new GtsPlugin({ isolated: true });
     const router: RouterPort = {
+      connect: () => { /* unused */ },
       registerDomain: () => { throw new Error('router: domain route conflict'); },
       registerExtension: () => { /* unused */ },
       releaseDomain: () => { /* unused */ },
@@ -179,6 +189,8 @@ describe('domain registration leaves nothing in the real GTS store when the rout
       assignOccupantValue: () => undefined,
       reflect: () => { /* unused */ },
       supplyNavigation: () => { /* unused */ },
+      startDomain: () => { /* unused */ },
+      stopDomain: () => { /* unused */ },
     };
     const registry = createMfeRegistryFactory().build({ typeSystem: plugin, router });
 
@@ -196,6 +208,7 @@ describe('domain registration leaves nothing in the real GTS store when the rout
   it('a router that admits the domain lets it reach the real GTS store', () => {
     const plugin = new GtsPlugin({ isolated: true });
     const router: RouterPort = {
+      connect: () => { /* unused */ },
       registerDomain: () => { /* domain admitted */ },
       registerExtension: () => { /* unused */ },
       releaseDomain: () => { /* unused */ },
@@ -203,6 +216,8 @@ describe('domain registration leaves nothing in the real GTS store when the rout
       assignOccupantValue: () => undefined,
       reflect: () => { /* unused */ },
       supplyNavigation: () => { /* unused */ },
+      startDomain: () => { /* unused */ },
+      stopDomain: () => { /* unused */ },
     };
     const registry = createMfeRegistryFactory().build({ typeSystem: plugin, router });
 
@@ -228,6 +243,7 @@ describe('router admission is released when the router admits but type-system re
     const plugin = new GtsPlugin({ isolated: true });
     const released: string[] = [];
     const router: RouterPort = {
+      connect: () => { /* unused */ },
       registerDomain: () => { /* domain admitted */ },
       // The router validates nothing about GTS shape — admitting here is
       // exactly what lets the extension reach (and fail) type-system
@@ -238,6 +254,8 @@ describe('router admission is released when the router admits but type-system re
       assignOccupantValue: () => undefined,
       reflect: () => { /* unused */ },
       supplyNavigation: () => { /* unused */ },
+      startDomain: () => { /* unused */ },
+      stopDomain: () => { /* unused */ },
     };
     // The hook's `stage` must be one the domain actually declares (governance's
     // own string-membership check, which never touches GTS) and must itself be
@@ -271,6 +289,7 @@ describe('router admission is released when the router admits but type-system re
     const plugin = new GtsPlugin({ isolated: true });
     const released: string[] = [];
     const router: RouterPort = {
+      connect: () => { /* unused */ },
       // The router validates nothing about GTS shape — admitting here is
       // exactly what lets the domain reach (and fail) type-system
       // registration afterward.
@@ -281,6 +300,8 @@ describe('router admission is released when the router admits but type-system re
       assignOccupantValue: () => undefined,
       reflect: () => { /* unused */ },
       supplyNavigation: () => { /* unused */ },
+      startDomain: () => { /* unused */ },
+      stopDomain: () => { /* unused */ },
     };
     const registry = createMfeRegistryFactory().build({ typeSystem: plugin, router });
 

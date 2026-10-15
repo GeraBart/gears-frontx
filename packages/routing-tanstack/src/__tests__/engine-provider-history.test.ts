@@ -8,35 +8,13 @@ import { resetRealm } from './helpers/index.js';
 
 const DASHBOARD_ENTRY_ADDRESS: EntryAddress = { domainKey: 'screen' as DomainKey, extension: 'dashboard' as ExtensionToken };
 const COMPOSED_URL = '/en?screen=dashboard;route=settings/general;orientation=left';
-const STANDALONE_URL = '/settings/general?orientation=left';
 
-describe('mode selection by presence of an entry address', () => {
+describe('history adaptation given an entry address', () => {
   it('projects from the occupant own entry when an entry address is supplied', () => {
     resetRealm(COMPOSED_URL);
     const history = adaptProviderHistory(resolveNavigationHistory(), DASHBOARD_ENTRY_ADDRESS);
     expect(history.location.pathname).toBe('/settings/general');
     expect(history.location.search).toBe('?orientation=left');
-  });
-
-  it('projects directly from the page own address when no entry address is given', () => {
-    resetRealm(STANDALONE_URL);
-    const history = adaptProviderHistory(resolveNavigationHistory(), undefined);
-    expect(history.location.pathname).toBe('/settings/general');
-    expect(history.location.search).toBe('?orientation=left');
-  });
-
-  it('produces the identical resulting virtual location for one navigation sequence in either mode', () => {
-    resetRealm(COMPOSED_URL);
-    const composed = adaptProviderHistory(resolveNavigationHistory(), DASHBOARD_ENTRY_ADDRESS);
-    composed.push('/settings/profile?orientation=right');
-    const composedResult = { pathname: composed.location.pathname, search: composed.location.search };
-
-    resetRealm(STANDALONE_URL);
-    const standalone = adaptProviderHistory(resolveNavigationHistory(), undefined);
-    standalone.push('/settings/profile?orientation=right');
-    const standaloneResult = { pathname: standalone.location.pathname, search: standalone.location.search };
-
-    expect(standaloneResult).toEqual(composedResult);
   });
 });
 
@@ -61,12 +39,12 @@ function buildRouteTreeWithTwoRoutes() {
 // argument `commitLocation` supplies that this adapter mishandles) is
 // invisible to every other test in this package, which drives `history`
 // itself.
-describe('router.navigate() writes back through the adapter, in both modes', () => {
+describe('router.navigate() writes back through the adapter', () => {
   it('composed mode: navigate() reaches the occupant own entry', async () => {
     const adapter = resetRealm(COMPOSED_URL);
     const history = adaptProviderHistory(resolveNavigationHistory(), DASHBOARD_ENTRY_ADDRESS);
-    // These two tests drive a router without mounting it through
-    // `EngineProvider`, so they take on the attach that component's own
+    // This test drives a router without mounting it through
+    // `EngineProvider`, so it takes on the attach that component's own
     // effect would otherwise perform.
     attachAdaptedHistory(history);
     const router = createProviderRouter(buildRouteTreeWithTwoRoutes(), history);
@@ -81,35 +59,12 @@ describe('router.navigate() writes back through the adapter, in both modes', () 
     expect(adapter.lastWrite).toBe('/en?screen=dashboard;route=settings/profile');
     expect(router.state.location.pathname).toBe('/settings/profile');
   });
-
-  it('standalone mode: navigate() reaches the page own address', async () => {
-    const adapter = resetRealm(STANDALONE_URL);
-    const history = adaptProviderHistory(resolveNavigationHistory(), undefined);
-    attachAdaptedHistory(history);
-    const router = createProviderRouter(buildRouteTreeWithTwoRoutes(), history);
-    await router.load();
-
-    await router.navigate({ to: '/settings/profile' });
-
-    expect(adapter.lastWrite).toBe('/settings/profile');
-    expect(router.state.location.pathname).toBe('/settings/profile');
-  });
 });
 
-describe('an undeclared route= path resolves to the engine own notFound identically in both modes', () => {
+describe('an undeclared route= path resolves to the engine own notFound', () => {
   it('composed mode resolves an undeclared path to this router own notFound match', async () => {
     resetRealm('/en?screen=dashboard;route=settings/unknown');
     const history = adaptProviderHistory(resolveNavigationHistory(), DASHBOARD_ENTRY_ADDRESS);
-    const router = createProviderRouter(buildRouteTreeWithNotFound(), history);
-
-    await router.load();
-
-    expect(router.state.matches.some((match) => match._notFound === true)).toBe(true);
-  });
-
-  it('standalone mode resolves the identical undeclared path to the same notFound match', async () => {
-    resetRealm('/settings/unknown');
-    const history = adaptProviderHistory(resolveNavigationHistory(), undefined);
     const router = createProviderRouter(buildRouteTreeWithNotFound(), history);
 
     await router.load();

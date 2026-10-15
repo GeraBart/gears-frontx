@@ -128,6 +128,9 @@ describe('DefaultMfeRegistryFactory cache', () => {
 
 function createFakeRouter(): RouterPort {
   return {
+    connect: () => {},
+    startDomain: () => {},
+    stopDomain: () => {},
     registerDomain: () => {},
     registerExtension: () => {},
     releaseDomain: () => {},

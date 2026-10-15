@@ -21,6 +21,7 @@
  * `inst-hi-selects-acceptance-verb`, `inst-hi-admit-strict`,
  * `inst-hi-not-to-router`.
  */
+import { mountedIn } from './helpers/mounted-in';
 import { afterEach, describe, it, expect } from 'vitest';
 import type { Extension } from '../../types';
 import { MfeHandler, type MfeEntryLifecycle } from '../../handler/MfeHandler';
@@ -110,7 +111,7 @@ describe.each(strategies)('[%s] timing of commands', (strategy) => {
 
     expect(await dispatch(f.registry, d, ACTION_MOUNT_EXT, payload)).toBe('fallback');
     expect(payload.history).toBe(REJECTED_HISTORY);
-    expect(f.registry.getMountedExtensions(d)).toEqual([]);
+    expect(mountedIn(f.registry, d)).toEqual([]);
     await expectCommands(f, []);
   });
 
@@ -138,7 +139,7 @@ describe.each(strategies)('[%s] chain independence', (strategy) => {
     if (strategy !== 'exclusive') {
       outcomes.push(await dispatch(f.registry, d, ACTION_UNMOUNT_EXT, { subject: 'A', history: 'none' }));
     }
-    return { outcomes, mounted: f.registry.getMountedExtensions(d) };
+    return { outcomes, mounted: mountedIn(f.registry, d) };
   }
 
   it('outcome and next/fallback execution are identical with a router double and with no router, and no chain waits on a command', async () => {
@@ -161,10 +162,10 @@ describe.each(strategies)('[%s] chain independence', (strategy) => {
     const d = `d-norouter-${strategy}`;
     const f = await make(strategy, d, ['A'], { router: null });
     expect(await dispatch(f.registry, d, ACTION_MOUNT_EXT, { subject: 'A', history: 'push' })).toBe('next');
-    expect(f.registry.getMountedExtensions(d)).toEqual(['A']);
+    expect(mountedIn(f.registry, d)).toEqual(['A']);
     if (strategy !== 'exclusive') {
       expect(await dispatch(f.registry, d, ACTION_UNMOUNT_EXT, { subject: 'A', history: 'push' })).toBe('next');
-      expect(f.registry.getMountedExtensions(d)).toEqual([]);
+      expect(mountedIn(f.registry, d)).toEqual([]);
     }
   });
 });
@@ -226,7 +227,7 @@ describe.each(strategies)('[%s] nested host replacement', (strategy) => {
     const nested = host.nested!;
     fixtures.push(nested);
     await mountSettled(nested, 'N');
-    expect(nested.registry.getMountedExtensions(NESTED_DOMAIN)).toEqual(['N']);
+    expect(mountedIn(nested.registry, NESTED_DOMAIN)).toEqual(['N']);
 
     if (strategy === 'concurrent') {
       expect(await dispatch(f.registry, d, ACTION_UNMOUNT_EXT, { subject: 'H', history: 'push' })).toBe('next');
@@ -238,7 +239,7 @@ describe.each(strategies)('[%s] nested host replacement', (strategy) => {
       expect(f.unmountActions).toEqual([]);
     }
 
-    expect(nested.registry.getMountedExtensions(NESTED_DOMAIN)).toEqual([]);
+    expect(mountedIn(nested.registry, NESTED_DOMAIN)).toEqual([]);
     expect(nested.rr.calls).toEqual([]);
     expect(nested.unmountActions).toEqual([]);
   });

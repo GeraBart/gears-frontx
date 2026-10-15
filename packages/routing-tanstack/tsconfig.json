@@ -21,9 +21,8 @@
     "isolatedModules": true,
     // Same reasoning as `packages/routing`'s own tsconfig — `tsup` reads
     // this file to build the published declaration output, and without
-    // `stripInternal` an export tagged compiler-internal
-    // (`history-adaptation.ts`, `location-preserving-redirect.ts`) ships in
-    // `dist/index.d.ts` anyway. `tsconfig.typecheck.json` (used by
+    // `stripInternal` a declaration tagged compiler-internal
+    // (`history-adaptation.ts`) ships in `dist/index.d.ts` anyway. `tsconfig.typecheck.json` (used by
     // `type-check:test`) extends this file but stays unaffected: it is
     // `noEmit`, so `stripInternal` — a declaration-emit option — has no
     // effect there.

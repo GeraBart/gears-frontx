@@ -160,8 +160,8 @@ export const serializeGrammar: SerializeGrammar = (input) => {
   // order, then in their own original relative order among themselves —
   // not interleaved with entries the way the source query string may have
   // had them (ADR 0003, "Repetition and order"): once parse separates
-  // entries from foreign segments into two lists, this package no longer
-  // tracks their original interleaving, and reconstructing it would mean
+  // entries from foreign segments into two lists, this package does not
+  // track their original interleaving, and reconstructing it would mean
   // threading position information through every entries-array
   // transformation the back-projection helper performs, for a guarantee
   // (exact original interleaving) neither the FEATURE nor any consumer

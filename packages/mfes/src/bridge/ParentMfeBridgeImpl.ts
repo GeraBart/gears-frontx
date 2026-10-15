@@ -144,7 +144,7 @@ export class ParentMfeBridgeImpl extends ParentMfeBridge {
   // @cpt-begin:cpt-frontx-algo-mfe-host-communication-bridge-delegation:p1:inst-parent-handle
   dispose(): void {
     if (this.destroyed) {
-      return; // Idempotent
+      return; // A second call is a no-op.
     }
     this.propertySubscribers.clear();
     this.childBridge.destroy();

@@ -1,7 +1,5 @@
 // Virtual-location projection — the pathname/search codec this package's
-// default adapter builds on top of one occupant's own entry (or, for a
-// standalone deployment, the page's own address directly — a later change,
-// not this file's own concern).
+// default adapter builds on top of one occupant's own entry.
 //
 // FEATURE (engine-provider) §1.1, §1.5, §3 "History Adaptation To The
 // RouterHistory Contract".
@@ -14,8 +12,8 @@ import { buildSearchString, parseSearchString } from './search-codec.js';
 export const ROUTE_PARAM_NAME = 'route';
 
 /** The `{pathname, search}` pair a virtual location carries — no hash of
- * its own (DESIGN §3.1, "Virtual location"; the page's own hash is a
- * location-preserving-helper concern, out of this file's scope). */
+ * its own (DESIGN §3.1, "Virtual location"; the page hash belongs to no
+ * runtime). */
 export interface VirtualLocationParts {
   readonly pathname: string;
   readonly search: string;
@@ -67,35 +65,22 @@ export function projectVirtualLocationToParams(pathname: string, search: string)
 
 /**
  * Splits a TanStack-supplied `path` argument (as handed to `push`/`replace`,
- * or accepted by `createHref`) into its pathname/search/hash components.
- * Deliberately not a URL parse — the input is always shell-relative, never
- * carrying an origin — so a plain, dependency-free split on the first `?`
- * and first `#` is enough and keeps this package independent of the exact
- * encoding TanStack's own internals choose for that argument.
+ * or accepted by `createHref`) into its pathname and search, dropping any
+ * hash it carries: a hash passed to a navigation never enters an entry and
+ * never reaches the page hash (FEATURE (engine-provider) §3, History
+ * Adaptation, steps 2 and 4). Deliberately not a URL parse — the input is
+ * always shell-relative, never carrying an origin — so a plain,
+ * dependency-free split on the first `#` and first `?` is enough and keeps
+ * this package independent of the exact encoding TanStack's own internals
+ * choose for that argument.
  */
-export function splitHref(path: string): { pathname: string; search: string; hash: string | undefined } {
+export function splitHref(path: string): VirtualLocationParts {
   const hashIndex = path.indexOf('#');
   const withoutHash = hashIndex === -1 ? path : path.slice(0, hashIndex);
-  // `undefined` — not `''` — when `path` carries no `#` at all: a caller
-  // that never named a hash and a caller that explicitly named an empty one
-  // are two different inputs (FEATURE (engine-provider) §3, "a hash passed
-  // to a navigation is applied to the page hash and never enters an
-  // entry"; "no hash given" preserves whatever the page's own hash already
-  // is, which an explicit empty string would instead clear) — collapsing
-  // them to the same `''` would make that distinction unrecoverable by the
-  // time it reaches `write`/`createHref` below.
-  const hash = hashIndex === -1 ? undefined : path.slice(hashIndex + 1);
 
   const searchIndex = withoutHash.indexOf('?');
   const pathname = searchIndex === -1 ? withoutHash : withoutHash.slice(0, searchIndex);
   const search = searchIndex === -1 ? '' : withoutHash.slice(searchIndex);
 
-  return { pathname, search, hash };
+  return { pathname, search };
 }
-
-// `buildSearchString`/`parseSearchString` — including the malformed-input
-// guard the latter relies on (`decodeComponentOrRaw`) — now live in
-// `./search-codec.js`, shared with `location-preserving-redirect.ts`'s own
-// redirect-search builder rather than each parsing this string on its own
-// (a second, unguarded copy is what let a lone `%` in a redirect's own
-// search throw before this extraction).

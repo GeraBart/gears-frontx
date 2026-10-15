@@ -24,6 +24,7 @@
  * finish) is observed via a probe action chained with `next`, exactly as
  * `mount-ext-prologue-integration.test.ts` does.
  */
+import { mountedIn } from './helpers/mounted-in';
 import { describe, it, expect } from 'vitest';
 import { DefaultMfeRegistry } from '../DefaultMfeRegistry';
 import type { TypeSystemPlugin } from '../../type-substrate';
@@ -217,7 +218,7 @@ describe('unregisterExtension of a MOUNTED extension', () => {
     });
     await mountNextFired;
 
-    expect(registry.getMountedExtensions(DOMAIN_ID)).toContain(EXTENSION_ID);
+    expect(mountedIn(registry, DOMAIN_ID)).toContain(EXTENSION_ID);
     log.length = 0;
 
     await registry.unregisterExtension(EXTENSION_ID);

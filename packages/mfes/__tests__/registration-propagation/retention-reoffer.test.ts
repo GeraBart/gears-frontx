@@ -178,11 +178,14 @@ function awaitChain(registry: DefaultMfeRegistry, chain: ActionsChain): Promise<
 
 function fakeRouter(overrides: Partial<RouterPort> = {}): RouterPort {
   return {
+    connect: () => {},
     registerDomain: () => {},
     registerExtension: () => {},
     releaseDomain: () => {},
     releaseExtension: () => {},
     assignOccupantValue: () => undefined,
+    startDomain: () => {},
+    stopDomain: () => {},
     reflect: () => {},
     supplyNavigation: () => {},
     ...overrides,

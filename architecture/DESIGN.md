@@ -75,12 +75,12 @@ This table maps non-functional requirements from the PRD to specific design/arch
 
 #### Architecture Decision Records
 
-The ecosystem's architecture is shaped by the following decision records, grouped by the concern each one governs. Each record documents one decision in full; this subsection lists the inventory by ID and one-line intent.
+The ecosystem's architecture is shaped by the following decision records, grouped by the concern each one governs. Each record documents one decision in full; this subsection lists the inventory by ID and one-line intent, and names each routing member record by its label and path.
 
 Foundational:
 
 * `cpt-frontx-adr-artifact-versioning-and-distribution` — Distributes the ecosystem as independently published, per-concern, independently versioned artifacts.
-* `cpt-frontx-adr-core-package-boundaries` — Partitions the published libraries into boundary-governed concerns (runtime, type-system provider, protocol surface), and binds the routing capability's delivery as an engine-agnostic navigation substrate plus a separate engine-provider package.
+* `cpt-frontx-adr-core-package-boundaries` — Partitions the published libraries into boundary-governed concerns (runtime, type-system provider, protocol surface), and binds the routing capability's delivery as an engine-agnostic navigation substrate that also holds the FrontX router, plus a separate engine-provider package.
 * `cpt-frontx-adr-contract-schema-ownership` — Ends the circular DESIGN↔ADR schema deferral by assigning each owned contract's role to DESIGN, its decision rationale to the ADR, and its concrete field-level schema to the owning FEATURE.
 * `cpt-frontx-adr-template-territory-traceability` — Fixes this artifact tree's subject as the ecosystem's own artifacts, leaves template payload unspecified by it, and declares a `@cpt-` marker found in template territory non-authoritative residue that binds nothing, wherever that territory lives.
 
@@ -93,7 +93,7 @@ Published libraries:
 * `cpt-frontx-adr-mfe-handler-resolution` — Abstracts the microfrontend handler and resolves it through the registry.
 * `cpt-frontx-adr-action-dispatch-and-chaining` — Routes host–microfrontend communication through an actions-chains mediator.
 * `cpt-frontx-adr-child-mfe-host-access` — Defines a narrow parent–child capability bridge between host and microfrontend.
-* `cpt-frontx-adr-extension-domain-occupancy` — Governs extension-domain occupancy through mount strategies and cardinality rules, and binds the addressed-action channel as the sole channel of an occupancy change, restoration included: the injected router translates a cold load, reload, or history step into `mount_ext` and `unmount_ext` action chains, an `unmount_ext` reaching only a domain that declares it, while unregistration and terminal disposal release occupants only as resource cleanup; the cardinality matrix is per strategy, with Concurrent and Optional requiring `mount_ext` and `unmount_ext` and Exclusive requiring `mount_ext` and forbidding `unmount_ext`.
+* `cpt-frontx-adr-extension-domain-occupancy` — Governs extension-domain occupancy through mount strategies and cardinality rules, with executed actions as the sole channel of an occupancy change, restoration included.
 * `cpt-frontx-adr-domain-extension-compatibility` — Admits extensions into domains by contract matching.
 * `cpt-frontx-adr-mfe-load-isolation` — Isolates loaded microfrontends at runtime.
 * `cpt-frontx-adr-lazy-import-resolution` — Separates the runtime ABI from the template-bound build through lazy import.
@@ -102,11 +102,11 @@ Published libraries:
 * `cpt-frontx-adr-shared-dep-cache-reach` — Extends that reuse to one bounded, version-namespaced source-text cache per realm, shared by compatible independently loaded copies of the runtime without sharing module graphs.
 * `cpt-frontx-adr-api-surface-organization` — Separates request/response and streaming behind a common protocol surface.
 * `cpt-frontx-adr-api-transport-bypass-and-fetch-sharing` — Provides a plugin short-circuit and a realm-shared fetch cache.
-* `cpt-frontx-adr-extension-routing-port` — The runtime depends on an optional abstract router port supplied by injection, through which the injected router admits routed registrations and receives the runtime's URL command: from the wrappers around each domain's mount and unmount handlers, the runtime commands the domain's projected occupancy with the request's `push` or `replace` when the domain accepts an application request and with `replace` when each request settles, and the router writes exactly that, sending action chains only for a page load or a back or forward step; occupant values are exchanged privately between runtime copies and the injected router, never through any interface handed to extension or host code.
-* `cpt-frontx-routing-adr-occupant-reference-boundary` — Names and carries occupant identity through route resolution and transition reporting without depending on the runtime's concrete extension type - owned by the routing member tree, `packages/routing/architecture/ADR/`.
-* `cpt-frontx-routing-adr-mount-trigger-ownership` — Shapes the navigation substrate's own surface under that rule as three publication acts — resolution at observer creation, a transition report, and a URL back-projection helper — with nothing a consumer can wire as an instruction to mount - owned by the routing member tree, `packages/routing/architecture/ADR/`.
-* `cpt-frontx-routing-adr-domain-occupancy-addressing-granularity` — Addresses every domain, at any depth and any occupant count, through one uniform query-string entry grammar, with the pathname reserved to the shell - owned by the routing member tree, `packages/routing/architecture/ADR/`.
-* `cpt-frontx-routing-adr-occupant-identity-stability` — Draws an entry's extension token from the extension's own normalized route identity rather than from its versioned type id, so a redeploy does not break a bookmarked link - owned by the routing member tree, `packages/routing/architecture/ADR/`.
+* `cpt-frontx-adr-extension-routing-port` — Injects an optional abstract router into the runtime, places the FrontX router in the routing package, keeps occupant values private, and lets the runtime decide what the URL shows while the router writes it.
+* Occupant Reference Boundary (`packages/routing/architecture/ADR/0001-occupant-reference-boundary.md`) — Carries occupant identity through route resolution without depending on the runtime's extension type.
+* Navigation's Role In Post-Boot Mounting (`packages/routing/architecture/ADR/0002-mount-trigger-ownership.md`) — Limits the routing surface to resolving, reporting and writing: the signal and the helper mount nothing, and the FrontX router acts only through actions chains.
+* Domain Occupancy Addressing Granularity (`packages/routing/architecture/ADR/0003-domain-occupancy-addressing-granularity.md`) — Addresses every domain through one uniform query-string entry grammar, with the pathname as the shell's subroute.
+* Occupant Identity Stability (`packages/routing/architecture/ADR/0004-occupant-identity-stability.md`) — Takes an entry's extension token from the extension's route, so a redeploy keeps bookmarked links.
 
 CLI (projects orchestration):
 
@@ -144,7 +144,7 @@ A candidate satisfying more than one of these is a defect in the candidate, not 
 
 **Within published libraries, two independent properties.** A library is **core** if it must remain UI-framework-agnostic; a library is **standalone** if it declares no intra-ecosystem package dependency, with the single exception of the type-substrate port. A library may hold either, both, or neither. Keeping them separate lets the agnostic-substrate guarantee (`cpt-frontx-principle-agnostic-core`, `cpt-frontx-fr-ui-framework-agnostic`) apply to a library that legitimately depends on another library, and permits a member bound to a concrete UI framework or engine to still be a full layer member that is simply not core.
 
-The two properties combine differently across the current members. The `mfes` runtime depends on `@gears-frontx/gts-plugin` through the type-substrate port — the one edge the standalone definition's stated exception covers (`cpt-frontx-adr-runtime-type-system-coupling`) — so it holds both properties. The runtime also declares an optional abstract router port, filled by injection in the same way as the type-substrate port; the concrete router implementing it is provided by the template framework, outside the published-libraries layer, so the port adds no package dependency, no edge runs between `mfes` and either routing member in either direction, and the runtime keeps both properties (`cpt-frontx-adr-extension-routing-port`). The navigation substrate (`@gears-frontx/routing`) is core and standalone at once: it declares no intra-ecosystem package dependency, and it carries no dependency on any UI framework or router engine — every such dependency is confined to a separate published member. That member, `@gears-frontx/routing-tanstack`, is the one that is not core, and also not standalone: it is bound to a concrete UI framework and a concrete routing engine, so it fails the core property, and it depends on `@gears-frontx/routing`, so it fails the standalone property too — a member can fail both properties at once, which is exactly why the two are kept independent rather than collapsed into a single "not core" label.
+The two properties combine differently across the current members. The `mfes` runtime depends on `@gears-frontx/gts-plugin` through the type-substrate port — the one edge the standalone definition's stated exception covers (`cpt-frontx-adr-runtime-type-system-coupling`) — so it holds both properties. The runtime also declares an optional abstract router; the concrete FrontX router lives in `@gears-frontx/routing`, one ready instance per runtime, and the router reaches the runtime only through the actions-chain executor and the type system that routing declares, which the runtime hands it. The abstract router adds no package dependency, so the runtime depends on neither routing package, no edge runs between `mfes` and either routing member in either direction, and the runtime keeps both properties (`cpt-frontx-adr-extension-routing-port`). The routing package (`@gears-frontx/routing`), holding the navigation substrate and the FrontX router, is core and standalone at once: it declares no intra-ecosystem package dependency, and it carries no dependency on any UI framework or router engine — every such dependency is confined to a separate published member. That member, `@gears-frontx/routing-tanstack`, is the one that is not core, and also not standalone: it is bound to a concrete UI framework and a concrete routing engine, so it fails the core property, and it depends on `@gears-frontx/routing`, so it fails the standalone property too — a member can fail both properties at once, which is exactly why the two are kept independent rather than collapsed into a single "not core" label.
 
 **Two categories outside the layers, both stated positively.** **Build internals** are packages that exist only to configure the build, are never published, and belong to no layer; they remain subject to the dependency-edge guard and are exempt from the member artifact chain and the publication gate. **Non-package code** — repository scripts and in-package demonstrations — has no package identity to carry layer membership; it remains scanned for traceability and holds no layer membership. Both are exemptions with a stated scope, not ignores.
 
@@ -163,7 +163,7 @@ graph TD
         GTS["Type System provider (@gears-frontx/gts-plugin)"]
         MFES["MFE Runtime substrate (@gears-frontx/mfes)"]
         TEL["Telemetry SDK (@gears-frontx/telemetry)"]
-        ROUTING["Routing substrate (@gears-frontx/routing)"]
+        ROUTING["Routing: navigation substrate and FrontX router (@gears-frontx/routing)"]
         ROUTINGTS["Routing TanStack provider (@gears-frontx/routing-tanstack)"]
     end
     subgraph Tmpl[Templates layer]
@@ -174,14 +174,14 @@ graph TD
     ROUTINGTS -- "engine-provider port of" --> ROUTING
     CLI -. "applies / upgrades" .-> T
     T -. "produce projects composing" .-> Libs
-    T -. "template framework implements optional router port of" .-> MFES
+    ROUTING -. "provides the router behind the abstract router of (no package edge)" .-> MFES
 ```
 
 - [ ] `p3` - **ID**: `cpt-frontx-tech-ecosystem-stack`
 
 | Layer | Responsibility | Technology |
 |-------|---------------|------------|
-| Published libraries | Runtime substrate, type-system provider, protocol surface, telemetry, a navigation substrate with a pluggable routing-engine-provider port, and its default routing-engine provider — consumed as versioned dependencies; the core subset stays UI-framework- and type-format-agnostic | TypeScript npm packages; module-federation runtime with lazy import (`@gears-frontx/mfes`); concrete type-definition specification confined to `@gears-frontx/gts-plugin`; transport as a peer dependency of `@gears-frontx/api`; navigation substrate declaring an engine-provider port with no concrete engine dependency of its own (`@gears-frontx/routing`); concrete routing-engine dependency confined to its default provider (`@gears-frontx/routing-tanstack`) |
+| Published libraries | Runtime substrate, type-system provider, protocol surface, telemetry, a navigation substrate holding the FrontX router with a pluggable routing-engine-provider port, and its default routing-engine provider — consumed as versioned dependencies; the core subset stays UI-framework- and type-format-agnostic | TypeScript npm packages; module-federation runtime with lazy import (`@gears-frontx/mfes`); concrete type-definition specification confined to `@gears-frontx/gts-plugin`; transport as a peer dependency of `@gears-frontx/api`; navigation substrate and FrontX router declaring an engine-provider port with no concrete engine dependency of its own (`@gears-frontx/routing`); concrete routing-engine dependency confined to its default provider (`@gears-frontx/routing-tanstack`) |
 | Templates | Producing and extending project content the receiving project owns | Externally hosted template repositories resolved by versioned source-spec; manifest publication contract |
 | Projects orchestration | Template and repository lifecycle (install, apply, assemble, upgrade) and AI-agent orchestration over it | Node.js CLI (`@gears-frontx/cli`); Constructor Studio kit (`cyber-pilot-kit-frontx`); GitHub source registry; npm package registry |
 | Outside the layers | Build internals (never published) and non-package repository code | Private `@gears-frontx/*` configuration packages; `scripts/` tooling |
@@ -242,7 +242,7 @@ The template-manifest half of total classification remains review-held because t
 
 Every FrontX-owned layer member owns a local artifact chain: PRD, DESIGN and at least one FEATURE. A missing chain must be recorded as path-scoped architecture debt with a removal criterion.
 
-Every FrontX-owned member now owns its chain: the last package-wide exemption, `ui-kit`'s, was lifted when that package registered as its own child system with a PRD, a DESIGN and a FEATURE. What remains for that member is narrower than a missing chain and is recorded as such - a path-scoped exemption covering its component sources alone, whose removal criterion is a member FEATURE giving the component surface numbered instructions for a marker to point at. No member is carried as a missing chain.
+Every FrontX-owned member owns its chain, and no member carries a package-wide exemption: `ui-kit` is registered as its own child system with a PRD, a DESIGN and a FEATURE. What that member carries is narrower than a missing chain and is recorded as such - a path-scoped exemption covering its component sources alone, whose removal criterion is a member FEATURE giving the component surface numbered instructions for a marker to point at. No member is carried as a missing chain.
 
 #### LAYER-3 - Root-to-member citation direction
 
@@ -290,9 +290,8 @@ graph TD
         ROUTINGTS[gears-frontx/routing-tanstack]
     end
     POL[ecosystem version policy - root-owned]
-    TFW["template framework router - template territory"]
     GTS -- "implements type-substrate port of" --> MFES
-    TFW -. "implements optional router port of" .-> MFES
+    ROUTING -. "provides the router behind the abstract router of (no package edge)" .-> MFES
     ROUTINGTS -- "implements engine-provider port of" --> ROUTING
     KIT -- "orchestrates command surface of" --> CLI
     POL -. "governs every published edge and release line" .-> Libs
@@ -427,6 +426,14 @@ Root capacity is expressed as an absence of structural caps. Concrete runtime or
 - Database and data architecture are not applicable at root altitude.
 - Hosted infrastructure operations are not applicable at root altitude.
 - Security and privacy behavior are owned by members and consuming applications unless a root contract explicitly states otherwise.
+- Performance — Not applicable because the root runs no service and sets no latency or throughput target; member PRDs own them.
+- Reliability — Not applicable because the root ecosystem runs no service of its own to keep available (§3.8); availability and recovery belong to the members and to the applications built on them.
+- Compliance — Not applicable because the root ecosystem handles no regulated or personal data.
+- Usability — Not applicable because the root ecosystem renders no user interface; user-facing behavior belongs to the members and to the applications built on them.
+- Testing — Not applicable because the root design sets no test strategy of its own; each member's FEATUREs state their acceptance criteria, and the root's own mechanical checks are the Ecosystem Governance Guard (§3.2).
+- Maintainability — Not applicable because the root sets no maintainability target beyond evolvability, which §1.2 allocates (`cpt-frontx-nfr-evolvability`).
+- Integration — Not applicable beyond the root-owned package-registry distribution contract (§3.3) and the cross-member dependency policy (§3.4); every other integration contract is owned by the member that publishes it.
+- Business — Not applicable because the business outcomes are the root PRD's goals; this design answers them through the drivers of §1.2.
 
 ### Member Pointers
 

@@ -4,6 +4,7 @@
  * `inst-ov-assign-failure`, `inst-ov-release-with-bridge`,
  * `inst-ov-supply-navigation`, `inst-ov-enclosing-value`).
  */
+import { mountedIn } from './helpers/mounted-in';
 import { describe, it, expect, vi } from 'vitest';
 import { DefaultMfeRegistry } from '../DefaultMfeRegistry';
 import { readOccupantValue } from '../occupant-value-rendezvous';
@@ -94,6 +95,9 @@ class ConcurrentDomainFactory extends ExtensionDomainImplementationFactory {
 
 function fakeRouter(overrides: Partial<RouterPort> = {}): RouterPort {
   return {
+    connect: () => {},
+    startDomain: () => {},
+    stopDomain: () => {},
     registerDomain: () => {},
     registerExtension: () => {},
     releaseDomain: () => {},
@@ -139,7 +143,7 @@ describe('occupant value — failure, release, and nested supplyNavigation', () 
     );
 
     expect(lifecycleMountCalls).toBe(0);
-    expect(registry.getMountedExtensions(DOMAIN_ID)).not.toContain(EXTENSION_ID);
+    expect(mountedIn(registry, DOMAIN_ID)).not.toContain(EXTENSION_ID);
 
     await registry.dispose();
   });
