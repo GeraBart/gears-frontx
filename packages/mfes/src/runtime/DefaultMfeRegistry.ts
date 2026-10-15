@@ -32,7 +32,6 @@ import { ConcurrentMountStrategy } from './ConcurrentMountStrategy';
 import { OptionalMountStrategy } from './OptionalMountStrategy';
 import { ExclusiveMountStrategy } from './ExclusiveMountStrategy';
 import { WeakMapRuntimeCoordinator } from './coordination/WeakMapRuntimeCoordinator';
-import { type ExtensionDomainState } from './ExtensionManager';
 import { DefaultExtensionManager } from './DefaultExtensionManager';
 import { DefaultLifecycleManager } from './DefaultLifecycleManager';
 import { MountManager } from './MountManager';
@@ -91,6 +90,15 @@ interface ForwardingEntry {
 /** A `ChildMfeBridge` that also exposes the concrete-only `onCrossHopEnvelope` hook. */
 interface CrossHopEnvelopeReceivingBridge extends ChildMfeBridge {
   onCrossHopEnvelope(handler: (envelope: CrossHopEnvelope) => void): () => void;
+}
+
+/**
+ * A copy of a stored registration without its declared `route`. The stored
+ * declaration is untouched; the route reaches the injected router only.
+ */
+function withoutRoute<T extends { route?: string }>(registration: T): Omit<T, 'route'> {
+  const { route: _route, ...rest } = registration;
+  return rest;
 }
 
 /**
@@ -291,11 +299,11 @@ export class DefaultMfeRegistry extends MfeRegistry {
   private disposed = false;
 
   /**
-   * The router snapshotted by the factory, or `undefined` for a standalone
-   * registry (`cpt-frontx-dod-mfe-registry-router-configuration`). Every
-   * `if (this.router)` branch in this class is skipped entirely when this is
-   * `undefined`, leaving a standalone registry's behavior unchanged
-   * (`inst-algo-ra-standalone`).
+   * The router snapshotted by the factory, or `undefined` for a registry
+   * built with no router (`cpt-frontx-dod-mfe-registry-router-configuration`).
+   * Every `if (this.router)` branch in this class is skipped entirely when
+   * this is `undefined`, leaving the behavior of a registry built with no
+   * router otherwise unchanged (`inst-algo-ra-standalone`).
    */
   private readonly router: RouterPort | undefined;
 
@@ -323,12 +331,28 @@ export class DefaultMfeRegistry extends MfeRegistry {
     this.typeSystem = config.typeSystem;
     // @cpt-begin:cpt-frontx-flow-mfe-registry-factory-build:p2:inst-flow-fb-standalone
     // `undefined` when the factory's config omitted `router`: every
-    // `if (this.router)` branch in this class is then skipped for this
-    // registry's whole life — it presents no registration, sends no
-    // release notification, assigns no occupant value, and issues no
-    // command to anyone.
+    // `if (this.router)` branch of this registry and of the collaborators it
+    // hands the router to is then skipped for this registry's whole life —
+    // it connects nothing, registers nothing with a router, sends no release
+    // notification, assigns no occupant value, starts and stops no domain,
+    // and issues no command to anyone.
     this.router = config.router;
     // @cpt-end:cpt-frontx-flow-mfe-registry-factory-build:p2:inst-flow-fb-standalone
+
+    // @cpt-begin:cpt-frontx-algo-mfe-registry-router-admission:p1:inst-algo-ra-connect
+    // Once, right after keeping the router and before any domain or
+    // extension registers: the router receives this registry's own chain
+    // executor and its own type system.
+    // @cpt-begin:cpt-frontx-algo-mfe-registry-router-admission:p1:inst-algo-ra-standalone
+    // A registry built with no router makes no `connect` call.
+    if (this.router) {
+      this.router.connect(
+        { executeActionsChain: (chain) => this.executeActionsChain(chain) },
+        this.typeSystem
+      );
+    }
+    // @cpt-end:cpt-frontx-algo-mfe-registry-router-admission:p1:inst-algo-ra-standalone
+    // @cpt-end:cpt-frontx-algo-mfe-registry-router-admission:p1:inst-algo-ra-connect
 
     this.operationSerializer = new OperationSerializer();
     this.coordinator = new WeakMapRuntimeCoordinator();
@@ -354,7 +378,7 @@ export class DefaultMfeRegistry extends MfeRegistry {
 
     this.extensionManager = new DefaultExtensionManager({
       typeSystem: this.typeSystem,
-      // Internal lifecycle trigger — bypasses the public surface (removed in spec v1.6).
+      // Internal lifecycle trigger — bypasses the public surface.
       triggerLifecycle: (extensionId, stageId) =>
         this.triggerLifecycleStageInternal(extensionId, stageId),
       triggerDomainOwnLifecycle: (domainId, stageId) =>
@@ -394,7 +418,6 @@ export class DefaultMfeRegistry extends MfeRegistry {
       retractInboundBridgeLink: (childBridge) =>
         this.retractInboundBridgeLinkFor(childBridge),
       router: this.router,
-      getInboundBridge: () => this.inboundBridgeLink?.edge,
     });
 
     // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-adopt-ambient-bridge
@@ -477,7 +500,7 @@ export class DefaultMfeRegistry extends MfeRegistry {
     // @cpt-begin:cpt-frontx-algo-mfe-host-communication-occupant-value-rendezvous:p1:inst-ov-supply-navigation
     // Called once per adoption of an inbound bridge by a registry built with
     // a router — never for a root registry (no `link` above) and never for
-    // a standalone one (no router).
+    // a registry built with no router.
     if (this.router) {
       this.router.supplyNavigation(() => readOccupantValue(this.inboundBridgeLink?.edge));
     }
@@ -880,7 +903,8 @@ export class DefaultMfeRegistry extends MfeRegistry {
       this.mountManager,
       (domainId, extId) => this.extensionManager.addMountedExtension(domainId, extId),
       (domainId, extId) => this.extensionManager.removeMountedExtension(domainId, extId),
-      (domainId) => this.extensionManager.getMountedExtensions(domainId)
+      (domainId) => this.extensionManager.getMountedExtensions(domainId),
+      this.router
     );
     const lifecycleTrigger = new DefaultDomainLifecycleTrigger(declaration.id, this.lifecycleManager);
 
@@ -947,19 +971,21 @@ export class DefaultMfeRegistry extends MfeRegistry {
     // running it any earlier would leave a router-rejected domain durably
     // registered with the type system — the same partial-admission hazard
     // extensions avoid (`inst-algo-ra-present-extension`).
+    // Only a declaration carrying `route` is registered with the router; an
+    // unrouted domain, like every domain of a registry built with no router,
+    // never reaches it and is never released to it.
     // @cpt-begin:cpt-frontx-algo-mfe-registry-router-admission:p1:inst-algo-ra-standalone
-    // `this.router` is `undefined` for a standalone registry, so the
-    // presentation, rejection rollback, and admission-tracking branch below
-    // is skipped entirely; domain registration proceeds exactly as it would
-    // with no router configured (`inst-algo-ra-standalone`).
-    if (this.router) {
+    if (this.router && declaration.route !== undefined) {
       try {
         // @cpt-begin:cpt-frontx-algo-mfe-registry-router-admission:p1:inst-algo-ra-no-routing-grammar
-        // `declaration` is handed to the router exactly as the runtime
-        // holds it, `route` included and uninterpreted: the runtime derives
-        // no routing token from it, validates no route name, and checks no
+        // The router receives ids, the declared `route` uninterpreted, and
+        // one boolean: whether the domain's actions list the `unmount_ext`
+        // action type id this registry's type system resolves — the fact
+        // the cardinality check above already established. The runtime
+        // derives no routing token, validates no route name, and checks no
         // route uniqueness — that is the router's own concern.
-        this.router.registerDomain(declaration);
+        const declaresUnmount = declaration.actions.includes(this.typeSystem.resolveUnmountExtActionId());
+        this.router.registerDomain(declaration.id, declaration.route, declaresUnmount);
         // @cpt-end:cpt-frontx-algo-mfe-registry-router-admission:p1:inst-algo-ra-no-routing-grammar
         // @cpt-begin:cpt-frontx-algo-mfe-registry-router-admission:p1:inst-algo-ra-return
         // Admitted: registration proceeds (no value returned to the
@@ -985,9 +1011,9 @@ export class DefaultMfeRegistry extends MfeRegistry {
     // @cpt-end:cpt-frontx-algo-mfe-registry-router-admission:p1:inst-algo-ra-standalone
 
     // @cpt-begin:cpt-frontx-algo-mfe-registry-router-admission:p1:inst-domain-type-register
-    // The router has admitted (or no router is injected): only now does the
-    // declaration become visible to the type system. A schema-validation
-    // failure here rolls back the same way a router rejection does — nothing
+    // The router has admitted a routed declaration (or the declaration did
+    // not reach a router): only then does it become visible to the type
+    // system. A schema-validation failure here rolls back the same way a router rejection does — nothing
     // was yet persisted to the mediator, recorded, or advertised — but, since
     // the router may already have admitted this declaration above, this also
     // throws a `DomainValidationError` rather than the router's own error,
@@ -1323,15 +1349,8 @@ export class DefaultMfeRegistry extends MfeRegistry {
   // ─── Query ────────────────────────────────────────────────────────────────
 
   /**
-   * Get the insertion-ordered list of currently-mounted extension IDs for a domain.
-   */
-  getMountedExtensions(domainId: string): readonly string[] {
-    return this.extensionManager.getMountedExtensions(domainId);
-  }
-
-  /**
    * Returns the per-domain `ExtensionMounter` instance.
-   * Called by the React `ExtensionDomainSlot` to call attach/detach.
+   * A domain's slot reaches it to call attach/detach.
    *
    * @throws {Error} if domain is not registered.
    */
@@ -1344,10 +1363,6 @@ export class DefaultMfeRegistry extends MfeRegistry {
       );
     }
     return state.mounter;
-  }
-
-  getParentBridge(extensionId: string): ParentMfeBridge | null {
-    return this.extensionManager.getExtensionState(extensionId)?.bridge ?? null;
   }
 
   // @cpt-flow:cpt-frontx-flow-mfe-registry-register-validate-mount:p1
@@ -1380,11 +1395,12 @@ export class DefaultMfeRegistry extends MfeRegistry {
       // @cpt-end:cpt-frontx-flow-mfe-registry-register-validate-mount:p1:inst-flow-rvm-05
 
       // @cpt-begin:cpt-frontx-algo-mfe-registry-router-admission:p1:inst-algo-ra-present-extension
-      // The call above already presented this extension to the router,
-      // inside `DefaultExtensionManager.registerExtension`, before its state
-      // was stored — reaching this line at all means that call did not
-      // throw, i.e. the router admitted it (or no router was injected).
-      if (this.router) {
+      // The call above already registered a routed extension with the
+      // router, inside `DefaultExtensionManager.registerExtension`, before
+      // its state is stored — reaching this line at all means that call did
+      // not throw, i.e. the router admitted it. An unrouted extension never
+      // reached the router, so nothing is recorded for its release.
+      if (this.router && extension.route !== undefined) {
         this.routerAdmittedExtensionIds.add(extension.id);
       }
       // @cpt-end:cpt-frontx-algo-mfe-registry-router-admission:p1:inst-algo-ra-present-extension
@@ -1489,8 +1505,8 @@ export class DefaultMfeRegistry extends MfeRegistry {
         // @cpt-begin:cpt-frontx-algo-mfe-host-communication-registration-propagation:p2:inst-retract-advertisements
         // @cpt-begin:cpt-frontx-algo-mfe-registry-domain-unregister-closes-admission:p1:inst-algo-du-drain-bounded
         // Drain every extension this domain currently holds through this
-        // registry's own `unregisterExtension`, the same path a standalone
-        // extension unregistration takes — it releases the router admission
+        // registry's own `unregisterExtension`, the same path an extension's
+        // own unregistration takes — it releases the router admission
         // and retracts the propagated advertisement for each one. The
         // domain was closed to new registrations above, so re-querying live
         // membership after each pass (instead of snapshotting it once) is
@@ -1596,9 +1612,11 @@ export class DefaultMfeRegistry extends MfeRegistry {
   // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-no-command-outside-action
   // @cpt-begin:cpt-frontx-algo-mfe-registry-router-admission:p1:inst-algo-ra-release-failure
   private releaseRouterExtension(extensionId: string): void {
+    // @cpt-begin:cpt-frontx-algo-mfe-registry-router-admission:p1:inst-algo-ra-standalone
     if (!this.router || !this.routerAdmittedExtensionIds.delete(extensionId)) {
       return;
     }
+    // @cpt-end:cpt-frontx-algo-mfe-registry-router-admission:p1:inst-algo-ra-standalone
     try {
       this.router.releaseExtension(extensionId);
     } catch (error) {
@@ -1607,9 +1625,11 @@ export class DefaultMfeRegistry extends MfeRegistry {
   }
 
   private releaseRouterDomain(domainId: string): void {
+    // @cpt-begin:cpt-frontx-algo-mfe-registry-router-admission:p1:inst-algo-ra-standalone
     if (!this.router || !this.routerAdmittedDomainIds.delete(domainId)) {
       return;
     }
+    // @cpt-end:cpt-frontx-algo-mfe-registry-router-admission:p1:inst-algo-ra-standalone
     try {
       this.router.releaseDomain(domainId);
     } catch (error) {
@@ -1620,30 +1640,32 @@ export class DefaultMfeRegistry extends MfeRegistry {
   // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-no-command-outside-action
   // @cpt-end:cpt-frontx-algo-mfe-registry-router-admission:p1:inst-algo-ra-cleanup-no-command
 
-  getExtension(extensionId: string): Extension | undefined {
-    return this.extensionManager.getExtensionState(extensionId)?.extension;
+  getExtension(extensionId: string): Omit<Extension, 'route'> | undefined {
+    const extension = this.extensionManager.getExtensionState(extensionId)?.extension;
+    return extension && withoutRoute(extension);
   }
 
-  getDomain(domainId: string): ExtensionDomain | undefined {
-    return this.extensionManager.getDomainState(domainId)?.domain;
+  getDomain(domainId: string): Omit<ExtensionDomain, 'route'> | undefined {
+    const domain = this.extensionManager.getDomainState(domainId)?.domain;
+    return domain && withoutRoute(domain);
   }
 
-  getExtensionsForDomain(domainId: string): Extension[] {
+  getExtensionsForDomain(domainId: string): Omit<Extension, 'route'>[] {
     const extensionStates = this.extensionManager.getExtensionStatesForDomain(domainId);
-    return extensionStates.map(state => state.extension);
+    return extensionStates.map(state => withoutRoute(state.extension));
   }
 
   getRegisteredPackages(): string[] {
     return Array.from(this.packages.keys());
   }
 
-  getExtensionsForPackage(packageId: string): Extension[] {
+  getExtensionsForPackage(packageId: string): Omit<Extension, 'route'>[] {
     const extensionIdSet = this.packages.get(packageId);
     if (!extensionIdSet) {
       return [];
     }
 
-    const extensions: Extension[] = [];
+    const extensions: Omit<Extension, 'route'>[] = [];
     for (const extensionId of extensionIdSet) {
       const extension = this.getExtension(extensionId);
       if (extension) {
@@ -1651,14 +1673,6 @@ export class DefaultMfeRegistry extends MfeRegistry {
       }
     }
     return extensions;
-  }
-
-  /**
-   * Get domain state for a registered domain.
-   * INTERNAL: Used by ActionsChainsMediator for domain resolution.
-   */
-  getDomainState(domainId: string): ExtensionDomainState | undefined {
-    return this.extensionManager.getDomainState(domainId);
   }
 
   setTheme(cssVars: Record<string, string>): void {

@@ -514,7 +514,7 @@ export interface EntryAddress {
  * The construction input a conforming engine-provider port **MUST** accept
  * (§1.5, "Engine-provider port shape"): the realm-shared `NavigationHistory`
  * instance; the entry address this occupant was mounted at, or `undefined`
- * when the unit is served standalone with no entry address at all; and the
+ * in the shell runtime, whose private subroute is the pathname; and the
  * microfrontend's own route tree, carried opaquely (`TRouteTree`) and never
  * inspected by this package.
  */
@@ -540,10 +540,10 @@ export interface EngineProviderInput<TRouteTree = unknown> {
  * adaptation of it is a worked example recorded in that provider's own
  * FEATURE, never a second normative copy.
  *
- * Folding the mount step into this port was considered and rejected: it
- * would widen `TRouter` into a router-plus-element (or a `{router, destroy}`
- * pair), breaking the very typing this function exists to satisfy, and it
- * would drag React into this package's engine-free core.
+ * The mount step is not folded into this port: folding it in would widen
+ * `TRouter` into a router-plus-element (or a `{router, destroy}` pair),
+ * breaking the very typing this function exists to satisfy, and it would
+ * drag React into this package's engine-free core.
  */
 export type EngineProviderPort<TRouteTree = unknown, TRouter = unknown> = (
   input: EngineProviderInput<TRouteTree>,
@@ -698,20 +698,12 @@ export type CreateObserver = <TRouteOwner = unknown>(
 /**
  * `cpt-frontx-algo-routing-route-ownership-signal-url-back-projection`.
  *
- * `pageHash` is optional and governs the page hash the helper's single
- * history write carries, independent of the domain-key rewrite the other
- * three parameters describe: given (including
- * `''`), that value replaces whatever hash is currently in the URL —
- * `''` clears it, matching `serializeGrammar`'s own `hash !== ''` check
- * (`../grammar/serialize.js`); absent, the helper preserves the current
- * hash verbatim, the pre-existing behaviour. This keeps a page-hash write
- * inside the helper's own "exactly one write" guarantee instead of forcing
- * a caller to run its own parse → serialize → push sequence just to carry
- * a hash alongside a domain-key rewrite.
+ * The helper takes no hash: its single history write copies the current
+ * page hash unchanged from the location it parses (FEATURE
+ * (route-ownership-signal) §3, step `inst-serialize`).
  */
 export type BackProjectEntries = (
   domainKey: DomainKey,
   delta: BackProjectionDelta,
   verb: HistoryVerb,
-  pageHash?: string,
 ) => void;

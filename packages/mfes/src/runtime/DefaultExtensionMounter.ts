@@ -7,18 +7,24 @@
  *
  * One instance is constructed by the registry per registered domain inside
  * `registerDomain` and exposed to the domain implementation via
- * `DomainContext.mounter`. The React `ExtensionDomainSlot` accesses this
- * instance via `registry.getMounter(domainId)`.
+ * `DomainContext.mounter`. A domain's slot reaches this instance through
+ * `registry.getMounter(domainId)` to attach and detach its root. In a
+ * registry built with a router, attaching the root starts the domain with
+ * the router and detaching it stops the domain first.
  *
  * @packageDocumentation
  * @internal
  */
+// @cpt-algo:cpt-frontx-algo-extension-domain-governance-slot-attach:p2
 // @cpt-algo:cpt-frontx-algo-extension-domain-governance-slot-detach:p2
 // @cpt-algo:cpt-frontx-algo-extension-domain-governance-mount-execution:p2
+// @cpt-dod:cpt-frontx-dod-extension-domain-governance-domain-start-stop:p1
 
 import { ExtensionMounter } from './ExtensionMounter';
 import type { MountManager } from './MountManager';
+import type { RouterPort } from '../router/RouterPort';
 import { ExtensionReleaserProvider } from './ExtensionReleaserProvider';
+import { MountSetLookup } from './MountSetLookup';
 
 /**
  * @internal
@@ -75,17 +81,39 @@ export class DefaultExtensionMounter extends ExtensionMounter {
     private readonly mountManager: MountManager,
     private readonly addMountedExtension: (domainId: string, extensionId: string) => void,
     private readonly removeMountedExtension: (domainId: string, extensionId: string) => void,
-    private readonly getMountedExtensions: (domainId: string) => readonly string[]
+    private readonly getMountedExtensions: (domainId: string) => readonly string[],
+    /** The registry's router, or `undefined` for a registry built with no router. */
+    private readonly router?: RouterPort
   ) {
     super();
     this.releaser = ExtensionReleaserProvider.for(this);
+    MountSetLookup.register(this, () => this.getMountedExtensions(this.domainId));
   }
 
+  // @cpt-begin:cpt-frontx-algo-extension-domain-governance-slot-attach:p2:inst-sa-return
   attach(root: Element): void {
+    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-slot-attach:p2:inst-sa-keep-root
     this.attachedRoot = root;
+    // @cpt-end:cpt-frontx-algo-extension-domain-governance-slot-attach:p2:inst-sa-keep-root
+    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-slot-attach:p2:inst-sa-start-domain
+    // The root is attached, so a mount the router sends while starting the
+    // domain finds it in place.
+    if (this.router) {
+      this.router.startDomain(this.domainId);
+    }
+    // @cpt-end:cpt-frontx-algo-extension-domain-governance-slot-attach:p2:inst-sa-start-domain
   }
+  // @cpt-end:cpt-frontx-algo-extension-domain-governance-slot-attach:p2:inst-sa-return
 
   async detach(): Promise<void> {
+    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-slot-detach:p2:inst-sd-stop-domain
+    // The first statement, synchronous: the router stops the domain while
+    // its root is still attached and before any extension is unmounted.
+    if (this.router) {
+      this.router.stopDomain(this.domainId);
+    }
+    // @cpt-end:cpt-frontx-algo-extension-domain-governance-slot-detach:p2:inst-sd-stop-domain
+
     // Mass-unmount every currently-mounted extension so the registry and
     // any framework slice stay consistent. Routed through `this.releaser`
     // — not `unmount()` or `mountManager.unmountExtension` directly — so a
@@ -95,7 +123,7 @@ export class DefaultExtensionMounter extends ExtensionMounter {
     // racing this detach still runs the destroy that strategy registered
     // at mount time, through the shared releaser, exactly once.
     //
-    // The root is cleared FIRST, synchronously, before the mount set is
+    // The root is cleared next, synchronously, before the mount set is
     // even read — so a mount whose own lifecycle mount settles while this
     // loop is still unmounting an earlier occupant never finds a root to
     // append its container under; it observes the root as already detached

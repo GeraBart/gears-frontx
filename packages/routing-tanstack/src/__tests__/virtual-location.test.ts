@@ -105,20 +105,21 @@ describe('projectVirtualLocationToParams', () => {
   });
 });
 
+// A hash passed to a navigation is dropped (FEATURE (engine-provider) §3,
+// History Adaptation, `inst-expose-direct-members`).
 describe('splitHref', () => {
-  it('splits pathname, search and hash out of a shell-relative path', () => {
+  it('splits pathname and search out of a shell-relative path and drops the hash', () => {
     expect(splitHref('/settings/general?orientation=left#frag')).toEqual({
       pathname: '/settings/general',
       search: '?orientation=left',
-      hash: 'frag',
     });
   });
 
   it('handles a path with no search and no hash', () => {
-    expect(splitHref('/settings/general')).toEqual({ pathname: '/settings/general', search: '', hash: undefined });
+    expect(splitHref('/settings/general')).toEqual({ pathname: '/settings/general', search: '' });
   });
 
-  it('reports an explicit empty hash (`#` with nothing after it) as the empty string, distinct from no hash at all', () => {
-    expect(splitHref('/settings/general#')).toEqual({ pathname: '/settings/general', search: '', hash: '' });
+  it('drops a bare `#` with nothing after it', () => {
+    expect(splitHref('/settings/general#')).toEqual({ pathname: '/settings/general', search: '' });
   });
 });

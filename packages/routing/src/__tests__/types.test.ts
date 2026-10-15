@@ -185,7 +185,7 @@ describe('EngineProviderPort', () => {
     expectTypeOf<EngineProviderPort>().parameter(0).toEqualTypeOf<EngineProviderInput>();
   });
 
-  it('entryAddress is undefined for a standalone occupant, never omitted', () => {
+  it('entryAddress is undefined in the shell runtime, never omitted', () => {
     // `entryAddress` must be present as a key (possibly `undefined`), not an
     // optional member — the FEATURE draws a distinction between "no entry
     // address at all" (a real, explicit value) and "wasn't asked for".

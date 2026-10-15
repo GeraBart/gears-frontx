@@ -7,16 +7,14 @@
 // `@tanstack/history`'s own `RouterHistory` contract.
 //
 // `VirtualLocationSource` is this file's own seam, not a FEATURE-defined
-// shape: the algorithm's own step 1 delegates "when running standalone" to
-// a *different* algorithm
-// (`cpt-frontx-algo-routing-engine-provider-standalone-deployment`) that
-// projects a virtual location from the page's own address rather than from
-// one entry — the composed and standalone cases share every derivation
-// this file performs (steps 2 onward) and differ only in where a virtual
-// location is read from and written to. This seam is what lets both
-// sources reuse this file's own derivation without duplicating it;
-// `./composed-history-source.js` and `./standalone-history-source.js` are
-// the two concrete sources this package implements.
+// shape: the algorithm's own step 1 projects the virtual location from this
+// occupant's own entry when an entry address is supplied, and from the
+// shell's subroute (the pathname) in the shell runtime — the two cases share
+// every derivation this file performs (steps 2 onward) and differ only in
+// where a virtual location is read from and written to. This seam is what
+// lets both sources reuse this file's own derivation without duplicating it;
+// `./composed-history-source.js` and `./shell-history-source.js` are the two
+// concrete sources this package implements.
 import type { HistoryVerb, NavigationHistory, Param } from '@gears-frontx/routing';
 import { projectParamsToVirtualLocation, splitHref } from './virtual-location.js';
 
@@ -46,34 +44,26 @@ type RouterBlockerAction = RouterBlockerFnArgs['action'];
 /**
  * What a `VirtualLocationSource` supplies `adaptVirtualLocationHistory`
  * (this file) so it never has to know whether it is adapting a composed
- * occupant's own entry or a standalone deployment's own page address.
+ * occupant's own entry or the shell's subroute (the pathname).
+ *
+ * No member takes or returns a hash: a hash passed to a navigation is
+ * dropped before it reaches a source, and the page hash belongs to no
+ * runtime (FEATURE (engine-provider) §3, History Adaptation, steps 2 and 4).
  */
 export interface VirtualLocationSource {
   /** This occupant's own current parameter list, or `undefined` when its
    * own entry is absent from the URL right now (FEATURE §3, step 8) — a
-   * state a standalone source never reports, since there is no entry to be
-   * absent. */
+   * state the shell source never reports, since the pathname is always
+   * present. */
   readParams(): readonly Param[] | undefined;
-  /**
-   * Writes a new virtual location back through this source's own single
+  /** Writes a new virtual location back through this source's own single
    * write path — one call to the core's URL back-projection helper for the
-   * composed source, the page's own `history.pushState`/`replaceState` for
-   * the standalone one.
-   *
-   * `hash`, when given, is a caller-supplied fragment from `navigate`/
-   * `Link`/`createHref` — it is applied to the *page's own* hash, never to
-   * this occupant's own entry (a virtual location carries no hash of its
-   * own; DESIGN §3.1), identically in both modes (FEATURE (engine-provider)
-   * §3, "a hash passed to a navigation is applied to the page hash and
-   * never enters an entry"). `undefined` means no hash was given at all —
-   * the page's own current hash is preserved verbatim, the existing
-   * behaviour; an explicit empty string is a caller asking to clear it.
-   */
-  write(pathname: string, search: string, verb: HistoryVerb, hash?: string): void;
+   * composed source, one write of the pathname alone, with the query string
+   * carried through, for the shell source. */
+  write(pathname: string, search: string, verb: HistoryVerb): void;
   /** Composes the full, shareable URL a target virtual location resolves
-   * to, for `RouterHistory#createHref` — `hash` follows the identical
-   * given-versus-absent convention `write` documents above. */
-  createHref(pathname: string, search: string, hash?: string): string;
+   * to, for `RouterHistory#createHref`; the returned href carries no hash. */
+  createHref(pathname: string, search: string): string;
 }
 
 /**
@@ -135,8 +125,7 @@ function defaultReportError(error: unknown): void {
 /**
  * Options `adaptVirtualLocationHistory` accepts, and every entry point that
  * builds history through it forwards straight through unchanged:
- * `adaptComposedHistory`, `adaptStandaloneHistory`,
- * `adaptProviderHistory`. `reportError` in particular gives a consumer at
+ * `adaptComposedHistory`, `adaptShellHistory`, `adaptProviderHistory`. `reportError` in particular gives a consumer at
  * any of those entry points the same error-reporting channel this file's
  * own `dispatchToSubscribers`/blocker handling already routes through —
  * `defaultReportError` above otherwise.
@@ -192,7 +181,7 @@ function buildHistoryLocation(parts: { pathname: string; search: string }, posit
     pathname: parts.pathname,
     search: parts.search,
     // The virtual location carries no hash of its own (DESIGN §3.1); the
-    // page's own hash is the location-preserving-helper's own concern.
+    // page hash belongs to no runtime.
     hash: '',
     state,
   };
@@ -261,13 +250,12 @@ export function adaptVirtualLocationHistory(
   let blockers: readonly RouterNavigationBlocker[] = [];
   // @cpt-end:cpt-frontx-algo-routing-engine-provider-history-adaptation:p2:inst-derive-block-degraded
 
-  // @cpt-begin:cpt-frontx-algo-routing-engine-provider-history-adaptation:p2:inst-adapt-subscribe
   // One internal registration against the shared history for the lifetime
-  // of one *mount* of this constructed `RouterHistory` (DESIGN §3.6, port
-  // role summary: "one subscribe per router with release on unmount") —
-  // fanning out to every external subscriber this object's own
-  // `subscribers` set collects, rather than one shared-history registration
-  // per external `subscribe` call.
+  // of one *mount* of this constructed `RouterHistory` (routing DESIGN §3.3,
+  // engine-provider port role summary: "one subscribe per router with
+  // release on unmount") — fanning out to every external subscriber this
+  // object's own `subscribers` set collects, rather than one shared-history
+  // registration per external `subscribe` call.
   //
   // This constructor deliberately does not perform it. An adapted history's
   // lifetime is one occupancy of a domain and it already has an explicit
@@ -280,6 +268,7 @@ export function adaptVirtualLocationHistory(
   // StrictMode building two from one `useMemo` is the everyday case) would
   // keep a live registration against a realm-lived shared history, for the
   // life of the page, with nothing left holding a reference to release it.
+  // @cpt-begin:cpt-frontx-algo-routing-engine-provider-teardown:p2:inst-register-internal-callback
   let unsubscribeFromNavigationHistory: (() => void) | undefined;
   function attachToNavigationHistory(): void {
     if (unsubscribeFromNavigationHistory !== undefined) {
@@ -287,39 +276,10 @@ export function adaptVirtualLocationHistory(
       // attach, so there is nothing of this call's own to redo.
       return;
     }
-    // A real gap (unlike the synchronous StrictMode setup/cleanup/setup
-    // cycle) can span a substrate navigation this adapter was not
-    // subscribed to observe: no notification arrived while
-    // `unsubscribeFromNavigationHistory` was `undefined`, so
-    // `currentLocation` may still hold whatever it projected before
-    // `destroy()` ran — or, on the very first attach, at construction, which
-    // for a router built well ahead of its own mount is the same kind of
-    // gap. Re-reading `source.readParams()` here — mirroring this
-    // constructor's own initial projection above — brings it back in sync
-    // with the substrate before the new subscription's own first
-    // notification (which may not arrive until a later navigation).
-    const previousLocation = currentLocation;
-    const params = source.readParams();
-    if (params !== undefined) {
-      currentLocation = buildHistoryLocation(projectParamsToVirtualLocation(params), navigationHistory.location.position);
-    }
-    if (currentLocation.href !== previousLocation.href) {
-      // The substrate moved while this adapter was detached (`destroy()` ran,
-      // then a real back/forward step, a third-party `go`, or another unit's
-      // own write landed, then this call re-attached) — a still-mounted
-      // consumer (a remounted router's own renderer, subscribed before
-      // `destroy()` and left subscribed since; `subscribe`/`unsubscribe` and
-      // this attach/detach pair are independent lifecycles) must see the new
-      // route, not keep rendering the one this resync silently replaced.
-      // Reuses `dispatchToSubscribers`, the identical snapshot-and-isolate
-      // fan-out the internal registration's own callback uses below, rather
-      // than a second dispatch path of this call's own. `toSubscriberAction`
-      // reads `'history'` — the same category this adapter already uses for
-      // a back/forward step or a third-party `go`, exactly what this is:
-      // a substrate change this adapter did not itself cause.
-      const args = { location: currentLocation, action: toSubscriberAction('history') } as RouterSubscriberArgs;
-      dispatchToSubscribers(subscribers, args, reportError);
-    }
+    // The internal callback is registered first, so a navigation that lands
+    // while the resync below fans out to subscribers (a subscriber that
+    // navigates) is observed by it rather than lost.
+    // @cpt-begin:cpt-frontx-algo-routing-engine-provider-history-adaptation:p2:inst-adapt-subscribe
     unsubscribeFromNavigationHistory = navigationHistory.subscribe((notification) => {
       // @cpt-begin:cpt-frontx-algo-routing-engine-provider-history-adaptation:p2:inst-if-own-entry-absent
       const params = source.readParams();
@@ -336,18 +296,63 @@ export function adaptVirtualLocationHistory(
       // navigation landed on — read from the notification already in hand
       // rather than a second `navigationHistory.location` access, though
       // both report the identical value (§1.5, Contract commitment).
+      const previousHref = currentLocation.href;
+      const previousPosition = (currentLocation.state as { __TSR_index: number }).__TSR_index;
       currentLocation = buildHistoryLocation(projectParamsToVirtualLocation(params), notification.location.position);
+      // Decision 47: the engine is notified when (1) this runtime's own
+      // re-projected virtual location changed, (2) the history position
+      // changed (a push by any runtime, or a back/forward step — the
+      // engine's index and `useCanGoBack` follow it), or (3) the
+      // notification results from a write this history itself issued
+      // through its own `push`/`replace` (the engine's own navigation
+      // always settles). Another runtime's replace that leaves both this
+      // runtime's own location and the position unchanged notifies nothing.
+      const locationChanged = currentLocation.href !== previousHref;
+      const positionChanged = notification.location.position !== previousPosition;
+      if (!locationChanged && !positionChanged && !issuingOwnWrite) {
+        return;
+      }
       const args = { location: currentLocation, action: toSubscriberAction(notification.kind) } as RouterSubscriberArgs;
       dispatchToSubscribers(subscribers, args, reportError);
     });
+    // @cpt-end:cpt-frontx-algo-routing-engine-provider-history-adaptation:p2:inst-adapt-subscribe
+    // The substrate may have moved while no registration was active (after
+    // `destroy()`, or between construction and the first attach), so
+    // `currentLocation` is re-projected here from `source.readParams()`,
+    // mirroring the constructor's own initial projection.
+    const previousLocation = currentLocation;
+    const previousPosition = (previousLocation.state as { __TSR_index: number }).__TSR_index;
+    const params = source.readParams();
+    if (params === undefined) {
+      return;
+    }
+    currentLocation = buildHistoryLocation(projectParamsToVirtualLocation(params), navigationHistory.location.position);
+    const locationChanged = currentLocation.href !== previousLocation.href;
+    const positionChanged = navigationHistory.location.position !== previousPosition;
+    if (locationChanged || positionChanged) {
+      // A still-mounted consumer (a router subscribed before `destroy()` and
+      // left subscribed since; `subscribe`/`unsubscribe` and this
+      // attach/detach pair are independent lifecycles) must see the new
+      // route and index. Same snapshot-and-isolate fan-out as the internal
+      // callback above, with the `'history'` kind: a substrate change this
+      // adapter did not itself cause.
+      const args = { location: currentLocation, action: toSubscriberAction('history') } as RouterSubscriberArgs;
+      dispatchToSubscribers(subscribers, args, reportError);
+    }
   }
-  // @cpt-end:cpt-frontx-algo-routing-engine-provider-history-adaptation:p2:inst-adapt-subscribe
+  // @cpt-end:cpt-frontx-algo-routing-engine-provider-teardown:p2:inst-register-internal-callback
 
   // @cpt-begin:cpt-frontx-algo-routing-engine-provider-history-adaptation:p2:inst-expose-direct-members
-  const write = (path: string, verb: HistoryVerb, hash?: string): void => {
+  // True only while a write issued through this history's own `push`/`replace`
+  // is inside the substrate call: the substrate's fan-out is synchronous, so
+  // the notification that write causes is observed while this is set.
+  let issuingOwnWrite = false;
+  const write = (path: string, verb: HistoryVerb): void => {
+    // `splitHref` drops any hash `path` carries (FEATURE §3, step 2).
     const { pathname, search } = splitHref(path);
+    issuingOwnWrite = true;
     try {
-      source.write(pathname, search, verb, hash);
+      source.write(pathname, search, verb);
     } catch (error) {
       // The shared history can refuse a write: the substrate bounds its own
       // fan-out drain and raises a `RoutingError` once a subscriber that
@@ -359,8 +364,8 @@ export function adaptVirtualLocationHistory(
       // It is reported, not rethrown, and this is deliberate rather than
       // incidental. `RouterHistory`'s own `push`/`replace` return `void` and
       // the engine calls them fire-and-forget, so there is no caller left to
-      // propagate to: before this `catch`, the throw crossed the enclosing
-      // `async tryNavigation` and became an unobserved promise rejection —
+      // propagate to: uncaught, the throw would cross the enclosing
+      // `async tryNavigation` and become an unobserved promise rejection —
       // the exact failure mode `reportError` already exists to replace for a
       // throwing blocker or subscriber, and it is routed through the same
       // channel here. What a consumer observes is what it observes for any
@@ -369,15 +374,16 @@ export function adaptVirtualLocationHistory(
       // report naming the cause.
       reportError(error);
       return;
+    } finally {
+      issuingOwnWrite = false;
     }
-    // `length`/`canGoBack` below no longer count this write themselves:
-    // `source.write`'s own push, when it
-    // actually reaches the shared history, already advances the
-    // substrate's own `Location.position` — so "no write reached the
-    // shared history, so nothing should count" is satisfied for
-    // free, since a `source.write` this occupant's own entry is absent for
-    // never calls `navigationHistory[verb]` at all
-    // (`./composed-history-source.js`'s own early return for that case).
+    // `length`/`canGoBack` below count nothing themselves: `source.write`'s
+    // own push, when it actually reaches the shared history, advances the
+    // substrate's own `Location.position` — so "no write reached the shared
+    // history, so nothing counts" holds by construction, since a
+    // `source.write` this occupant's own entry is absent for never calls
+    // `navigationHistory[verb]` at all (`./composed-history-source.js`'s own
+    // early return for that case).
   };
   // @cpt-end:cpt-frontx-algo-routing-engine-provider-history-adaptation:p2:inst-expose-direct-members
 
@@ -402,11 +408,11 @@ export function adaptVirtualLocationHistory(
   // `void tryNavigation(...)` unobserved.
   const tryNavigation = async (path: string, verb: HistoryVerb, navigateOpts?: RouterNavigateOptions): Promise<void> => {
     if (navigateOpts?.ignoreBlocker ?? false) {
-      write(path, verb, splitHref(path).hash);
+      write(path, verb);
       return;
     }
     if (typeof document !== 'undefined' && blockers.length > 0) {
-      const { hash, ...pathnameAndSearch } = splitHref(path);
+      const pathnameAndSearch = splitHref(path);
       // `@tanstack/history`'s own `tryNavigation`
       // builds the blocked-navigation's `next` location with
       // `currentIndex + 1` for a push (a push always lands one entry past
@@ -432,11 +438,10 @@ export function adaptVirtualLocationHistory(
           return;
         }
       }
-      write(path, verb, hash);
+      write(path, verb);
       return;
     }
-    const { hash } = splitHref(path);
-    write(path, verb, hash);
+    write(path, verb);
   };
   // @cpt-end:cpt-frontx-algo-routing-engine-provider-history-adaptation:p2:inst-derive-block-degraded
 
@@ -528,17 +533,13 @@ export function adaptVirtualLocationHistory(
     forward: () => {
       navigationHistory.go(1);
     },
-    // `> 0`, no `|| canGoBackFallback()` — a fallback that read
-    // `window.history.length > 1` reported `true` in almost every real tab
-    // regardless of this occupant's own stack;
-    // `Location.position` is accurate from construction (cold mount reads
-    // `0`, per the substrate's own Position Tracking), so no fallback is
-    // needed at all.
+    // `Location.position` is accurate from construction (a cold mount reads
+    // `0`, per the substrate's own Position Tracking), so `canGoBack` is
+    // exactly `position > 0`.
     canGoBack: () => navigationHistory.location.position > 0,
     flush: () => {
       // No throttling queue to flush — every write this adapter performs
-      // already lands synchronously, through the composed source's single
-      // `backProjectEntries` call.
+      // lands synchronously, through its source's single write.
     },
     // @cpt-algo:cpt-frontx-algo-routing-engine-provider-teardown:p2
     // @cpt-dod:cpt-frontx-dod-routing-engine-provider-teardown:p1
@@ -550,9 +551,9 @@ export function adaptVirtualLocationHistory(
       // 1 — the `WHEN` itself is the consumer's own unmount mechanism
       // calling this member, never observed by this adapter on its own).
       // `unsubscribeFromNavigationHistory` is `NavigationHistory`'s own
-      // `ReleaseFunction`, already documented idempotent — "calling it more
-      // than once is a no-op after the first call"
-      // (`cpt-frontx-feature-routing-navigation-substrate` §1.5). This
+      // `ReleaseFunction` — "calling it more than once is a no-op after the
+      // first call" (`cpt-frontx-feature-routing-navigation-substrate`
+      // §1.5). This
       // adapter additionally clears its own reference once released:
       // that clearing is what lets `attachToNavigationHistory` tell a
       // torn-down registration apart from a still-active one, so a second
@@ -574,8 +575,9 @@ export function adaptVirtualLocationHistory(
 
     // @cpt-begin:cpt-frontx-algo-routing-engine-provider-history-adaptation:p2:inst-derive-create-href
     createHref: (href: string) => {
-      const { pathname, search, hash } = splitHref(href);
-      return source.createHref(pathname, search, hash);
+      // `splitHref` drops any hash `href` carries (FEATURE §3, step 4).
+      const { pathname, search } = splitHref(href);
+      return source.createHref(pathname, search);
     },
     // @cpt-end:cpt-frontx-algo-routing-engine-provider-history-adaptation:p2:inst-derive-create-href
 

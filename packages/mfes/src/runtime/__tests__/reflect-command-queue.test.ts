@@ -27,6 +27,7 @@
  * `cpt-frontx-algo-mfe-host-communication-history-intent`:
  * `inst-hi-selects-acceptance-verb`.
  */
+import { mountedIn } from './helpers/mounted-in';
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import {
   ACTION_MOUNT_EXT, ACTION_UNMOUNT_EXT, addProbeDomain, dispatch, expectCommands, mountSettled, setup,
@@ -225,7 +226,7 @@ describe.each(queueStrategies)('[%s] acceptance and settle commands of a mount',
     await expectCommands(f, [
       [d, ['A'], 'push'], [d, ['B'], 'push'], [d, ['A'], 'replace'], [d, ['A'], 'replace'],
     ]);
-    expect(f.registry.getMountedExtensions(d)).toEqual(['A']);
+    expect(mountedIn(f.registry, d)).toEqual(['A']);
   });
 
   it('a caller whose entry is running when the mediator\'s per-action bound fires still has its settle command issued when the wrapper\'s handling settles', async () => {
@@ -310,7 +311,7 @@ describe.each(queueStrategies)('[%s] acceptance and settle commands of a mount',
     expect(f.rr.calls).toEqual([]);
     await done;
     await f.rr.whenCalls(1);
-    expect(f.rr.calls).toEqual([[d, [...f.registry.getMountedExtensions(d)], 'replace']]);
+    expect(f.rr.calls).toEqual([[d, [...mountedIn(f.registry, d)], 'replace']]);
   });
 
   it('a burst A, B, C, D: B and C take their fallbacks, every one of the four requests issues one settle command, and D is the sole occupant', async () => {
@@ -339,7 +340,7 @@ describe.each(queueStrategies)('[%s] acceptance and settle commands of a mount',
       [d, ['A'], 'push'], [d, ['B'], 'push'], [d, ['C'], 'push'], [d, ['D'], 'push'],
       [d, ['D'], 'replace'], [d, ['D'], 'replace'], [d, ['D'], 'replace'], [d, ['D'], 'replace'],
     ]);
-    expect(f.registry.getMountedExtensions(d)).toEqual(['D']);
+    expect(mountedIn(f.registry, d)).toEqual(['D']);
   });
 
   it('a successful displacement (Optional) / eviction (Exclusive) of A by a mount of B issues its acceptance and settle commands naming [B] and no command naming both', async () => {
@@ -353,7 +354,7 @@ describe.each(queueStrategies)('[%s] acceptance and settle commands of a mount',
     expect(await done).toBe('next');
     await expectCommands(f, [[d, ['B'], 'push'], [d, ['B'], 'replace']]);
     expect(f.rr.calls.every(([, ids]) => ids.length <= 1)).toBe(true);
-    expect(f.registry.getMountedExtensions(d)).toEqual(['B']);
+    expect(mountedIn(f.registry, d)).toEqual(['B']);
   });
 
   it('a mount of B that displaces/evicts A and then fails issues a settle command naming no extension', async () => {
@@ -379,7 +380,7 @@ describe('Exclusive domain: no unmount_ext', () => {
 
     expect(await dispatch(f.registry, d, ACTION_UNMOUNT_EXT, { subject: 'A', history: 'push' })).toBe('fallback');
     expect(f.rr.calls).toEqual([]);
-    expect(f.registry.getMountedExtensions(d)).toEqual(['A']);
+    expect(mountedIn(f.registry, d)).toEqual(['A']);
   });
 });
 
@@ -394,7 +395,7 @@ describe('Optional domain: unmount commands', () => {
     expect(f.rr.calls).toEqual([[d, [], 'push']]);
     expect(await done).toBe('next');
     await expectCommands(f, [[d, [], 'push'], [d, [], 'replace']]);
-    expect(f.registry.getMountedExtensions(d)).toEqual([]);
+    expect(mountedIn(f.registry, d)).toEqual([]);
   });
 
   it('a mount of A running, then an unmount of A accepted: the commands issued once the unmount is accepted name []', async () => {
@@ -433,7 +434,7 @@ describe('Optional domain: unmount commands', () => {
     await expectCommands(f, [
       [d, ['A'], 'push'], [d, ['A'], 'push'], [d, ['A'], 'replace'], [d, ['A'], 'replace'],
     ]);
-    expect(f.registry.getMountedExtensions(d)).toEqual(['A']);
+    expect(mountedIn(f.registry, d)).toEqual(['A']);
   });
 
   it.each(['push', 'none'] as const)('an unmount (%s) naming a non-admitted subject is placed, gets its acceptance per intent, fails at its turn, and issues its settle command', async (intent) => {

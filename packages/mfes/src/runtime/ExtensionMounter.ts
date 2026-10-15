@@ -3,12 +3,12 @@
  *
  * The per-domain mount facade. One instance is constructed by the registry for
  * each registered domain and exposed to the domain implementation through
- * `DomainContext.mounter`. The React slot accesses the mounter via
+ * `DomainContext.mounter`. A domain's slot reaches the mounter through
  * `registry.getMounter(domainId)` to call `attach`/`detach`.
  *
- * The mounter does NOT own mount-set state — the registry does. The mounter
- * does NOT expose `getMounted()`; strategies and consumers read mount-set
- * state via `registry.getMountedExtensions(domainId)`.
+ * The mounter does NOT own mount-set state. It does NOT expose `getMounted()`;
+ * the built-in Optional and Exclusive strategies read their domain's mount set
+ * through their own mounter by a lookup private to the runtime.
  *
  * @packageDocumentation
  */
@@ -22,17 +22,17 @@
  * the captured reference survives `DomainContext` invalidation because it is
  * stored directly on the strategy's class field, not accessed through `ctx`.
  *
- * The React `ExtensionDomainSlot` component calls:
- * - `attach(element)` from its ref-attach callback
- * - `detach()` from its ref-detach / cleanup callback
+ * A domain's slot calls `attach(element)` when its root element appears and
+ * `detach()` when that element goes away.
  */
 export abstract class ExtensionMounter {
   /**
    * Register `root` as the DOM root under which the mounter places per-extension
-   * containers. Called by `ExtensionDomainSlot` from its ref-attach callback.
+   * containers. Called by the domain's slot when its root element appears.
    *
-   * Idempotent when called with the same root. Replaces the prior root when
-   * called with a different element — subsequent `mount` calls target the new root.
+   * Calling it again with the same root keeps that root. Replaces the prior
+   * root when called with a different element — subsequent `mount` calls
+   * target the new root.
    *
    * @param root - The host DOM element that serves as the mount root for this domain.
    */
@@ -55,7 +55,7 @@ export abstract class ExtensionMounter {
    * mounter has no root; subsequent `mount` calls will throw until `attach`
    * is called again.
    *
-   * Called by `ExtensionDomainSlot` from its cleanup callback.
+   * Called by the domain's slot when its root element goes away.
    */
   abstract detach(): Promise<void>;
 

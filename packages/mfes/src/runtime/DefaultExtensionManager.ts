@@ -44,9 +44,10 @@ export class DefaultExtensionManager extends ExtensionManager {
   private readonly releaseExtensionBridge: (extensionId: string) => void;
   private readonly validateEntryType: (entryTypeId: string) => void;
   /**
-   * The router snapshotted by the factory, or `undefined` for a standalone
-   * registry. Presented an extension through `registerExtension` after
-   * every runtime check passes and before the extension's state is stored
+   * The router snapshotted by the factory, or `undefined` for a registry
+   * built with no router. A routed extension is registered with it through
+   * `registerExtension` after every runtime check passes and before the
+   * extension's state is stored
    * (`cpt-frontx-algo-mfe-registry-router-admission` `inst-algo-ra-present-extension`)
    * — this is the one point in the registration flow that precedes storage,
    * since `DefaultExtensionManager.registerExtension` itself commits state.
@@ -223,20 +224,24 @@ export class DefaultExtensionManager extends ExtensionManager {
     // own error, unchanged (`inst-algo-ra-extension-rejected`,
     // `inst-algo-re-router-reject`, `inst-flow-rvm-router-extension-reject`,
     // `inst-extension-router-reject`).
-    if (this.router) {
-      this.router.registerExtension(extension);
+    // Only a declaration carrying `route` is registered with the router, as
+    // ids and the declared `route` uninterpreted; an unrouted extension never
+    // reaches it and is never released to it.
+    const route = extension.route;
+    if (this.router && route !== undefined) {
+      this.router.registerExtension(extension.id, extension.domain, route);
     }
     // @cpt-end:cpt-frontx-flow-extension-domain-governance-admission:p1:inst-extension-router-admission
 
-    // The router has admitted (or no router is injected): only now does the
-    // extension become visible to the type system. A schema-validation
-    // failure here throws with the same "nothing left behind" guarantee as
-    // a router rejection for everything downstream of this point — the lines
-    // below (state storage, package tracking, `init` trigger) never run —
-    // but the router admission just above is not itself "nothing left
-    // behind": it already happened, and no caller above this method tracks
-    // it, so it must be released right here, before the throw, or a
-    // corrected retry would collide with it in the router.
+    // The router has admitted a routed extension (or the extension did not
+    // reach a router): only then does it become visible to the type system.
+    // A schema-validation failure here throws with the same "nothing left
+    // behind" guarantee as a router rejection for everything downstream of
+    // this point — the lines below (state storage, package tracking, `init`
+    // trigger) never run — but a router admission just above is not itself
+    // "nothing left behind": it already happened, and no caller above this
+    // method tracks it, so it must be released right here, before the
+    // throw, or a corrected retry would collide with it in the router.
     // @cpt-begin:cpt-frontx-algo-mfe-registry-router-admission:p1:inst-extension-type-register
     try {
       this.typeSystem.register(extension);
@@ -246,7 +251,7 @@ export class DefaultExtensionManager extends ExtensionManager {
       // being rolled back for: log it and still rethrow `cause` unchanged,
       // the same contract `DefaultMfeRegistry`'s releaseRouterDomain/
       // releaseRouterExtension helpers hold for their own release calls.
-      if (this.router) {
+      if (this.router && route !== undefined) {
         try {
           this.router.releaseExtension(extension.id);
         } catch (releaseError) {
@@ -268,7 +273,7 @@ export class DefaultExtensionManager extends ExtensionManager {
     // @cpt-begin:cpt-frontx-algo-mfe-registry-register-extension:p2:inst-algo-re-router-reject
     // @cpt-begin:cpt-frontx-flow-mfe-registry-register-validate-mount:p1:inst-flow-rvm-router-extension-reject
     // @cpt-begin:cpt-frontx-flow-extension-domain-governance-admission:p1:inst-extension-router-reject
-    // No separate catch exists for this rejection: `this.router.registerExtension`
+    // No separate catch exists for this rejection: `registerExtension`
     // above is called with no try/catch, so a throw propagates straight out
     // of this `async` method as this method's own rejection, reaching the
     // caller (`DefaultMfeRegistry.registerExtension`, which awaits this call

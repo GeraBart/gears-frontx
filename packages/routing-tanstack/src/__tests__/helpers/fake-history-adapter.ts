@@ -1,21 +1,26 @@
-// Test-only double for `@gears-frontx/routing`'s own `HistoryAdapter`.
+// Test-only double for the browser's own session history, as the navigation
+// substrate's `window` adapter reads and writes it.
 //
-// A near-copy of the double `@gears-frontx/routing` keeps for its own suite,
-// and deliberately so: that one lives in the sibling package's `src/`, which
-// nothing here may import — the package publishes no test helpers, and the
-// monorepo guard forbidding `@gears-frontx/*/src/**` exists precisely to keep
-// one package's internals from becoming another's dependency, test code
-// included. The two copies are free to diverge; each answers to its own
-// suite.
+// `@gears-frontx/routing` publishes no history seam: its public
+// `resolveNavigationHistory()` takes no argument and builds the realm-shared
+// `NavigationHistory` over `window.history`, `window.location` and the
+// `popstate` event. This double is what `resetRealm` (`./index.ts`) installs
+// behind those three, so a test seeds the page address and observes every
+// write through the package's public entry alone, never through the sibling
+// package's own `src/`.
 //
-// `AdapterLocation` is imported from `@gears-frontx/routing`'s public entry
-// point: both `AdapterLocation` and `HistoryAdapter` are public types — they
-// sit in `resolveNavigationHistory`'s own `createAdapter` parameter's
-// signature (see `packages/routing/src/history/index.ts`'s own comment for
-// why a compiler-internal tag could not be relied on to strip them) — so this
-// test double reaches them the same way any other consumer of the package
-// would, never through a relative path into the sibling package's own `src/`.
-import type { AdapterLocation } from '@gears-frontx/routing';
+// It keeps its own stack of entries and per-entry states, mirrors the
+// current entry into the realm's real address (`mirrorAddress`, which writes
+// jsdom's own `window.location`), and delivers a traversal to the `popstate`
+// listeners registered with it from a microtask, as a browser delivers one
+// after the move.
+
+/** The `{path, search, hash}` triple one history entry carries. */
+export interface AdapterLocation {
+  readonly path: string;
+  readonly search: string;
+  readonly hash: string;
+}
 
 function splitPath(path: string): AdapterLocation {
   const hashIndex = path.indexOf('#');
@@ -29,12 +34,17 @@ function splitPath(path: string): AdapterLocation {
   return { path: pathname, search, hash };
 }
 
+function joinPath(location: AdapterLocation): string {
+  const search = location.search === '' ? '' : `?${location.search}`;
+  const hash = location.hash === '' ? '' : `#${location.hash}`;
+  return `${location.path}${search}${hash}`;
+}
+
 export class FakeHistoryAdapter {
   private entries: AdapterLocation[];
-  // Mirrors `window.history.state` per entry, exactly as the core
-  // package's own `FakeHistoryAdapter` does (see that copy's own comment) —
-  // needed since position is restored from
-  // this per-entry state on an external pop.
+  // One opaque per-entry state per entry, as `window.history.state` keeps
+  // one: the navigation substrate records its own position there and reads
+  // it back on a traversal.
   private entryStates: unknown[];
   private index = 0;
   private popListeners = new Set<() => void>();
@@ -44,9 +54,13 @@ export class FakeHistoryAdapter {
    * against, rather than reconstructing one from `getLocation()`. */
   lastWrite: string | undefined;
 
-  constructor(initialPath = '/') {
+  constructor(
+    initialPath = '/',
+    private readonly mirrorAddress: (path: string) => void = () => {},
+  ) {
     this.entries = [splitPath(initialPath)];
     this.entryStates = [undefined];
+    this.mirrorCurrent();
   }
 
   getLocation(): AdapterLocation {
@@ -64,12 +78,14 @@ export class FakeHistoryAdapter {
     this.entries.push(splitPath(path));
     this.entryStates.push(state);
     this.index += 1;
+    this.mirrorCurrent();
   }
 
   replaceState(path: string, state?: unknown): void {
     this.lastWrite = path;
     this.entries[this.index] = splitPath(path);
     this.entryStates[this.index] = state;
+    this.mirrorCurrent();
   }
 
   go(delta: number): void {
@@ -78,6 +94,7 @@ export class FakeHistoryAdapter {
       return;
     }
     this.index = nextIndex;
+    this.mirrorCurrent();
     this.firePopAsync();
   }
 
@@ -97,7 +114,12 @@ export class FakeHistoryAdapter {
     this.entries.push(splitPath(path));
     this.entryStates.push(undefined);
     this.index += 1;
+    this.mirrorCurrent();
     this.firePopAsync();
+  }
+
+  private mirrorCurrent(): void {
+    this.mirrorAddress(joinPath(this.entries[this.index]));
   }
 
   private firePopAsync(): void {

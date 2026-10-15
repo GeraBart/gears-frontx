@@ -46,8 +46,8 @@ type QueueEntries = ReturnType<DomainOccupancyCoordinator['readEntries']>;
 export class DomainReflectCommands {
   /**
    * @param domainId - The domain the wrappers belong to.
-   * @param router - The injected router, or `undefined` for a standalone
-   *   registry.
+   * @param router - The injected router, or `undefined` for a registry
+   *   built with no router.
    * @param readMountSet - Reads the domain's current mount set, in mount-set
    *   order.
    * @param queue - The domain's occupancy queue (Optional/Exclusive), or

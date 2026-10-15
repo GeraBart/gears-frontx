@@ -31,13 +31,13 @@
 
 ### 1.1 Overview
 
-This feature drives microfrontend asset discovery from an enriched published manifest and resolves lazy dynamic imports through a per-load runtime ABI that inherits the parent load's shared-dependency bindings — so the runtime stays decoupled from template build internals and lazy chunks always join their parent load's isolated graph.
+This feature drives microfrontend asset discovery from an enriched published manifest and resolves lazy dynamic imports through a per-load runtime ABI that inherits the parent load's shared-dependency bindings — so the runtime stays decoupled from bundler build internals and lazy chunks always join their parent load's isolated graph.
 
 ### 1.2 Purpose
 
 The MFE Runtime must locate a microfrontend's chunks without parsing bundler-emitted output, and code-split MFEs must have their lazily reached chunks resolve inside the same isolated module graph as their parent load. This feature provides the manifest-driven discovery contract and the lazy-import ABI that together satisfy on-demand loading without coupling the runtime to any particular bundler or build substrate.
 
-**Requirements**: `cpt-frontx-fr-mfe-runtime-registration`, `cpt-frontx-nfr-runtime-performance`
+**Requirements**: `cpt-frontx-fr-mfe-runtime-registration`, `cpt-frontx-fr-mfe-load-failure-handling`, `cpt-frontx-nfr-runtime-performance`
 
 **Principles**: none owned by this feature
 
@@ -49,11 +49,24 @@ The MFE Runtime must locate a microfrontend's chunks without parsing bundler-emi
 
 ### 1.4 References
 
-- **PRD**: [PRD.md](../../../../../architecture/PRD.md)
+- **PRD**: [PRD.md](../../PRD.md)
 - **Design**: [DESIGN.md](../../DESIGN.md)
 - **ADRs**: `cpt-frontx-adr-mfe-asset-discovery`, `cpt-frontx-adr-lazy-import-resolution`, `cpt-frontx-adr-shared-dep-cache-reach`
 - **Component**: `cpt-frontx-component-mfe-runtime` (shared with F4, F6, F7, F8)
 - **Dependencies**: `cpt-frontx-feature-mfe-registry` (F4)
+
+**Checklist applicability**:
+- PERF — Addressed in §5 (Lazy-Import ABI Inherits Parent Load Bindings; Per-Attempt Load Timeout Budget), which address `cpt-frontx-nfr-runtime-performance`.
+- SEC — Not applicable because this feature authorizes no one; isolated evaluation of loaded units belongs to `cpt-frontx-feature-mfe-isolation`.
+- REL — Addressed in §3 (Per-Attempt Load Timeout) and §5 (Per-Attempt Load Timeout Budget): every attempt is raced against its own budget, an expired attempt fails with a diagnostic naming the entry, and a failure a repeat attempt cannot change is not retried.
+- DATA — Not applicable because this feature stores nothing durable; resolved manifests are cached in memory.
+- INT — Addressed in §5 (Manifest Fields Drive Discovery — No Remote-Entry Parsing): the published manifest's declared fields are the contract this feature reads.
+- OPS — Not applicable because this feature is library code with no deployed service, configuration or monitoring of its own.
+- MAINT — Not applicable because this feature sets no maintainability target of its own.
+- TEST — Addressed in §6: the acceptance criteria an implementation is tested against.
+- COMPL — Not applicable because this feature handles no regulated or personal data.
+- UX — Not applicable because this feature renders no user interface.
+- BIZ — Not applicable because this is an internal library feature; its requirements are cited by ID in §1.2.
 
 ## 2. Actor Flows (CDSL)
 
@@ -206,7 +219,7 @@ The system **MUST** derive every locating fact needed for a microfrontend load e
 - `cpt-frontx-fr-mfe-runtime-registration`
 - `cpt-frontx-adr-mfe-asset-discovery`
 
-**Constraints**: none owned — contract `template-manifest` is defined by F11 and consumed here
+**Constraints**: none owned — the manifest read here is the microfrontend's own published manifest (`cpt-frontx-adr-mfe-asset-discovery`)
 
 **Touches**:
 - Entities: `MfeEntry`
@@ -241,6 +254,7 @@ The system **MUST** race every individual load attempt against the timeout budge
 
 **Addresses**:
 - `cpt-frontx-nfr-runtime-performance` — a bounded per-attempt budget keeps a stalled fetch from holding a load open indefinitely
+- `cpt-frontx-fr-mfe-load-failure-handling`
 
 **Constraints**: none owned
 

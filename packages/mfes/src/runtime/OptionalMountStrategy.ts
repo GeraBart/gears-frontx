@@ -1,7 +1,7 @@
 import { MountStrategy, type ActionPayload, type ContainerHooks } from './MountStrategy';
 import type { ExtensionMounter } from './ExtensionMounter';
-import type { MfeRegistry } from '../registry/MfeRegistry';
 import { ExtensionReleaserProvider } from './ExtensionReleaserProvider';
+import { MountSetLookup } from './MountSetLookup';
 // @cpt-algo:cpt-frontx-algo-extension-domain-governance-slot-detach:p2
 
 /**
@@ -11,18 +11,16 @@ import { ExtensionReleaserProvider } from './ExtensionReleaserProvider';
  * extension before mounting the new one. Explicit unmount empties the slot.
  * Suitable for sidebar, popup, overlay domains.
  *
- * Reads the canonical mount-set from the registry
- * (`registry.getMountedExtensions(domainId)`) — the registry owns mount-set
- * state, not the mounter.
+ * Reads its domain's current mount set through its own mounter, by a lookup
+ * private to the runtime; a mounter the runtime never registered makes that
+ * read throw.
  *
  * Cardinality matrix: REQUIRES `mount_ext` AND `unmount_ext` in `declaration.actions`.
  */
 export class OptionalMountStrategy extends MountStrategy {
   constructor(
     private readonly mounter: ExtensionMounter,
-    private readonly hooks: ContainerHooks,
-    private readonly registry: MfeRegistry,
-    private readonly domainId: string
+    private readonly hooks: ContainerHooks
   ) {
     super();
   }
@@ -31,7 +29,7 @@ export class OptionalMountStrategy extends MountStrategy {
   async mount(payload: ActionPayload): Promise<void> {
     const subject = payload.subject;
     // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-get-mounted
-    const mounted = this.registry.getMountedExtensions(this.domainId);
+    const mounted = MountSetLookup.of(this.mounter);
     // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-get-mounted
 
     // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-optional-already-occupant
@@ -76,7 +74,9 @@ export class OptionalMountStrategy extends MountStrategy {
 
   override async unmount(payload: ActionPayload): Promise<void> {
     const subject = payload.subject;
-    const mounted = this.registry.getMountedExtensions(this.domainId);
+    // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-get-mounted
+    const mounted = MountSetLookup.of(this.mounter);
+    // @cpt-end:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-get-mounted
 
     if (!mounted.includes(subject)) {
       return;

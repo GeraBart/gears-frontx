@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { createRootRoute, createRoute, createRouter } from '@tanstack/react-router';
 import {
   parseGrammar,
   resolveNavigationHistory,
@@ -9,6 +10,7 @@ import {
 } from '@gears-frontx/routing';
 import { adaptComposedHistory, createComposedVirtualLocationSource } from '../composed-history-source.js';
 import { adaptVirtualLocationHistory, attachAdaptedHistory } from '../history-adaptation.js';
+import { adaptShellHistory } from '../shell-history-source.js';
 import { resetRealm } from './helpers/index.js';
 
 // FEATURE example 7.3, the acceptance scenario an implementation MUST
@@ -130,9 +132,8 @@ describe('createHref', () => {
 // (`cpt-frontx-algo-routing-navigation-substrate-position-tracking`), never
 // a counter this adapter keeps of its own. `length` therefore matches a
 // real browser's own `history.length` semantics: 1 for the cold-mount
-// entry alone, growing by one per push, exactly as `position + 1` — not
-// "count of pushes issued", which started at 0 under the old, removed
-// provider-local counter.
+// entry alone, growing by one per push — `length` is `position + 1`, not a
+// count of pushes issued.
 describe('length and canGoBack', () => {
   it('reports length as position + 1 (real-history semantics: 1 for the cold-mount entry alone)', () => {
     resetRealm(EXAMPLE_7_3_URL);
@@ -196,10 +197,11 @@ describe('length and canGoBack', () => {
     history.push('/settings/profile?orientation=left');
     expect(history.length).toBe(2);
 
+    // A step past the end is a no-op in the underlying history: no
+    // `popstate` is ever delivered, so there is nothing to wait for.
     history.forward();
     history.forward();
     history.forward();
-    await flushMicrotasks();
 
     expect(history.length).toBe(2);
     expect(history.canGoBack()).toBe(true);
@@ -207,17 +209,17 @@ describe('length and canGoBack', () => {
 
   // An external `go(-1)` (a real back/forward step, or a third-party
   // `history.go`) that lands this occupant back at the root must report
-  // `canGoBack: false` there, not `true` — the failure mode caused by
-  // the removed `window.history.length > 1` fallback.
-  it('reports canGoBack false at the root after an external go(-1), not the removed window-length fallback', async () => {
+  // `canGoBack: false` there, whatever the window's own history length is.
+  it('reports canGoBack false at the root after an external go(-1)', async () => {
     resetRealm(EXAMPLE_7_3_URL);
     const navigationHistory = resolveNavigationHistory();
     const history = adaptComposedHistory(navigationHistory, DASHBOARD_ENTRY_ADDRESS);
     history.push('/settings/profile?orientation=left');
     expect(history.canGoBack()).toBe(true);
 
+    const settled = nextNotification(navigationHistory);
     navigationHistory.go(-1);
-    await flushMicrotasks();
+    await settled;
 
     expect(history.canGoBack()).toBe(false);
     expect(history.length).toBe(1);
@@ -263,8 +265,9 @@ describe('back/forward pop propagation into subscribers', () => {
     const received: unknown[] = [];
     history.subscribe((args) => received.push(args));
 
+    const settled = nextNotification(navigationHistory);
     history.back();
-    await flushMicrotasks();
+    await settled;
 
     expect(received).toHaveLength(1);
     const args = received[0] as { location: { pathname: string; search: string }; action: { type: string } };
@@ -278,15 +281,20 @@ describe('back/forward pop propagation into subscribers', () => {
     resetRealm(EXAMPLE_7_3_URL);
     const navigationHistory = resolveNavigationHistory();
     const history = adaptComposedHistory(navigationHistory, DASHBOARD_ENTRY_ADDRESS);
+    attachAdaptedHistory(history);
     history.push('/settings/profile?orientation=left');
 
     const received: unknown[] = [];
+    const kept: unknown[] = [];
     const unsubscribe = history.subscribe((args) => received.push(args));
+    history.subscribe((args) => kept.push(args));
     unsubscribe();
 
+    const settled = nextNotification(navigationHistory);
     history.back();
-    await flushMicrotasks();
+    await settled;
 
+    expect(kept).toHaveLength(1);
     expect(received).toHaveLength(0);
   });
 });
@@ -296,6 +304,7 @@ describe('own entry absent from the URL (FEATURE §3, step 8)', () => {
     const adapter = resetRealm(EXAMPLE_7_3_URL);
     const navigationHistory = resolveNavigationHistory();
     const history = adaptComposedHistory(navigationHistory, DASHBOARD_ENTRY_ADDRESS);
+    attachAdaptedHistory(history);
     const lastLocation = history.location;
 
     const received: unknown[] = [];
@@ -304,8 +313,9 @@ describe('own entry absent from the URL (FEATURE §3, step 8)', () => {
     // A structural change that drops the dashboard occupant's own entry
     // entirely, observed as a third-party addition (e.g. a back step past
     // it, or a sibling's own structural reset).
+    const settled = nextNotification(navigationHistory);
     adapter.simulateExternalPop('/en?sheet=tenant-details;route=contacts;tenantId=456');
-    await flushMicrotasks();
+    await settled;
 
     expect(received).toHaveLength(0);
     expect(history.location).toBe(lastLocation);
@@ -327,7 +337,8 @@ describe('block (recognized, degraded adaptation)', () => {
 
   it('does not stop a navigation performed directly through the shared NavigationHistory', () => {
     const adapter = resetRealm(EXAMPLE_7_3_URL);
-    const history = adaptComposedHistory(resolveNavigationHistory(), DASHBOARD_ENTRY_ADDRESS);
+    const navigationHistory = resolveNavigationHistory();
+    const history = adaptComposedHistory(navigationHistory, DASHBOARD_ENTRY_ADDRESS);
     history.block({ blockerFn: () => false });
 
     // A block registered here is this adapter's own bookkeeping only
@@ -340,36 +351,81 @@ describe('block (recognized, degraded adaptation)', () => {
 });
 
 describe('block actually enforced on push/replace issued through this same RouterHistory', () => {
+  // The blocker answers true for the first navigation it is asked about and
+  // false for every later one. The permitted navigation issued after the
+  // vetoed one is the observable completion: its shared-history notification
+  // resolves only once the vetoed navigation's continuation has already run,
+  // since continuations settle in the order they were started.
+  function vetoFirstOnly(history: ReturnType<typeof adaptComposedHistory>): void {
+    let calls = 0;
+    history.block({
+      blockerFn: () => {
+        calls += 1;
+        return calls === 1;
+      },
+    });
+  }
+
+  // Records every full URL the adapter is asked to write, through either verb.
+  function recordWrites(adapter: ReturnType<typeof resetRealm>): string[] {
+    const writes: string[] = [];
+    const originalPushState = adapter.pushState.bind(adapter);
+    const originalReplaceState = adapter.replaceState.bind(adapter);
+    adapter.pushState = (path: string) => {
+      writes.push(path);
+      originalPushState(path);
+    };
+    adapter.replaceState = (path: string) => {
+      writes.push(path);
+      originalReplaceState(path);
+    };
+    return writes;
+  }
+
   it('a blocker returning true stops a push: no write, length unchanged', async () => {
     const adapter = resetRealm(EXAMPLE_7_3_URL);
-    const history = adaptComposedHistory(resolveNavigationHistory(), DASHBOARD_ENTRY_ADDRESS);
-    history.block({ blockerFn: () => true });
+    const navigationHistory = resolveNavigationHistory();
+    const history = adaptComposedHistory(navigationHistory, DASHBOARD_ENTRY_ADDRESS);
+    const writes = recordWrites(adapter);
+    vetoFirstOnly(history);
 
+    const permitted = nextNotification(navigationHistory);
     history.push('/settings/profile?orientation=left');
-    await flushMicrotasks();
+    history.push('/settings/billing?orientation=left');
+    await permitted;
 
-    expect(adapter.lastWrite).toBeUndefined();
-    expect(history.length).toBe(1);
+    expect(writes).toEqual([
+      '/en?screen=dashboard;route=settings/billing;orientation=left&sheet=tenant-details;route=contacts;tenantId=456',
+    ]);
+    expect(history.length).toBe(2);
   });
 
   it('a blocker returning true stops a replace: no write issued', async () => {
     const adapter = resetRealm(EXAMPLE_7_3_URL);
-    const history = adaptComposedHistory(resolveNavigationHistory(), DASHBOARD_ENTRY_ADDRESS);
-    history.block({ blockerFn: () => true });
+    const navigationHistory = resolveNavigationHistory();
+    const history = adaptComposedHistory(navigationHistory, DASHBOARD_ENTRY_ADDRESS);
+    const writes = recordWrites(adapter);
+    vetoFirstOnly(history);
 
+    const permitted = nextNotification(navigationHistory);
     history.replace('/settings/profile?orientation=left');
-    await flushMicrotasks();
+    history.push('/settings/billing?orientation=left');
+    await permitted;
 
-    expect(adapter.lastWrite).toBeUndefined();
+    expect(writes).toEqual([
+      '/en?screen=dashboard;route=settings/billing;orientation=left&sheet=tenant-details;route=contacts;tenantId=456',
+    ]);
   });
 
   it('a blocker returning false lets the push through', async () => {
     const adapter = resetRealm(EXAMPLE_7_3_URL);
-    const history = adaptComposedHistory(resolveNavigationHistory(), DASHBOARD_ENTRY_ADDRESS);
+    const navigationHistory = resolveNavigationHistory();
+    const history = adaptComposedHistory(navigationHistory, DASHBOARD_ENTRY_ADDRESS);
     history.block({ blockerFn: () => false });
 
+    const written = nextNotification(navigationHistory);
     history.push('/settings/profile?orientation=left');
-    await flushMicrotasks();
+    await written;
 
     expect(adapter.lastWrite).toBe(
       '/en?screen=dashboard;route=settings/profile;orientation=left&sheet=tenant-details;route=contacts;tenantId=456',
@@ -383,7 +439,6 @@ describe('block actually enforced on push/replace issued through this same Route
     history.block({ blockerFn: () => true });
 
     history.push('/settings/profile?orientation=left', undefined, { ignoreBlocker: true });
-    await flushMicrotasks();
 
     expect(adapter.lastWrite).toBe(
       '/en?screen=dashboard;route=settings/profile;orientation=left&sheet=tenant-details;route=contacts;tenantId=456',
@@ -403,7 +458,6 @@ describe('block actually enforced on push/replace issued through this same Route
     });
 
     history.push('/settings/profile?orientation=left');
-    await flushMicrotasks();
 
     expect(received).toHaveLength(1);
     const args = received[0] as {
@@ -435,7 +489,6 @@ describe('block actually enforced on push/replace issued through this same Route
     });
 
     history.replace('/settings/profile?orientation=left');
-    await flushMicrotasks();
 
     expect(received).toHaveLength(1);
     const args = received[0] as {
@@ -450,12 +503,12 @@ describe('block actually enforced on push/replace issued through this same Route
 
   it('does not gate a bare go() call (no blocker check for back/forward)', async () => {
     resetRealm(EXAMPLE_7_3_URL);
-    const history = adaptComposedHistory(resolveNavigationHistory(), DASHBOARD_ENTRY_ADDRESS);
+    const navigationHistory = resolveNavigationHistory();
+    const history = adaptComposedHistory(navigationHistory, DASHBOARD_ENTRY_ADDRESS);
     // An adapted history is inert until something attaches it; this test
     // drives it directly rather than through a mounted `EngineProvider`.
     attachAdaptedHistory(history);
     history.push('/settings/profile?orientation=left');
-    await flushMicrotasks();
     expect(history.location.pathname).toBe('/settings/profile');
 
     let blockerCalled = false;
@@ -466,8 +519,9 @@ describe('block actually enforced on push/replace issued through this same Route
       },
     });
 
+    const settled = nextNotification(navigationHistory);
     history.back();
-    await flushMicrotasks();
+    await settled;
 
     expect(blockerCalled).toBe(false);
     expect(history.location.pathname).toBe('/settings/general');
@@ -539,7 +593,7 @@ describe('attachAdaptedHistory re-projects location after a real detach gap', ()
 // the core's own `FanOutDispatcher` — a throwing subscriber must not stop
 // delivery to the subscribers registered after it in the same round.
 describe('subscriber error isolation', () => {
-  it('a throwing subscriber does not stop delivery to the next one', async () => {
+  it('a throwing subscriber does not stop delivery to the next one', () => {
     resetRealm(EXAMPLE_7_3_URL);
     const navigationHistory = resolveNavigationHistory();
     const reported: unknown[] = [];
@@ -561,14 +615,13 @@ describe('subscriber error isolation', () => {
     });
 
     history.push('/settings/profile?orientation=left');
-    await flushMicrotasks();
 
     expect(secondCalled.value).toBe(true);
     expect(reported).toHaveLength(1);
     expect((reported[0] as Error).message).toBe('first subscriber exploded');
   });
 
-  it('reports through the default reportError channel (console.error) when none is supplied', async () => {
+  it('reports through the default reportError channel (console.error) when none is supplied', () => {
     resetRealm(EXAMPLE_7_3_URL);
     const navigationHistory = resolveNavigationHistory();
     const history = adaptComposedHistory(navigationHistory, DASHBOARD_ENTRY_ADDRESS);
@@ -581,7 +634,6 @@ describe('subscriber error isolation', () => {
       throw new Error('boom');
     });
     history.push('/settings/profile?orientation=left');
-    await flushMicrotasks();
 
     expect(consoleErrorSpy).toHaveBeenCalled();
     consoleErrorSpy.mockRestore();
@@ -596,17 +648,22 @@ describe('rejected/throwing blocker', () => {
     const adapter = resetRealm(EXAMPLE_7_3_URL);
     const navigationHistory = resolveNavigationHistory();
     const reported: unknown[] = [];
+    const reportedOnce = createSignal();
     const history = adaptVirtualLocationHistory(
       navigationHistory,
       createComposedVirtualLocationSource(navigationHistory, DASHBOARD_ENTRY_ADDRESS),
-      { reportError: (error) => reported.push(error) },
+      {
+        reportError: (error) => {
+          reported.push(error);
+          reportedOnce.signal();
+        },
+      },
     );
     const failure = new Error('blocker exploded');
     history.block({ blockerFn: () => Promise.reject(failure) });
 
     history.push('/settings/profile?orientation=left');
-    await flushMicrotasks();
-    await flushMicrotasks();
+    await reportedOnce.settled;
 
     expect(adapter.lastWrite).toBeUndefined();
     expect(reported).toEqual([failure]);
@@ -616,10 +673,16 @@ describe('rejected/throwing blocker', () => {
     const adapter = resetRealm(EXAMPLE_7_3_URL);
     const navigationHistory = resolveNavigationHistory();
     const reported: unknown[] = [];
+    const reportedOnce = createSignal();
     const history = adaptVirtualLocationHistory(
       navigationHistory,
       createComposedVirtualLocationSource(navigationHistory, DASHBOARD_ENTRY_ADDRESS),
-      { reportError: (error) => reported.push(error) },
+      {
+        reportError: (error) => {
+          reported.push(error);
+          reportedOnce.signal();
+        },
+      },
     );
     history.block({
       blockerFn: () => {
@@ -628,7 +691,7 @@ describe('rejected/throwing blocker', () => {
     });
 
     history.push('/settings/profile?orientation=left');
-    await flushMicrotasks();
+    await reportedOnce.settled;
 
     expect(adapter.lastWrite).toBeUndefined();
     expect(reported).toHaveLength(1);
@@ -641,8 +704,12 @@ describe('rejected/throwing blocker', () => {
   it('a wrapper entry point (adaptComposedHistory) forwards reportError to a throwing blocker', async () => {
     const adapter = resetRealm(EXAMPLE_7_3_URL);
     const reported: unknown[] = [];
+    const reportedOnce = createSignal();
     const history = adaptComposedHistory(resolveNavigationHistory(), DASHBOARD_ENTRY_ADDRESS, {
-      reportError: (error) => reported.push(error),
+      reportError: (error) => {
+        reported.push(error);
+        reportedOnce.signal();
+      },
     });
     history.block({
       blockerFn: () => {
@@ -651,7 +718,7 @@ describe('rejected/throwing blocker', () => {
     });
 
     history.push('/settings/profile?orientation=left');
-    await flushMicrotasks();
+    await reportedOnce.settled;
 
     expect(adapter.lastWrite).toBeUndefined();
     expect(reported).toHaveLength(1);
@@ -681,21 +748,22 @@ describe('rejected/throwing blocker', () => {
   });
 });
 
-// A hash given to `navigate`/`Link`/`createHref` is applied to the
-// page's own hash, never to this entry.
+// A hash passed to `push`/`replace`/`createHref` is dropped, and the current
+// page hash is kept by the write (FEATURE (engine-provider) §3, History
+// Adaptation, `inst-expose-direct-members`, `inst-derive-create-href`).
 describe('hash on push/createHref', () => {
-  it('applies a given hash to the page hash on push', () => {
+  it('drops a hash passed to push and keeps the current page hash', () => {
     const adapter = resetRealm(`${EXAMPLE_7_3_URL}#old`);
     const history = adaptComposedHistory(resolveNavigationHistory(), DASHBOARD_ENTRY_ADDRESS);
 
     history.push('/settings/profile?orientation=left#new');
 
     expect(adapter.lastWrite).toBe(
-      '/en?screen=dashboard;route=settings/profile;orientation=left&sheet=tenant-details;route=contacts;tenantId=456#new',
+      '/en?screen=dashboard;route=settings/profile;orientation=left&sheet=tenant-details;route=contacts;tenantId=456#old',
     );
   });
 
-  it('preserves the current page hash when none is given', () => {
+  it('keeps the current page hash when none is passed', () => {
     const adapter = resetRealm(`${EXAMPLE_7_3_URL}#current`);
     const history = adaptComposedHistory(resolveNavigationHistory(), DASHBOARD_ENTRY_ADDRESS);
 
@@ -706,12 +774,12 @@ describe('hash on push/createHref', () => {
     );
   });
 
-  it('createHref includes a given hash', () => {
-    resetRealm(EXAMPLE_7_3_URL);
+  it('createHref drops a passed hash and returns no hash', () => {
+    resetRealm(`${EXAMPLE_7_3_URL}#current`);
     const history = adaptComposedHistory(resolveNavigationHistory(), DASHBOARD_ENTRY_ADDRESS);
 
     expect(history.createHref('/settings/profile?orientation=left#new')).toBe(
-      '/en?screen=dashboard;route=settings/profile;orientation=left&sheet=tenant-details;route=contacts;tenantId=456#new',
+      '/en?screen=dashboard;route=settings/profile;orientation=left&sheet=tenant-details;route=contacts;tenantId=456',
     );
   });
 });
@@ -722,12 +790,12 @@ describe('hash on push/createHref', () => {
 // per-entry state on each `popstate` (`./navigation-history.js`'s own
 // Position Tracking), asynchronously, exactly as any other externally
 // observed navigation is (§1.5, Contract commitment) — never a
-// synchronously self-adjusted local counter the way the removed
-// `virtualIndex` was.
+// synchronously self-adjusted local counter.
 describe('substrate-owned position across push/back/forward/go', () => {
   it('advances on push, retreats on back, advances on forward, follows go — all confirmed asynchronously', async () => {
     resetRealm(EXAMPLE_7_3_URL);
-    const history = adaptComposedHistory(resolveNavigationHistory(), DASHBOARD_ENTRY_ADDRESS);
+    const navigationHistory = resolveNavigationHistory();
+    const history = adaptComposedHistory(navigationHistory, DASHBOARD_ENTRY_ADDRESS);
 
     expect(history.length).toBe(1);
     expect(history.canGoBack()).toBe(false);
@@ -739,13 +807,11 @@ describe('substrate-owned position across push/back/forward/go', () => {
     history.push('/settings/b?orientation=left');
     expect(history.length).toBe(3);
 
-    history.back();
-    await flushMicrotasks();
+    await stepAndSettle(navigationHistory, () => history.back());
     expect(history.length).toBe(2);
     expect(history.canGoBack()).toBe(true);
 
-    history.back();
-    await flushMicrotasks();
+    await stepAndSettle(navigationHistory, () => history.back());
     expect(history.length).toBe(1);
     expect(history.canGoBack()).toBe(false);
 
@@ -753,15 +819,12 @@ describe('substrate-owned position across push/back/forward/go', () => {
     // past either end of the real stack (mirroring a real browser) — no
     // `popstate` fires, so position stays exactly where it already was.
     history.back();
-    await flushMicrotasks();
     expect(history.length).toBe(1);
 
-    history.forward();
-    await flushMicrotasks();
+    await stepAndSettle(navigationHistory, () => history.forward());
     expect(history.length).toBe(2);
 
-    history.go(1);
-    await flushMicrotasks();
+    await stepAndSettle(navigationHistory, () => history.go(1));
     expect(history.length).toBe(3);
   });
 
@@ -796,7 +859,7 @@ describe('a write the shared history refuses', () => {
     };
   }
 
-  it('reports the failure and leaves the virtual location where it was', async () => {
+  it('reports the failure and leaves the virtual location where it was', () => {
     resetRealm(EXAMPLE_7_3_URL);
     const reported: unknown[] = [];
     const failure = new Error('the shared history refused this write');
@@ -805,13 +868,12 @@ describe('a write the shared history refuses', () => {
     });
 
     history.push('/settings/profile');
-    await flushMicrotasks();
 
     expect(reported).toEqual([failure]);
     expect(history.location.pathname).toBe('/settings/general');
   });
 
-  it('reports a refused replace the same way', async () => {
+  it('reports a refused replace the same way', () => {
     resetRealm(EXAMPLE_7_3_URL);
     const reported: unknown[] = [];
     const failure = new Error('the shared history refused this write');
@@ -820,12 +882,232 @@ describe('a write the shared history refuses', () => {
     });
 
     history.replace('/settings/profile');
-    await flushMicrotasks();
 
     expect(reported).toEqual([failure]);
   });
 });
 
-function flushMicrotasks(): Promise<void> {
-  return new Promise((resolve) => queueMicrotask(resolve));
+type SharedHistory = ReturnType<typeof resolveNavigationHistory>;
+
+/** A promise that settles on the shared history's next notification — the
+ * observable completion of a back/forward step, which the substrate learns of
+ * asynchronously. Subscribed at call time, so call it before the step. */
+function nextNotification(navigationHistory: SharedHistory): Promise<void> {
+  return new Promise<void>((resolve) => {
+    const release = navigationHistory.subscribe(() => {
+      release();
+      resolve();
+    });
+  });
 }
+
+async function stepAndSettle(navigationHistory: SharedHistory, step: () => void): Promise<void> {
+  const settled = nextNotification(navigationHistory);
+  step();
+  await settled;
+}
+
+function createSignal(): { signal: () => void; settled: Promise<void> } {
+  let signal!: () => void;
+  const settled = new Promise<void>((resolve) => {
+    signal = resolve;
+  });
+  return { signal, settled };
+}
+
+// FEATURE (engine-provider) §3, step 7 (`inst-adapt-subscribe`): a write that
+// changes neither this runtime's own location nor the history position, and
+// that this history did not issue, notifies no subscriber.
+describe('a sibling replace leaves subscribers un-notified; a push or an own-location change notifies', () => {
+  it('shell runtime: a query-only write does not notify; a pathname change does', () => {
+    resetRealm('/en/home');
+    const navigationHistory = resolveNavigationHistory();
+    const history = adaptShellHistory(navigationHistory);
+    attachAdaptedHistory(history);
+    const subscriber = vi.fn();
+    history.subscribe(subscriber);
+
+    // Another runtime's entry lives in the query string; the shell's own
+    // subroute (the pathname) is untouched.
+    navigationHistory.replace('/en/home?screen=dashboard;route=settings/general');
+    expect(subscriber).not.toHaveBeenCalled();
+
+    navigationHistory.push('/en/about?screen=dashboard;route=settings/general');
+    expect(subscriber).toHaveBeenCalledTimes(1);
+    expect(subscriber.mock.calls[0]![0]).toMatchObject({ location: { pathname: '/en/about' } });
+  });
+
+  it('extension runtime: a sibling entry write does not notify; its own entry change does', () => {
+    resetRealm(EXAMPLE_7_3_URL);
+    const navigationHistory = resolveNavigationHistory();
+    const history = adaptComposedHistory(navigationHistory, DASHBOARD_ENTRY_ADDRESS);
+    attachAdaptedHistory(history);
+    const subscriber = vi.fn();
+    history.subscribe(subscriber);
+
+    navigationHistory.replace(
+      '/en?screen=dashboard;route=settings/general;orientation=left&sheet=tenant-details;route=orders;tenantId=456',
+    );
+    expect(subscriber).not.toHaveBeenCalled();
+
+    navigationHistory.push(
+      '/en?screen=dashboard;route=settings/profile;orientation=left&sheet=tenant-details;route=orders;tenantId=456',
+    );
+    expect(subscriber).toHaveBeenCalledTimes(1);
+    expect(subscriber.mock.calls[0]![0]).toMatchObject({ location: { pathname: '/settings/profile' } });
+  });
+});
+
+// Decision 47 — FEATURE (engine-provider) §3, step 7: the engine is notified
+// when the own virtual location changed, when the history position changed,
+// or when the notification results from this history's own write.
+describe('engine notification gate (own location, position, own write)', () => {
+  function mountRouter(history: ReturnType<typeof adaptComposedHistory>) {
+    const root = createRootRoute();
+    const a = createRoute({ getParentRoute: () => root, path: '/a' });
+    const router = createRouter({ routeTree: root.addChildren([a]), history });
+    attachAdaptedHistory(history);
+    let pending: Promise<void> = Promise.resolve();
+    history.subscribe(() => {
+      pending = router.load();
+    });
+    return { router, settled: () => pending };
+  }
+
+  it('another runtime push with the own location unchanged dispatches once and the engine index follows', async () => {
+    resetRealm('/en?screen=dash;route=a&sheet=x');
+    const navigationHistory = resolveNavigationHistory();
+    const history = adaptComposedHistory(navigationHistory, { domainKey: 'screen' as DomainKey, extension: 'dash' as ExtensionToken });
+    const { router, settled } = mountRouter(history);
+    await router.load();
+    expect(router.state.location.state.__TSR_index).toBe(0);
+    const received: unknown[] = [];
+    history.subscribe((args) => received.push(args));
+
+    navigationHistory.push('/en?screen=dash;route=a&sheet=y');
+    await settled();
+
+    expect(received).toHaveLength(1);
+    expect(router.state.location.state.__TSR_index).toBe(1);
+    expect(history.canGoBack()).toBe(true);
+  });
+
+  it('another runtime replace leaving own location and position unchanged dispatches nothing', () => {
+    resetRealm('/en?screen=dash;route=a&sheet=x');
+    const navigationHistory = resolveNavigationHistory();
+    const history = adaptComposedHistory(navigationHistory, { domainKey: 'screen' as DomainKey, extension: 'dash' as ExtensionToken });
+    attachAdaptedHistory(history);
+    const subscriber = vi.fn();
+    history.subscribe(subscriber);
+
+    navigationHistory.replace('/en?screen=dash;route=a&sheet=y');
+
+    expect(subscriber).not.toHaveBeenCalled();
+  });
+
+  it('an own write that leaves the projection unchanged still dispatches', () => {
+    resetRealm('/en?screen=dash;route=a');
+    const navigationHistory = resolveNavigationHistory();
+    const history = adaptComposedHistory(navigationHistory, { domainKey: 'screen' as DomainKey, extension: 'dash' as ExtensionToken });
+    attachAdaptedHistory(history);
+    const subscriber = vi.fn();
+    history.subscribe(subscriber);
+
+    history.replace('/a');
+
+    expect(subscriber).toHaveBeenCalledTimes(1);
+    expect(subscriber.mock.calls[0]![0]).toMatchObject({ action: { type: 'REPLACE' } });
+  });
+
+  it('router.navigate with only a state change at the current location settles', async () => {
+    resetRealm('/en?screen=dash;route=a');
+    const navigationHistory = resolveNavigationHistory();
+    const history = adaptComposedHistory(navigationHistory, { domainKey: 'screen' as DomainKey, extension: 'dash' as ExtensionToken });
+    const { router } = mountRouter(history);
+    await router.load();
+
+    await router.navigate({ to: '/a', state: { x: 1 } as never });
+  });
+
+  it('shell runtime: a push by another runtime dispatches; a replace changing only the query dispatches nothing', () => {
+    resetRealm('/en/home');
+    const navigationHistory = resolveNavigationHistory();
+    const history = adaptShellHistory(navigationHistory);
+    attachAdaptedHistory(history);
+    const subscriber = vi.fn();
+    history.subscribe(subscriber);
+
+    navigationHistory.replace('/en/home?screen=dashboard;route=a');
+    expect(subscriber).not.toHaveBeenCalled();
+
+    navigationHistory.push('/en/home?screen=dashboard;route=b');
+    expect(subscriber).toHaveBeenCalledTimes(1);
+  });
+});
+
+// FEATURE (engine-provider) §3, Teardown step 1.1: on attach the internal
+// callback is registered first, then the own virtual location is re-projected
+// and, when it or the history position differs, subscribers are invoked once
+// with the `history`-kind action.
+describe('attach resync', () => {
+  const OWN: EntryAddress = { domainKey: 'screen' as DomainKey, extension: 'dash' as ExtensionToken };
+
+  it('a position-only change while detached dispatches once and the engine index reaches 1', async () => {
+    resetRealm('/en?screen=dash;route=a&other=x');
+    const navigationHistory = resolveNavigationHistory();
+    const history = adaptComposedHistory(navigationHistory, OWN);
+    const root = createRootRoute();
+    const a = createRoute({ getParentRoute: () => root, path: '/a' });
+    const router = createRouter({ routeTree: root.addChildren([a]), history });
+    const received: Array<{ action: { type: string } }> = [];
+    let pending: Promise<void> = Promise.resolve();
+    history.subscribe((args) => {
+      received.push(args as never);
+      pending = router.load();
+    });
+    await router.load();
+    expect(router.state.location.state.__TSR_index).toBe(0);
+
+    // Another runtime pushes while this history is not attached; its own href is unchanged.
+    navigationHistory.push('/en?screen=dash;route=a&other=y');
+    attachAdaptedHistory(history);
+    await pending;
+
+    expect(received).toHaveLength(1);
+    expect(received[0]!.action).toEqual({ type: 'GO', index: 0 });
+    expect(history.location.state.__TSR_index).toBe(1);
+    expect(router.state.location.state.__TSR_index).toBe(1);
+  });
+
+  it('a subscriber that pushes during the resync dispatch is observed', () => {
+    resetRealm('/en?screen=dash;route=a&other=x');
+    const navigationHistory = resolveNavigationHistory();
+    const history = adaptComposedHistory(navigationHistory, OWN);
+    let pushed = false;
+    history.subscribe(() => {
+      if (!pushed) {
+        pushed = true;
+        history.push('/b');
+      }
+    });
+    navigationHistory.replace('/en?screen=dash;route=c&other=x');
+
+    attachAdaptedHistory(history);
+
+    expect(pushed).toBe(true);
+    expect(history.location.pathname).toBe('/b');
+    expect(history.location.state.__TSR_index).toBe(navigationHistory.location.position);
+  });
+
+  it('an unchanged location and position on attach dispatches nothing', () => {
+    resetRealm('/en?screen=dash;route=a&other=x');
+    const navigationHistory = resolveNavigationHistory();
+    const history = adaptComposedHistory(navigationHistory, OWN);
+    const subscriber = vi.fn();
+    history.subscribe(subscriber);
+
+    attachAdaptedHistory(history);
+
+    expect(subscriber).not.toHaveBeenCalled();
+  });
+});

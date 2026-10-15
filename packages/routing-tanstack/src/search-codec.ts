@@ -1,10 +1,8 @@
-// Search-string decode/parse/build — the one codec this package's every
-// caller shares for TanStack's own `?a=b&c=d`-shaped search string, kept in
-// its own module so no second caller can carry a near-verbatim copy of the
-// parse without the malformed-input guard below. `virtual-location.ts`'s
-// own history-adaptation codec and `location-preserving-redirect.ts`'s own
-// redirect-search builder both import from here rather than each parsing
-// this string on their own.
+// Search-string decode/parse/build — the one codec this package uses for
+// TanStack's own `?a=b&c=d`-shaped search string, kept in its own module so
+// no second caller can carry a near-verbatim copy of the parse without the
+// malformed-input guard below. `virtual-location.ts`'s own history-adaptation
+// codec imports from here.
 //
 // Not the navigation substrate's own grammar codec — that codec encodes the
 // composed-application URL's entry syntax (ADR 0003), a structurally

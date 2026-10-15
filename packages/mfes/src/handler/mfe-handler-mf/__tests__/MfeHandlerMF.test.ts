@@ -1501,7 +1501,7 @@ describe('MfeHandlerMF — lazy-import failure isolation', () => {
 
 describe('MfeHandlerMF — an unbuilt dependency at rewrite time', () => {
   // Drives the private `rewriteModuleImports` directly. An absence from the
-  // per-load blob URL map now has a single outcome: there is no sanctioned
+  // per-load blob URL map has a single outcome: there is no sanctioned
   // reason for one, because a detected dependency cycle fails the build
   // where it is detected rather than leaving a hole to be filled from
   // origin here.

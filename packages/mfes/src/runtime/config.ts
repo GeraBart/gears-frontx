@@ -63,15 +63,19 @@ export interface MfeRegistryConfig {
   mfeHandlers?: MfeHandler[];
 
   /**
-   * Optional router implementing the router port (`cpt-frontx-mfes-interface-router-port`).
-   * Where present, the registry presents each domain and extension
-   * registration to it before the registration becomes durable, obtains
-   * each extension's occupant value from it at mount, issues URL commands to
-   * it at a request's acceptance and at its settle, and sends it release
-   * notifications on unregistration and disposal. Where absent, the
-   * registry runs every extension standalone: it presents no registration,
-   * sends no release notification, assigns no occupant value, and issues no
-   * command (`cpt-frontx-dod-mfe-registry-router-configuration`).
+   * Optional router conforming to the abstract router `RouterPort`
+   * (`cpt-frontx-mfes-interface-router-port`). Where present, the registry
+   * connects it to its actions-chain executor and type system once, at
+   * construction; registers with it each domain and extension that declares
+   * a `route` before the registration becomes durable; starts and stops a
+   * domain at its root's attach and detach; obtains each extension's
+   * occupant value from it at mount; supplies navigation when it adopts an
+   * inbound bridge; issues URL commands to it at a request's acceptance and
+   * at its settle; and sends it release notifications for what it admitted.
+   * Where absent, the registry makes no router call: it connects nothing,
+   * registers nothing, sends no release notification, assigns no occupant
+   * value, and issues no command
+   * (`cpt-frontx-dod-mfe-registry-router-configuration`).
    */
   router?: RouterPort;
 }

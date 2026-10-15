@@ -2,10 +2,10 @@
 // `dist/index.d.ts` — pulled out here so they can
 // be unit-tested on their own against fixture strings (`surface-check.test.ts`)
 // rather than only ever exercised end-to-end through a real `tsup` build.
-// That is the only way left to prove a missing export actually fails this
-// check, now that `helpers.ts`'s own surface lists are pinned as complete —
-// a mutation of the checked-in build output
-// itself is not something a test in this repository can perform.
+// That is the only way to prove a missing export actually fails this
+// check: `helpers.ts`'s own surface lists are pinned as complete, and a
+// mutation of the checked-in build output itself is not something a test
+// in this repository can perform.
 
 /** Whether `dts` exports `name` as a runtime value, via the bundler's own
  * `export { ... }` list (rollup-dts's declaration bundling always emits one

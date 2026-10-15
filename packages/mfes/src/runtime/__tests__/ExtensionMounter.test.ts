@@ -91,7 +91,7 @@ describe('DefaultExtensionMounter', () => {
       expect(removeMountedExtension).toHaveBeenCalledWith(DOMAIN, 'ext-1');
     });
 
-    it('idempotent: unmounting unknown id does not throw', async () => {
+    it('unmounting an unknown id is a no-op and does not throw', async () => {
       const { mounter, root } = makeFixture();
       mounter.attach(root);
 

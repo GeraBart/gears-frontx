@@ -1278,30 +1278,30 @@ describe('Cross-nesting reachability: registration propagation, escalation, retr
 
   it(
     'a target re-advertised over a STILL-LIVE edge that already holds the identical entry for it is ' +
-      'accepted as an idempotent no-op — neither rejected nor logged (inst-readvertise-same-edge)',
+      'accepted as a no-op — neither rejected nor logged (inst-readvertise-same-edge)',
     async () => {
-      const IDEMP_ENTRY = 'entry.idempotent-child.v1';
-      const IDEMP_EXT = 'ext.idempotent-child.v1';
-      const D_IDEMP = 'domain.idempotent-child.v1';
-      const ACTION_IDEMP_LEAF = 'mock.action.v1~action_idempotent_leaf.v1~';
+      const SAME_EDGE_ENTRY = 'entry.same-edge-child.v1';
+      const SAME_EDGE_EXT = 'ext.same-edge-child.v1';
+      const D_SAME_EDGE = 'domain.same-edge-child.v1';
+      const ACTION_SAME_EDGE_LEAF = 'mock.action.v1~action_same_edge_leaf.v1~';
 
-      const entries = new Map<string, MfeEntry>([[IDEMP_ENTRY, makeEntry(IDEMP_ENTRY)]]);
+      const entries = new Map<string, MfeEntry>([[SAME_EDGE_ENTRY, makeEntry(SAME_EDGE_ENTRY)]]);
       const plugin = createMockPlugin(entries);
       const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       const counter = makeCallCounter();
 
       const registries: DefaultMfeRegistry[] = [];
-      const idempHandler = new InjectableMountHandler(IDEMP_ENTRY, () => {
-        // A fresh registry every mount — its adoption re-propagates D_IDEMP
+      const sameEdgeHandler = new InjectableMountHandler(SAME_EDGE_ENTRY, () => {
+        // A fresh registry every mount — its adoption re-propagates D_SAME_EDGE
         // upward through the SAME still-live edge (the extension's own
         // bridge pair never changes across mounts) that already holds the
         // ancestor's own recorded entry for it, minted by the PREVIOUS
         // mount's registry.
         const registry = new DefaultMfeRegistry({ typeSystem: plugin });
         registry.registerDomain(
-          makeDomain(D_IDEMP, [ACTION_IDEMP_LEAF]),
+          makeDomain(D_SAME_EDGE, [ACTION_SAME_EDGE_LEAF]),
           new GenericDomainFactory([
-            [ACTION_IDEMP_LEAF, ActionHandler.fromFunction(async () => { counter.increment(); })],
+            [ACTION_SAME_EDGE_LEAF, ActionHandler.fromFunction(async () => { counter.increment(); })],
           ])
         );
         registries.push(registry);
@@ -1309,23 +1309,23 @@ describe('Cross-nesting reachability: registration propagation, escalation, retr
 
       const registry0 = new DefaultMfeRegistry({
         typeSystem: plugin,
-        mfeHandlers: [idempHandler],
+        mfeHandlers: [sameEdgeHandler],
       });
       registry0.registerDomain(makeDomain(D0), new GenericDomainFactory());
 
-      await registry0.registerExtension(makeExtension(IDEMP_EXT, D0, IDEMP_ENTRY));
+      await registry0.registerExtension(makeExtension(SAME_EDGE_EXT, D0, SAME_EDGE_ENTRY));
       const mounter0 = registry0.getMounter(D0);
       mounter0.attach(document.createElement('div'));
 
-      await mounter0.mount(IDEMP_EXT, document.createElement('div'));
+      await mounter0.mount(SAME_EDGE_EXT, document.createElement('div'));
 
       // Remount WITHOUT ever unregistering the extension in between: the
       // link registry0 minted for it is still live, and the second
-      // registry's own adoption (step 2) re-advertises D_IDEMP over that
+      // registry's own adoption (step 2) re-advertises D_SAME_EDGE over that
       // SAME edge — the ancestor already holds exactly this entry for it.
       errorSpy.mockClear();
-      await mounter0.unmount(IDEMP_EXT);
-      await mounter0.mount(IDEMP_EXT, document.createElement('div'));
+      await mounter0.unmount(SAME_EDGE_EXT);
+      await mounter0.mount(SAME_EDGE_EXT, document.createElement('div'));
 
       // Neither rejected (a collision would be logged) nor otherwise
       // logged — an ordinary, silent no-op.
@@ -1337,7 +1337,7 @@ describe('Cross-nesting reachability: registration propagation, escalation, retr
       // The route still resolves — proving the entry was genuinely
       // accepted (as the SAME entry), not silently dropped.
       expect(registries).toHaveLength(2);
-      void awaitChain(registry0, actionChain(ACTION_IDEMP_LEAF, D_IDEMP));
+      void awaitChain(registry0, actionChain(ACTION_SAME_EDGE_LEAF, D_SAME_EDGE));
       await counter.waitFor(1);
       expect(counter.count).toBe(1);
 

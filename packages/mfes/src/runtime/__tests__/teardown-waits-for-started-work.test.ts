@@ -61,7 +61,7 @@ function expectOrder(events: string[], ...labels: string[]): void {
 async function addDomain(f: Fixture, strategy: Strategy, domainId: string, ids: string[]): Promise<void> {
   f.registry.registerDomain(
     makeDomain(domainId, strategy !== 'exclusive'),
-    domainFactory(strategy, f.registry, domainId, strategy !== 'exclusive')
+    domainFactory(strategy, strategy !== 'exclusive')
   );
   for (const id of ids) await f.registry.registerExtension(makeExtension(id, domainId));
   f.registry.getMounter(domainId).attach(document.createElement('div'));
@@ -370,7 +370,7 @@ describe('registering a domain once disposal began', () => {
 
     const p = f.registry.dispose();
     expect(() => {
-      f.registry.registerDomain(makeDomain(d2, true), domainFactory('concurrent', f.registry, d2));
+      f.registry.registerDomain(makeDomain(d2, true), domainFactory('concurrent'));
     }).toThrow();
     await expect(f.registry.registerExtension(makeExtension('X', d2))).rejects.toThrow();
     expect(f.handler.mountEntries('X')).toBe(0);

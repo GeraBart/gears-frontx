@@ -18,6 +18,7 @@
  * `inst-me-no-command-outside-action` (a slot detach leaves no stale record), and
  * `cpt-frontx-dod-extension-domain-governance-url-commands`.
  */
+import { mountedIn } from './helpers/mounted-in';
 import { afterEach, describe, it, expect } from 'vitest';
 import {
   ACTION_MOUNT_EXT, ACTION_UNMOUNT_EXT, dispatch, expectCommands, mountSettled, replaceNamingOneOf, setup,
@@ -79,7 +80,7 @@ describe('Concurrent domain commands', () => {
       ...(intent === 'push' ? [[d, [], 'push'] as Command] : []),
       [d, [], 'replace'], [d, [], 'replace'],
     ]);
-    expect(f.registry.getMountedExtensions(d)).toEqual([]);
+    expect(mountedIn(f.registry, d)).toEqual([]);
   });
 
   it('an already-mounted mount of A sets and clears its own record; an unmount of A accepted after it is not cleared by that settle, so commands omit A until the unmount settles', async () => {
@@ -96,12 +97,12 @@ describe('Concurrent domain commands', () => {
     expect(await doneM).toBe('next');
     await f.rr.whenCalls(3);
     expect(f.rr.calls[2]).toEqual([d, [], 'replace']);
-    expect(f.registry.getMountedExtensions(d)).toEqual(['A']);
+    expect(mountedIn(f.registry, d)).toEqual(['A']);
 
     f.handler.releaseUnmount('A');
     expect(await doneU).toBe('next');
     await expectCommands(f, [[d, ['A'], 'push'], [d, [], 'push'], [d, [], 'replace'], [d, [], 'replace']]);
-    expect(f.registry.getMountedExtensions(d)).toEqual([]);
+    expect(mountedIn(f.registry, d)).toEqual([]);
   });
 
   it('a mount of A accepted while an unmount of A has not settled: commands name A, including the unmount\'s own settle command', async () => {
@@ -133,7 +134,7 @@ describe('Concurrent domain commands', () => {
     expect(f.rr.calls).toEqual([[d, [], 'push']]);
     expect(await done).toBe('next');
     await expectCommands(f, [[d, [], 'push'], [d, [], 'replace']]);
-    expect(f.registry.getMountedExtensions(d)).toEqual([]);
+    expect(mountedIn(f.registry, d)).toEqual([]);
   });
 
   it('start/join: a joined mount issues its own acceptance and its own settle command', async () => {
@@ -197,7 +198,7 @@ describe('Concurrent domain commands', () => {
     await expectCommands(f, [
       [d, ['A'], 'push'], [d, [], 'push'], [d, [], 'replace'], [d, [], 'replace'],
     ]);
-    expect(f.registry.getMountedExtensions(d)).toEqual([]);
+    expect(mountedIn(f.registry, d)).toEqual([]);
   });
 
   it('a mount of A that waited on an unmount of A which failed takes its fallback: acceptance commands per request, one settle command per request', async () => {
@@ -221,7 +222,7 @@ describe('Concurrent domain commands', () => {
     // record then held, so either projection is one the FEATURE allows.
     const either = replaceNamingOneOf(d, [[], ['A']]);
     await expectCommands(f, [[d, [], 'push'], [d, ['A'], 'push'], either, either]);
-    expect(f.registry.getMountedExtensions(d)).toEqual([]);
+    expect(mountedIn(f.registry, d)).toEqual([]);
   });
 
   it('an extension that leaves the mount set by a slot detach after its request settled is not named by the next command: its record was cleared at its own settle', async () => {
@@ -231,7 +232,7 @@ describe('Concurrent domain commands', () => {
     await mountSettled(f, 'A');
 
     await f.registry.getMounter(d).detach();
-    expect(f.registry.getMountedExtensions(d)).toEqual([]);
+    expect(mountedIn(f.registry, d)).toEqual([]);
     expect(f.rr.calls).toEqual([]);
 
     await expectCommands(f, []);

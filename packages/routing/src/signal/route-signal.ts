@@ -2,17 +2,13 @@
  * Route Signal Factory — `history`-bound construction of the route
  * ownership signal's own write and observe surfaces.
  *
- * This factory replaces a public surface that used to
- * export `backProjectEntries` and `createObserver` as free, top-level
- * bindings that resolved the realm-shared `NavigationHistory` singleton
- * internally on every call. A caller that constructed its own
- * `NavigationHistory` — a test double, an SSR instance carrying its own
- * adapter — had no way to make either function read *or write* through it:
- * `backProjectEntries` always read and wrote the real singleton regardless
- * of what the caller had built. `createRouteSignal` replaces both exports
- * with a single factory that binds both surfaces to the identical
- * `NavigationHistory` given here, for both reading and writing — there is
- * no unbound compatibility export left to keep in sync with this one.
+ * The package exports no free, top-level `backProjectEntries` or
+ * `createObserver` resolving the realm-shared `NavigationHistory` singleton
+ * internally: a caller that constructs its own `NavigationHistory` — a test
+ * double, an SSR instance carrying its own adapter — could not make such a
+ * function read *or write* through it. `createRouteSignal` is a single
+ * factory that binds both surfaces to the identical `NavigationHistory`
+ * given here, for both reading and writing.
  */
 import { createBackProjectEntries } from './url-back-projection.js';
 import { createObserverBoundTo } from './observe-change.js';

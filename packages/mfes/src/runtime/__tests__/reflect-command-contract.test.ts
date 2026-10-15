@@ -1,5 +1,5 @@
 /**
- * The router port has exactly seven members, the runtime contacts the router
+ * The router port has exactly ten members, the runtime contacts the router
  * only through them, and an Exclusive domain that declares `unmount_ext` is
  * rejected.
  *
@@ -20,21 +20,21 @@ const registries: DefaultMfeRegistry[] = [];
 afterEach(async () => { for (const r of registries.splice(0)) await r.dispose(); });
 
 type RouterMember =
-  | 'registerDomain' | 'registerExtension' | 'releaseDomain' | 'releaseExtension'
-  | 'assignOccupantValue' | 'reflect' | 'supplyNavigation';
+  | 'connect' | 'registerDomain' | 'registerExtension' | 'releaseDomain' | 'releaseExtension'
+  | 'assignOccupantValue' | 'supplyNavigation' | 'startDomain' | 'stopDomain' | 'reflect';
 const ROUTER_MEMBERS: RouterMember[] = [
-  'registerDomain', 'registerExtension', 'releaseDomain', 'releaseExtension',
-  'assignOccupantValue', 'reflect', 'supplyNavigation',
+  'connect', 'registerDomain', 'registerExtension', 'releaseDomain', 'releaseExtension',
+  'assignOccupantValue', 'supplyNavigation', 'startDomain', 'stopDomain', 'reflect',
 ];
 
 describe('router port surface', () => {
-  it('RouterPort has exactly the seven members, and `reflect` has the URL-command signature (type level)', () => {
+  it('RouterPort has exactly the ten members, and `reflect` has the URL-command signature (type level)', () => {
     // cpt-frontx-dod-mfe-host-communication-router-port-contract
     expectTypeOf<keyof RouterPort>().toEqualTypeOf<RouterMember>();
     expectTypeOf<RouterPort['reflect']>().toEqualTypeOf<(domainId: string, extensionIds: string[], verb: 'push' | 'replace') => void>();
   });
 
-  it('through mount, unregisterExtension, unregisterDomain and dispose the runtime touches only the seven members, and reaches `reflect`', async () => {
+  it('through mount, unregisterExtension, unregisterDomain and dispose the runtime touches only the ten members, and reaches each of them', async () => {
     // cpt-frontx-dod-mfe-host-communication-router-port-contract
     const touched = new Set<string>();
     const router = new Proxy({} as Record<string, unknown>, {
@@ -47,11 +47,13 @@ describe('router port surface', () => {
     const f = await setup('optional', 'd-contract-port', ['A', 'B'], { router });
     expect(await dispatch(f.registry, 'd-contract-port', ACTION_MOUNT_EXT, { subject: 'A', history: 'push' })).toBe('next');
     await f.registry.unregisterExtension('B');
+    await f.registry.getMounter('d-contract-port').detach();
     await f.registry.unregisterDomain('d-contract-port');
     await f.registry.dispose();
 
     expect([...touched].filter((member) => !ROUTER_MEMBERS.includes(member as RouterMember))).toEqual([]);
-    for (const member of ['registerDomain', 'registerExtension', 'assignOccupantValue', 'reflect', 'releaseExtension', 'releaseDomain']) {
+    // `supplyNavigation` is reached only by a registry that adopts an inbound bridge (inbound-bridge-link.test.ts).
+    for (const member of ROUTER_MEMBERS.filter((m) => m !== 'supplyNavigation')) {
       expect(touched.has(member)).toBe(true);
     }
   });
@@ -67,7 +69,7 @@ describe('Exclusive domain cardinality', () => {
     registries.push(registry);
 
     expect(() =>
-      registry.registerDomain(makeDomain('d-exclusive-with-unmount', true), domainFactory('exclusive', registry, 'd-exclusive-with-unmount', true))
+      registry.registerDomain(makeDomain('d-exclusive-with-unmount', true), domainFactory('exclusive', true))
     ).toThrow(ACTION_UNMOUNT_EXT);
   });
 
@@ -79,7 +81,7 @@ describe('Exclusive domain cardinality', () => {
     registries.push(registry);
 
     expect(() =>
-      registry.registerDomain(makeDomain('d-exclusive-plain', false), domainFactory('exclusive', registry, 'd-exclusive-plain'))
+      registry.registerDomain(makeDomain('d-exclusive-plain', false), domainFactory('exclusive'))
     ).not.toThrow();
   });
 });

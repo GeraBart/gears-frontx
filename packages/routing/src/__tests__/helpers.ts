@@ -18,35 +18,72 @@
 // falling out of sync with it.
 export const ROUTING_RUNTIME_SURFACE = Object.keys(routingIndex).sort();
 
-// Type-only exports cannot be derived the same way — `export type *`/
-// `export type { ... }` erase entirely at compile time, so there is no
-// runtime object to call `Object.keys` on. This list is instead
-// cross-checked by hand against every DESIGN §3.3 public-surface row that
-// names a type rather than a function: the `NavigationHistory` contract
-// (`NavigationHistory`, `Location`); the `resolveNavigationHistory`/
-// `HistoryAdapter` seam (`HistoryAdapter`, `AdapterLocation`); the
-// engine-provider port (`EngineProviderInput`, `EngineProviderPort`,
-// `EntryAddress`); the registered-extensions source
-// (`RegisteredExtensionsSource`); `createRouteSignal`'s own return shape
-// (`RouteSignal`); the transition notification (`Transition`); and
-// `RoutingError`'s own discriminant (`RoutingErrorCode`). Missing one of
-// these here would silently reopen the same class of gap the runtime half
-// above just closed — `helpers/surface-check.test.ts` proves the presence
-// check this list feeds (`dist-internal.test.ts`) actually fails on a
-// fixture missing a declared name, so an incomplete list is the only way
-// left for a name to go unverified.
+// Type-only exports cannot be derived the same way — `export type { ... }`
+// erases entirely at compile time, so there is no runtime object to call
+// `Object.keys` on. This list is instead cross-checked by hand against every
+// DESIGN §3.3 public-surface row that names a type rather than a function:
+// the `NavigationHistory` contract (`NavigationHistory`, `Location`,
+// `HistoryNotification`, `HistorySubscriber`, `NavigationKind`,
+// `ReleaseFunction`, `HistoryVerb`); the URL grammar codec's input and output
+// shapes (`ParseResult`, `SerializeInput`, `Entry`, `Param`, `ParamName`,
+// `ParamValue`, `DomainKey`, `ExtensionToken`, `ParseWarning`,
+// `ParseWarningCode`); `createRouteSignal`'s own return shape (`RouteSignal`)
+// and the back-projection helper the engine-provider package uses through it
+// (`BackProjectEntries`, `BackProjectionDelta`, `EntryInit`, `PayloadChange`,
+// `ReplacedEntry`); and the engine-provider port (`EngineProviderInput`,
+// `EngineProviderPort`, `EntryAddress`). The `HistoryAdapter` seam
+// (`HistoryAdapter`, `AdapterLocation`) and the error class with its
+// discriminant (`RoutingError`, `RoutingErrorCode`) are package-internal
+// (DESIGN §3.3, surface scope), so they are not listed. Missing a public name
+// here would let it go unverified — `helpers/surface-check.test.ts` proves
+// the presence check this list feeds (`dist-internal.test.ts`) actually
+// fails on a fixture missing a declared name.
 export const ROUTING_TYPE_ONLY_SURFACE = [
-  'AdapterLocation',
+  'BackProjectEntries',
+  'BackProjectionDelta',
+  'DomainKey',
   'EngineProviderInput',
   'EngineProviderPort',
+  'Entry',
   'EntryAddress',
-  'HistoryAdapter',
+  'EntryInit',
+  'ExtensionToken',
+  'HistoryNotification',
+  'HistorySubscriber',
+  'HistoryVerb',
   'Location',
   'NavigationHistory',
-  'RegisteredExtensionsSource',
+  'NavigationKind',
+  'Param',
+  'ParamName',
+  'ParamValue',
+  'ParseResult',
+  'ParseWarning',
+  'ParseWarningCode',
+  'PayloadChange',
+  'ReleaseFunction',
+  'ReplacedEntry',
   'RouteSignal',
-  'RoutingErrorCode',
+  'SerializeInput',
+] as const;
+
+// The package-internal contracts DESIGN §3.3 lists below its table (name
+// validity, extension-token derivation, the registered-extensions source,
+// entry resolution, the observer factory, the transition) — asserted absent
+// from the published export list, so a re-export slipping one of them into
+// the public surface fails the same pin that catches a missing public name.
+export const ROUTING_INTERNAL_TYPES = [
+  'CreateObserver',
+  'DeriveExtensionToken',
+  'EntryResolution',
+  'ExtensionRegistration',
+  'ObserverHandle',
+  'RegisteredExtensionsSource',
+  'ResolveEntries',
+  'ResolvedEntry',
   'Transition',
+  'TransitionDiff',
+  'ValidateName',
 ] as const;
 
 // Internal building blocks DESIGN §3.3 explicitly excludes from the public
@@ -70,13 +107,12 @@ import type {
   RegisteredExtensionsSource,
 } from '../types/index.js';
 
-// `backProjectEntries`/`createObserver` are no longer
-// free, realm-singleton-defaulting exports of the package itself — a
-// conforming consumer now calls `createRouteSignal(history)` once and reuses
-// the pair it returns. These two module-level bindings are this test
-// suite's own equivalent of that call site, rebound by `resetRealm` on every
-// reset so the many existing call sites across this package's test files
-// (`backProjectEntries(...)`, `createObserver(...)`) keep working unchanged,
+// `backProjectEntries`/`createObserver` are not free, realm-singleton-
+// defaulting exports of the package itself — a conforming consumer calls
+// `createRouteSignal(history)` once and reuses the pair it returns. These two
+// module-level bindings are this test suite's own equivalent of that call
+// site, rebound by `resetRealm` on every reset so the call sites across this
+// package's test files (`backProjectEntries(...)`, `createObserver(...)`) are
 // always bound to whichever `NavigationHistory` the current test's
 // `resetRealm` most recently constructed.
 export let backProjectEntries: BackProjectEntries;

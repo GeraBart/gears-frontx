@@ -1,7 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import type { FakeHistoryAdapter } from '../history/fake-history-adapter.js';
 import { backProjectEntries, expectRoutingError, resetRealm } from '../helpers.js';
-import type { DomainKey, ExtensionToken } from '../../types/index.js';
+import type { BackProjectionDelta, DomainKey, ExtensionToken, HistoryVerb } from '../../types/index.js';
 
 // FEATURE (route-ownership-signal) §3, "URL Back-Projection Helper Via
 // Own-Key Rewrite" (cpt-frontx-algo-routing-route-ownership-signal-url-back-projection);
@@ -368,7 +368,7 @@ describe('url-back-projection — synchronous validation', () => {
 
   // §6 Acceptance Criteria: "a domain key that is not a single valid name —
   // `screen.tenants.tabs` among them".
-  it('throws RoutingError(invalid-domain-key) for the composite-shaped "screen.tenants.tabs", which is no longer a valid single-name domain key', () => {
+  it('throws RoutingError(invalid-domain-key) for the composite-shaped "screen.tenants.tabs", which is not a valid single-name domain key', () => {
     const adapter = resetRealm('/en?screen=dashboard');
 
     const error = expectRoutingError(() => backProjectEntries('screen.tenants.tabs' as DomainKey, {}, 'push'));
@@ -637,26 +637,11 @@ describe('url-back-projection — replaced must name an entry this domain key cu
   });
 });
 
-// The optional fourth `pageHash` parameter — the
-// single write path for the page hash. Given (including `''`), it
-// overrides whatever hash is currently in the URL; absent, the current
-// hash is preserved verbatim, the pre-existing behaviour every other
-// describe block in this file already exercises implicitly.
-describe('url-back-projection — optional pageHash parameter', () => {
-  it('given, replaces the current page hash in the same single write', () => {
-    const adapter = resetRealm('/en?screen=dashboard#old-hash');
-
-    backProjectEntries(
-      'screen' as DomainKey,
-      { payloadChanged: [{ extension: 'dashboard' as ExtensionToken, params: [] }] },
-      'push',
-      'new-hash',
-    );
-
-    expect(adapter.lastWrite).toBe('/en?screen=dashboard#new-hash');
-  });
-
-  it('absent, preserves the current page hash verbatim', () => {
+// The codec copies the current hash unchanged, and the
+// helper takes no hash (FEATURE (route-ownership-signal) §3, step
+// `inst-serialize`).
+describe('url-back-projection — the current hash is kept and no hash is taken', () => {
+  it('keeps the current page hash verbatim in a push', () => {
     const adapter = resetRealm('/en?screen=dashboard#kept-hash');
 
     backProjectEntries(
@@ -668,30 +653,39 @@ describe('url-back-projection — optional pageHash parameter', () => {
     expect(adapter.lastWrite).toBe('/en?screen=dashboard#kept-hash');
   });
 
-  it('an empty string clears the current page hash', () => {
-    const adapter = resetRealm('/en?screen=dashboard#old-hash');
+  it('keeps the current page hash verbatim in a replace that removes the entry', () => {
+    const adapter = resetRealm('/en?screen=dashboard#kept-hash');
 
-    backProjectEntries(
-      'screen' as DomainKey,
-      { payloadChanged: [{ extension: 'dashboard' as ExtensionToken, params: [] }] },
-      'push',
-      '',
-    );
+    backProjectEntries('screen' as DomainKey, { removed: ['dashboard' as ExtensionToken] }, 'replace');
 
-    expect(adapter.lastWrite).toBe('/en?screen=dashboard');
+    expect(adapter.lastWrite).toBe('/en#kept-hash');
   });
 
-  it('given on a URL that carries no hash yet, adds it in the same single write', () => {
+  it('writes no hash when the current URL carries none', () => {
     const adapter = resetRealm('/en?screen=dashboard');
 
     backProjectEntries(
       'screen' as DomainKey,
       { payloadChanged: [{ extension: 'dashboard' as ExtensionToken, params: [] }] },
       'push',
-      'fresh-hash',
     );
 
-    expect(adapter.lastWrite).toBe('/en?screen=dashboard#fresh-hash');
+    expect(adapter.lastWrite).toBe('/en?screen=dashboard');
+  });
+
+  it('takes no hash argument: its parameters are the domain key, the delta and the verb, and an extra argument leaves the current hash in place', () => {
+    expectTypeOf(backProjectEntries).parameters.toEqualTypeOf<[DomainKey, BackProjectionDelta, HistoryVerb]>();
+    const adapter = resetRealm('/en?screen=dashboard#kept-hash');
+
+    (backProjectEntries as (...args: unknown[]) => void)(
+      'screen' as DomainKey,
+      { payloadChanged: [{ extension: 'dashboard' as ExtensionToken, params: [] }] },
+      'push',
+      'new-hash',
+    );
+
+    expect(backProjectEntries).toHaveLength(3);
+    expect(adapter.lastWrite).toBe('/en?screen=dashboard#kept-hash');
   });
 });
 
@@ -740,9 +734,8 @@ describe('url-back-projection — what one call always does', () => {
     backProjectEntries('widgets' as DomainKey, {}, 'push');
     backProjectEntries('widgets' as DomainKey, {}, 'push');
 
-    // Nothing compares the composed URL against the current one: an empty
-    // delta is also how a caller writes a page hash and nothing else, and
-    // the consumer is the side that knows whether anything changed.
+    // Nothing compares the composed URL against the current one: the
+    // consumer is the side that knows whether anything changed.
     expect(pushed).toEqual([
       '/en?widgets=line-a;range=7d',
       '/en?widgets=line-a;range=7d',

@@ -1,59 +1,84 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { afterEach, describe, it, expect } from 'vitest';
 import { ExclusiveMountStrategy } from '../ExclusiveMountStrategy';
 import { makePayload } from './helpers/make-payload';
 import { FakeMounter } from './helpers/FakeMounter';
 import { FakeContainerHooks } from './helpers/FakeContainerHooks';
-import { FakeRegistry } from './helpers/FakeRegistry';
-import { ExtensionReleaserProvider } from '../ExtensionReleaserProvider';
+import { mountedIn } from './helpers/mounted-in';
+import { strategyDomain, type StrategyDomain } from './helpers/strategy-domain';
 
 // ─── ExclusiveMountStrategy ──────────────────────────────────────────────────
+//
+// Constructed as `new ExclusiveMountStrategy(mounter, hooks)`; the strategy reads
+// its domain's mount set through its own mounter. Driven directly, bypassing
+// the occupancy queue.
 
 describe('ExclusiveMountStrategy', () => {
   const DOMAIN = 'excl-domain';
-  let mounter: FakeMounter;
-  let hooks: FakeContainerHooks;
-  let registry: FakeRegistry;
-  let strategy: ExclusiveMountStrategy;
+  const opened: StrategyDomain[] = [];
 
-  beforeEach(() => {
-    mounter = new FakeMounter();
-    hooks = new FakeContainerHooks();
-    registry = new FakeRegistry();
-    strategy = new ExclusiveMountStrategy(mounter, hooks, registry, DOMAIN);
+  async function open(): Promise<StrategyDomain> {
+    const d = await strategyDomain('exclusive', DOMAIN, ['ext-a', 'ext-b', 'ext-c']);
+    opened.push(d);
+    return d;
+  }
+
+  afterEach(async () => {
+    for (const d of opened.splice(0)) await d.registry.dispose();
   });
 
   it('returns without action on a direct mount of the sole already-mounted subject (already-mounted handling is normally done by the mount-ext prologue)', async () => {
-    registry.setMounted(DOMAIN, ['ext-a']);
+    const d = await open();
+    await d.strategy.mount(makePayload('ext-a'));
 
     // Through the mediator, the registry's mount-ext prologue
     // (`MountExtActionHandler`) short-circuits an already-mounted request
     // before this strategy body ever runs. A direct call bypasses that
     // prologue, so this defensive check returns successfully without
     // mounting 'ext-a' a second time, rather than throwing.
-    await expect(strategy.mount(makePayload('ext-a'))).resolves.toBeUndefined();
+    await expect(d.strategy.mount(makePayload('ext-a'))).resolves.toBeUndefined();
+
+    expect(d.hooks.created).toEqual(['ext-a']);
+    expect(d.hooks.destroyed).toEqual([]);
+    expect(mountedIn(d.registry, DOMAIN)).toEqual(['ext-a']);
+  });
+
+  it('a replacing mount evicts the occupant and mounts the new extension', async () => {
+    const d = await open();
+    await d.strategy.mount(makePayload('ext-a'));
+
+    await d.strategy.mount(makePayload('ext-b'));
+
+    expect(mountedIn(d.registry, DOMAIN)).toEqual(['ext-b']);
+    expect(d.hooks.destroyed).toEqual(['ext-a']);
+    expect(d.hooks.created).toEqual(['ext-a', 'ext-b']);
+  });
+
+  it('a mount evicts every other member of the mount set', async () => {
+    const d = await open();
+    await d.strategy.mount(makePayload('ext-a'));
+    // A second member placed straight through the domain's mounter, as a mount that bypassed the strategy would.
+    await d.registry.getMounter(DOMAIN).mount('ext-b', document.createElement('div'));
+    expect(mountedIn(d.registry, DOMAIN)).toEqual(['ext-a', 'ext-b']);
+
+    await d.strategy.mount(makePayload('ext-c'));
+
+    expect(mountedIn(d.registry, DOMAIN)).toEqual(['ext-c']);
+    expect(d.hooks.destroyed).toContain('ext-a');
+  });
+
+  it('exposes no unmount member', async () => {
+    const d = await open();
+    expect('unmount' in d.strategy).toBe(false);
+  });
+
+  it('a strategy built with a mounter the runtime never registered throws when it reads the mount set', async () => {
+    const mounter = new FakeMounter();
+    const hooks = new FakeContainerHooks();
+    const strategy = new ExclusiveMountStrategy(mounter, hooks);
+
+    await expect(strategy.mount(makePayload('ext-a'))).rejects.toThrow(/never registered/);
 
     expect(mounter.mountCalls).toHaveLength(0);
-    expect(mounter.unmountCalls).toHaveLength(0);
-  });
-
-  it('mount evicts siblings and mounts the new extension', async () => {
-    registry.setMounted(DOMAIN, ['ext-a', 'ext-b']);
-    // Stands in for the destroy each sibling's own earlier mount would have registered.
-    ExtensionReleaserProvider.for(mounter).registerDestroy('ext-a', () => hooks.destroy('ext-a'));
-    ExtensionReleaserProvider.for(mounter).registerDestroy('ext-b', () => hooks.destroy('ext-b'));
-
-    await strategy.mount(makePayload('ext-c'));
-
-    // Both prior extensions evicted
-    expect(mounter.unmountCalls).toContain('ext-a');
-    expect(mounter.unmountCalls).toContain('ext-b');
-    expect(hooks.destroyed).toContain('ext-a');
-    expect(hooks.destroyed).toContain('ext-b');
-    // New extension mounted
-    expect(mounter.mountCalls.map(c => c.extensionId)).toContain('ext-c');
-  });
-
-  it('exposes no unmount member', () => {
-    expect('unmount' in strategy).toBe(false);
+    expect(hooks.created).toHaveLength(0);
   });
 });

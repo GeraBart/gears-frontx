@@ -1,6 +1,4 @@
 import { describe, it, expect } from 'vitest';
-import { OptionalMountStrategy } from '../OptionalMountStrategy';
-import { ExclusiveMountStrategy } from '../ExclusiveMountStrategy';
 import { ConcurrentMountStrategy } from '../ConcurrentMountStrategy';
 import { ExtensionMounter } from '../ExtensionMounter';
 import { DefaultExtensionMounter } from '../DefaultExtensionMounter';
@@ -8,86 +6,50 @@ import { MountManager } from '../MountManager';
 import { ExtensionReleaserProvider } from '../ExtensionReleaserProvider';
 import { makePayload } from './helpers/make-payload';
 import { FakeContainerHooks } from './helpers/FakeContainerHooks';
-import { FakeRegistry } from './helpers/FakeRegistry';
+import { mountedIn } from './helpers/mounted-in';
+import { strategyDomain } from './helpers/strategy-domain';
 import type { ParentMfeBridge } from '../../handler/ParentMfeBridge';
 
-/**
- * A mounter implementing only the `unmount(extensionId)` signature — no
- * coalescing of its own, and no way to be handed a `destroy` callback
- * directly. The exactly-once container-release guarantee for a strategy's
- * `ExtensionReleaserProvider.for(mounter).release()` calls must hold for a mounter shaped exactly like
- * this one, since it is what `ExtensionMounter` itself, as a public
- * abstract contract, requires.
- */
-class UnmountOnlyFakeMounter extends ExtensionMounter {
-  readonly unmountCalls: string[] = [];
-  private releaseGate: Promise<void> = Promise.resolve();
-  private releaseGateResolve: (() => void) | undefined;
+// ─── Exactly-once release for overlapping strategy releases ────────────────
 
-  attach(_root: Element): void {}
-  async detach(): Promise<void> {}
-  async mount(_extensionId: string, _container: Element): Promise<void> {}
-
-  /** Holds every `unmount()` call open until `settle()` is called. */
-  gate(): void {
-    this.releaseGate = new Promise((resolve) => {
-      this.releaseGateResolve = resolve;
-    });
-  }
-
-  settle(): void {
-    this.releaseGateResolve?.();
-  }
-
-  async unmount(extensionId: string): Promise<void> {
-    this.unmountCalls.push(extensionId);
-    await this.releaseGate;
-  }
-}
-
-// ─── Exactly-once release, independent of the mounter implementation ───────
-
-describe('ExtensionReleaserProvider.for(mounter).release() — exactly-once, even with a mounter that only implements the unmount(extensionId) signature', () => {
+describe('ExtensionReleaserProvider.for(mounter).release() — exactly-once for overlapping strategy releases of one extension', () => {
   it('two overlapping OptionalMountStrategy.unmount() calls for the same extension physically unmount once and destroy its container exactly once', async () => {
-    const DOMAIN = 'old-sig-optional-domain';
-    const mounter = new UnmountOnlyFakeMounter();
-    const hooks = new FakeContainerHooks();
-    const registry = new FakeRegistry();
-    registry.setMounted(DOMAIN, ['ext-a']);
-    // Stands in for the strategy's own earlier mount of ext-a, which is what
-    // registers the destroy that a later release() must run.
-    ExtensionReleaserProvider.for(mounter).registerDestroy('ext-a', () => hooks.destroy('ext-a'));
-    const strategy = new OptionalMountStrategy(mounter, hooks, registry, DOMAIN);
+    const d = await strategyDomain('optional', 'old-sig-optional-domain', ['ext-a']);
+    try {
+      await d.strategy.mount(makePayload('ext-a'));
 
-    mounter.gate();
-    const first = strategy.unmount!(makePayload('ext-a'));
-    const second = strategy.unmount!(makePayload('ext-a'));
-    mounter.settle();
-    await Promise.all([first, second]);
+      d.handler.holdUnmount('ext-a');
+      const first = d.strategy.unmount!(makePayload('ext-a'));
+      const second = d.strategy.unmount!(makePayload('ext-a'));
+      await d.handler.unmountStarted('ext-a');
+      d.handler.releaseUnmount('ext-a');
+      await Promise.all([first, second]);
 
-    expect(mounter.unmountCalls).toEqual(['ext-a']);
-    expect(hooks.destroyed).toEqual(['ext-a']);
+      expect(d.handler.events.filter((e) => e === 'unmount-entered:ext-a')).toHaveLength(1);
+      expect(d.hooks.destroyed).toEqual(['ext-a']);
+      expect(mountedIn(d.registry, 'old-sig-optional-domain')).toEqual([]);
+    } finally {
+      await d.registry.dispose();
+    }
   });
 
   it('two concurrent ExclusiveMountStrategy mounts of different extensions that each evict the same prior sibling physically unmount it once and destroy its container exactly once', async () => {
-    const DOMAIN = 'old-sig-exclusive-domain';
-    const mounter = new UnmountOnlyFakeMounter();
-    const hooks = new FakeContainerHooks();
-    const registry = new FakeRegistry();
-    registry.setMounted(DOMAIN, ['ext-a']);
-    // Stands in for the strategy's own earlier mount of ext-a, which is what
-    // registers the destroy that a later release() must run.
-    ExtensionReleaserProvider.for(mounter).registerDestroy('ext-a', () => hooks.destroy('ext-a'));
-    const strategy = new ExclusiveMountStrategy(mounter, hooks, registry, DOMAIN);
+    const d = await strategyDomain('exclusive', 'old-sig-exclusive-domain', ['ext-a', 'ext-b', 'ext-c']);
+    try {
+      await d.strategy.mount(makePayload('ext-a'));
 
-    mounter.gate();
-    const first = strategy.mount(makePayload('ext-b'));
-    const second = strategy.mount(makePayload('ext-c'));
-    mounter.settle();
-    await Promise.all([first, second]);
+      d.handler.holdUnmount('ext-a');
+      const first = d.strategy.mount(makePayload('ext-b'));
+      const second = d.strategy.mount(makePayload('ext-c'));
+      await d.handler.unmountStarted('ext-a');
+      d.handler.releaseUnmount('ext-a');
+      await Promise.all([first, second]);
 
-    expect(mounter.unmountCalls).toEqual(['ext-a']);
-    expect(hooks.destroyed).toEqual(['ext-a']);
+      expect(d.handler.events.filter((e) => e === 'unmount-entered:ext-a')).toHaveLength(1);
+      expect(d.hooks.destroyed).toEqual(['ext-a']);
+    } finally {
+      await d.registry.dispose();
+    }
   });
 });
 

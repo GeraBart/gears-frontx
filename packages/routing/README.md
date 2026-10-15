@@ -1,10 +1,14 @@
 # @gears-frontx/routing
 
-FrontX's navigation library: one browser navigation history and one URL grammar shared by a
-composed application and every independently bundled microfrontend it contains, plus a signal
-naming which extension(s) own a given extension domain's entries. Framework-agnostic and
-engine-agnostic by constraint — no dependency on any concrete router engine or UI framework; a
-separately published engine-provider package binds this substrate to one.
+FrontX's navigation library. It holds the FrontX router — one ready `router` instance per runtime,
+which a runtime receives when its MFE registry is built (the registry config's `router` field) —
+together with the router's two abstract dependencies, `ActionsChainExecutor` and
+`RouterTypeSystem`, published as runtime abstract classes. It also holds one browser navigation
+history and one URL grammar shared by a composed application and every independently bundled
+microfrontend it contains, plus a signal naming which extension(s) own a given extension domain's
+entries. Framework-agnostic and engine-agnostic by constraint — no dependency on any concrete
+router engine or UI framework; a separately published engine-provider package binds this substrate
+to one.
 
 Every extension domain, at any depth, is addressed through the same entry grammar. The model task
 (ADR-0003 example 7.1) reads in the address bar as one line:
@@ -19,26 +23,24 @@ The requirements (PRD), the structure and constraints (DESIGN), the decisions be
 (ADR), and the behavior each FEATURE specifies live in this package's own `architecture/` tree in
 the FrontX repository; they are not part of the published package.
 
-## Domain keys and extension tokens: what you supply
+## Published surface
 
-A **domain key** names one addressable location in the URL, and an **extension token** names one
-occupant registered at that location — both are values *you* declare and hand to this package, not
-values it invents or looks up for you:
+- `router` — the ready FrontX router instance, one per runtime.
+- `ActionsChainExecutor`, `RouterTypeSystem` — the router's two abstract dependencies, runtime
+  abstract classes.
+- `resolveNavigationHistory` — the realm-shared navigation history (`location`, `subscribe`,
+  `push`, `replace`, `go`).
+- `parseGrammar`, `serializeGrammar`, `namesEqual` — the URL grammar codec and the name-equality
+  predicate.
+- `createRouteSignal(history)` — returns the URL back-projection helper and the observer factory,
+  both bound to the one history it is given. The observer reads only the entries carrying one
+  domain key and matches each entry's extension token against the list of extension tokens you
+  pass in for that domain; nothing is read from any other package's manifest, registry, or
+  configuration.
 
-- Both must satisfy this package's own lexical rule: lowercase letters, digits, and hyphens, always
-  starting with a letter. This package validates that rule at the point you declare a value and
-  rejects a bad one immediately, rather than letting it reach the URL and fail later.
-- This package never reads another package's manifest, registry, or configuration. It has no
-  built-in notion of a "microfrontend" or a "registration" of its own — those are concepts your own
-  application defines. Everything this package resolves against (which extensions exist for a
-  domain, which one owns a given entry) comes from a plain list of tokens you construct and pass in
-  yourself, never from a source this package goes and reads on its own.
-- In a composed deployment — a host assembling several independently built microfrontends — the
-  extension token for a given occupant typically comes from that microfrontend's own registration:
-  whatever identity it already uses to describe its own route, normalized into a value that
-  satisfies the lexical rule above. Deriving that value correctly, and keeping it unique among the
-  other occupants of the same domain, is your own responsibility; this package only validates and
-  routes on the value once you give it one.
+A domain key and an extension token must satisfy this package's lexical rule: lowercase letters,
+digits, and hyphens, always starting with a letter. The rule is validated where a value is
+declared, and a bad value is rejected immediately.
 
 ## License
 

@@ -34,7 +34,6 @@ import {
 import type { RouterPort } from '../router/RouterPort';
 import {
   associateOccupantValue,
-  readOccupantValue,
   releaseOccupantValue,
 } from './occupant-value-rendezvous';
 
@@ -62,15 +61,8 @@ export class DefaultMountManager extends MountManager {
     parentBridge: ParentMfeBridge
   ) => InboundBridgeLink;
   private readonly retractInboundBridgeLink: (childBridge: ChildMfeBridge) => void;
-  /** The router snapshotted by the factory, or `undefined` for a standalone registry. */
+  /** The router snapshotted by the factory, or `undefined` for a registry built with no router. */
   private readonly router: RouterPort | undefined;
-  /**
-   * Reads this registry's own inbound bridge, if any — the enclosing-value
-   * key for `assignOccupantValue` (`inst-ov-enclosing-value`). Threaded in
-   * the same way as `buildInboundBridgeLink`/`retractInboundBridgeLink`
-   * rather than as a new method on `MfeRegistry` or `DefaultMfeRegistry`.
-   */
-  private readonly getInboundBridge: () => ChildMfeBridge | undefined;
 
   /**
    * The `ChildMfeBridge` whose inbound link is registered for each extension,
@@ -131,7 +123,6 @@ export class DefaultMountManager extends MountManager {
     ) => InboundBridgeLink;
     retractInboundBridgeLink: (childBridge: ChildMfeBridge) => void;
     router?: RouterPort;
-    getInboundBridge: () => ChildMfeBridge | undefined;
   }) {
     super();
     this.extensionManager = config.extensionManager;
@@ -147,7 +138,6 @@ export class DefaultMountManager extends MountManager {
     this.buildInboundBridgeLink = config.buildInboundBridgeLink;
     this.retractInboundBridgeLink = config.retractInboundBridgeLink;
     this.router = config.router;
-    this.getInboundBridge = config.getInboundBridge;
   }
 
   async loadExtension(extensionId: string): Promise<void> {
@@ -317,46 +307,32 @@ export class DefaultMountManager extends MountManager {
         };
 
         // @cpt-algo:cpt-frontx-algo-mfe-host-communication-occupant-value-rendezvous:p1
-        // @cpt-begin:cpt-frontx-algo-mfe-host-communication-occupant-value-rendezvous:p1:inst-ov-assign
-        // After the bridge pair is acquired for this mount and before the
-        // lifecycle mount runs: obtain this extension's occupant value from
-        // the router, keyed by this registry's own inbound bridge for the
-        // enclosing value (`inst-ov-enclosing-value`). A throw here fails
-        // the mount before `lifecycle.mount` is invoked — the existing
-        // catch below deactivates the acquired bridge exactly as any other
-        // pre-lifecycle failure does (`inst-ov-assign-failure`).
         // @cpt-begin:cpt-frontx-algo-mfe-host-communication-occupant-value-rendezvous:p1:inst-ov-standalone
-        // `this.router` is `undefined` for a standalone registry, so this
-        // whole branch is skipped: nothing is assigned and nothing is
-        // associated — the extension mounts exactly as it would with no
-        // occupant-value rendezvous at all.
+        // `this.router` is `undefined` for a registry built with no router,
+        // so this whole branch is skipped: nothing is assigned and nothing
+        // is associated — the extension mounts with no occupant value.
         if (this.router) {
-          // @cpt-begin:cpt-frontx-algo-mfe-host-communication-occupant-value-rendezvous:p1:inst-ov-enclosing-value
-          // `undefined` when this registry holds no inbound bridge (a root
-          // registry — `getInboundBridge()` returns `undefined`), when no
-          // value is associated with it, or when this copy backed away from
-          // the rendezvous (`readOccupantValue` returns `undefined` in both
-          // of those last two cases).
-          const enclosingValue = readOccupantValue(this.getInboundBridge());
-          // @cpt-end:cpt-frontx-algo-mfe-host-communication-occupant-value-rendezvous:p1:inst-ov-enclosing-value
+          // @cpt-begin:cpt-frontx-algo-mfe-host-communication-occupant-value-rendezvous:p1:inst-ov-assign
+          // After the bridge pair is acquired for this mount and before the
+          // lifecycle mount runs: obtain this extension's occupant value from
+          // the router by the domain's id and the extension's id.
           // @cpt-begin:cpt-frontx-algo-mfe-host-communication-occupant-value-rendezvous:p1:inst-ov-assign-failure
           // A throw here propagates out of this `try` block unchanged,
           // reaching the same `catch` that handles every other pre-lifecycle
           // mount failure below: `mountState` moves to 'error', the acquired
           // bridge is deactivated, and no occupant value is associated —
           // `lifecycle.mount` is never reached.
-          const occupantValue = this.router.assignOccupantValue({
-            domain: domainState.domain,
-            extension: extensionState.extension,
-            enclosingValue,
-          });
+          const occupantValue = this.router.assignOccupantValue(
+            extensionState.extension.domain,
+            extensionId
+          );
           // @cpt-end:cpt-frontx-algo-mfe-host-communication-occupant-value-rendezvous:p1:inst-ov-assign-failure
+          // @cpt-end:cpt-frontx-algo-mfe-host-communication-occupant-value-rendezvous:p1:inst-ov-assign
           // @cpt-begin:cpt-frontx-algo-mfe-host-communication-occupant-value-rendezvous:p1:inst-ov-set-before-mount
           associateOccupantValue(childBridge, occupantValue);
           // @cpt-end:cpt-frontx-algo-mfe-host-communication-occupant-value-rendezvous:p1:inst-ov-set-before-mount
         }
         // @cpt-end:cpt-frontx-algo-mfe-host-communication-occupant-value-rendezvous:p1:inst-ov-standalone
-        // @cpt-end:cpt-frontx-algo-mfe-host-communication-occupant-value-rendezvous:p1:inst-ov-assign
 
         // Prepare the link a nested registry constructed synchronously inside
         // this extension's own `mount()` body will automatically adopt, then

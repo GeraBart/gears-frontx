@@ -179,24 +179,13 @@ describe('published declarations: module specifiers and public surface', () => {
     try {
       const valueImports = TANSTACK_RUNTIME_SURFACE.join(', ');
       const typeImports = TANSTACK_TYPE_ONLY_SURFACE.map((name) => `type ${name}`).join(', ');
-      // `EngineProviderProps`/`EngineProviderFromRouterProps`/
-      // `ProviderRouterOptions` are generic over the concrete route
-      // tree/router type a consumer's own router module supplies —
-      // referencing the bare name here (with no consumer router to infer one
-      // from) needs an explicit type argument, same as any other generic
-      // type would.
-      const typeArgs: Partial<Record<(typeof TANSTACK_TYPE_ONLY_SURFACE)[number], string>> = {
-        EngineProviderProps: '<any>',
-        EngineProviderFromRouterProps: '<any>',
-        ProviderRouterOptions: '<any>',
-      };
       writeFileSync(
         path.join(consumerDir, 'consumer.ts'),
         [
           `import { ${valueImports}, ${typeImports} } from '@gears-frontx/routing-tanstack';`,
           '',
           `export const _values = { ${valueImports} };`,
-          `export type _types = [${TANSTACK_TYPE_ONLY_SURFACE.map((name) => `${name}${typeArgs[name] ?? ''}`).join(', ')}];`,
+          `export type _types = [${TANSTACK_TYPE_ONLY_SURFACE.join(', ')}];`,
           '',
         ].join('\n'),
       );

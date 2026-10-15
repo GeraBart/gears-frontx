@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 // @internal — colocated test, direct relative import is permitted.
 import { DefaultMfeRegistry } from '../DefaultMfeRegistry';
-import { MfeRegistry } from '../../registry/MfeRegistry';
 import type { MfeRegistryConfig } from '../config';
 import type { TypeSystemPlugin } from '../../type-substrate';
 import type { ExtensionDomain } from '../../types';
@@ -188,10 +187,10 @@ class ConcurrentDomainFactory extends ExtensionDomainImplementationFactory {
 class ExclusiveDomainImpl extends ExtensionDomainImplementation {
   private readonly strategy: ExclusiveMountStrategy;
 
-  constructor(ctx: DomainContext, registry: MfeRegistry) {
+  constructor(ctx: DomainContext) {
     super();
     const hooks = new TestHooks();
-    this.strategy = new ExclusiveMountStrategy(ctx.mounter, hooks, registry, DOMAIN_EXCL_ID);
+    this.strategy = new ExclusiveMountStrategy(ctx.mounter, hooks);
     ctx.registerHandler(
       FRONTX_ACTION_MOUNT_EXT,
       ActionHandler.fromFunction((_t, p) => this.strategy.mount(p as ActionPayload))
@@ -204,10 +203,9 @@ class ExclusiveDomainImpl extends ExtensionDomainImplementation {
 }
 
 class ExclusiveDomainFactory extends ExtensionDomainImplementationFactory {
-  constructor(private readonly reg: MfeRegistry) { super(); }
 
   build(ctx: DomainContext): ExclusiveDomainImpl {
-    return new ExclusiveDomainImpl(ctx, this.reg);
+    return new ExclusiveDomainImpl(ctx);
   }
 }
 
@@ -216,9 +214,9 @@ class ExclusiveDomainFactory extends ExtensionDomainImplementationFactory {
 class OptionalDomainImpl extends ExtensionDomainImplementation {
   private readonly strategy: OptionalMountStrategy;
 
-  constructor(ctx: DomainContext, registry: MfeRegistry) {
+  constructor(ctx: DomainContext) {
     super();
-    this.strategy = new OptionalMountStrategy(ctx.mounter, new TestHooks(), registry, DOMAIN_OPT_ID);
+    this.strategy = new OptionalMountStrategy(ctx.mounter, new TestHooks());
     ctx.registerHandler(
       FRONTX_ACTION_MOUNT_EXT,
       ActionHandler.fromFunction((_t, p) => this.strategy.mount(p as ActionPayload))
@@ -235,10 +233,9 @@ class OptionalDomainImpl extends ExtensionDomainImplementation {
 }
 
 class OptionalDomainFactory extends ExtensionDomainImplementationFactory {
-  constructor(private readonly reg: MfeRegistry) { super(); }
 
   build(ctx: DomainContext): OptionalDomainImpl {
-    return new OptionalDomainImpl(ctx, this.reg);
+    return new OptionalDomainImpl(ctx);
   }
 }
 
@@ -273,7 +270,7 @@ describe('DefaultMfeRegistry', () => {
 
     it('ExclusiveMountStrategy factory with only mount_ext (and load_ext) declared is admitted', () => {
       const reg = freshRegistry();
-      expect(() => reg.registerDomain(makeExclusiveDomain(), new ExclusiveDomainFactory(reg))).not.toThrow();
+      expect(() => reg.registerDomain(makeExclusiveDomain(), new ExclusiveDomainFactory())).not.toThrow();
       expect(reg.getMounter(DOMAIN_EXCL_ID)).toBeTruthy();
     });
 
@@ -284,7 +281,7 @@ describe('DefaultMfeRegistry', () => {
         ...makeExclusiveDomain(),
         actions: [FRONTX_ACTION_LOAD_EXT],
       } as unknown as ExtensionDomain;
-      expect(() => reg.registerDomain(illegalDomain, new ExclusiveDomainFactory(reg))).toThrow(
+      expect(() => reg.registerDomain(illegalDomain, new ExclusiveDomainFactory())).toThrow(
         FRONTX_ACTION_MOUNT_EXT
       );
     });
@@ -295,7 +292,7 @@ describe('DefaultMfeRegistry', () => {
         ...makeConcurrentDomain(DOMAIN_OPT_ID),
         actions: [FRONTX_ACTION_LOAD_EXT, FRONTX_ACTION_MOUNT_EXT],
       } as unknown as ExtensionDomain;
-      expect(() => reg.registerDomain(illegalDomain, new OptionalDomainFactory(reg))).toThrow(
+      expect(() => reg.registerDomain(illegalDomain, new OptionalDomainFactory())).toThrow(
         FRONTX_ACTION_UNMOUNT_EXT
       );
     });
@@ -309,16 +306,6 @@ describe('DefaultMfeRegistry', () => {
       expect(() => reg.registerDomain(illegalDomain, new ConcurrentDomainFactory())).toThrow();
     });
 
-  });
-
-  describe('getMountedExtensions', () => {
-    it('returns empty readonly array for an unknown domain — never undefined', () => {
-      const reg = freshRegistry();
-      const result = reg.getMountedExtensions('unknown-domain-id');
-      expect(result).toBeDefined();
-      expect(Array.isArray(result)).toBe(true);
-      expect(result).toHaveLength(0);
-    });
   });
 
   describe('getMounter', () => {

@@ -1,25 +1,29 @@
 /**
- * Router Port Contract
+ * The Abstract Router
  *
- * The abstract contract an injected router implements, accepted through the
- * optional `MfeRegistryConfig.router`. The runtime presents each domain and
- * extension registration to it, obtains each extension's opaque occupant
- * value from it at mount, commands it to reflect a domain's projected
- * occupancy in the URL (`reflect`), and hands it a reader for an extension's
- * navigable occupant value. The router owns routing identity and page-wide
- * domain-route uniqueness; this package keeps no routing grammar of its own
- * (`cpt-frontx-adr-extension-routing-port`).
+ * The optional abstract router this package declares and calls, accepted
+ * through `MfeRegistryConfig.router`. The runtime tells the router everything
+ * in ids, routes and one boolean per domain: it connects the router to the
+ * registry's actions-chain executor and type system, registers and releases
+ * routed domains and extensions, starts and stops a domain at its root's
+ * attach and detach, obtains each extension's opaque occupant value at mount,
+ * supplies an extension runtime's navigation, and commands the router to
+ * reflect a domain's projected occupancy in the URL. The router owns routing
+ * identity and page-wide domain-route uniqueness; this package keeps no
+ * routing grammar of its own (`cpt-frontx-adr-extension-routing-port`).
  *
- * This package MUST NOT import `@gears-frontx/routing` or
- * `@gears-frontx/routing-tanstack`, nor be imported by either — the router
- * port is the only contact surface between this package and a concrete
- * router (`cpt-frontx-dod-mfe-host-communication-router-port-contract`).
+ * The FrontX router in `@gears-frontx/routing` conforms to this class
+ * structurally and does not extend it; the runtime never tests a router with
+ * `instanceof`. This package MUST NOT import `@gears-frontx/routing` or
+ * `@gears-frontx/routing-tanstack`, nor be imported by either
+ * (`cpt-frontx-dod-mfe-host-communication-router-port-contract`).
  *
  * @packageDocumentation
  */
 // @cpt-dod:cpt-frontx-dod-mfe-host-communication-router-port-contract:p1
 
-import type { ExtensionDomain, Extension } from '../types';
+import type { ActionsChain } from '../types';
+import type { TypeSystemPlugin } from '../type-substrate';
 
 /**
  * The opaque value a router assigns an extension at mount. The runtime
@@ -29,34 +33,50 @@ import type { ExtensionDomain, Extension } from '../types';
 export type OccupantValue = unknown;
 
 /**
- * The input to `RouterPort.assignOccupantValue`: the registered domain and
- * extension declarations for the mount in progress, and the value associated
- * with the mounting registry's own inbound bridge (`undefined` for a root
- * registry, when no value is associated with that bridge, or when this copy
- * backed away from the rendezvous).
+ * The abstract router: only abstract public methods and no fields. Every
+ * member is a synchronous call that returns its result directly. Adds no
+ * member to `MfeRegistry`, `ChildMfeBridge`, or `ParentMfeBridge`.
  */
-export interface OccupantValueAssignment {
-  domain: ExtensionDomain;
-  extension: Extension;
-  enclosingValue: OccupantValue | undefined;
-}
+export abstract class RouterPort {
+  /**
+   * Called once, in the registry's constructor, before any domain or
+   * extension registers. `executor` executes each chain it is given through
+   * the registry's own `executeActionsChain`; `typeSystem` is the registry's
+   * own type-system plugin.
+   */
+  abstract connect(
+    executor: { executeActionsChain(chain: ActionsChain): void },
+    typeSystem: TypeSystemPlugin
+  ): void;
 
-/**
- * The router port: the abstract contract an injected router implements.
- * Every member is synchronous. Adds no member to `MfeRegistry`,
- * `ChildMfeBridge`, or `ParentMfeBridge`.
- */
-export interface RouterPort {
-  /** The registration notification for a domain; throwing rejects the registration. */
-  registerDomain(domain: ExtensionDomain): void;
-  /** The registration notification for an extension; throwing rejects the registration. */
-  registerExtension(extension: Extension): void;
-  /** The release notification that frees what the router admitted for a domain. */
-  releaseDomain(domainId: string): void;
-  /** The release notification that frees what the router admitted for an extension. */
-  releaseExtension(extensionId: string): void;
-  /** The value assignment at mount. */
-  assignOccupantValue(assignment: OccupantValueAssignment): OccupantValue;
+  /**
+   * Called when a domain whose declaration carries `route` registers.
+   * `declaresUnmount` is whether the domain's actions list the `unmount_ext`
+   * action type id. A throw rejects the registration.
+   */
+  abstract registerDomain(domainId: string, route: string, declaresUnmount: boolean): void;
+
+  /** Called when an extension whose declaration carries `route` registers. A throw rejects it. */
+  abstract registerExtension(extensionId: string, domainId: string, route: string): void;
+
+  /** Frees what the router admitted for a domain, on unregistration, rollback or disposal. */
+  abstract releaseDomain(domainId: string): void;
+
+  /** Frees what the router admitted for an extension, in the same cases as `releaseDomain`. */
+  abstract releaseExtension(extensionId: string): void;
+
+  /** Called at mount, before the lifecycle `mount` runs; the result is stored without being read. */
+  abstract assignOccupantValue(domainId: string, extensionId: string): unknown;
+
+  /** Called when the registry adopts its inbound bridge, on each adoption. */
+  abstract supplyNavigation(readOccupantValue: () => unknown): void;
+
+  /** Called in the domain's mounter `attach(root)`, once the domain's root is attached. */
+  abstract startDomain(domainId: string): void;
+
+  /** Called first in the domain's mounter `detach()`, synchronously, before the mass unmount. */
+  abstract stopDomain(domainId: string): void;
+
   /**
    * The URL command: the URL entries of the domain `domainId` must show
    * exactly the extensions `extensionIds`, written with the history verb
@@ -65,7 +85,5 @@ export interface RouterPort {
    * its settle; it carries no action type, payload, history intent, or
    * outcome.
    */
-  reflect(domainId: string, extensionIds: string[], verb: 'push' | 'replace'): void;
-  /** The supply of an extension's navigation from its occupant value. */
-  supplyNavigation(readOccupantValue: () => OccupantValue | undefined): void;
+  abstract reflect(domainId: string, extensionIds: string[], verb: 'push' | 'replace'): void;
 }

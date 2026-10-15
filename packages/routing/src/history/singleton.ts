@@ -29,17 +29,16 @@ interface RealmGlobal {
  * package built against the same contract version (FEATURE §3,
  * Realm-Global Singleton Resolution).
  *
- * `createAdapter` is consulted only when no instance exists yet under this
- * realm's well-known key; a later caller's own `createAdapter` is ignored
- * once an instance is already stored, exactly as a second copy of this
- * package finds the first copy's instance already there. Defaults to the
- * browser `window` adapter; a test or an SSR entry point passes its own to
- * avoid touching `window` at all.
+ * Package-internal: the public `resolveNavigationHistory` (`./index.ts`)
+ * calls this with no argument, so the instance is built over the browser
+ * `window` adapter. `createAdapter` is consulted only when no instance
+ * exists yet under this realm's well-known key; a later caller's own
+ * `createAdapter` is ignored once an instance is already stored, exactly as
+ * a second copy of this package finds the first copy's instance already
+ * there.
  *
- * @param createAdapter Test/SSR seam — a conforming consumer never passes
- * this; it exists so a test can resolve the singleton against a
- * `HistoryAdapter` double instead of `window`, and so an SSR entry point can
- * resolve it without ever touching `window`.
+ * @param createAdapter The `HistoryAdapter` the instance is built over;
+ * this package's own tests pass a double here instead of `window`.
  */
 // @cpt-algo:cpt-frontx-algo-routing-navigation-substrate-singleton-resolution:p2
 // @cpt-flow:cpt-frontx-flow-routing-navigation-substrate-imperative-navigation:p1
@@ -55,14 +54,12 @@ export function resolveNavigationHistory(
 
   // @cpt-begin:cpt-frontx-algo-routing-navigation-substrate-singleton-resolution:p2:inst-if-absent
   if (existing === undefined) {
-    // The default browser adapter has nothing to
-    // construct itself over in a realm with no `window` — an SSR render
-    // that never passed its own adapter override. Checked here, ahead of
-    // `createAdapter()`, rather than inside `createWindowHistoryAdapter`
-    // itself, so the check applies exactly to "the default was left in
-    // place", never to a caller's own SSR-safe adapter that happens to
-    // read `window` too (`createAdapter !== createWindowHistoryAdapter`
-    // always skips this branch, whatever that adapter does internally).
+    // The default browser adapter has nothing to construct itself over in
+    // a realm with no `window`. Checked here, ahead of `createAdapter()`,
+    // rather than inside `createWindowHistoryAdapter` itself, so the check
+    // applies exactly to "the default is in place", never to a supplied
+    // adapter (`createAdapter !== createWindowHistoryAdapter` always skips
+    // this branch, whatever that adapter does internally).
     if (createAdapter === createWindowHistoryAdapter && typeof window === 'undefined') {
       throw RoutingError.noNavigationHistoryInRealm();
     }

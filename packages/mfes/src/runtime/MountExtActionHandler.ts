@@ -102,8 +102,8 @@ export class MountExtActionHandler extends DeclaredTimeoutActionHandler {
    *   `undefined` for a Concurrent domain.
    * @param concurrentJoiner - This domain's same-extension mount joiner
    *   (Concurrent), or `undefined` for an Optional/Exclusive domain.
-   * @param router - The injected router, or `undefined` for a standalone
-   *   registry.
+   * @param router - The injected router, or `undefined` for a registry
+   *   built with no router.
    * @param readMountSet - Reads the domain's current mount set, which the
    *   domain's URL commands project from.
    */

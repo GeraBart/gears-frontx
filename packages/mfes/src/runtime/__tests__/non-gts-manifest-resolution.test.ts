@@ -77,8 +77,8 @@ function buildEntry(): MfeEntryMF {
 
 /**
  * Plugin holding both the entry and the manifest, each under its own id —
- * the arrangement `DefaultExtensionManager.resolveEntry` already relies on,
- * now extended to the manifest the entry names.
+ * the arrangement `DefaultExtensionManager.resolveEntry` relies on for the
+ * entry, applied to the manifest the entry names as well.
  */
 function createNonGtsPlugin(): TypeSystemPlugin {
   const registered = new Map<string, unknown>([

@@ -181,7 +181,7 @@ describe('createObserver — input validation', () => {
 
   // §6 Acceptance Criteria: "a domain key that is not a single valid name —
   // `screen.tenants.tabs` among them".
-  it('throws invalid-domain-key for the composite-shaped "screen.tenants.tabs", which is no longer a valid single-name domain key', () => {
+  it('throws invalid-domain-key for the composite-shaped "screen.tenants.tabs", which is not a valid single-name domain key', () => {
     const error = expectRoutingError(() =>
       createObserver('screen.tenants.tabs' as DomainKey, staticSource([]), vi.fn()),
     );

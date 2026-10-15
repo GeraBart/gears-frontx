@@ -100,12 +100,12 @@ function validateBackProjectionInput(
  * unbound public shape exists to keep in sync with this one.
  */
 export function createBackProjectEntries(history: NavigationHistory): BackProjectEntries {
-  return (domainKey, delta, verb, pageHash) => {
+  return (domainKey, delta, verb) => {
     // @cpt-begin:cpt-frontx-algo-routing-route-ownership-signal-url-back-projection:p2:inst-consumer-calls-helper
     validateBackProjectionInput(domainKey, delta);
     // @cpt-end:cpt-frontx-algo-routing-route-ownership-signal-url-back-projection:p2:inst-consumer-calls-helper
 
-    runBackProjection(history, domainKey, delta, verb, pageHash);
+    runBackProjection(history, domainKey, delta, verb);
   };
 }
 
@@ -114,7 +114,6 @@ function runBackProjection(
   domainKey: DomainKey,
   delta: BackProjectionDelta,
   verb: Parameters<BackProjectEntries>[2],
-  pageHash: Parameters<BackProjectEntries>[3],
 ): void {
   // @cpt-begin:cpt-frontx-algo-routing-route-ownership-signal-url-back-projection:p2:inst-parse-current
   const location = history.location;
@@ -281,14 +280,12 @@ function runBackProjection(
   // @cpt-end:cpt-frontx-algo-routing-route-ownership-signal-url-back-projection:p2:inst-compose-full-list
 
   // @cpt-begin:cpt-frontx-algo-routing-route-ownership-signal-url-back-projection:p2:inst-serialize
-  // An explicit `pageHash` (including `''`, which
-  // `serializeGrammar` drops per its own `hash !== ''` check) overrides
-  // whatever hash the current URL carries; `undefined` preserves it — this
-  // is the one place the write's hash is decided, so a caller never has to
-  // run its own parse/serialize/push sequence just to carry a hash.
+  // The pathname and the hash are copied unchanged from the parse above:
+  // the helper takes no hash of its own, so the write carries whatever hash
+  // the page already has.
   const serialized = serializeGrammar({
     shellSubroute: parsed.shellSubroute,
-    hash: pageHash !== undefined ? pageHash : parsed.hash,
+    hash: parsed.hash,
     entries: composed,
     // A foreign query segment — an OAuth `code`/`state`, an analytics
     // `utm_*` parameter — is never this helper's own business to touch; it

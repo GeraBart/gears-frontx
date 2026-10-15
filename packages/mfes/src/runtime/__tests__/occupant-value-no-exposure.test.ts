@@ -179,8 +179,11 @@ describe('occupant value — no exposure on any interface', () => {
       }
     }
 
-    const assignOccupantValue = vi.fn(() => sentinel);
+    const assignOccupantValue = vi.fn((_domainId: string, _extensionId: string) => sentinel);
     const router: RouterPort = {
+      connect: () => {},
+      startDomain: () => {},
+      stopDomain: () => {},
       registerDomain: () => {},
       registerExtension: () => {},
       releaseDomain: () => {},
@@ -205,14 +208,10 @@ describe('occupant value — no exposure on any interface', () => {
     await mounter.mount(EXTENSION_ID, document.createElement('div'));
 
     expect(capturedArgs.bridge).toBeDefined();
-    // Called with the registered domain, the registered extension, and the
-    // enclosing value — `undefined` for this root registry, which holds no
-    // inbound bridge.
-    expect(assignOccupantValue).toHaveBeenCalledWith({
-      domain: expect.objectContaining({ id: DOMAIN_ID }),
-      extension: expect.objectContaining({ id: EXTENSION_ID }),
-      enclosingValue: undefined,
-    });
+    // Called with the domain's id and the extension's id only: no declaration
+    // and no enclosing value.
+    expect(assignOccupantValue).toHaveBeenCalledTimes(1);
+    expect(assignOccupantValue.mock.calls[0]).toEqual([DOMAIN_ID, EXTENSION_ID]);
 
     // Walk every reachable surface the runtime handed to extension/host code.
     const surfaces: unknown[] = [
@@ -220,7 +219,6 @@ describe('occupant value — no exposure on any interface', () => {
       capturedArgs.bridge,
       capturedArgs.mountContext,
       capturedArgs.container,
-      registry.getParentBridge(EXTENSION_ID),
     ];
 
     const allReachable = surfaces.flatMap((s) => collectReachable(s));
@@ -268,6 +266,9 @@ describe('occupant value — no exposure on any interface', () => {
 
     const reflect = vi.fn();
     const router: RouterPort = {
+      connect: () => {},
+      startDomain: () => {},
+      stopDomain: () => {},
       registerDomain: () => {},
       registerExtension: () => {},
       releaseDomain: () => {},
@@ -318,12 +319,10 @@ describe('occupant value — no exposure on any interface', () => {
         registry.getExtension(EXTENSION_ID),
         registry.getDomain(DOMAIN_ID),
         registry.getExtensionsForDomain(DOMAIN_ID),
-        registry.getMountedExtensions(DOMAIN_ID),
         registry.getRegisteredPackages(),
         registry.getDomainProperty(DOMAIN_ID, PROPERTY_ID),
       ],
       childBridge: bridge,
-      parentBridge: registry.getParentBridge(EXTENSION_ID),
       lifecycleArguments: lifecycleArgs,
       actionsAndChains: [mountChain, probeChain, handledPayloads],
       sharedProperties: delivered,
