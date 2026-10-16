@@ -23,8 +23,8 @@ import { projectParamsToVirtualLocation, splitHref } from './virtual-location.js
 // reach it. That package is named throughout this file for the contract it
 // defines and for the reference behaviour this adapter reproduces — never
 // as a dependency: it is in no manifest and imported nowhere. This
-// package's declared engine dependencies are `@tanstack/react-router` and
-// `@tanstack/router-core` (DESIGN §1.3, §3.5). `SubscriberArgs` and
+// package's declared engine dependency is `@tanstack/react-router`
+// (DESIGN §1.3, §3.5). `SubscriberArgs` and
 // `NavigationBlocker` are *not* re-exported anywhere reachable, so they are
 // derived structurally from `RouterHistory`'s own field types below, rather
 // than imported by name.

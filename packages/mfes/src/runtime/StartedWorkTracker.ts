@@ -39,9 +39,12 @@ export class StartedWorkTracker {
   }
 
   /**
-   * Resolves once every request in flight has settled. Requests arriving
-   * after `close()` are refused and are not waited on as started work. Never
-   * rejects and never interrupts a request.
+   * Resolves once every request in flight has settled. The tracker has no
+   * close: a request that arrives after its domain closes is refused by
+   * `DomainOccupancyCoordinator.close()` / `ConcurrentMountJoiner.close()`,
+   * and is still tracked until its settle command is issued, which follows at
+   * once, so it does not extend teardown's wait. Never rejects and never
+   * interrupts a request.
    */
   async whenAllSettled(): Promise<void> {
     while (this.executions.size > 0) {

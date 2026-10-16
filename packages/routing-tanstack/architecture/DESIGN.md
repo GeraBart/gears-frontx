@@ -91,7 +91,7 @@ graph TD
 
 | Layer | Responsibility | Technology |
 |-------|---------------|------------|
-| Engine provider | Projects the entry address read from the ready `router` into a virtual history and adapts it to TanStack Router via `createRouter({ routeTree, history })`; the sole package in the ecosystem permitted an engine import | TypeScript over `@tanstack/react-router` (React) and `@tanstack/router-core` |
+| Engine provider | Projects the entry address read from the ready `router` into a virtual history and adapts it to TanStack Router via `createRouter({ routeTree, history })`; the sole package in the ecosystem permitted an engine import | TypeScript over `@tanstack/react-router` (React) |
 | Extension router and navigation | `ExtensionRouter` builds and renders the extension's one router from its route tree; `navigation()` gives the extension's own subroute access outside React; both read the entry address from the ready `router` of `@gears-frontx/routing` | TypeScript over React |
 
 ## 2. Principles & Constraints
@@ -144,7 +144,7 @@ A router engine renders routes and matches search parameters, and engines evolve
 - Adapts that virtual location and the navigation substrate's `NavigationHistory` into the concrete engine's `RouterHistory` input — filling in the members the engine's contract requires beyond the substrate's five, full list and derivation owned by `cpt-frontx-algo-routing-engine-provider-history-adaptation` (that algorithm also records `block`'s deliberately degraded semantics, §4) — and translating `NavigationHistory`'s own subscriber notification into the `SubscriberArgs` shape (`location`, `action`) `RouterHistory`'s `subscribe` callback expects — then calls `createRouter({ routeTree, history })`.
 - Writes every navigation the constructed router performs back to the occupant's own entry alone, through exactly one call to the navigation substrate's own URL back-projection helper (`cpt-frontx-algo-routing-route-ownership-signal-url-back-projection`), which keeps that write inside the control boundary — never a sibling occupant's entry, another domain's entry, or the pathname.
 - Composes a full composed-application URL from an updated virtual location for `createHref`, by calling the navigation substrate's own grammar serializer over the current entry list with this occupant's own entry replaced.
-- Owns the concrete engine dependency: `@tanstack/react-router`, together with `@tanstack/router-core` for the router types this package's own emitted declarations name.
+- Owns the concrete engine dependency: `@tanstack/react-router`.
 - Re-exports the engine's own route-tree builders and scoped route hooks, so an extension's own code authors its route tree and redirects without an engine import of its own; it does not re-export the engine's router construction.
 - Unsubscribes the constructed router from the shared history when the extension that owns it unmounts, so a torn-down router's callback stops receiving the fan-out.
 
@@ -246,12 +246,11 @@ Exactly one: `@gears-frontx/routing`, the navigation substrate whose `Navigation
 | Dependency Module | Interface Used | Purpose |
 |-------------------|-----------------|---------|
 | `@tanstack/react-router` | `createRouter`, `createRootRoute`, `createRootRouteWithContext`, `createRoute`, `RouterProvider`, `useNavigate`, `useParams`, `useSearch`, `useRouterState`, `Link`, `Outlet`, `redirect`, `notFound` | The concrete router engine's React binding — the exact framework-specific package this provider adapts a virtual history for. `createRouter` and `RouterProvider` are used inside this package only; the route-tree builders and scoped route hooks are re-exported. This package's UI framework is React; a provider bound to a different UI framework is a different, non-default provider this package does not ship. |
-| `@tanstack/router-core` | The engine's own router type surface (`RouterContextOptions` and the router/route types the React binding is built over) | Declared as this package's own dependency because its emitted type declarations name that surface directly (`src/router-creation.tsx`); a consumer type-checking against them resolves it here rather than reaching into the React binding's own dependency. |
 
 **Engine contract ownership**: the `RouterHistory` member list and the `SubscriberArgs` callback shape are the engine's own contract, not this package's. This package adapts its own virtual location, itself projected from `NavigationHistory` and the entry address read from the ready `router`, to whatever that contract requires at the time it is built, and a change to it is a change to this package alone — the navigation substrate, its `NavigationHistory` contract, and every consumer of it are unaffected, which is the isolation the engine-provider port exists to give.
 
 **Dependency Rules** (per project conventions):
-- `@tanstack/react-router` and `@tanstack/router-core` are dependencies of this package alone; no other ecosystem package imports either.
+- `@tanstack/react-router` is a dependency of this package alone; no other ecosystem package imports it.
 - This package is replaceable: a different engine-provider port implementation is not required to depend on it at all.
 
 ### 3.6 Interactions & Sequences

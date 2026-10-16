@@ -104,13 +104,13 @@ export class DomainReflectCommands {
    * of it settles, whatever the outcome. It awaits `handling` from a call
    * separate from the one that handles the request, so the command runs in
    * a later turn than the request's delivery. The returned promise resolves
-   * once the settle command has been issued; the caller
-   * does not await it for the request's outcome — that and its chain's
-   * continuation come from `handling` alone — and tracks it so teardown waits
-   * for the settle command. A throw from the router's `reflect` is not hidden:
-   * the returned promise rejects with it and, unhandled, it surfaces as an
-   * unhandled rejection; the request's own outcome is unchanged. A request without a string
-   * subject (`request` undefined) set no Concurrent record and has no
+   * once the settle command has been issued; the caller does not await it
+   * for the request's outcome — that and its chain's continuation come from
+   * `handling` alone — and tracks it so teardown waits for the settle
+   * command. A throw from the router's `reflect` is not hidden: the returned
+   * promise rejects with it and, unhandled, it surfaces as an unhandled
+   * rejection; the request's own outcome is unchanged. A request without a
+   * string subject (`request` undefined) set no Concurrent record and has no
    * acceptance command; it is settled the same way.
    */
   // @cpt-begin:cpt-frontx-algo-extension-domain-governance-mount-execution:p2:inst-me-cmd-settle-async
