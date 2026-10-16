@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { classifySpecifier, collectModuleSpecifiers } from './helpers/module-specifiers.js';
+import { classifySpecifier, collectReachableModuleSpecifiers } from './helpers/module-specifiers.js';
 import { TANSTACK_RUNTIME_SURFACE, TANSTACK_TYPE_ONLY_SURFACE } from './helpers/public-surface.js';
 
 // The published `dist/index.d.ts` must never
@@ -12,7 +12,7 @@ import { TANSTACK_RUNTIME_SURFACE, TANSTACK_TYPE_ONLY_SURFACE } from './helpers/
 // or peerDependency (or a relative path) — an undeclared import resolves
 // only by accident, through hoisting in this monorepo's own workspace, and
 // breaks the moment a consumer installs this package on its own (this is
-// what let `@tanstack/router-core` appear in `dist/index.d.ts` while only
+// what lets an engine package appear in `dist/index.d.ts` while only
 // implicitly present via `@tanstack/react-router`'s own dependency).
 //
 // This test builds its own throwaway declaration output into a temp
@@ -35,15 +35,13 @@ import { TANSTACK_RUNTIME_SURFACE, TANSTACK_TYPE_ONLY_SURFACE } from './helpers/
 // A per-file `tsc` emit (what this test builds,
 // and what `tsup`'s own rollup-dts step ultimately draws from too) spreads
 // a package's own import surface across *several* `.d.ts` files, not just
-// `index.d.ts` — `react` and `@tanstack/router-core` sit in
-// `router-creation.d.ts`, the latter only as a dynamic `import("…")` type
-// reference, not a static `from '…'`. Reading only `index.d.ts` and
-// matching only `from '…'` would understate the real surface enough that
-// removing `@tanstack/router-core` from `dependencies` — the exact defect
-// this test exists to catch — would keep passing. This version scans
-// every `*.d.ts` file the build produces and matches both import forms
-// (`./helpers/module-specifiers.ts`, unit-tested on its own in
-// `module-specifiers.test.ts`).
+// `index.d.ts`, and a specifier can appear as a dynamic `import("…")` type
+// reference rather than a static `from '…'`. Reading only `index.d.ts` and
+// matching only `from '…'` would understate the real surface. This version
+// follows the relative imports from `index.d.ts` through every `*.d.ts` it
+// reaches, matching both import forms (`./helpers/module-specifiers.ts`,
+// unit-tested on its own in `module-specifiers.test.ts`); a declaration file
+// no published entry reaches is not part of the published surface.
 //
 // The build this file already produces — one
 // throwaway declaration output for `packages/routing`, one for
@@ -141,8 +139,8 @@ afterAll(() => {
 });
 
 describe('published declarations: module specifiers and public surface', () => {
-  it('every non-relative import, across every emitted .d.ts, is a declared dependency or peerDependency', () => {
-    const specifiers = collectModuleSpecifiers(built.tanstackOutDir);
+  it('every non-relative import, across every .d.ts reachable from index.d.ts, is a declared dependency or peerDependency', () => {
+    const specifiers = collectReachableModuleSpecifiers(path.join(built.tanstackOutDir, 'index.d.ts'));
     expect(specifiers.size).toBeGreaterThan(0);
 
     const packageJson = JSON.parse(readFileSync(path.join(packageRoot, 'package.json'), 'utf-8')) as {
@@ -193,7 +191,7 @@ describe('published declarations: module specifiers and public surface', () => {
       // TypeScript's own upward `node_modules` walk (from wherever
       // `consumer.ts` lives) never reaches `repoRoot/node_modules` — unlike
       // the build above, whose `cwd` is `packageRoot` and so resolves
-      // `react`/`@tanstack/react-router`/`@tanstack/router-core` normally.
+      // `react`/`@tanstack/react-router` normally.
       // Pointing `paths` at those packages' own declaration entry points
       // directly sidesteps that without moving this test's temp output
       // into the tracked package tree, matching the same temp-output
@@ -217,6 +215,7 @@ describe('published declarations: module specifiers and public surface', () => {
                 react: [path.join(repoRoot, 'node_modules/@types/react/index.d.ts')],
                 'react/jsx-runtime': [path.join(repoRoot, 'node_modules/@types/react/jsx-runtime.d.ts')],
                 '@tanstack/react-router': [path.join(repoRoot, 'node_modules/@tanstack/react-router/dist/esm/index.d.ts')],
+                // Resolves `@tanstack/react-router`'s own transitive declarations for the out-of-tree consumer; not a dependency of this package.
                 '@tanstack/router-core': [path.join(repoRoot, 'node_modules/@tanstack/router-core/dist/esm/index.d.ts')],
               },
             },

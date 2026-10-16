@@ -2,16 +2,15 @@
 // out into their own module so the regex and the declared/relative
 // classification rule can be unit-tested directly against a fixture,
 // without paying for a real `tsc` build per assertion.
-import { readdirSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 // Matches both the static form (`import { x } from '…'`, `export { x } from
 // '…'`) and the dynamic type-only form TypeScript emits for a declaration
 // it can only reference lazily (`import("…").Foo`) — a per-file `tsc` emit
 // uses the latter routinely for a type that is used, but not re-exported,
-// by the file doing the importing — `router-creation.d.ts` importing
-// `@tanstack/router-core` this way is exactly what a check matching only
-// `from '…'` would miss.
+// by the file doing the importing — a check matching only `from '…'`
+// would miss it.
 const SPECIFIER_PATTERN = /(?:from\s+|import\()\s*['"]([^'"]+)['"]/g;
 
 /** Every module specifier a single `.d.ts` file's text imports from — in
@@ -21,25 +20,27 @@ export function extractModuleSpecifiers(dts: string): string[] {
   return Array.from(dts.matchAll(SPECIFIER_PATTERN), (match) => match[1]);
 }
 
-function listDtsFilesRecursive(dir: string): string[] {
-  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-    const fullPath = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      return listDtsFilesRecursive(fullPath);
-    }
-    return entry.isFile() && entry.name.endsWith('.d.ts') ? [fullPath] : [];
-  });
-}
-
-/** Every module specifier imported by any `*.d.ts` file under `dir`,
- * recursively — a per-file `tsc` emit (as opposed to a single rolled-up
- * bundle) spreads a package's own import surface across several files,
- * so reading only the entry point's own `index.d.ts` understates it. */
-export function collectModuleSpecifiers(dir: string): Set<string> {
+/** Every module specifier imported by `entry` (an emitted `.d.ts`) or by any
+ * `.d.ts` it reaches through relative imports — a per-file `tsc` emit (as
+ * opposed to a single rolled-up bundle) spreads a package's own import
+ * surface across several files, so reading only the entry point's own
+ * `index.d.ts` understates it, while reading every emitted file also counts
+ * internal declarations no published entry reaches. */
+export function collectReachableModuleSpecifiers(entry: string): Set<string> {
   const specifiers = new Set<string>();
-  for (const file of listDtsFilesRecursive(dir)) {
+  const visited = new Set<string>();
+  const pending = [entry];
+  while (pending.length > 0) {
+    const file = pending.pop() as string;
+    if (visited.has(file)) {
+      continue;
+    }
+    visited.add(file);
     for (const specifier of extractModuleSpecifiers(readFileSync(file, 'utf-8'))) {
       specifiers.add(specifier);
+      if (specifier.startsWith('.')) {
+        pending.push(path.resolve(path.dirname(file), specifier.replace(/\.js$/, '.d.ts')));
+      }
     }
   }
   return specifiers;

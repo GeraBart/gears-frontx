@@ -33,15 +33,17 @@ export type AdapterLocation = Omit<Location, 'position'>;
 export interface HistoryAdapter {
   /** Reads the current location fresh — never cached by the adapter itself. */
   getLocation(): AdapterLocation;
-  /** Appends a new history entry for `path`, exactly as composed by the
-   * caller, carrying `state` as that new entry's own opaque per-entry
+  /** Appends a new history entry for `path` — a location of the page's own
+   * origin, so a path beginning with `//` is written as that origin plus the
+   * path (pathname unchanged) by the default adapter and any other path is
+   * written as given — carrying `state` as that new entry's own opaque per-entry
    * state (`navigation-history.ts`'s own position bookkeeping, merged with
    * whatever the host already carries — never a raw caller-supplied value,
    * since `NavigationHistory#push` itself accepts no state parameter). */
   pushState(path: string, state: unknown): void;
-  /** Overwrites the current history entry with `path`, carrying `state` as
-   * that entry's own new opaque per-entry state, identically to `pushState`
-   * above. */
+  /** Overwrites the current history entry with `path`, written as a location
+   * of the page's own origin and carrying `state` as that entry's own new
+   * opaque per-entry state, identically to `pushState` above. */
   replaceState(path: string, state: unknown): void;
   /** Reads the current entry's own opaque per-entry state fresh — never
    * cached by the adapter itself, mirroring `getLocation`. `undefined`/`null`
@@ -55,6 +57,17 @@ export interface HistoryAdapter {
    * Returns its own release function. */
   onPop(listener: () => void): () => void;
 }
+
+// A path is written as a location of the page's own origin: a path with a
+// single leading `/` already is one and is written as given, while handed to
+// `pushState`/`replaceState` bare a pathname beginning with `//` would be
+// resolved as protocol-relative (another host) and refused. The pathname
+// itself stays byte-for-byte as serialized.
+// @cpt-begin:cpt-frontx-algo-routing-navigation-substrate-fanout-dispatch:p2:inst-write-own-origin
+function toOwnOriginLocation(path: string): string {
+  return path.startsWith('//') ? `${window.location.origin}${path}` : path;
+}
+// @cpt-end:cpt-frontx-algo-routing-navigation-substrate-fanout-dispatch:p2:inst-write-own-origin
 
 function readWindowLocation(): AdapterLocation {
   return {
@@ -86,10 +99,10 @@ export function createWindowHistoryAdapter(): HistoryAdapter {
   return {
     getLocation: readWindowLocation,
     pushState(path: string, state: unknown): void {
-      window.history.pushState(state, '', path);
+      window.history.pushState(state, '', toOwnOriginLocation(path));
     },
     replaceState(path: string, state: unknown): void {
-      window.history.replaceState(state, '', path);
+      window.history.replaceState(state, '', toOwnOriginLocation(path));
     },
     getState(): unknown {
       return window.history.state;
