@@ -293,6 +293,7 @@ Internal system functions and procedures that do not interact with actors direct
 
 **Steps**:
 1. [x] - `p1` - **IF** the registry holding the domain was built with a router, call the router's `stopDomain(domainId)` as the first statement of the detach, synchronously, before the root is cleared and before any extension is unmounted; a registry built with no router makes no such call - `inst-sd-stop-domain`
+   1. [x] - `p1` - **IF** the router's `stopDomain` throws, log the error and continue the detach: the failure never interrupts the detach, which still clears the root and unmounts every extension - `inst-sd-stop-domain-failure`
 2. [x] - `p1` - Clear the domain's root next, before reading the mount set, so a mount whose lifecycle mount settles during the detach is never placed under the departing root and is rolled back instead (`inst-me-mount-root-detached`) - `inst-sd-clear-root-first`
 3. [x] - `p1` - **FOR EACH** extension in the domain's mount set, in mount-set order - `inst-sd-each-occupant`
    1. [x] - `p1` - Unmount it as any physical unmount does, joining an unmount of the same extension already in progress rather than starting a second one; a mount request for it that arrives meanwhile waits for this unmount (`inst-me-await-unmount-settle`) - `inst-sd-unmount-occupant`
@@ -423,7 +424,7 @@ The system **MUST**, where the registry holding a domain was built with a router
 
 - [x] `p1` - **ID**: `cpt-frontx-dod-extension-domain-governance-domain-start-stop`
 
-The system **MUST**, where the registry holding a domain was built with a router, call the router's `startDomain(domainId)` in the domain's mounter `attach(root)`, once the domain's root is attached, and **MUST** call the router's `stopDomain(domainId)` as the first statement of the domain's mounter `detach()`, synchronously, before the root is cleared and before the mass unmount. A registry built with no router **MUST** make neither call.
+The system **MUST**, where the registry holding a domain was built with a router, call the router's `startDomain(domainId)` in the domain's mounter `attach(root)`, once the domain's root is attached, and **MUST** call the router's `stopDomain(domainId)` as the first statement of the domain's mounter `detach()`, synchronously, before the root is cleared and before the mass unmount; a `stopDomain` that throws **MUST** be logged and the detach **MUST** continue. A registry built with no router **MUST** make neither call.
 
 **Implements**:
 - `cpt-frontx-algo-extension-domain-governance-slot-attach`
@@ -469,7 +470,7 @@ The system **MUST**, where the registry holding a domain was built with a router
 - [x] Slot detach: detaching a domain's slot unmounts every extension in its mount set and destroys each one's container exactly once through the strategy's container hooks; the domain is left with no root and an empty mount set.
 - [x] Slot detach: a mount whose lifecycle mount settles while the slot is being detached is not placed under the departing root; the extension's lifecycle is unmounted again, the mount fails, its container is destroyed, and the next mount of that extension runs its lifecycle mount again.
 - [x] Slot detach: when one extension's unmount fails, the detach still unmounts every other extension; one failure is reported unchanged, and several failures are reported as one aggregate error carrying each of them.
-- [ ] With a router test double injected, attaching a domain's root calls `startDomain` with the domain's id once the root is attached, and detaching it calls `stopDomain` with the domain's id synchronously, before any extension of the domain is unmounted; a registry built with no router makes neither call.
+- [ ] With a router test double injected, attaching a domain's root calls `startDomain` with the domain's id once the root is attached, and detaching it calls `stopDomain` with the domain's id synchronously, before any extension of the domain is unmounted, and a `stopDomain` that throws is logged while the detach continues (`router-port-contract.test.ts`); a registry built with no router makes neither call.
 - [x] In an Optional or Exclusive domain, a mount request for an extension whose slot-detach unmount is in flight waits for that unmount to settle and never reports success on the strength of the mount-set record the unmount removes; if that unmount failed, the request fails.
 - [x] Mount rollback: when placing the container or recording the extension in the mount set fails after the extension's lifecycle mount has run, the container leaves the DOM, the extension is not in the mount set, its lifecycle is unmounted, and the mount fails with the original error.
 - [x] Unmount failure: when an extension's own lifecycle unmount fails, its bridge is still deactivated, its container still leaves the DOM and is destroyed exactly once, the extension leaves the mount set, and the unmount fails with the lifecycle error; a later mount of the extension runs as a fresh mount.

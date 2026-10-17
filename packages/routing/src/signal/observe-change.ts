@@ -28,8 +28,8 @@ import type {
 import { resolveEntries } from './entry-resolution.js';
 
 /**
- * Validates every extension token of the registered-extensions set read at
- * observer start — FEATURE §3 (Observable Transition Signal), step 1.1.
+ * Validates every extension token of the registered-extensions set read for a
+ * resolution — FEATURE §3 (Observable Transition Signal), steps 1.1 and 2.1.
  */
 function validateRegistrations<TRouteOwner>(
   registrations: readonly ExtensionRegistration<TRouteOwner>[],
@@ -58,7 +58,11 @@ function resolveCurrentEntries<TRouteOwner>(
     search: location.search,
     hash: location.hash,
   });
-  return resolveEntries(domainKey, parsed.entries, source);
+  // Read live for every resolution and copied, so a source that hands back its
+  // own mutable list is never held past this call.
+  const registrations = source.getRegistrations().map((registration) => ({ ...registration }));
+  validateRegistrations(registrations);
+  return resolveEntries(domainKey, parsed.entries, { getRegistrations: () => registrations });
 }
 
 function paramsEqual(
@@ -143,19 +147,13 @@ export function createObserverBoundTo(history: NavigationHistory): CreateObserve
   // @cpt-begin:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-initial-resolve
   // @cpt-begin:cpt-frontx-flow-routing-route-ownership-signal-deep-link-cold-mount:p1:inst-resolve-entries-at-creation
   validateDomainKey(domainKey);
-  // The registered-extensions set is read here, once, and copied: every
-  // later navigation resolves against this copy, so a source that hands back
-  // its own live list and mutates it afterwards changes nothing.
-  const registrations = source.getRegistrations().map((registration) => ({ ...registration }));
-  validateRegistrations(registrations);
-  const startSet: typeof source = {
-    getRegistrations: () => registrations,
-  };
-
+  // The registered-extensions set is read afresh by every resolution, the
+  // initial one included, so an extension registered later resolves from the
+  // next navigation; nothing here watches the set for changes.
   // The baseline `reresolveAndReport` (below) reads and overwrites on every
   // later navigation; recorded before subscribing so a navigation caught by
   // that subscription has a correct state to diff against.
-  let previous = resolveCurrentEntries(history, domainKey, startSet);
+  let previous = resolveCurrentEntries(history, domainKey, source);
   // @cpt-end:cpt-frontx-flow-routing-route-ownership-signal-deep-link-cold-mount:p1:inst-resolve-entries-at-creation
   // @cpt-end:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-initial-resolve
 
@@ -170,7 +168,7 @@ export function createObserverBoundTo(history: NavigationHistory): CreateObserve
   function reresolveAndReport(cause: Transition['cause']): void {
     // @cpt-begin:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-resolve-current
     // @cpt-begin:cpt-frontx-flow-routing-route-ownership-signal-deep-link-cold-mount:p1:inst-resolve-entries
-    const current = resolveCurrentEntries(history, domainKey, startSet);
+    const current = resolveCurrentEntries(history, domainKey, source);
     // @cpt-end:cpt-frontx-flow-routing-route-ownership-signal-deep-link-cold-mount:p1:inst-resolve-entries
     // @cpt-end:cpt-frontx-algo-routing-route-ownership-signal-observe-change:p2:inst-resolve-current
 

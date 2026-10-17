@@ -15,7 +15,7 @@
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { afterEach, describe, it, expect, expectTypeOf } from 'vitest';
+import { afterEach, describe, it, expect, expectTypeOf, vi } from 'vitest';
 import { RouterPort } from '../../index';
 import type { HistoryIntent } from '../../index';
 import type { ActionsChain } from '../../types';
@@ -306,6 +306,27 @@ describe('startDomain and stopDomain', () => {
     // The root was still attached when stopDomain ran.
     await expect(probes[0]).rejects.not.toThrow(/no root attached/);
     expect(f.handler.events).toContain('unmount-entered:A');
+  });
+
+  it('a stopDomain that throws is logged and never interrupts the detach: the root clears and every extension unmounts', async () => {
+    // inst-sd-stop-domain-failure
+    const failure = new Error('router down');
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const rec = createRecorder({ stopDomain: () => { throw failure; } });
+      const f = await setup('concurrent', 'd-stop-throws', ['A'], { router: rec.router });
+      await f.registry.getMounter('d-stop-throws').mount('A', document.createElement('div'));
+
+      await expect(f.registry.getMounter('d-stop-throws').detach()).resolves.toBeUndefined();
+
+      expect(mountedIn(f.registry, 'd-stop-throws')).toEqual([]);
+      expect(f.handler.events).toContain('unmount-entered:A');
+      await expect(f.registry.getMounter('d-stop-throws').mount('absent', document.createElement('div')))
+        .rejects.toThrow(/no root attached/);
+      expect(errorLog).toHaveBeenCalledWith("[DefaultExtensionMounter] stopDomain failed for 'd-stop-throws':", failure);
+    } finally {
+      errorLog.mockRestore();
+    }
   });
 
   it('a registry built with no router attaches and detaches normally', async () => {

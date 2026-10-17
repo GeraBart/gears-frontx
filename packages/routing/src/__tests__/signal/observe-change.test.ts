@@ -132,10 +132,10 @@ describe('createObserver — a throwing initial report', () => {
 });
 
 describe('createObserver — subscribing before the initial report', () => {
-  it('does not re-resolve a navigation it observes from inside its own initial report against a set registered during that report', () => {
-    // The registered set is read once when the observer starts; a
-    // registration a consumer makes from inside the first report does not
-    // change how the navigation that report triggers resolves.
+  it('resolves a navigation it observes from inside its own initial report against a set registered during that report', () => {
+    // The registered set is read at every resolution, so a registration a
+    // consumer makes from inside the first report counts for the navigation
+    // that report triggers.
     const adapter = resetRealm('/en?screen=app');
     const history = resolveNavigationHistory(() => adapter);
     const source = swappableSource([]);
@@ -151,7 +151,7 @@ describe('createObserver — subscribing before the initial report', () => {
       }
     });
 
-    expect(reportedResolutions).toEqual([false, false]);
+    expect(reportedResolutions).toEqual([false, true]);
   });
 
   it('releases the fan-out subscription when the first report throws, subscribing to nothing else', () => {
@@ -370,8 +370,8 @@ describe('createObserver — the cause of each transition', () => {
   });
 });
 
-describe('createObserver — the registered-extensions set is read once, at start', () => {
-  it('does not read the source again on a later navigation', () => {
+describe('createObserver — the registered-extensions set is read at every resolution', () => {
+  it('reads the source again on a later navigation, and only then', () => {
     const adapter = resetRealm('/en');
     const source = staticSource([{ extension: 'dashboard', routeOwner: 'DashboardScreen' }]);
     const getRegistrations = vi.spyOn(source, 'getRegistrations');
@@ -382,10 +382,10 @@ describe('createObserver — the registered-extensions set is read once, at star
     history.push('/en?screen=dashboard');
     history.push('/en?screen=other');
 
-    expect(getRegistrations.mock.calls.length).toBe(readsAtStart);
+    expect(getRegistrations.mock.calls.length).toBe(readsAtStart + 2);
   });
 
-  it('resolves a later navigation against the set it read at start, not against what the source would return now', () => {
+  it('resolves a later navigation against what the source returns now, so a released extension is unresolved', () => {
     const adapter = resetRealm('/en');
     const source = swappableSource([{ extension: 'dashboard', routeOwner: 'DashboardScreen' }]);
     const onTransition = vi.fn<(transition: Transition<string>) => void>();
@@ -397,11 +397,11 @@ describe('createObserver — the registered-extensions set is read once, at star
 
     expect(onTransition).toHaveBeenCalledTimes(1);
     const transition = onTransition.mock.calls[0][0];
-    expect(transition.entries[0].resolution).toEqual({ resolved: true, routeOwner: 'DashboardScreen' });
-    expect(transition.diff.unresolved).toEqual([]);
+    expect(transition.entries[0].resolution).toEqual({ resolved: false });
+    expect(transition.diff.unresolved).toEqual(['dashboard']);
   });
 
-  it('keeps an extension unregistered at start unresolved after the source later declares it', () => {
+  it('resolves an extension unregistered at start once the source later declares it', () => {
     const adapter = resetRealm('/en');
     const source = swappableSource([]);
     const onTransition = vi.fn<(transition: Transition<string>) => void>();
@@ -412,11 +412,11 @@ describe('createObserver — the registered-extensions set is read once, at star
     resolveNavigationHistory(() => adapter).push('/en?screen=dashboard');
 
     const transition = onTransition.mock.calls[0][0];
-    expect(transition.entries[0].resolution).toEqual({ resolved: false });
-    expect(transition.diff.unresolved).toEqual(['dashboard']);
+    expect(transition.entries[0].resolution).toEqual({ resolved: true, routeOwner: 'DashboardScreen' });
+    expect(transition.diff.unresolved).toEqual([]);
   });
 
-  it('resolves a later navigation against the start set when the source returns its own live list and mutates it', () => {
+  it('resolves a later navigation against the current set when the source returns its own live list and mutates it', () => {
     const adapter = resetRealm('/en');
     const live = [{ extension: 'dashboard' as ExtensionToken, routeOwner: 'DashboardScreen' }];
     const source = { getRegistrations: () => live };
@@ -430,12 +430,12 @@ describe('createObserver — the registered-extensions set is read once, at star
 
     const transition = onTransition.mock.calls[0][0];
     expect(transition.entries.map((e) => e.resolution)).toEqual([
-      { resolved: true, routeOwner: 'DashboardScreen' },
-      { resolved: false },
+      { resolved: true, routeOwner: 'Swapped' },
+      { resolved: true, routeOwner: 'SettingsScreen' },
     ]);
   });
 
-  it('keeps the route owner read at start when the source later swaps it under the same token', () => {
+  it('resolves to the route owner the source holds now when it swaps it under the same token', () => {
     const adapter = resetRealm('/en?widgets=chart;range=90d');
     const source = swappableSource([{ extension: 'chart', routeOwner: 'ChartPlaceholder' }]);
     const onTransition = vi.fn<(transition: Transition<string>) => void>();
@@ -451,7 +451,7 @@ describe('createObserver — the registered-extensions set is read once, at star
       {
         extension: 'chart',
         params: [{ name: 'range', value: '30d' }],
-        resolution: { resolved: true, routeOwner: 'ChartPlaceholder' },
+        resolution: { resolved: true, routeOwner: 'ChartReal' },
       },
     ]);
   });

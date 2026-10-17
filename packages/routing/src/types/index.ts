@@ -327,8 +327,9 @@ export interface ExtensionRegistration<TRouteOwner = unknown> {
 /**
  * A domain's own registered-extensions source, supplied by the consumer as
  * a plain argument — never an injected port (§1.5). The observer reads
- * `getRegistrations` once, when it starts, and resolves every later
- * navigation against that set; the source carries no change notification.
+ * `getRegistrations` afresh at each resolution, the initial one and every
+ * later navigation's; the source carries no change notification, so a
+ * registration counts from the next navigation on.
  */
 export interface RegisteredExtensionsSource<TRouteOwner = unknown> {
   getRegistrations(): readonly ExtensionRegistration<TRouteOwner>[];

@@ -176,7 +176,7 @@ describe('router admission', () => {
 
     await registry.unregisterExtension(EXTENSION_ID);
     await registry.unregisterDomain(DOMAIN_ID);
-    registry.dispose();
+    await registry.dispose();
 
     expect(router.registerDomain).not.toHaveBeenCalled();
     expect(router.registerExtension).not.toHaveBeenCalled();
@@ -196,7 +196,7 @@ describe('router admission', () => {
     expect(router.registerExtension).not.toHaveBeenCalled();
     expect(router.releaseExtension).not.toHaveBeenCalled();
     expect(router.releaseDomain).toHaveBeenCalledWith(DOMAIN_ID);
-    registry.dispose();
+    await registry.dispose();
   });
 
   it('no router member receives a declaration object: every argument is a string or a boolean', async () => {
@@ -218,7 +218,7 @@ describe('router admission', () => {
     const args = members.flatMap((member) => member.mock.calls.flat());
     expect(args.length).toBeGreaterThan(0);
     for (const arg of args) expect(['string', 'boolean']).toContain(typeof arg);
-    registry.dispose();
+    await registry.dispose();
   });
 
   it('presents the domain declaration to the router after the runtime\'s own checks pass and before it becomes durable', async () => {

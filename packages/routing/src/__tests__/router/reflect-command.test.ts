@@ -4,9 +4,11 @@ import {
   cleanupRouters,
   connectedRouter,
   entriesOf,
+  mountChain,
   freshRoute,
   newPage,
   spyWrites,
+  userNavigates,
   type DomainRig,
   type RouterLike,
 } from './harness.js';
@@ -298,11 +300,11 @@ describe('a command that drops a host clears its nested domains in the same sing
 });
 
 describe('a command for a domain whose enclosing entry is absent is deferred', () => {
-  async function nestedDomain() {
+  async function nestedDomain(options: Parameters<typeof addDomain>[2] = {}) {
     const page = newPage('/en');
     const { router } = await connectedRouter();
     router.supplyNavigation(() => ({ domainKey: 'host', extension: 'hostx' }));
-    const rig = addDomain(router, EXTENSIONS, { route: freshRoute('n') });
+    const rig = addDomain(router, EXTENSIONS, { route: freshRoute('n'), ...options });
     router.startDomain(rig.domainId);
     return { page, ...rig };
   }
@@ -383,6 +385,42 @@ describe('a command for a domain whose enclosing entry is absent is deferred', (
     expect(writes.push).not.toHaveBeenCalled();
   });
 
+  it('cancels the deferred write on a user back step that restores the enclosing entry', async () => {
+    const page = newPage('/en?host=hostx');
+    const { router } = await connectedRouter();
+    router.supplyNavigation(() => ({ domainKey: 'host', extension: 'hostx' }));
+    const rig = addDomain(router, EXTENSIONS, { route: freshRoute('n') });
+    router.startDomain(rig.domainId);
+    page.history.push('/en');
+    router.reflect(rig.domainId, ['extA'], 'push');
+    const writes = spyWrites(page);
+
+    await userNavigates(page, '/en?host=hostx');
+
+    expect(writes.push).not.toHaveBeenCalled();
+    expect(entriesOf(page, rig.route)).toEqual([]);
+  });
+
+  it('keeps the write-back a user step defers itself, and applies it, not the stale command, once the enclosing entry arrives', async () => {
+    const { page, router, domainId, route } = await nestedDomain({ declaresUnmount: false });
+    router.reflect(domainId, ['extA'], 'replace');
+
+    await userNavigates(page, `/en?${route}=zzz`);
+    page.history.replace(`/en?host=hostx&${route}=zzz`);
+
+    expect(entriesOf(page, route)).toEqual(['alpha']);
+  });
+
+  it('drops a released extension from the deferred write', async () => {
+    const { page, router, domainId, route } = await nestedDomain();
+    router.reflect(domainId, ['extA', 'extB'], 'push');
+    router.releaseExtension('extA');
+
+    page.history.replace('/en?host=hostx');
+
+    expect(entriesOf(page, route)).toEqual(['beta']);
+  });
+
   it('writes at once when the enclosing entry is already present', async () => {
     const { page, router, domainId, route } = await nestedDomain();
     page.history.replace('/en?host=hostx');
@@ -392,5 +430,40 @@ describe('a command for a domain whose enclosing entry is absent is deferred', (
 
     expect(entriesOf(page, route)).toEqual(['alpha']);
     expect(writes.push).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('an extension registered or released while its domain is routing', () => {
+  it('is restored by a back step to its entry once registered late and mounted through reflect', async () => {
+    const page = newPage('/en');
+    const { router, sent } = await connectedRouter();
+    const rig = addDomain(router, EXTENSIONS);
+    router.startDomain(rig.domainId);
+    router.registerExtension('extL', rig.domainId, 'late');
+    router.reflect(rig.domainId, ['extL'], 'push');
+    const lateUrl = `/en?${rig.route}=late`;
+    await userNavigates(page, '/en');
+    sent.chains.length = 0;
+
+    await userNavigates(page, lateUrl);
+
+    expect(sent.chains).toContainEqual(mountChain(rig.domainId, 'extL'));
+    expect(entriesOf(page, rig.route)).toEqual(['late']);
+  });
+
+  it('resolves to nothing on a back step to the entry of an extension released meanwhile', async () => {
+    const page = newPage('/en');
+    const { router, sent } = await connectedRouter();
+    const rig = addDomain(router, EXTENSIONS);
+    router.startDomain(rig.domainId);
+    router.reflect(rig.domainId, ['extA'], 'push');
+    await userNavigates(page, '/en');
+    router.releaseExtension('extA');
+    sent.chains.length = 0;
+
+    await userNavigates(page, `/en?${rig.route}=alpha`);
+
+    expect(sent.chains).toEqual([]);
+    expect(entriesOf(page, rig.route)).toEqual([]);
   });
 });
