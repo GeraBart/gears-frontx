@@ -110,7 +110,15 @@ export class DefaultExtensionMounter extends ExtensionMounter {
     // The first statement, synchronous: the router stops the domain while
     // its root is still attached and before any extension is unmounted.
     if (this.router) {
-      this.router.stopDomain(this.domainId);
+      // @cpt-begin:cpt-frontx-algo-extension-domain-governance-slot-detach:p2:inst-sd-stop-domain-failure
+      // A throwing router never leaves the slot attached with everything
+      // still mounted: log it and carry on with the detach.
+      try {
+        this.router.stopDomain(this.domainId);
+      } catch (error) {
+        console.error(`[DefaultExtensionMounter] stopDomain failed for '${this.domainId}':`, error);
+      }
+      // @cpt-end:cpt-frontx-algo-extension-domain-governance-slot-detach:p2:inst-sd-stop-domain-failure
     }
     // @cpt-end:cpt-frontx-algo-extension-domain-governance-slot-detach:p2:inst-sd-stop-domain
 

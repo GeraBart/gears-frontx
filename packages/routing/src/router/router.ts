@@ -214,8 +214,12 @@ export class FrontXRouter {
     const state = [...this.domains.values()].find((candidate) => candidate.extensions.has(extensionId));
     if (state === undefined) return;
     // @cpt-begin:cpt-frontx-algo-routing-route-ownership-signal-router-admission:p1:inst-admission-free-extension
+    const name = state.extensions.get(extensionId);
     state.extensions.delete(extensionId);
     state.lastCommand = state.lastCommand.filter((id) => id !== extensionId);
+    if (name !== undefined) {
+      state.pendingTarget = state.pendingTarget.filter((held) => !namesEqual(held, name));
+    }
     // @cpt-end:cpt-frontx-algo-routing-route-ownership-signal-router-admission:p1:inst-admission-free-extension
     // @cpt-end:cpt-frontx-algo-routing-route-ownership-signal-router-admission:p1:inst-admission-when-release-extension
   }
@@ -362,6 +366,13 @@ export class FrontXRouter {
           // @cpt-begin:cpt-frontx-flow-routing-route-ownership-signal-deep-link-cold-mount:p1:inst-router-discards-initial-route
           this.pageLoads.of(history).discard();
           // @cpt-end:cpt-frontx-flow-routing-route-ownership-signal-deep-link-cold-mount:p1:inst-router-discards-initial-route
+          // A back or forward step before the enclosing entry is present supersedes every stale deferred write: the step's own write-back owns the URL now.
+          // Cancelled here, before any observer runs, so a write-back the step itself defers is not cancelled with them.
+          // @cpt-begin:cpt-frontx-flow-routing-route-ownership-signal-deep-link-cold-mount:p1:inst-router-defers-write
+          for (const state of this.domains.values()) {
+            this.cancelPendingWrite(state);
+          }
+          // @cpt-end:cpt-frontx-flow-routing-route-ownership-signal-deep-link-cold-mount:p1:inst-router-defers-write
         }
         // @cpt-end:cpt-frontx-flow-routing-route-ownership-signal-deep-link-cold-mount:p1:inst-when-initial-route-ends
       });
@@ -622,6 +633,7 @@ export class FrontXRouter {
       state.pendingVerb = state.pendingVerb === 'replace' || verb === 'replace' ? 'replace' : 'push';
       if (state.pendingWrite === undefined) {
         state.pendingWrite = this.history().subscribe(() => {
+          // A back or forward step cancels the pending write before any observer runs (see history()), so only an arrival reaches here.
           if (!this.enclosingPresent(enclosing)) return;
           const pendingTarget = state.pendingTarget;
           const pendingVerb = state.pendingVerb ?? verb;

@@ -177,7 +177,7 @@ export interface TypeSystemPlugin<TSchema = unknown> {
 
   /**
    * Resolve this plugin's concrete type ID for the framework's `unmount_ext`
-   * lifecycle action (required by every mount strategy's cardinality rule).
+   * lifecycle action (required or forbidden depending on mount strategy).
    *
    * @returns This plugin's concrete type ID for `unmount_ext`
    */

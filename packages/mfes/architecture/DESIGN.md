@@ -312,7 +312,7 @@ Applications need to gain user-facing functionality from independently developed
 
 - [ ] `p2` - **ID**: `cpt-frontx-mfes-interface-router-port`
 
-- **Contracts**: `cpt-frontx-interface-mfe-runtime` (an optional, backward-compatible addition to that surface, governed by its breaking-change policy; with it, the `MfeRegistry` surface removes `getMountedExtensions` and `getParentBridge` and its registry reads return registrations without `route`, a removal that keeps no backward compatibility, since there are no consumers, `cpt-frontx-adr-extension-routing-port`)
+- **Contracts**: `cpt-frontx-interface-mfe-runtime` (a breaking change to that surface, `cpt-frontx-adr-extension-routing-port`: it exports the abstract `RouterPort` and `HistoryIntent`; `getMountedExtensions` and `getParentBridge` are not members of `MfeRegistry`, and registry reads return registrations without `route`; `RouterPort` is an abstract class with `reflect`, `connect`, `startDomain` and `stopDomain`, which breaks its implementers)
 - **Technology**: TypeScript abstract contract declared by this package and implemented outside it, structurally, by the FrontX router in `@gears-frontx/routing`
 - **Location**: [src/index.ts](../src/index.ts)
 
