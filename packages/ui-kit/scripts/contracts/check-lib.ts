@@ -401,22 +401,30 @@ export function compareElementSurfaces(input: ElementSurfaceComparisonInput): El
   const { component, oldElement, newElement, oldSchema, newSchema } = input;
 
   if (oldElement === undefined) return {};
+  // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-compat-unit:p1:inst-cu-element-surface-both
+  // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-compat-unit:p1:inst-cu-element-surface-skipped
   if (oldSchema === undefined) {
     return {
       note: `${component}: forwarded-surface signal skipped - the base ref carries no committed surface for element "${oldElement}"`,
     };
   }
+  // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-compat-unit:p1:inst-cu-element-surface-skipped
+  // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-compat-unit:p1:inst-cu-element-surface-both
   if (newElement === undefined) {
     return {
       diff: diffElementSurface(oldSchema, {}),
       note: `${component}: the contract no longer names the forwarded surface it carried at the base ref (element "${oldElement}")`,
     };
   }
+  // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-compat-unit:p1:inst-cu-element-surface-both
+  // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-compat-unit:p1:inst-cu-element-surface-skipped
   if (newSchema === undefined) {
     return {
       note: `${component}: forwarded-surface signal skipped - no committed surface for element "${newElement}"`,
     };
   }
+  // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-compat-unit:p1:inst-cu-element-surface-skipped
+  // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-compat-unit:p1:inst-cu-element-surface-both
   return {
     diff: diffElementSurface(oldSchema, newSchema),
     note:
@@ -764,21 +772,25 @@ export function findRemovedContracts(input: {
 // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-compat-removal:p1:inst-cr-decide
 export function decideRemoval(removal: ContractRemoval): CompatDecision {
   if (removal.acknowledged) {
+  // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-compat-removal:p1:inst-cr-decide
+    // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-compat-removal:p1:inst-cr-acknowledge
     return {
       decision: 'pass',
       notes: [
         `${removal.stem}: contract removed (${removal.path} at the base ref) - "${removal.directory}" is no longer in enrolled.json, so the removal is acknowledged`,
       ],
     };
+    // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-compat-removal:p1:inst-cr-acknowledge
   }
+  // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-compat-removal:p1:inst-cr-refuse
   return {
     decision: 'fail',
     notes: [
       `${removal.stem}: contract removed (${removal.path} at the base ref) while "${removal.directory}" is still listed in enrolled.json - a removed contract resolves to nothing for a consumer holding it; drop the enrolled.json entry to acknowledge the removal, or restore the contract`,
     ],
   };
+  // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-compat-removal:p1:inst-cr-refuse
 }
-// @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-compat-removal:p1:inst-cr-decide
 
 export interface GuardEvaluationInput {
   component: string;
@@ -1044,6 +1056,7 @@ export function classifyProps(
       known.push(name);
       continue;
     }
+    // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-props-classification:p1:inst-pc-classify
     // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-props-classification:p1:inst-pc-near-miss
     // The near miss is decided BEFORE the patterns, because a pattern cannot
     // tell one from a name it was written for: `^on[A-Z]` matches
@@ -1051,19 +1064,26 @@ export function classifyProps(
     // consulted first answered "known" to a typo in the one half of the
     // contract this report exists to protect.
     const probably = contractProps.filter((candidate) => editDistance(name, candidate) === 1).sort()[0];
+    // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-props-classification:p1:inst-pc-near-miss
+    // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-props-classification:p1:inst-pc-near-miss-first
     if (probably !== undefined) {
       unchecked.push(name);
       nearMiss.push({ prop: name, probably });
       continue;
     }
-    // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-props-classification:p1:inst-pc-near-miss
+    // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-props-classification:p1:inst-pc-near-miss-first
+    // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-props-classification:p1:inst-pc-classify-pattern
     if (patterns.some((pattern) => pattern.test(name))) {
       known.push(name);
       continue;
     }
+    // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-props-classification:p1:inst-pc-classify-pattern
+    // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-props-classification:p1:inst-pc-classify-unchecked
     unchecked.push(name);
+    // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-props-classification:p1:inst-pc-classify-unchecked
   }
 
+  // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-props-classification:p1:inst-pc-classify
   return { known, unchecked, nearMiss };
 }
 // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-props-classification:p1:inst-pc-classify

@@ -145,10 +145,12 @@ export interface PropStatementGroup {
 // - and reads it back inside a description that continues with `because`, so
 // the terminator belongs to the join rather than to the authored value. A
 // phrase that already ends in one is left alone rather than doubled.
+// @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-untyped-props:p1:inst-up-terminate
 export function terminate(sentence: string): string {
   const trimmed = sentence.trim();
   return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
 }
+// @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-untyped-props:p1:inst-up-terminate
 
 // Internal structure of the primitive underneath that the kit does not
 // expose as a component of its own - a Header glued onto a Trigger inside
@@ -635,13 +637,15 @@ export function assertKnownAttestationClaims(component: string, overlay: Overlay
   const known = new Set([...loadAttestationClaims().required, ...loadAttestationClaims().optional]);
   for (const claim of Object.keys(overlay.attestations)) {
     if (!known.has(claim)) {
+    // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-overlay-admission:p1:inst-oa-attestation-claims
+      // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-overlay-admission:p1:inst-oa-attestation-claims-refuse
       throw new Error(
         `${component}: attestation claim "${claim}" is not in the claim list - add it to scripts/contracts/attestation-claims.json`,
       );
+      // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-overlay-admission:p1:inst-oa-attestation-claims-refuse
     }
   }
 }
-// @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-overlay-admission:p1:inst-oa-attestation-claims
 
 // A vocabulary type resolves through TWO resolvers with different rules, so
 // both have to be given the types explicitly:
@@ -679,12 +683,12 @@ export function registerContractTypes(register: (entity: Record<string, unknown>
 // no surface - there would be nothing for the surface to account for - so the
 // contract and the instance decide it here, once, rather than each applying
 // its own version of the rule and disagreeing the day one of them changes.
-// @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-compilation:p1:inst-cc-close
+// @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-compilation:p1:inst-cc-surface-reference
 export function forwardsTo(extraction: ComponentExtraction): string | undefined {
   if (extraction.forwardedProps.length === 0 || extraction.elementKind === undefined) return undefined;
   return elementTypeRef(domElementToken(extraction.elementKind));
 }
-// @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-compilation:p1:inst-cc-close
+// @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-compilation:p1:inst-cc-surface-reference
 
 // The hand-written surface for one host element - what a component
 // rendering that element forwards to it. One file per element kind under
@@ -707,6 +711,8 @@ export function forwardsTo(extraction: ComponentExtraction): string | undefined 
 export const loadElementSurfaceByToken = memoizeSchemaBy((token: string): Record<string, unknown> => {
   assertSharedAttributesAgree();
   const path = join(ELEMENTS_DIR, `${token}.json`);
+  // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-element-surface:p1:inst-es-load
+  // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-element-surface:p1:inst-es-load-refuse
   if (!existsSync(path)) {
     throw new Error(
       `no hand-written surface "${token}" - expected ` +
@@ -714,6 +720,8 @@ export const loadElementSurfaceByToken = memoizeSchemaBy((token: string): Record
         `attributes, the element's own, and the aria-/data-/on* patterns) rather than deriving one per component`,
     );
   }
+  // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-element-surface:p1:inst-es-load-refuse
+  // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-element-surface:p1:inst-es-load
   return JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
 });
 
@@ -894,11 +902,13 @@ export function describeUnexpressedType(schema: ContractProperty, typeText: stri
 // chooses not to emit (extract.ts's expressUnion). So the sentence names the
 // compiler's own rule, which is true of a union, a function and an object
 // alike, rather than a limit of JSON Schema that is true of only some.
+// @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-untyped-props:p1:inst-up-say-how-much
 function unexpressedClause(schema: ContractProperty): string {
   return schema.type === undefined
     ? 'The compiler emits one JSON type per property; this type is left to tsc.'
     : 'Not fully expressible in JSON Schema; what the type states beyond the kind above is checked by tsc.';
 }
+// @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-untyped-props:p1:inst-up-say-how-much
 
 // Which branches of a union props type declare a prop only some of them
 // declare, said in the property's own description after whatever the type
@@ -906,13 +916,13 @@ function unexpressedClause(schema: ContractProperty): string {
 // on, because a schema over the whole union cannot tell the branches apart,
 // so what narrows it has to be stated where a reader of the property looks.
 // A prop every branch declares carries no branch list and is returned as is.
-// @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-untyped-props:p1:inst-up-describe
+// @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-untyped-props:p1:inst-up-union-branches
 export function describeBranches(schema: ContractProperty, prop: ExtractedProp): ContractProperty {
   if (prop.branches === undefined) return schema;
   const sentence = `${BRANCH_SENTENCE_PREFIX} ${prop.branches.join(', ')} of the props union; absent from the others.`;
   return { ...schema, description: schema.description === undefined ? sentence : `${schema.description} ${sentence}` };
 }
-// @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-untyped-props:p1:inst-up-describe
+// @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-untyped-props:p1:inst-up-union-branches
 
 const BRANCH_SENTENCE_PREFIX = 'Declared only by';
 
@@ -1059,6 +1069,8 @@ export const buildVocabularyTypes = memoizeSchema((): Record<string, unknown>[] 
       propNameSchema().description as string,
       propNameSchema(),
     ),
+    // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-component-type-schema:p2:inst-ts-vocabulary
+    // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-component-type-schema:p2:inst-ts-recommendation-shape
     vocabularyType(
       'recommendation',
       'UiKit recommendation',
@@ -1084,6 +1096,8 @@ export const buildVocabularyTypes = memoizeSchema((): Record<string, unknown>[] 
         additionalProperties: false,
       },
     ),
+    // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-component-type-schema:p2:inst-ts-recommendation-shape
+    // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-component-type-schema:p2:inst-ts-vocabulary
     vocabularyType(
       'dont_use_when_rule',
       'UiKit dont-use-when rule',
@@ -1119,10 +1133,14 @@ export const buildVocabularyTypes = memoizeSchema((): Record<string, unknown>[] 
             minItems: 1,
             description: 'Kit components that may appear inside, by reference - typed so a reader can resolve one and the conformance suite can check it exists. This is also the ONE authored statement of a nesting relationship: every other contract\'s `mounted_in` is filled from these lists.',
           },
+          // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-component-type-schema:p2:inst-ts-vocabulary
+          // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-component-type-schema:p2:inst-ts-content-kind
           text: {
             type: 'boolean',
             description: 'A non-component React node may appear inside: a string, a number, a fragment, or a formatted inline element (<strong>, <code>) - never a kit component, which would be a reference in `components` instead.',
           },
+          // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-component-type-schema:p2:inst-ts-content-kind
+          // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-component-type-schema:p2:inst-ts-vocabulary
           icons_via: propNameRef(),
         },
         required: ['content'],
@@ -1142,6 +1160,8 @@ export const buildVocabularyTypes = memoizeSchema((): Record<string, unknown>[] 
         // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-component-type-schema:p2:inst-ts-content-exclusive
       },
     ),
+    // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-component-type-schema:p2:inst-ts-vocabulary
+    // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-component-type-schema:p2:inst-ts-mount-point-shape
     vocabularyType(
       'mount_point',
       'UiKit mount point',
@@ -1178,6 +1198,8 @@ export const buildVocabularyTypes = memoizeSchema((): Record<string, unknown>[] 
         // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-component-type-schema:p2:inst-ts-mount-note
       },
     ),
+    // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-component-type-schema:p2:inst-ts-mount-point-shape
+    // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-component-type-schema:p2:inst-ts-vocabulary
     vocabularyType(
       'prop_deprecation',
       'UiKit prop deprecation',
@@ -1200,6 +1222,8 @@ export const buildVocabularyTypes = memoizeSchema((): Record<string, unknown>[] 
       },
       additionalProperties: false,
     }),
+    // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-component-type-schema:p2:inst-ts-vocabulary
+    // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-component-type-schema:p2:inst-ts-three-answers
     vocabularyType(
       'attestation',
       'UiKit attestation',
@@ -1218,6 +1242,8 @@ export const buildVocabularyTypes = memoizeSchema((): Record<string, unknown>[] 
         additionalProperties: false,
       },
     ),
+    // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-component-type-schema:p2:inst-ts-three-answers
+    // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-component-type-schema:p2:inst-ts-keyed-statements
     vocabularyType(
       'prop_statement',
       'UiKit prop statement',
@@ -1240,6 +1266,8 @@ export const buildVocabularyTypes = memoizeSchema((): Record<string, unknown>[] 
         additionalProperties: false,
       },
     ),
+    // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-component-type-schema:p2:inst-ts-keyed-statements
+    // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-component-type-schema:p2:inst-ts-vocabulary
     vocabularyType(
       'prop_statement_group',
       'UiKit prop statement group',
@@ -1672,6 +1700,7 @@ export const buildComponentType = memoizeSchema((): Record<string, unknown> => {
     // snake_case member of that list. `x-gts-ref` is the pointer form: it
     // resolves against this type's own $id, so an instance claiming a
     // different type fails.
+    // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-component-type-schema:p2:inst-ts-id-single
     gts_type: {
       type: 'string',
       // `const` rather than a pattern, because there is exactly one value
@@ -1684,6 +1713,7 @@ export const buildComponentType = memoizeSchema((): Record<string, unknown> => {
       'x-gts-ref': '/$id',
       description: 'GTS type id of the component type - what makes this document a typed value rather than a bare JSON record.',
     },
+    // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-component-type-schema:p2:inst-ts-id-single
     metamodel: {
       const: METAMODEL_VERSION,
       description:
@@ -1704,9 +1734,9 @@ export const buildComponentType = memoizeSchema((): Record<string, unknown> => {
   // host-element surface is not a registered type. A reference nested inside
   // a meaning field's value object is not reached by that walk and is
   // resolved by the conformance suite instead.
-  // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-component-type-schema:p2:inst-ts-host
+  // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-component-type-schema:p2:inst-ts-host-place
   for (const field of COMPILER_WRITTEN_FIELDS) properties[field] = fields.properties[field];
-  // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-component-type-schema:p2:inst-ts-host
+  // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-component-type-schema:p2:inst-ts-host-place
 
   // Every meaning field, exactly as the vocabulary defines it and exactly as
   // an overlay author states it - no widening, no null alternative and no
@@ -1963,7 +1993,7 @@ export function liftPropsSchema(document: Pick<CompiledContract, '$id' | 'props'
 // `strict: false`, which would also swallow a genuine typo like
 // `unevaluatedProperites` - exactly the class of mistake these schemas exist
 // to catch.
-// @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-element-surface:p1:inst-es-compose
+// @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-element-surface:p1:inst-es-compose-validate
 export function compilePropsValidator(contract: CompiledContract): ValidateFunction {
   const ajv = new Ajv2020({ allErrors: true });
   addContractTypes(ajv);
@@ -1981,7 +2011,7 @@ export function compilePropsValidator(contract: CompiledContract): ValidateFunct
     allOf: [{ $ref: String(props.$id) }, { $ref: String(surface.$id) }],
   });
 }
-// @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-element-surface:p1:inst-es-compose
+// @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-element-surface:p1:inst-es-compose-validate
 
 // The validation half, over an already-compiled validator. Split out so the
 // schema EVERY compile validates against - the component type - can be
@@ -2295,7 +2325,7 @@ export function buildPropsAndRequired(
   }
   // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-compilation:p1:inst-cc-api
 
-  // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-compilation:p1:inst-cc-axes
+  // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-compilation:p1:inst-cc-body-default
   // The default the component's own body writes is the value a caller who
   // passes nothing gets, so it is the one stated, over a variant
   // declaration's default for the same axis. Only for a property the contract
@@ -2316,7 +2346,7 @@ export function buildPropsAndRequired(
     assertDefaultFitsProperty(component, name, value, property);
     properties[name] = { ...property, default: value };
   }
-  // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-compilation:p1:inst-cc-axes
+  // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-compilation:p1:inst-cc-body-default
 
   required.sort();
   return { properties, required, partiallyTypedProps, notes };
@@ -2327,7 +2357,7 @@ export function buildPropsAndRequired(
 // typed `| null` admits a `null` default its enum does not list. Stated
 // anyway, the contract would carry a default no validator of it accepts, so
 // the compile is refused naming both.
-// @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-compilation:p1:inst-cc-axes
+// @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-compilation:p1:inst-cc-body-default
 function assertDefaultFitsProperty(component: string, name: string, value: PropDefault, property: ContractProperty): void {
   const kind = value === null ? 'null' : typeof value;
   const typeFits = property.type === undefined ? true : property.type === kind;
@@ -2338,7 +2368,7 @@ function assertDefaultFitsProperty(component: string, name: string, value: PropD
       `${JSON.stringify({ type: property.type, enum: property.enum })} rejects - the component's default and its schema disagree`,
   );
 }
-// @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-compilation:p1:inst-cc-axes
+// @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-compilation:p1:inst-cc-body-default
 
 // How a cva axis reads when the conflict message has to name it: the shape
 // VariantProps gives the prop, in the words a reader of the component's
@@ -2439,7 +2469,7 @@ export function noHostElementRefusal(directory: string, exportStem: string, extr
 // goes among what the extraction could not read, naming the attributes the
 // type admits and the reason nothing renders them, so the contract says
 // what it leaves out rather than claiming the component forwards nothing.
-// @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-compilation:p1:inst-cc-orphan-inherited
+// @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-compilation:p1:inst-cc-no-host-statement
 export function assertHostElementStatement(
   exportStem: string,
   overlay: Pick<Overlay, 'host_element'>,
@@ -2469,7 +2499,7 @@ export function assertHostElementStatement(
     `(${names.join(', ')}): ${statement.none.trim()}`
   );
 }
-// @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-compilation:p1:inst-cc-orphan-inherited
+// @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-compilation:p1:inst-cc-no-host-statement
 
 // The families of the named element surface the props type admits no name
 // of. A surface states its attribute families by pattern for every component
@@ -2480,7 +2510,7 @@ export function assertHostElementStatement(
 // the type system checks: a hyphenated attribute (`aria-*`, `data-*`) is
 // admitted on any component whatever its props type declares, so a family
 // whose pattern spells a hyphen is never closed by this.
-// @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-compilation:p1:inst-cc-close
+// @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-compilation:p1:inst-cc-close-families
 export function closedFamiliesOf(
   extraction: Pick<ComponentExtraction, 'axes' | 'ownProps' | 'apiProps' | 'forwardedProps' | 'admitsUnlistedProps'>,
   surface: Record<string, unknown> | undefined,
@@ -2506,7 +2536,7 @@ export function closedFamiliesOf(
   }
   return Object.keys(closed).length === 0 ? {} : { patternProperties: closed };
 }
-// @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-compilation:p1:inst-cc-close
+// @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-compilation:p1:inst-cc-close-families
 
 // The extracted-prop adapter: the two prop loops hold an ExtractedProp, and
 // what the check needs off it is its name, its printed type and whatever the
@@ -2588,9 +2618,11 @@ export function findUntypedPropMismatches(contract: CompiledContract): string[] 
       problems.push(`a prop statement names "${name}", which the contract's properties state in full`);
     }
   }
+  // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-untyped-props:p1:inst-up-pair
+  // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-untyped-props:p1:inst-up-return
   return problems;
+  // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-untyped-props:p1:inst-up-return
 }
-// @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-untyped-props:p1:inst-up-pair
 
 // Which property each group covers: a property the schema leaves to tsc,
 // that no explicit statement names, and that exactly one group's pattern
@@ -2881,13 +2913,15 @@ export function mountPointsAccepting(exportStem: string, self: string, overlays:
       // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-structure-derivation:p1:inst-co-stale-major
       const named = refPattern.exec(accepted);
       if (named !== null && named[1] === selfToken) {
+      // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-structure-derivation:p1:inst-co-stale-major
+        // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-structure-derivation:p1:inst-co-stale-major-refuse
         throw new Error(
           `${exportStem}: ${otherDirectory}/${stem}.contract.yaml accepts "${accepted}" inside it, but ${exportStem} ` +
             `ships "${self}" - a reference carries the target's major, so moving a major means updating every ` +
             `overlay that names the component`,
         );
+        // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-structure-derivation:p1:inst-co-stale-major-refuse
       }
-      // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-structure-derivation:p1:inst-co-stale-major
     }
   }
   // Code-unit order, which no locale or collation setting changes.
@@ -2897,6 +2931,7 @@ export function mountPointsAccepting(exportStem: string, self: string, overlays:
     return left < right ? -1 : left > right ? 1 : 0;
   });
 }
+// @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-structure-derivation:p1:inst-co-derive
 
 // The mount points an artifact carries: the filled component references plus
 // whatever containers outside the kit the overlay stated. Absent entirely when
@@ -2908,10 +2943,13 @@ export function mountPointsAccepting(exportStem: string, self: string, overlays:
 export function compileMountedIn(directory: string, exportStem: string, overlay: Overlay): MountPoint[] | undefined {
   // The major from the overlay in hand, which is the one being compiled.
   const major = overlay.major ?? DEFAULT_CONTRACT_MAJOR;
+  // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-structure-derivation:p1:inst-co-merge-outside
   const points: MountPoint[] = [...deriveMountPoints(directory, exportStem, major), ...(overlay.mounted_in ?? [])];
+  // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-structure-derivation:p1:inst-co-merge-outside
+  // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-structure-derivation:p1:inst-co-emit-nonempty
   return points.length > 0 ? points : undefined;
+  // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-structure-derivation:p1:inst-co-emit-nonempty
 }
-// @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-structure-derivation:p1:inst-co-derive
 
 // One overlay file as it sits on disk, before anything has read it as YAML.
 // The text travels with it because a file that fails to parse can still be
@@ -3176,9 +3214,9 @@ export function compileContractFrom(
   // The id of that surface, bare: an id-VALUED field holds an id, and gts-ts's
   // reference validator rejects the URI form outright (Gts.isValidGtsID).
   let forwardsToId: string | undefined;
-  // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-compilation:p1:inst-cc-orphan-inherited
+  // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-compilation:p1:inst-cc-no-host-statement
   const statedNoHost = assertHostElementStatement(exportStem, overlay, extraction);
-  // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-compilation:p1:inst-cc-orphan-inherited
+  // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-compilation:p1:inst-cc-no-host-statement
   if (extraction.forwardedProps.length > 0 && statedNoHost === undefined) {
     // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-compilation:p1:inst-cc-orphan-inherited
     if (!extraction.elementKind) {
@@ -3193,9 +3231,9 @@ export function compileContractFrom(
     // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-compilation:p1:inst-cc-owner-conflict
     elementSurface = loadElementSurface(extraction.elementKind);
     // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-compilation:p1:inst-cc-owner-conflict
-    // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-compilation:p1:inst-cc-close
+    // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-compilation:p1:inst-cc-surface-reference
     forwardsToId = forwardsTo(extraction);
-    // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-compilation:p1:inst-cc-close
+    // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-compilation:p1:inst-cc-surface-reference
   }
 
   const { properties, required, partiallyTypedProps, notes: propsNotes } = buildPropsAndRequired(
@@ -3230,13 +3268,15 @@ export function compileContractFrom(
     // is punctuation of the emitted text, not part of what the author states.
     properties[name] = { ...existing, description: `${existing.description} ${terminate(statement.states)} ${statement.because}` };
   }
+  // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-untyped-props:p1:inst-up-emit
   // A group's statement goes into each property it covers, the same way:
   // one property, one description, read once.
+  // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-untyped-props:p1:inst-up-emit-group
   for (const [name, group] of groupCoverage(properties, overlay.prop_statements ?? {}, overlay.prop_statement_groups ?? [])) {
     const existing = properties[name];
     properties[name] = { ...existing, description: `${existing.description} ${terminate(group.states)} ${group.because}` };
   }
-  // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-untyped-props:p1:inst-up-emit
+  // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-untyped-props:p1:inst-up-emit-group
 
   const major = overlay.major ?? DEFAULT_CONTRACT_MAJOR;
   // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-instance:p2:inst-mi-assemble
@@ -3245,13 +3285,13 @@ export function compileContractFrom(
     gts_type: COMPONENT_TYPE_ID_BARE,
     metamodel: METAMODEL_VERSION,
     component: exportStem,
-    // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-compilation:p1:inst-cc-close
+    // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-compilation:p1:inst-cc-surface-reference
     // The host element's surface, NAMED rather than composed into the props
     // surface: it is shared kit-wide by every component that renders the same
     // element, so it is something this component uses rather than a second
     // thing it is. Undefined for a component that renders none.
     forwards_to: forwardsToId,
-    // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-compilation:p1:inst-cc-close
+    // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-compilation:p1:inst-cc-surface-reference
     // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-compilation:p1:inst-cc-route
     // Everything asserted about the component: every authored field, with the
     // two the compiler fills from other authors' assertions overwriting what
@@ -3278,10 +3318,14 @@ export function compileContractFrom(
       type: 'object',
       properties,
       required,
+      // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-compilation:p1:inst-cc-close
+      // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-compilation:p1:inst-cc-close-families
       ...closedFamiliesOf(extraction, elementSurface),
+      // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-compilation:p1:inst-cc-close-families
+      // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-compilation:p1:inst-cc-open-props
       unevaluatedProperties: OPEN_UNEVALUATED,
+      // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-compilation:p1:inst-cc-open-props
     },
-    // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-compilation:p1:inst-cc-close
   };
   // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-instance:p2:inst-mi-assemble
   // M3: validated against the component type here, not only inside whichever
@@ -3375,12 +3419,12 @@ if (invokedDirectly()) {
   // @cpt-begin:cpt-frontx-ui-kit-flow-component-contracts-compile:p1:inst-invoke-compile
   const [directory] = process.argv.slice(2);
   // @cpt-end:cpt-frontx-ui-kit-flow-component-contracts-compile:p1:inst-invoke-compile
-  // @cpt-begin:cpt-frontx-ui-kit-flow-component-contracts-compile:p1:inst-write-shared
+  // @cpt-begin:cpt-frontx-ui-kit-flow-component-contracts-compile:p1:inst-shared-requested
   if (directory === '--schemas') {
     writeSharedSchemas();
     process.exit(0);
   }
-  // @cpt-end:cpt-frontx-ui-kit-flow-component-contracts-compile:p1:inst-write-shared
+  // @cpt-end:cpt-frontx-ui-kit-flow-component-contracts-compile:p1:inst-shared-requested
   // @cpt-begin:cpt-frontx-ui-kit-flow-component-contracts-compile:p1:inst-missing-argument
   if (!directory) {
     // @cpt-begin:cpt-frontx-ui-kit-flow-component-contracts-compile:p1:inst-usage-exit

@@ -151,6 +151,7 @@ export function componentRef(component: string, major: number): string {
 function componentInstanceSegment(token: string, major: number): string {
   return `${VENDOR_PACKAGE}.${EMPTY_NAMESPACE}.${token}.v${major}`;
 }
+// @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-identifiers:p2:inst-id-instance
 
 // The text an overlay would have to carry to name this component at ANY
 // major - the whole reference up to the version number. Exported rather than
@@ -162,10 +163,11 @@ function componentInstanceSegment(token: string, major: number): string {
 // catch the drift either. Carries the full prefix, so it matches a component
 // instance and nothing else - the component TYPE's own id is not one of its
 // prefixes.
+// @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-identifiers:p2:inst-id-ref-prefix
 export function componentRefPrefix(component: string): string {
   return `${COMPONENT_TYPE_ID_BARE}${VENDOR_PACKAGE}.${EMPTY_NAMESPACE}.${gtsToken(component)}.v`;
 }
-// @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-identifiers:p2:inst-id-instance
+// @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-identifiers:p2:inst-id-ref-prefix
 
 // GTS type id of the props surface a component's document carries - a
 // STANDALONE type with no parent: there is nothing above a component's props

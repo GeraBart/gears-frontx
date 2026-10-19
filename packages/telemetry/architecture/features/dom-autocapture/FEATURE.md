@@ -88,7 +88,7 @@ Realizes the automatic-capture requirements and the sequence `cpt-frontx-telemet
 - A hook returns reserved-prefix data keys or fields outside the permitted attribution set: those are dropped.
 
 **Steps**:
-1. [x] - `p1` - Developer assigns a hook function to the subtree's root element under the SDK's registry key - `inst-assign-hook`
+1. [x] - `p1` - Developer assigns a hook callback to the subtree's root element under the SDK's registry key - `inst-assign-hook`
 2. [x] - `p1` - End user interacts with a descendant of that element - `inst-user-interacts`
 3. [x] - `p1` - System receives the interaction on its capture-phase document listener - `inst-receive-event`
 4. [x] - `p1` - System resolves the event target, substituting the parent when the target is a text node - `inst-resolve-target`

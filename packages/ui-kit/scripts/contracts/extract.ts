@@ -194,6 +194,7 @@ function constrainsNothing(type: ts.Type): boolean {
 // is where instantiating a default belongs. What reaches here is a parameter
 // still open at the component's own boundary, so whatever comes back is a
 // bound on the type and never the whole of it.
+// @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-untyped-props:p1:inst-up-constraint-not-default
 function constraintOfTypeParameter(type: ts.Type, checker: ts.TypeChecker): ts.Type | undefined {
   if ((type.flags & ts.TypeFlags.TypeParameter) === 0) return undefined;
   const constraint = checker.getBaseConstraintOfType(type);
@@ -201,6 +202,7 @@ function constraintOfTypeParameter(type: ts.Type, checker: ts.TypeChecker): ts.T
   // forever; one with no constraint says nothing at all.
   return constraint === undefined || constraint === type ? undefined : constraint;
 }
+// @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-untyped-props:p1:inst-up-constraint-not-default
 
 // The JSON Schema keyword for a type that maps onto exactly one, or
 // undefined when none does. Object shapes are deliberately absent: a plain
@@ -255,7 +257,9 @@ export function expressType(type: ts.Type, checker: ts.TypeChecker, depth = 0): 
   const literal = (type.flags & (ts.TypeFlags.BooleanLiteral | ts.TypeFlags.NumberLiteral)) !== 0;
   return { schema: { type: jsonType }, complete: !literal };
 }
+// @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-untyped-props:p1:inst-up-express
 
+// @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-untyped-props:p1:inst-up-list-elements
 function expressArray(type: ts.TypeReference, checker: ts.TypeChecker, depth: number): ExpressedType {
   const element = checker.getTypeArguments(type)[0];
   if (element === undefined || constrainsNothing(element)) return { schema: { type: 'array' }, complete: true };
@@ -266,7 +270,9 @@ function expressArray(type: ts.TypeReference, checker: ts.TypeChecker, depth: nu
   if (expressed?.complete !== true) return { schema: { type: 'array' }, complete: false };
   return { schema: { type: 'array', items: expressed.schema }, complete: true };
 }
+// @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-untyped-props:p1:inst-up-list-elements
 
+// @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-untyped-props:p1:inst-up-express
 function expressUnion(type: ts.UnionType, checker: ts.TypeChecker, depth: number): ExpressedType | undefined {
   // Optionality is carried by the contract's `required` list, so a `|
   // undefined` member is not part of the shape a present value must have.
@@ -280,6 +286,8 @@ function expressUnion(type: ts.UnionType, checker: ts.TypeChecker, depth: number
 
   for (const member of members) {
     const expressed = expressType(member, checker, depth + 1);
+    // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-untyped-props:p1:inst-up-express
+    // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-untyped-props:p1:inst-up-withhold-partial-union
     if (expressed?.schema.type === undefined) {
       // A function, an object, an intersection - and with it the whole
       // union, because a `type` covering only the members that ARE
@@ -287,6 +295,8 @@ function expressUnion(type: ts.UnionType, checker: ts.TypeChecker, depth: number
       // `Record<string, any> | Array<any>` is not `type: "array"`.
       return undefined;
     }
+    // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-untyped-props:p1:inst-up-withhold-partial-union
+    // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-untyped-props:p1:inst-up-express
     jsonTypes.add(expressed.schema.type);
     if (expressed.schema.enum !== undefined && expressed.schema.type === 'string') enumValues.push(...expressed.schema.enum);
     else everyMemberIsAStringLiteral = false;
@@ -635,11 +645,13 @@ interface KeyFilter {
 
 const NO_KEY_FILTER: KeyFilter = { omitted: new Set() };
 
+// @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-axes-omit-pick
 function narrowFilter(filter: KeyFilter, kind: 'omit' | 'pick', keys: readonly string[]): KeyFilter {
   if (kind === 'omit') return { ...filter, omitted: new Set([...filter.omitted, ...keys]) };
   const picked = filter.picked === undefined ? new Set(keys) : new Set(keys.filter((key) => filter.picked!.has(key)));
   return { ...filter, picked };
 }
+// @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-axes-omit-pick
 
 // A filter's content as text, to tell two filters apart whatever order
 // their keys were added in.
@@ -665,15 +677,19 @@ function mergeBranchFilters(filters: readonly KeyFilter[]): KeyFilter {
   return { omitted: new Set(), anyOf: distinct };
 }
 
+// @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-axes-omit-pick
 function unreadableFilter(filter: KeyFilter, keyText: string): KeyFilter {
   return { ...filter, unreadable: filter.unreadable ?? keyText };
 }
+// @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-axes-omit-pick
 
+// @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-axes-omit-pick
 function keyAllowed(filter: KeyFilter | undefined, key: string): boolean {
   if (filter === undefined) return true;
   if (filter.omitted.has(key) || (filter.picked !== undefined && !filter.picked.has(key))) return false;
   return filter.anyOf === undefined || filter.anyOf.some((one) => keyAllowed(one, key));
 }
+// @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-axes-omit-pick
 
 // The same keys read off an instantiated helper's key argument: a string
 // literal type or a union of them.
@@ -873,10 +889,12 @@ function walkPropsType(
     walkPropsType(node.type, checker, result, visited, depth + 1, filter);
     return;
   }
+  // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-heritage
   // A union of props types is walked branch by branch, the way its props are
   // read (propsOfEveryBranch): each branch is a props type in its own right.
   // Branches naming different host elements are a note rather than a guess
   // passed off as the answer; the first branch's element is kept.
+  // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-host-union
   if (ts.isUnionTypeNode(node)) {
     const kinds: string[] = [];
     // Every branch's filter for each variant declaration, by its text: two
@@ -907,7 +925,7 @@ function walkPropsType(
       }
     }
     if (result.kind === undefined) result.kind = kinds[0];
-    // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-heritage
+    // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-host-union
     // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-cannot
     if (kinds.length > 1) {
       result.cannotExtract.push(
@@ -988,17 +1006,21 @@ function walkPropsType(
     // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-heritage
     return;
   }
+  // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-heritage
+  // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-host-element
   if (namesHostElement(shape) && args?.length) {
     readHostElementArgument(node, args[0], checker, result, visited, depth, filter);
     return;
   }
+  // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-host-element
+  // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-host-argument
   if (shape?.kind === 'dom-attributes' && args !== undefined && args.length > shape.argument) {
     const argument = args[shape.argument];
     const interfaceName = ts.isTypeReferenceNode(argument) ? lastEntityName(argument.typeName) : argument.getText();
     readDomInterface(node, interfaceName, result);
     return;
   }
-  // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-heritage
+  // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-host-argument
 
   // A named reference this loop does not special-case - resolve it and
   // recurse into its own declaration's heritage (interface `extends` list,
@@ -1050,7 +1072,7 @@ function walkPropsType(
 // type parameter, a union of tags, an attributes interface - is recorded
 // rather than dropped: the walk stopping here with nothing said is how a
 // component came to forward a whole DOM surface with no element to name it.
-// @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-heritage
+// @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-host-argument
 function readHostElementArgument(
   node: ts.TypeNode,
   first: ts.TypeNode,
@@ -1068,11 +1090,13 @@ function readHostElementArgument(
     walkQueriedComponentProps(first, node, checker, result, visited, depth, filter);
     return;
   }
+  // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-host-argument
+  // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-host-union
   const tags = literalTagsOf(first);
   const chosen = tags === undefined ? undefined : documentedDefaultTag(node, tags);
   if (tags !== undefined && chosen !== undefined) {
     if (result.kind === undefined) result.kind = chosen;
-    // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-heritage
+    // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-host-union
     // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-cannot
     result.cannotExtract.push(
       `heritage: "${node.getText()}" admits ${tags.length} host elements (${tags.join(', ')}); the contract names ` +
@@ -1080,9 +1104,9 @@ function readHostElementArgument(
     );
     return;
     // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-cannot
-    // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-heritage
+    // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-host-union
   }
-  // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-heritage
+  // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-host-union
   // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-cannot
   result.cannotExtract.push(
     `heritage: "${node.getText()}" names its host element with "${first.getText()}", a ${
@@ -1101,7 +1125,7 @@ function isNullishTypeNode(node: ts.TypeNode): boolean {
 
 // A union written entirely of string literals, as the tags it names, or
 // undefined for anything else.
-// @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-heritage
+// @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-host-union
 function literalTagsOf(node: ts.TypeNode): string[] | undefined {
   if (!ts.isUnionTypeNode(node)) return undefined;
   const tags: string[] = [];
@@ -1146,16 +1170,18 @@ function documentedDefaultTag(node: ts.TypeNode, tags: readonly string[]): strin
   }
   return documented.size === 1 ? [...documented][0] : undefined;
 }
+// @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-host-union
 
 // The host element a DOM interface names, or a note when the interface names
 // none this walk can map (see DOM_INTERFACE_TAGS).
 function readDomInterface(node: ts.TypeNode, interfaceName: string, result: PropsTypeWalkResult): void {
+  // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-host-argument
   const tag = DOM_INTERFACE_TAGS[interfaceName];
   if (tag !== undefined) {
     if (result.kind === undefined) result.kind = tag;
     return;
   }
-  // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-heritage
+  // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-host-argument
   // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-cannot
   result.cannotExtract.push(
     `heritage: "${node.getText()}" names its host element by the DOM interface "${interfaceName}", which stands for no ` +
@@ -1168,7 +1194,7 @@ function readDomInterface(node: ts.TypeNode, interfaceName: string, result: Prop
 // is - TypeScript's own `Parameters`, by symbol, indexed at the first
 // parameter. Any other indexed access answers undefined and is left to the
 // walk's ordinary "cannot classify" note.
-// @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-heritage
+// @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-host-argument
 function firstParameterQuery(node: ts.IndexedAccessTypeNode, checker: ts.TypeChecker): ts.TypeQueryNode | undefined {
   const index = node.indexType;
   if (!ts.isLiteralTypeNode(index) || !ts.isNumericLiteral(index.literal) || index.literal.text !== '0') return undefined;
@@ -1181,7 +1207,7 @@ function firstParameterQuery(node: ts.IndexedAccessTypeNode, checker: ts.TypeChe
   const resolved = symbol.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol;
   if (resolved.getName() !== 'Parameters') return undefined;
   return declaredUnder(resolved.getDeclarations() ?? [], /[\\/]node_modules[\\/]typescript[\\/]lib[\\/]/) ? query : undefined;
-  // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-heritage
+  // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-host-argument
 }
 
 // The props type of the component a type query names: its first parameter,
@@ -1193,7 +1219,7 @@ function firstParameterQuery(node: ts.IndexedAccessTypeNode, checker: ts.TypeChe
 // is declared as `ForwardRefExoticComponent<Props & ...>`, whose parameter is
 // annotated with React's own unbound `P`, so there only the instantiated type
 // carries the part's props and the walk continues on the type.
-// @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-heritage
+// @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-host-argument
 function walkQueriedComponentProps(
   query: ts.TypeQueryNode,
   node: ts.TypeNode,
@@ -1213,7 +1239,7 @@ function walkQueriedComponentProps(
   // the same reason every other shape this walk skips is.
   const signature = candidates[candidates.length - 1];
   if (signature !== undefined) {
-    // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-heritage
+    // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-host-argument
     // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-cannot
     if (candidates.length > 1) {
       result.cannotExtract.push(
@@ -1222,7 +1248,7 @@ function walkQueriedComponentProps(
       );
     }
     // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-cannot
-    // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-heritage
+    // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-host-argument
     const parameter = signature.getParameters()[0];
     const propsType = checker.getTypeOfSymbolAtLocation(parameter, query);
     const declaration = parameter.valueDeclaration;
@@ -1234,7 +1260,7 @@ function walkQueriedComponentProps(
     }
     return;
   }
-  // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-heritage
+  // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-host-argument
   // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-cannot
   result.cannotExtract.push(
     `heritage: "${node.getText()}" queries "${query.exprName.getText()}", which has no call signature taking a props ` +
@@ -1305,13 +1331,15 @@ function walkResolvedType(
     );
     return;
     // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-cannot
-    // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-heritage
   }
+  // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-host-argument
   if (shape?.kind === 'dom-attributes' && typeArguments.length > shape.argument) {
     const argument = typeArguments[shape.argument];
     readDomInterface(node, argument.getSymbol()?.getName() ?? stripModuleSpecifiers(checker.typeToString(argument)), result);
     return;
   }
+  // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-host-argument
+  // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-heritage
   if (shape?.kind === 'variant-props') {
     // Prefixed `cva:` so the compiler refuses: an instantiated VariantProps
     // no longer holds the `typeof X` it was written with, so its axes cannot
@@ -1571,6 +1599,7 @@ function relativeDeclarationFile(absolutePath: string, kitRoot: string): string 
 // a leak: it is the component's own public generic, and substituting its
 // default would print `AccordionValue<unknown>` - false for the caller who
 // writes `<Accordion<string>>`, which is most of them.
+// @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-props-type-text
 const TYPE_PRINT_FLAGS = ts.TypeFormatFlags.NoTruncation | ts.TypeFormatFlags.UseAliasDefinedOutsideCurrentScope;
 
 export function stripModuleSpecifiers(typeText: string): string {
@@ -1580,6 +1609,7 @@ export function stripModuleSpecifiers(typeText: string): string {
 function printTypeText(type: ts.Type, location: ts.Node, checker: ts.TypeChecker): string {
   return stripModuleSpecifiers(checker.typeToString(type, location, TYPE_PRINT_FLAGS));
 }
+// @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-props-type-text
 
 // True for a call whose resolved callee really is React's own `forwardRef`
 // or `memo` export - checked by symbol identity the same way isCvaCall
@@ -1920,7 +1950,7 @@ const extractionCache = new Map<string, ComponentExtraction[]>();
 // branches type it differently, the schema states nothing and the printed
 // types of every declaring branch are what a reader gets (see
 // extractFromSource).
-// @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-props
+// @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-props-union-branches
 interface BranchedProp {
   symbol: ts.Symbol;
   branches?: string[];
@@ -1975,14 +2005,14 @@ function branchLabel(branch: ts.Type, branches: readonly ts.Type[], checker: ts.
   }
   return stripModuleSpecifiers(checker.typeToString(branch, undefined, TYPE_PRINT_FLAGS));
 }
-// @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-props
+// @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-props-union-branches
 
 // The literal defaults a component's body writes into its destructured props
 // parameter, by the prop name each binding reads (`{ tone: t = 'info' }` is
 // `tone`). A default that is not a literal - a call, a constant, a template
 // with a substitution - says nothing a schema can hold, so it is named in
 // `cannotExtract` rather than evaluated or dropped in silence.
-// @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-axes
+// @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-body-defaults
 function destructuredDefaults(param: ts.ParameterDeclaration, cannotExtract: string[]): Record<string, PropDefault> {
   const defaults: Record<string, PropDefault> = {};
   if (!ts.isObjectBindingPattern(param.name)) return defaults;
@@ -2143,6 +2173,7 @@ function acceptsLiteral(paramType: ts.Type, name: string, value: PropDefault, lo
             : checker.getFalseType();
   return declaring.every((prop) => checker.isTypeAssignableTo(literal, checker.getTypeOfSymbolAtLocation(prop, location)));
 }
+// @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-body-defaults
 
 // The defaults a wrapper takes from the one kit component it renders. When
 // the body returns that one element and passes it the props through a single
@@ -2159,6 +2190,7 @@ function acceptsLiteral(paramType: ts.Type, name: string, value: PropDefault, lo
 // whose default the inner contract notes rather than states, one for an
 // inner default its own type for the prop does not accept, and one when the
 // inner body leaves defaults unread without naming the props.
+// @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-wrapper-defaults
 function inheritedDefaults(
   param: ts.ParameterDeclaration,
   body: ts.Node,
@@ -2269,7 +2301,9 @@ function inheritedDefaults(
   }
   return inherited;
 }
+// @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-wrapper-defaults
 
+// @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-body-defaults
 type CoalescedDefault = { kind: 'literal'; value: PropDefault } | { kind: 'unsure'; why: string };
 
 // How the body reads one destructured binding: undefined when it never reads
@@ -2629,7 +2663,7 @@ function literalValue(expr: ts.Expression): { value: PropDefault } | undefined {
   if (expr.kind === ts.SyntaxKind.NullKeyword) return { value: null };
   return undefined;
 }
-// @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-axes
+// @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-body-defaults
 
 // Whether a props type may accept a name it does not list. A string-like
 // index key does - a string, or a template literal such as `on${string}`; a
@@ -2724,9 +2758,9 @@ function extractFromSource(source: ts.SourceFile, program: ts.Program): Componen
           // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-heritage
           variantSourceLabels = variantSourceLabelsOf(param.type, checker, cannotExtract);
         }
-        // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-heritage
+        // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-host-element
         elementKind = walk.kind;
-        // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-heritage
+        // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-host-element
         // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-cannot
         cannotExtract.push(...walk.cannotExtract);
         // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-cannot
@@ -2829,12 +2863,14 @@ function extractFromSource(source: ts.SourceFile, program: ts.Program): Componen
       // belongs to the element's surface, which states no defaults, so an
       // attribute written for one (`aria-label={label}`) is neither stated
       // nor noted.
-      // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-axes
+      // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-body-defaults
       if (param && defaultsBody !== undefined) {
         const propNames = new Set([...Object.keys(axes), ...[...ownProps, ...apiProps].map((prop) => prop.name)]);
         for (const [name, value] of Object.entries(bodyDefaults(param, defaultsBody, checker, propNames, cannotExtract))) {
           if (!Object.prototype.hasOwnProperty.call(propDefaults, name)) propDefaults[name] = value;
         }
+        // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-body-defaults
+        // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-wrapper-defaults
         const own = new Set(Object.keys(propDefaults));
         for (const [name, value] of Object.entries(
           inheritedDefaults(param, defaultsBody, checker, propNames, own, cannotExtract, 0),
@@ -2842,7 +2878,7 @@ function extractFromSource(source: ts.SourceFile, program: ts.Program): Componen
           if (!Object.prototype.hasOwnProperty.call(propDefaults, name)) propDefaults[name] = value;
         }
       }
-      // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-axes
+      // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-extraction:p1:inst-ex-wrapper-defaults
 
       // Sorted by name before returning - N3: `checker.getPropertiesOfType`'s
       // iteration order is an undocumented TypeScript-internal detail (its

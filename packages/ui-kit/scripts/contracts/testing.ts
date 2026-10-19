@@ -429,7 +429,9 @@ export function assertContractFreshness(directory: string, exportStem: string = 
       );
       expect(lifted.$schema).toBe('https://json-schema.org/draft/2020-12/schema');
     });
+    // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-conformance:p1:inst-cf-element
 
+    // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-conformance:p1:inst-cf-element-surface-refs
     it('resolves the host-element surface it names to a committed file in the grammar', () => {
       // The surfaces are hand-written, so nothing recompiles them into place:
       // what has to hold is that the reference a contract HOLDS resolves to a
@@ -469,7 +471,7 @@ export function assertContractFreshness(directory: string, exportStem: string = 
         .sort();
       expect(orphans, `committed element surfaces no contract names:\n${orphans.join('\n')}`).toEqual([]);
     });
-    // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-conformance:p1:inst-cf-element
+    // @cpt-end:cpt-frontx-ui-kit-algo-component-contracts-conformance:p1:inst-cf-element-surface-refs
 
     // @cpt-begin:cpt-frontx-ui-kit-algo-component-contracts-conformance:p1:inst-cf-instance-ref
     it('validates as an instance of the component type, in a registry holding what it names', () => {

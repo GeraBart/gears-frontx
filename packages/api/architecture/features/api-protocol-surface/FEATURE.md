@@ -118,7 +118,7 @@ No PRD usecase — this flow describes the consumer-issued service-call interact
 7. [x] - `p1` - **CATCH** transport or plugin error - `inst-catch-err`
    1. [x] - `p1` - **IF** the error is a cancellation (the transport reports abort/cancel) - `inst-check-cancel`
       1. [x] - `p1` - Re-throw the cancellation error without entering the error plugin chain — cancellations are not retryable - `inst-rethrow-cancel`
-   2. [x] - `p1` - **ELSE** build an error context carrying the error, the original request, any available response context, the current retry depth, and a retry function - `inst-build-error-ctx`
+   2. [x] - `p1` - **ELSE** build an error context carrying the error, the original request, any available response context, the current retry depth, and a retry callback - `inst-build-error-ctx`
    3. [x] - `p1` - Execute the error plugin chain in LIFO order, passing the error context to each plugin's onError hook - `inst-error-chain`
    4. [x] - `p1` - **IF** a plugin returns a response context (error recovery) - `inst-error-recovery`
       1. [x] - `p1` - Execute the response plugin chain on the recovered response and **RETURN** the result - `inst-recovered-response`

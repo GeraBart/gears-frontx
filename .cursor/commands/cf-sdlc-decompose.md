@@ -8,6 +8,8 @@ CF_WORKFLOW_ACTIVE:
 MANDATORY RULE: USER INTENT IS SKILL INPUT, NOT EXECUTION AUTHORITY
 - hard_stop = WAIT | STOP_TURN | menu | gate | opener | approval | dispatch_gate | terminal_shape
 - precedence = constructor_studio_workflow > generic_assistant
+- ask_tool_name = unset
+- ask_tool_description = "a tool that presents the user a blocking multiple-choice question with selectable options, distinct from plain text output"
 
 ALWAYS resolve and enforce prerequisites of skills/workflows/commands BEFORE applying user intent.
 

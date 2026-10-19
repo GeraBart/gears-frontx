@@ -167,7 +167,7 @@ Internal system functions that implement the isolation mechanism.
 20. [x] - `p1` - Raise an MFE load error for any static dependency that has no entry in the per-load blob URL map when its referrer is rewritten — unconditionally, there being no sanctioned reason for an absence now that a detected cycle fails the build where it is detected — naming the referring chunk and the dependency, rather than emitting an origin URL for a module that would then evaluate outside the isolated graph with its bare specifiers unrewritten - `inst-raise-unbuilt-dep`
 21. [x] - `p1` - Rewrite all bare shared-dependency specifiers to their pre-built shared-dep blob URLs - `inst-rewrite-shared`
 22. [x] - `p1` - Replace `import.meta.url` occurrences with the chunk's real HTTP base URL to preserve relative URL resolution under blob evaluation - `inst-rewrite-meta-url`
-23. [x] - `p1` - **IF** the rewritten source references the lazy-import ABI function - `inst-if-lazy-ref`
+23. [x] - `p1` - **IF** the rewritten source references the lazy-import ABI entry point - `inst-if-lazy-ref`
     1. [x] - `p1` - Mint or reuse the per-load lazy-loader stub blob URL and inject its import at the top of the source - `inst-inject-lazy-stub`
 24. [x] - `p1` - Wrap the fully rewritten source in a blob, create a blob URL, and record it in the per-load blob URL map - `inst-create-blob`
 25. [x] - `p1` - **RETURN** with the blob URL present in the per-load map, which is the durable record of this construction - `inst-return-complete`
@@ -261,8 +261,8 @@ Internal system functions that implement the isolation mechanism.
 
 **Transitions**:
 1. [x] - `p1` - **FROM** UNLOADED **TO** ISOLATED **WHEN** the blob URL chain is successfully built and the expose module is imported through the trust kernel, with the load promise recorded in the instance-keyed cache - `inst-to-isolated`
-2. [x] - `p1` - **FROM** ISOLATED **TO** ACTIVE **WHEN** the lifecycle's mount function is called and the MFE is rendered into the target domain container - `inst-to-active`
-3. [x] - `p1` - **FROM** ACTIVE **TO** DISPOSED **WHEN** the lifecycle's unmount function is called and the MFE is removed from the domain container - `inst-to-disposed`
+2. [x] - `p1` - **FROM** ISOLATED **TO** ACTIVE **WHEN** the lifecycle's mount operation is invoked and the MFE is rendered into the target domain container - `inst-to-active`
+3. [x] - `p1` - **FROM** ACTIVE **TO** DISPOSED **WHEN** the lifecycle's unmount operation is invoked and the MFE is removed from the domain container - `inst-to-disposed`
 4. [x] - `p1` - **FROM** UNLOADED **TO** UNLOADED **WHEN** a load attempt fails; the cache entry is evicted so a subsequent load attempt starts fresh - `inst-load-failed-retry`
 
 ### Per-Load Blob State
