@@ -240,34 +240,22 @@ jobs:
 
       - name: Check spec coverage thresholds
         # The scan covers the ecosystem packages, including the core substrate
-        # (api/mfes/gts-plugin); solution packages live in the templates
-        # repository and tooling scripts/ are outside the scan. Core-substrate
-        # code + type/interface/glue lines cap fair @cpt marker density well
-        # below 100% (even greenfield cli/kit top out ~50-56%). Current honest
-        # coverage is ~48%; the bar sits just below it. Raise it as
-        # core-substrate traceability density improves.
+        # (api/mfes/gts-plugin), and the root scripts/ code root; solution
+        # packages live in the templates repository. Core-substrate code and
+        # type/interface/glue lines cap fair @cpt marker density well below
+        # 100%, so both floors sit just below the measured values. Raise them
+        # as traceability density improves.
         #
-        # --min-coverage is 47. The scan is 24909 lines over 266 files, so
-        # 1.24 points below the honest 48.24% is ~309 lines of slack — a
-        # normal-sized change, not room for a whole unmarked package.
+        # --min-granularity guards against marking covered code in coarse
+        # blocks, the failure mode markers exist to prevent.
         #
-        # --min-granularity is 0.70 against an actual 0.7152, so covered code
-        # cannot be marked in blocks much coarser than anything in the tree
-        # today, which is the failure mode markers exist to prevent. 0.70
-        # keeps ~0.015 of headroom.
-        #
-        # The per-file flags cannot be used yet, and this is measured rather
-        # than assumed:
-        #   --min-file-coverage    fails on "any file", and 96 of the 266
-        #                          scanned files carry no markers at all, so any
-        #                          value above 0 fails today.
-        #   --min-file-granularity fails on "any covered file", and a small file
-        #                          fully covered by one block scores 0.00 — so it
-        #                          would fail on the best-covered files in the
-        #                          repo, not the worst.
-        # Per-system floors (--system) are the useful next step and need more than one
-        # registered system; today there is only `frontx`, so a per-system floor
-        # is the aggregate under another name.
+        # The per-file flags don't fit this codebase:
+        #   --min-file-coverage    fails on any file, and some scanned files
+        #                          carry no markers, so any value above 0 fails.
+        #   --min-file-granularity fails on any covered file, and a small file
+        #                          fully covered by one block scores 0.00, so it
+        #                          fails on the best-covered files.
+        # Per-system floors (--system) need more than one registered system.
         run: >-
           python3 .cf-studio/.core/skills/studio/scripts/studio.py
           spec-coverage
