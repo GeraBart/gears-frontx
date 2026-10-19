@@ -9,7 +9,7 @@ import type { KitDefinition, KitManifest, KitResourceEntry, ResourceBodyReader, 
 // implementation. Everything else (required fields, id pattern, type enum, path
 // containment, the base public/kind contract) is a SNAPSHOT of rules owned by
 // the Constructor Studio kit specification
-// (`.cf-studio/.core/architecture/specs/kit/kit.md`, engine v1.6.2); their
+// (`.cf-studio/.core/architecture/specs/kit/kit.md`, engine v1.8.0); their
 // authoritative gate is `cfs kit validate` in CI. The mirror exists so
 // `loadKitSession` refuses at session start what the CLI refuses at install.
 // When the Studio spec moves, update the snapshot from the spec — never treat

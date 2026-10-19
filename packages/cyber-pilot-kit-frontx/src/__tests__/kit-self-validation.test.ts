@@ -448,7 +448,7 @@ describe('kit self-validation — routing and scaffolding entry points (cpt-fron
     const CHECKLIST_ID = 'frontx_verification_checklist';
 
     // Studio infers `kind` from a source whose file name ends in `checklist.md`
-    // (`_resource_kind_from_path`, studio engine v1.6.2). A rename to any other
+    // (`_resource_kind_from_path`, studio engine v1.8.0). A rename to any other
     // file name would leave the declared kind and the inferred one disagreeing,
     // which no other assertion in this suite would notice.
     it('is declared as a non-public checklist whose file name backs the kind inference', () => {

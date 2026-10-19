@@ -1,7 +1,7 @@
 # Canonical Constructor Studio kit manifest for the FrontX AI Tooling Kit.
 #
 # Replaces the legacy Cypilot `manifest.toml`. Generated with
-# `cfs kit normalize --from manifest` on studio engine v1.6.2, then
+# `cfs kit normalize --from manifest` on studio engine v1.8.0, then
 # hand-corrected for `name` and `version` (see below).
 #
 # Resource identifiers carry the mandatory `frontx_` prefix (KIT-1,
@@ -12,7 +12,7 @@ manifest_version = "1.0"
 [[kits]]
 slug = "cyber-pilot-kit-frontx"
 name = "FrontX AI Tooling Kit"
-version = "0.3.0"
+version = "0.3.1"
 
 [[kits.resources]]
 id = "frontx_skill"
