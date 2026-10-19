@@ -239,30 +239,26 @@ jobs:
         run: cfs update -y --no-interactive --with-kits yes --version ${{ steps.cfs-version.outputs.version }}
 
       - name: Check spec coverage thresholds
-        # Threshold rebased for the post-split ecosystem repo. The framework/
-        # template split changed the scanned code: solution packages moved out
-        # to the templates repository, extracted core-substrate code
-        # (api/mfes/gts-plugin) moved in, and tooling scripts/ were removed
-        # from the scan. Extracted
+        # The scan covers the ecosystem packages, including the core substrate
+        # (api/mfes/gts-plugin); solution packages live in the templates
+        # repository and tooling scripts/ are outside the scan. Core-substrate
         # code + type/interface/glue lines cap fair @cpt marker density well
-        # below the old 58 (even greenfield cli/kit top out ~50-56%). Current
-        # honest coverage is ~41%; the bar sits just below it with headroom.
-        # Raise it as core-substrate (api/mfes/gts-plugin) traceability
-        # density improves over time.
+        # below 100% (even greenfield cli/kit top out ~50-56%). Current honest
+        # coverage is ~48%; the bar sits just below it. Raise it as
+        # core-substrate traceability density improves.
         #
-        # --min-coverage stays at 38. The scan is 10255 lines over 139 files, so
-        # 3 points below the honest 41% is ~308 lines of slack — a normal-sized
-        # change, not room for a whole unmarked package. Tightening it further
-        # buys ~100 lines and costs every in-flight PR a rebase.
+        # --min-coverage is 47. The scan is 24909 lines over 266 files, so
+        # 1.24 points below the honest 48.24% is ~309 lines of slack — a
+        # normal-sized change, not room for a whole unmarked package.
         #
-        # --min-granularity is the gap worth closing: 0.28 against an actual
-        # 0.7276 permitted covered code to be marked in blocks far coarser than
-        # anything in the tree today, which is the failure mode markers exist to
-        # prevent. 0.60 keeps 0.12 of headroom.
+        # --min-granularity is 0.70 against an actual 0.7152, so covered code
+        # cannot be marked in blocks much coarser than anything in the tree
+        # today, which is the failure mode markers exist to prevent. 0.70
+        # keeps ~0.015 of headroom.
         #
         # The per-file flags cannot be used yet, and this is measured rather
         # than assumed:
-        #   --min-file-coverage    fails on "any file", and 48 of the 139
+        #   --min-file-coverage    fails on "any file", and 96 of the 266
         #                          scanned files carry no markers at all, so any
         #                          value above 0 fails today.
         #   --min-file-granularity fails on "any covered file", and a small file
@@ -275,8 +271,8 @@ jobs:
         run: >-
           python3 .cf-studio/.core/skills/studio/scripts/studio.py
           spec-coverage
-          --min-coverage 38
-          --min-granularity 0.60
+          --min-coverage 47
+          --min-granularity 0.70
 
   dependency-graph:
     runs-on: ubuntu-latest
