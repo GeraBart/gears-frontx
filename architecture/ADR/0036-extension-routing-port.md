@@ -2,6 +2,7 @@
 status: proposed
 date: 2026-10-01
 decision-makers: German Bartenev
+description: "Decides that the MFE runtime takes an optional abstract router and exchanges occupant values through a private rendezvous."
 ---
 
 # Inject an Optional Abstract Router, Exchange Occupant Values Through a Private Rendezvous, and Command the URL

@@ -1,3 +1,7 @@
+---
+description: Specifies the GTS default type-system provider that implements the runtime's type-substrate port with infrastructure schemas, schema validation, and type-of hierarchy resolution.
+---
+
 # Feature: GTS Default Type-System Provider
 
 

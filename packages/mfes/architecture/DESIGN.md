@@ -2,6 +2,7 @@
 type: DESIGN
 system: frontx-mfes
 status: draft
+description: Technical design of the MFE runtime (@gears-frontx/mfes) — registry, manifest-driven loading, governed extension domains, host communication, and isolation of microfrontends.
 ---
 
 # Technical Design — MFE Runtime

@@ -1,6 +1,7 @@
 ---
 status: accepted
 date: 2026-06-05
+description: "Decides that the API surface separates interaction shapes into typed protocols behind a common abstract base, with a generic plugin extension point."
 ---
 
 # API Surface Organization

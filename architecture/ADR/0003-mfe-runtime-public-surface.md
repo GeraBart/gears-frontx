@@ -1,6 +1,7 @@
 ---
 status: accepted
 date: 2026-06-04
+description: "Decides that the MFE runtime exposes an abstract registry facade constructed through a factory that injects the type-system provider."
 ---
 
 # The MFE Runtime's Public Access Surface

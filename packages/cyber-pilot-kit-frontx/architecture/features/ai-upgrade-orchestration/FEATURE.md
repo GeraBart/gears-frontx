@@ -1,3 +1,7 @@
+---
+description: Specifies the AI workflow that selects an applied template from provenance, enriches the CLI change set with impact analysis and review gates, and applies the approved upgrade.
+---
+
 # Feature: AI-Driven Upgrade Orchestration
 
 

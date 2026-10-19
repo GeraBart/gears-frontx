@@ -1,6 +1,7 @@
 ---
 status: accepted
 date: 2026-06-05
+description: "Decides that the AI tooling framework is packaged as a Constructor Studio kit installed through the CLI integration."
 ---
 
 # AI Tooling Framework Packaging

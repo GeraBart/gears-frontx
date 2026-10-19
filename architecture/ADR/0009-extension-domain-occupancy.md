@@ -1,6 +1,7 @@
 ---
 status: proposed
 date: 2026-10-01
+description: "Decides that extension-domain occupancy is governed by composable named mount strategies plus a cardinality matrix checked at admission."
 ---
 
 # Extension-Domain Occupancy

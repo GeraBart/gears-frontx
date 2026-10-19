@@ -1,3 +1,7 @@
+---
+description: Feature specification of the telemetry client lifecycle and the record path from a caller's call through enrichment and queueing to a delivered batch.
+---
+
 # Feature: Event Collection And Batched Delivery
 
 - [x] `p1` - **ID**: `cpt-frontx-telemetry-featstatus-event-collection`

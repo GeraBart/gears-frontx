@@ -1,3 +1,7 @@
+---
+description: Specifies the versioned template manifest contract every publishable template exposes and the pre-publish validation the CLI applies to it.
+---
+
 # Feature: Template Manifest Contract & Pre-Publish Validation
 
 

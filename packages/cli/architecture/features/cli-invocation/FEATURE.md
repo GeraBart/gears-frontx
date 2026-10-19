@@ -1,3 +1,7 @@
+---
+description: Specifies the frontx executable invocation surface that parses a command invocation and dispatches it to the internal component owning that lifecycle capability.
+---
+
 # Feature: CLI Executable Invocation Surface
 
 <!-- toc -->

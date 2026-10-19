@@ -1,6 +1,7 @@
 ---
 status: accepted
 date: 2026-09-10
+description: "Decides that the cross-MFE shared-dependency source-text cache keys on a producer-published content hash, falling back to the resolved chunk URL."
 ---
 
 # What Identity Should the Cross-MFE Shared-Dependency Source-Text Cache Key On?

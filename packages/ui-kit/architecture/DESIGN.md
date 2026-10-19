@@ -2,6 +2,7 @@
 type: DESIGN
 system: frontx-ui-kit
 status: draft
+description: Technical design of the UI kit, a token-styled React component library with per-component entries and a compiled agent knowledge layer of component contracts held to the code.
 ---
 
 # Technical Design - UI Kit
@@ -332,23 +333,23 @@ A consuming application needs components whose behaviour it does not have to imp
 
 Concrete artifact: the package's three global stylesheets and the seam guard over them.
 
-##### Why this component exists
+##### Why this component exists — Token System
 
 Rebranding must be an override, not a fork. That requires exactly one place where an appearance value is decided, and a rule that components reference it rather than restating it.
 
-##### Responsibility scope
+##### Responsibility scope — Token System
 
 - Defines the radius, spacing, control-metric, elevation, colour and type-ramp vocabulary as custom properties.
 - Defines both themes: the light values on the root, redefined under the viewer's preference and under an explicit theme declaration, so a document or any subtree can be pinned.
 - Ships as global stylesheets an application imports once, separate from the per-component style emission.
 
-##### Responsibility boundaries
+##### Responsibility boundaries — Token System
 
 - Knows nothing about any component: the dependency runs one way only.
 - Does not own component layout or component-local structural CSS; those live in the component's own module and consume this vocabulary.
 - Does not ship font files; it names families and leaves their delivery to the consuming application.
 
-##### Related components (by ID)
+##### Related components (by ID) — Token System
 
 - `cpt-frontx-ui-kit-component-component-surface` - the sole consumer of this vocabulary.
 
@@ -358,11 +359,11 @@ Rebranding must be an override, not a fork. That requires exactly one place wher
 
 Concrete artifact: the package's library build configuration and its build plugin.
 
-##### Why this component exists
+##### Why this component exists — Package Build
 
 Nearly every property a consumer depends on is decided at build time and invisible in the source: whether a component's styles are emitted as their own artifact, whether the client directive survives bundling, whether the declaration files resolve under a consumer's module resolution, and whether importing one component pulls in the rest.
 
-##### Responsibility scope
+##### Responsibility scope — Package Build
 
 - Emits one library entry per component public entry point, one per plugin entry point a component splits out (published as `<component>/<plugin>`), plus the package barrel, with shared code split into chunks rather than duplicated.
 - Emits each entry's styles as their own artifact and marks stylesheets as the package's only side effects, so a bundler that honours the declaration can drop the rest.
@@ -370,13 +371,13 @@ Nearly every property a consumer depends on is decided at build time and invisib
 - Emits declarations and the re-export shims that make the per-component and per-plugin subpaths resolve under both module-resolution modes.
 - Copies the global stylesheets and the per-component usage documents into the published artifact.
 
-##### Responsibility boundaries
+##### Responsibility boundaries — Package Build
 
 - Decides nothing about a component's behaviour or appearance.
 - Publishes no contract artifact and no harness source (UIKIT-4).
 - Does not verify its own output; that is the consumer acceptance component's responsibility, and deliberately so, because a build cannot observe the properties that only fail at a consumer.
 
-##### Related components (by ID)
+##### Related components (by ID) — Package Build
 
 - `cpt-frontx-ui-kit-component-component-surface` - supplies the entry points.
 - `cpt-frontx-ui-kit-component-agent-documentation` - supplies the documents this build copies into the artifact.
@@ -388,23 +389,23 @@ Nearly every property a consumer depends on is decided at build time and invisib
 
 Concrete artifact: the per-component usage documents, the index at the package root, and the guard that holds them to the component set.
 
-##### Why this component exists
+##### Why this component exists — Agent Documentation
 
 An agent writing application code reads what the project installed. Documentation that lives anywhere else describes a version the project may not have, and the reader cannot tell.
 
-##### Responsibility scope
+##### Responsibility scope — Agent Documentation
 
 - Keeps one usage document per component beside that component, and ships a copy of each inside the published artifact.
 - Ships an index at the package root naming every component's document path together with the rules that apply across the kit.
 - Holds the set to the component set: every exported component has a document, is named in the index, and has the values of its stylesheet's styling axes named in its document.
 
-##### Responsibility boundaries
+##### Responsibility boundaries — Agent Documentation
 
 - Carries prose, not a checkable contract. What a tool can verify lives in the contract harness's artifacts, not here.
 - The documents are authored, not generated; the build copies them and adds nothing.
 - Does not describe composition above a single component.
 
-##### Related components (by ID)
+##### Related components (by ID) — Agent Documentation
 
 - `cpt-frontx-ui-kit-component-package-build` - copies these documents into the published artifact.
 - `cpt-frontx-ui-kit-component-contract-harness` - the checkable description of the same components, for the described subset.
@@ -415,11 +416,11 @@ An agent writing application code reads what the project installed. Documentatio
 
 Concrete artifact: the contract tooling under the package's `scripts/contracts/` directory, together with the compiled artifacts committed beside each described component.
 
-##### Why this component exists
+##### Why this component exists — Contract Harness
 
 Prose describing a component can only be reviewed. This component produces a description a tool can act on, and then keeps that description honest: nothing else in the package can tell whether a description has fallen behind the code it describes, or whether a change narrowed a surface a consumer depends on.
 
-##### Responsibility scope
+##### Responsibility scope — Contract Harness
 
 - Reads a component's TypeScript for its exported components, variant axes and defaults, the host element each renders, and every prop filed by where its declaration lives - the component's own source, the primitive library's props for the part it wraps, or React's attributes for that element.
 - Validates the hand-authored overlay against the overlay vocabulary and refuses one that reaches into the machine's half (UIKIT-1).
@@ -434,14 +435,14 @@ Prose describing a component can only be reviewed. This component produces a des
 - Decides which components a change must be held to - the directories it touches, widened to every described component when anything that reshapes a compiled contract changes, including a dependency the checker's printed type text comes from - and reports how much of the kit is enrolled without failing on it.
 - Changes the package's own build tooling where its own compilation and linting need it - the TypeScript project layout separating shipping source from tooling and tests, and the lint scope that covers the harness - since that configuration is the package's own (`cpt-frontx-ui-kit-nfr-standalone-verification`) and reaches no consumer (UIKIT-4); such a change is recorded in the package's committed configuration, which the package's own type-check and lint scripts run against.
 
-##### Responsibility boundaries
+##### Responsibility boundaries — Contract Harness
 
 - Never edits a component: the code is the fact owner, and a disagreement is reported, not repaired (`cpt-frontx-ui-kit-principle-code-is-the-fact-owner`).
 - Produces nothing a consumer installs (UIKIT-4).
 - Does not decide when it runs. The base reference and the invocation come from outside the package, so the same tool serves a local run and a continuous-integration run without knowing which it is in.
 - Owns no meaning of its own: every semantic statement in a contract came from an overlay a person wrote.
 
-##### Related components (by ID)
+##### Related components (by ID) — Contract Harness
 
 - `cpt-frontx-ui-kit-component-component-surface` - the subject it reads and the code it holds the contracts to.
 - `cpt-frontx-ui-kit-component-agent-documentation` - the prose description of the same components; the two are independent and neither generates the other.
@@ -452,24 +453,24 @@ Prose describing a component can only be reviewed. This component produces a des
 
 Concrete artifact: the package's consumer verification script and the clean projects it builds.
 
-##### Why this component exists
+##### Why this component exists — Consumer Acceptance
 
 The properties a consumer depends on most - that styles survive, that unimported components cost nothing, that types resolve - are decided by the interaction between this package's manifest and a consumer's bundler. None of them can be observed from inside this package's own build.
 
-##### Responsibility scope
+##### Responsibility scope — Consumer Acceptance
 
 - Packs the artifact and installs it into clean projects, one per bundler and module-resolution mode a consumer may use.
 - Asserts both directions on each: the imported component's code and styles present, every other component's absent, using probes taken from the just-built artifact rather than hardcoded. For a component whose plugins are entries of their own, the same in miniature: its core entry alone carries none of its plugins, and a plugin imported by its subpath brings its own styles and no other plugin's.
 - Asserts that the artifact carries the documentation index and the per-component documents.
 - Asserts the client-boundary classification against the built artifact, including every plugin entry, and fails on a component the classification does not mention.
 
-##### Responsibility boundaries
+##### Responsibility boundaries — Consumer Acceptance
 
 - Reports on this package only; it is not a test of the bundlers, which is why their versions are pinned.
 - Does not run in the unit lane: it packs and installs, and belongs in a slower one.
 - Checks the published artifact, not the source.
 
-##### Related components (by ID)
+##### Related components (by ID) — Consumer Acceptance
 
 - `cpt-frontx-ui-kit-component-package-build` - the component whose output this one accepts or rejects.
 

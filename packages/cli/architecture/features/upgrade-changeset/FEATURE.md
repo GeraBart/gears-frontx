@@ -1,3 +1,7 @@
+---
+description: Specifies the upgrade change-set engine that upgrades each applied template independently by diffing within its ownership boundary and applying an approved change set.
+---
+
 # Feature: Upgrade Change-Set Engine
 
 

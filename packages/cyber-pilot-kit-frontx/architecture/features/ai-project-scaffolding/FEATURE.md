@@ -1,3 +1,7 @@
+---
+description: Specifies the AI kit entry points that match a developer's stated intent to installed templates and drive the CLI to apply them.
+---
+
 # Feature: AI-Driven Project Scaffolding from Intent
 
 

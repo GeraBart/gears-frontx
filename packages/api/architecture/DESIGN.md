@@ -2,6 +2,7 @@
 type: DESIGN
 system: frontx-api
 status: draft
+description: Technical design of the @gears-frontx/api protocol surface — protocol-separated request/response and streaming communication, plugin chains with short-circuit, and a realm-shared retainer-counted fetch cache.
 ---
 
 # Technical Design — API Protocol Surface

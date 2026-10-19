@@ -1,6 +1,7 @@
 ---
 status: proposed
 date: 2026-06-04
+description: "Decides that the runtime treats types as opaque identities and delegates all schema, validation, and type-of operations to an injected type-system plugin."
 ---
 
 # The Runtime's Coupling to the Type System

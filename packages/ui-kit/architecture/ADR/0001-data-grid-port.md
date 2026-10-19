@@ -2,6 +2,7 @@
 status: accepted
 date: 2026-10-06
 decision-makers: Andrey Sysoev
+description: Architecture decision to port AcvDataGrid onto the UI kit's own components and tokens rather than build a new data grid in the kit.
 ---
 
 # Port AcvDataGrid into the Kit Rather Than Build a Data Grid Here

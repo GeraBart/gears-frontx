@@ -1,6 +1,7 @@
 ---
 status: accepted
 date: 2026-07-16
+description: "Decides to decompose the AI tooling kit into three internal components under a retained package anchor."
 ---
 
 # One Monolithic AI-Tooling Component Fuses Base Kit, Extension Host, and Upgrade Orchestration

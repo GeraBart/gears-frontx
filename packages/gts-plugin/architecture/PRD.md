@@ -1,3 +1,7 @@
+---
+description: Product requirements for @gears-frontx/gts-plugin, the default type-system provider that validates entities against GTS type definitions and supplies infrastructure type definitions.
+---
+
 # PRD — GTS Type-System Provider (`@gears-frontx/gts-plugin`)
 
 

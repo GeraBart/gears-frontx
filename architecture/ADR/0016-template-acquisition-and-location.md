@@ -1,6 +1,7 @@
 ---
 status: accepted
 date: 2026-09-10
+description: "Decides that templates live outside the CLI and are resolved by source-spec at runtime, with a tracked local inventory."
 ---
 
 # Template Acquisition and Location

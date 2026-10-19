@@ -1,3 +1,7 @@
+---
+description: Feature specification of the Navigation Substrate, the single realm-shared navigation history with its subscription fan-out and URL grammar codec.
+---
+
 # Feature: Navigation Substrate
 
 

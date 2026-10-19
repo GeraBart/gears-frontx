@@ -1,3 +1,7 @@
+---
+description: Feature specification of the Route Ownership Signal and the FrontX router, covering per-domain entry resolution, transition observation, URL back-projection and router admission and lifecycle.
+---
+
 # Feature: Route Ownership Signal And FrontX Router
 
 
@@ -21,7 +25,7 @@
   - [No Feature-Owned State Machine](#no-feature-owned-state-machine)
 - [5. Definitions of Done](#5-definitions-of-done)
   - [Entry Resolution And Observable Signal](#entry-resolution-and-observable-signal)
-  - [Observer Release](#observer-release-1)
+  - [Observer Release — Definition of Done](#observer-release--definition-of-done)
   - [URL Back-Projection Helper](#url-back-projection-helper)
   - [Router Admission](#router-admission)
   - [Router User-Change Dispatch](#router-user-change-dispatch)
@@ -395,7 +399,7 @@ The system **MUST** resolve, for one domain key, every entry currently carrying 
 **Touches**:
 - Component: `cpt-frontx-component-routing-route-ownership-signal`
 
-### Observer Release
+### Observer Release — Definition of Done
 
 - [x] `p1` - **ID**: `cpt-frontx-dod-routing-route-ownership-signal-release`
 

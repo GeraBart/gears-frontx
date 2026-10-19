@@ -1,6 +1,7 @@
 ---
 status: accepted
 date: 2026-06-05
+description: "Decides the declared extension-bundle contract through which templates carry skills, workflows, guidelines, and reference artifacts for AI agents."
 ---
 
 # Template AI-Extension Bundle Contract

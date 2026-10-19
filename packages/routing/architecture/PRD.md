@@ -1,3 +1,7 @@
+---
+description: Product requirements for the routing package, the navigation library through which a composed application and its microfrontends share one navigation history and keep URL and screen in agreement.
+---
+
 # PRD — Routing (`@gears-frontx/routing`)
 
 
@@ -185,7 +189,7 @@ The system **MUST** expose `push`, `replace`, `go`, `location`, and `subscribe` 
 
 **Actors**: `cpt-frontx-routing-actor-frontx-router`
 
-#### FrontX router
+#### FrontX router — Navigation Coordination
 
 - [ ] `p1` - **ID**: `cpt-frontx-routing-fr-frontx-router`
 

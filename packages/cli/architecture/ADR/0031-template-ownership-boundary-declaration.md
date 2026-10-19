@@ -1,6 +1,7 @@
 ---
 status: accepted
 date: 2026-07-16
+description: Decision record on how a template declares the exclusive subtrees and shared-file regions it owns, so independently authored templates can be assembled into one repository without conflicting claims.
 ---
 
 # How a Template Declares the Boundaries of What It Owns

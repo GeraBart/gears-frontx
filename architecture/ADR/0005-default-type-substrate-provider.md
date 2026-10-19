@@ -1,6 +1,7 @@
 ---
 status: accepted
 date: 2026-06-04
+description: "Decides that the ecosystem ships a GTS-backed default type-substrate provider so microfrontends validate out of the box."
 ---
 
 # The Default Type-Substrate Provider

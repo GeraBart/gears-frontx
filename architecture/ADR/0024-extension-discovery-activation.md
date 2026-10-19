@@ -1,6 +1,7 @@
 ---
 status: accepted
 date: 2026-06-05
+description: "Decides that installed-template AI extensions are discovered and activated by a generalized scan parameterized by the extension contract."
 ---
 
 # Discovery and Activation of Installed-Template AI Extensions

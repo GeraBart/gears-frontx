@@ -1,3 +1,7 @@
+---
+description: Product requirements for @gears-frontx/cli, which installs, applies, assembles, validates, and upgrades templates across a repository's lifecycle with per-template provenance.
+---
+
 # PRD — FrontX CLI (`@gears-frontx/cli`)
 
 

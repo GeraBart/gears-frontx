@@ -1,3 +1,7 @@
+---
+description: Product requirements for the UI kit, the ecosystem's standard React component base with token-only styling, shipped documentation and machine-readable component contracts.
+---
+
 # PRD - UI Kit (`@gears-frontx/ui-kit`)
 
 <!-- toc -->

@@ -1,6 +1,7 @@
 ---
 status: accepted
 date: 2026-07-16
+description: "Decides to decompose the CLI into six internal lifecycle components under a retained package anchor."
 ---
 
 # One Monolithic CLI Component Fuses Six Distinct Lifecycle Responsibilities

@@ -1,3 +1,7 @@
+---
+description: Specifies the API protocol surface — request/response and streaming dispatch behind an abstract ApiProtocol, plugin short-circuit, and the realm-shared retainer-counted fetch cache.
+---
+
 # Feature: API Protocol Surface
 
 
@@ -18,7 +22,7 @@
   - [Fetch-Cache Entry State Machine](#fetch-cache-entry-state-machine)
 - [5. Definitions of Done](#5-definitions-of-done)
   - [Protocol-Separated Request/Response and Streaming Dispatch](#protocol-separated-requestresponse-and-streaming-dispatch)
-  - [Realm-Shared Retainer-Counted Fetch Cache](#realm-shared-retainer-counted-fetch-cache-1)
+  - [Realm-Shared Retainer-Counted Fetch Cache — Definition of Done](#realm-shared-retainer-counted-fetch-cache--definition-of-done)
 - [6. Acceptance Criteria](#6-acceptance-criteria)
 
 <!-- /toc -->
@@ -208,7 +212,7 @@ The system **MUST** implement `ApiProtocol` as an abstract base parameterized by
 - Entities: `ApiService`
 - Component: `cpt-frontx-component-api-surface`
 
-### Realm-Shared Retainer-Counted Fetch Cache
+### Realm-Shared Retainer-Counted Fetch Cache — Definition of Done
 
 - [x] `p1` - **ID**: `cpt-frontx-dod-api-protocol-surface-shared-cache`
 

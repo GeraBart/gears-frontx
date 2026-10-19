@@ -1,6 +1,7 @@
 ---
 status: accepted
 date: 2026-09-10
+description: "Decides that template-territory code lies outside the ecosystem artifact tree and that traceability markers there are non-authoritative residue."
 ---
 
 # Which Artifact Tree Specifies Template-Territory Code, and What Its Traceability Markers Mean

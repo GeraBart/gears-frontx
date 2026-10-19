@@ -1,3 +1,7 @@
+---
+description: Specifies extension-domain governance — named mount strategies, cardinality, subset-rule contract matching for default-deny admission, and router commands from domain mount handlers.
+---
+
 # Feature: Extension-Domain Governance (Mount Strategies, Cardinality & Contract Matching)
 
 

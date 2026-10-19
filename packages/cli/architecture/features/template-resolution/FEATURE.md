@@ -1,3 +1,7 @@
+---
+description: Specifies how the CLI resolves templates from external sources by versioned source-spec into a tracked local inventory, with install, list, and local update operations.
+---
+
 # Feature: Template Externalization & Source-Spec Resolution
 
 

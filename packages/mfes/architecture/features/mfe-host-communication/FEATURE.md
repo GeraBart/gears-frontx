@@ -1,3 +1,7 @@
+---
+description: Specifies host-MFE communication — the actions-chains mediator with recursive chain execution, the narrow capability bridge, the abstract router contract, and occupant-value rendezvous.
+---
+
 # Feature: Host-MFE Communication: Mediator & Bridge
 
 
@@ -19,12 +23,12 @@
 - [4. States (CDSL)](#4-states-cdsl)
   - [Action State Machine](#action-state-machine)
 - [5. Definitions of Done](#5-definitions-of-done)
-  - [Mediator Keyed Dispatch and Recursive Chain Execution](#mediator-keyed-dispatch-and-recursive-chain-execution-1)
+  - [Mediator Keyed Dispatch and Recursive Chain Execution — Definition of Done](#mediator-keyed-dispatch-and-recursive-chain-execution--definition-of-done)
   - [Narrow Capability Bridge With Delegating Methods](#narrow-capability-bridge-with-delegating-methods)
   - [Abstract Router Contract](#abstract-router-contract)
-  - [Occupant-Value Rendezvous](#occupant-value-rendezvous-1)
+  - [Occupant-Value Rendezvous — Definition of Done](#occupant-value-rendezvous--definition-of-done)
   - [Occupant Values Exposed on No Interface](#occupant-values-exposed-on-no-interface)
-  - [History Intent on Lifecycle Actions](#history-intent-on-lifecycle-actions-1)
+  - [History Intent on Lifecycle Actions — Definition of Done](#history-intent-on-lifecycle-actions--definition-of-done)
 - [6. Acceptance Criteria](#6-acceptance-criteria)
 
 <!-- /toc -->
@@ -300,7 +304,7 @@ This feature also specifies the abstract router contract the package declares (`
 
 ## 5. Definitions of Done
 
-### Mediator Keyed Dispatch and Recursive Chain Execution
+### Mediator Keyed Dispatch and Recursive Chain Execution — Definition of Done
 
 - [ ] `p1` - **ID**: `cpt-frontx-dod-mfe-host-communication-mediator-dispatch`
 
@@ -364,7 +368,7 @@ This DoD is the single normative statement of the abstract router's members and 
 - Entities: Abstract router, Occupant value, `Action`
 - Component: `cpt-frontx-component-mfe-runtime`
 
-### Occupant-Value Rendezvous
+### Occupant-Value Rendezvous — Definition of Done
 
 - [x] `p1` - **ID**: `cpt-frontx-dod-mfe-host-communication-occupant-value-rendezvous`
 
@@ -395,7 +399,7 @@ The system **MUST** expose no occupant value on any interface it hands to extens
 - Entities: Occupant value, `Action`, `ActionsChain`
 - Component: `cpt-frontx-component-mfe-runtime`
 
-### History Intent on Lifecycle Actions
+### History Intent on Lifecycle Actions — Definition of Done
 
 - [x] `p1` - **ID**: `cpt-frontx-dod-mfe-host-communication-history-intent`
 

@@ -1,6 +1,7 @@
 ---
 status: accepted
 date: 2026-06-04
+description: "Decides that multi-template assembly resolves manifest-declared preset references and arbitrates conflicts by ownership boundaries."
 ---
 
 # Multi-Template Assembly and Preset Reference Resolution

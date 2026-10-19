@@ -1,3 +1,7 @@
+---
+description: Specifies microfrontend asset discovery from a published manifest and lazy dynamic-import resolution through a per-load runtime ABI that inherits shared-dependency bindings.
+---
+
 # Feature: MFE Discovery & Lazy-Import Loading
 
 

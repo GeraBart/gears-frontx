@@ -1,3 +1,7 @@
+---
+description: Specifies kindless template assembly — one uniform apply path for seeding or extending a repository, governed by declared ownership boundaries and a pre-flight conflict check.
+---
+
 # Feature: Kindless Template Assembly & Conflict-Checked Composition
 
 

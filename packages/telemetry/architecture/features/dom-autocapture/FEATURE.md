@@ -1,3 +1,7 @@
+---
+description: Feature specification of DOM interaction autocapture, covering document listeners, the ancestor walk for suppression, redaction and attribution, and the element-hook contract.
+---
+
 # Feature: DOM Autocapture And Element Attribution
 
 - [x] `p1` - **ID**: `cpt-frontx-telemetry-featstatus-dom-autocapture`

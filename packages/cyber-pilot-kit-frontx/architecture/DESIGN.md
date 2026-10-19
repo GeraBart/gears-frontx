@@ -2,6 +2,7 @@
 type: DESIGN
 system: frontx-cyber-pilot-kit-frontx
 status: draft
+description: Technical design of the FrontX AI tooling kit — a Constructor Studio kit shipping base ecosystem capabilities, hosting template AI extensions, and orchestrating AI-driven template upgrades.
 ---
 
 # Technical Design — AI Tooling Kit
@@ -197,20 +198,20 @@ This component is the package-level anchor for `cyber-pilot-kit-frontx`: it is t
 
 Internal component of `cyber-pilot-kit-frontx`.
 
-##### Why this component exists
+##### Why this component exists — AI Base Kit
 
 AI agents working in a FrontX project need ecosystem fluency from session start, independent of any installed template. This component is the base set of ecosystem capabilities always available to agents.
 
-##### Responsibility scope
+##### Responsibility scope — AI Base Kit
 
 - Owns the base ecosystem AI capabilities — skills, workflows, guidelines, and reference artifacts — available to agents at session start, every resource identifier `frontx_`-prefixed (KIT-1).
 
-##### Responsibility boundaries
+##### Responsibility boundaries — AI Base Kit
 
 - Ships zero solution-specific AI content (KIT-2); solution-specific capabilities arrive only through the extension host from installed-template bundles.
 - Does not discover or activate template extensions (extension host) and does not orchestrate upgrades (upgrade orchestration).
 
-##### Related components (by ID)
+##### Related components (by ID) — AI Base Kit
 
 - `cpt-frontx-component-ai-tooling-kit` — internal component of (composed by).
 - `cpt-frontx-component-ai-extension-host` — base capability set is extended by.
@@ -221,21 +222,21 @@ AI agents working in a FrontX project need ecosystem fluency from session start,
 
 Internal component of `cyber-pilot-kit-frontx`.
 
-##### Why this component exists
+##### Why this component exists — AI Extension Host
 
 Template-specific expertise must become agent-visible automatically when a template is installed, with no manual wiring, so that expertise travels with the template rather than being recreated per project.
 
-##### Responsibility scope
+##### Responsibility scope — AI Extension Host
 
 - Owns recognition of the template AI-extension contract (`cpt-frontx-contract-template-ai-extension`) and the discovery-and-activation mechanism that turns an installed template's bundled extension into agent-visible capabilities with no manual wiring ([Discovery and Activation of Installed-Template AI Extensions](../../../architecture/ADR/0024-extension-discovery-activation.md), [Template AI-Extension Bundle Contract](../../../architecture/ADR/0023-template-ai-extension-contract.md)).
 - Reports a malformed bundle as a structural error and does not activate it.
 
-##### Responsibility boundaries
+##### Responsibility boundaries — AI Extension Host
 
 - Recognizes the extension contract role only; the concrete extension schema is owned by `cpt-frontx-feature-template-ai-extensions`, per [Concrete Contract Schemas Left Unowned by Circular DESIGN-ADR Deferral](../../../architecture/ADR/0027-contract-schema-ownership.md).
 - Does not author extensions (Template Developers do) and does not package the base kit (base kit).
 
-##### Related components (by ID)
+##### Related components (by ID) — AI Extension Host
 
 - `cpt-frontx-component-ai-tooling-kit` — internal component of (composed by).
 - `cpt-frontx-component-ai-base-kit` — activates discovered extensions into the base capability set of.
@@ -246,20 +247,20 @@ Template-specific expertise must become agent-visible automatically when a templ
 
 Internal component of `cyber-pilot-kit-frontx`.
 
-##### Why this component exists
+##### Why this component exists — AI Upgrade Orchestration
 
 AI-driven upgrade workflows must add review gating, change-impact analysis, and downstream-effect assessment on top of the CLI's change-set engine — enriching the developer's decision without owning a second, divergent upgrade mechanism.
 
-##### Responsibility scope
+##### Responsibility scope — AI Upgrade Orchestration
 
 - Owns the AI workflow surface for template upgrades that orchestrates and enriches the CLI change-set engine ([AI-Driven Upgrade Orchestration over a Single CLI Change-Set Engine](../../../architecture/ADR/0026-ai-driven-upgrade-orchestration.md)).
 
-##### Responsibility boundaries
+##### Responsibility boundaries — AI Upgrade Orchestration
 
 - Orchestrates, and does not reimplement, the CLI change-set engine; it holds no independent change computation or project-mutation logic (KIT-3).
 - Owns no change-set engine of its own; change computation and application remain owned by `cpt-frontx-component-cli-change-set-engine`.
 
-##### Related components (by ID)
+##### Related components (by ID) — AI Upgrade Orchestration
 
 - `cpt-frontx-component-ai-tooling-kit` — internal component of (composed by).
 - `cpt-frontx-component-cli-change-set-engine` — orchestrates and enriches (for AI-driven upgrades).

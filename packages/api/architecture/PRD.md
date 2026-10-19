@@ -1,3 +1,7 @@
+---
+description: Product requirements for @gears-frontx/api, the library through which applications and microfrontends call back-end services across protocol-separated surfaces with shared fetch results.
+---
+
 # PRD — API Protocol Surface (`@gears-frontx/api`)
 
 

@@ -1,6 +1,7 @@
 ---
 status: accepted
 date: 2026-07-28
+description: "Decides the source-spec syntax for versioned template references: a host-prefixed token with an optional subtree segment."
 ---
 
 # Source-Spec Syntax for Versioned Template References

@@ -1,6 +1,7 @@
 ---
 status: accepted
 date: 2026-07-16
+description: "Decides that assembly conflicts are prevented by a pre-flight intersection check over a staged change set, refusing rather than merging, plus a boundary-honesty guard."
 ---
 
 # Detecting and Preventing Conflicting Assembly Before Any Files Are Written

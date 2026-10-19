@@ -1,3 +1,7 @@
+---
+description: Feature specification of the Engine Provider, the sole component that imports a concrete router engine and builds a router over an occupant's own entry address.
+---
+
 # Feature: Engine Provider
 
 

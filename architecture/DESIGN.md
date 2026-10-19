@@ -2,6 +2,7 @@
 type: DESIGN
 system: frontx
 status: final
+description: "Technical design of the FrontX ecosystem: its three layers, the principles and constraints binding every member, and the components the root owns."
 ---
 
 # Technical Design - FrontX Ecosystem
@@ -325,22 +326,22 @@ Owns versioning and compatibility rules that bind published members. It governs 
 
 - [x] `p2` - **ID**: `cpt-frontx-component-ecosystem-governance-guard`
 
-##### Why this component exists
+##### Why this component exists — Ecosystem Governance Guard
 
 Owns checks that classify workspace packages and account for member artifact chains. The guard may accept a path-scoped ignore as debt, but only when the debt and its removal criterion are visible to owners.
 
-##### Responsibility scope
+##### Responsibility scope — Ecosystem Governance Guard
 
 - Classify every FrontX-owned workspace package.
 - Check member artifact registration or path-scoped debt.
 - Fail CI-visible checks when classification or artifact accounting is missing.
 
-##### Responsibility boundaries
+##### Responsibility boundaries — Ecosystem Governance Guard
 
 - Does not validate member behavior.
 - Does not enforce cross-system citation direction beyond the review-held constraint.
 
-##### Related components (by ID)
+##### Related components (by ID) — Ecosystem Governance Guard
 
 - `cpt-frontx-component-ecosystem-version-policy` - sibling root component; it owns release policy, not member accounting.
 

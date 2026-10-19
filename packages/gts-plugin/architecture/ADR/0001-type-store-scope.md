@@ -1,6 +1,7 @@
 ---
 status: accepted
 date: 2026-10-09
+description: Decision record on how far the default type provider's GTS store reaches across provider instances in a JavaScript realm.
 ---
 
 # How Far Should the Default Type Provider's Store Reach?

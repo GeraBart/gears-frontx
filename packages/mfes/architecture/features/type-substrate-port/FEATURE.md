@@ -1,3 +1,7 @@
+---
+description: Specifies the MFE runtime's opaque type-substrate port, which delegates schema registration, validation, and type-hierarchy operations to an injected provider.
+---
+
 # Feature: Opaque Type-Substrate Port
 
 

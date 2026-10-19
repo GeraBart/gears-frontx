@@ -1,3 +1,7 @@
+---
+description: Product requirements for the routing-tanstack package, the default routing-engine provider that gives each runtime one TanStack router over its own private subroute.
+---
+
 # PRD — Routing TanStack Provider (`@gears-frontx/routing-tanstack`)
 
 

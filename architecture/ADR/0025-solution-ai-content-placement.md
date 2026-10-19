@@ -1,6 +1,7 @@
 ---
 status: accepted
 date: 2026-06-04
+description: "Decides that the base AI tooling stays solution-agnostic and solution-specific AI content lives in the template AI bundle."
 ---
 
 # Placement of Solution-Specific AI Content

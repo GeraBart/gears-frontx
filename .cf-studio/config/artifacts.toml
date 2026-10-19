@@ -75,10 +75,6 @@ path = "packages/"
 extensions = [".ts", ".tsx", ".mjs"]
 
 [[systems.codebase]]
-path = "src/"
-extensions = [".ts"]
-
-[[systems.codebase]]
 path = "scripts/"
 extensions = [".mjs", ".ts"]
 

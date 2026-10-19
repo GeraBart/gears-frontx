@@ -1,6 +1,7 @@
 ---
 status: accepted
 date: 2026-06-05
+description: "Decides that a single published template manifest is the conformance contract read by pre-publish validation and every CLI command."
 ---
 
 # Template Manifest as the Published Conformance Contract

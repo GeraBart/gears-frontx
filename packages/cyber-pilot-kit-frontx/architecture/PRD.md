@@ -1,3 +1,7 @@
+---
+description: Product requirements for @gears-frontx/cyber-pilot-kit-frontx, the AI tooling framework that equips AI agents with FrontX capabilities, template AI extensions, and AI-driven upgrades.
+---
+
 # PRD — AI Tooling Framework (`@gears-frontx/cyber-pilot-kit-frontx`)
 
 

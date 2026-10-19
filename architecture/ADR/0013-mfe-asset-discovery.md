@@ -1,6 +1,7 @@
 ---
 status: accepted
 date: 2026-06-04
+description: "Decides that the runtime discovers MFE assets from the enriched, published manifest the microfrontend owns."
 ---
 
 # MFE Asset Discovery

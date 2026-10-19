@@ -1,6 +1,7 @@
 ---
 status: accepted
 date: 2026-06-05
+description: "Decides that each MFE load gets its own inline-content module graph behind a small, audited trust kernel."
 ---
 
 # MFE Load Isolation

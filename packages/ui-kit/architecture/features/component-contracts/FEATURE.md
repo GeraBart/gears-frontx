@@ -1,3 +1,7 @@
+---
+description: Feature specification of component contracts, the compiled per-component descriptions and the conformance, freshness and compatibility checks that keep them aligned with the code.
+---
+
 # Feature: Component Contracts
 
 - [x] `p1` - **ID**: `cpt-frontx-ui-kit-featstatus-component-contracts`

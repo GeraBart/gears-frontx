@@ -1,3 +1,7 @@
+---
+description: "Decomposes the root-owned FrontX ecosystem work into prioritized entries with dependencies and coverage back to the root PRD and DESIGN."
+---
+
 # Decomposition: FrontX Ecosystem
 
 <!-- toc -->

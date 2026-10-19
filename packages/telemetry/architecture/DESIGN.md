@@ -2,6 +2,7 @@
 type: DESIGN
 system: frontx-telemetry
 status: draft
+description: Technical design of the telemetry SDK, a closure-based composition of client facade, managers and plugins where all context enrichment goes through one hook and delivery is separated from collection.
 ---
 
 # Technical Design — Telemetry SDK
@@ -253,11 +254,11 @@ Gives the application one object to hold and one lifecycle to manage, and confin
 
 - [x] `p2` - **ID**: `cpt-frontx-telemetry-component-events-manager`
 
-##### Why this component exists
+##### Why this component exists — Events Manager
 
 Holds everything about how a record becomes a request — identity, enrichment dispatch, the queue, the batching policy, the envelope and the transport — so that the collection path stays synchronous and the delivery policy has one owner.
 
-##### Responsibility scope
+##### Responsibility scope — Events Manager
 
 - Constructs each record: caller fields first, then SDK-assigned identifier and trigger timestamp.
 - Accepts either a name-and-data call or a whole record, normalizing the two forms.
@@ -267,14 +268,14 @@ Holds everything about how a record becomes a request — identity, enrichment d
 - Builds the envelope for the configured version, including hoisting fields common to a multi-record batch.
 - Issues the request with `keepalive`, and consults the delivery flag only after the queue has been drained.
 
-##### Responsibility boundaries
+##### Responsibility boundaries — Events Manager
 
 - Does NOT know any context field by name; every one arrives through the hook.
 - Does NOT retry, persist undelivered batches, or report delivery failure to the application — a rejected request reaches the console only. This is a known gap, not an oversight.
 - Does NOT decide the endpoint; it reads the resolved value from normalized configuration.
 - Does NOT own session or user identity.
 
-##### Related components (by ID)
+##### Related components (by ID) — Events Manager
 
 - `cpt-frontx-telemetry-component-client` — constructed and torn down by it
 - `cpt-frontx-telemetry-component-builtin-plugins` — invokes their `event` hooks; they also call back into it to log their own events
@@ -284,24 +285,24 @@ Holds everything about how a record becomes a request — identity, enrichment d
 
 - [x] `p2` - **ID**: `cpt-frontx-telemetry-component-session-manager`
 
-##### Why this component exists
+##### Why this component exists — Session Manager
 
 Makes session a property of observed user activity rather than of page lifetime, so that a session spans navigation and is comparable between single-page and multi-page applications.
 
-##### Responsibility scope
+##### Responsibility scope — Session Manager
 
 - Reads and writes the session record — identifier, start time, last activity — in browser storage.
 - Continues an existing session or mints a new identifier, depending on whether the stored record is still within the inactivity window.
 - Observes scroll, keypress and click as activity, debounced so an activity burst costs one write.
 - Exposes session accessors for plugins, and detaches its listeners on teardown.
 
-##### Responsibility boundaries
+##### Responsibility boundaries — Session Manager
 
 - Does NOT stamp the session onto records; the session plugin does that through the hook.
 - Does NOT own the device identifier.
 - Does NOT emit the session-start event; the session plugin does.
 
-##### Related components (by ID)
+##### Related components (by ID) — Session Manager
 
 - `cpt-frontx-telemetry-component-client` — started, refreshed and detached by it
 - `cpt-frontx-telemetry-component-plugins-manager` — session accessors reach plugins through the context it builds
@@ -311,21 +312,21 @@ Makes session a property of observed user activity rather than of page lifetime,
 
 - [x] `p2` - **ID**: `cpt-frontx-telemetry-component-user-info-manager`
 
-##### Why this component exists
+##### Why this component exists — User Info Manager
 
 Holds the application-supplied user identity, which has a different lifetime from everything else the SDK knows: it is unknown at construction, may arrive at any point, and is not derived from the browser.
 
-##### Responsibility scope
+##### Responsibility scope — User Info Manager
 
 - Records the user identifier the application supplies.
 - Makes it available for enrichment of subsequent records.
 
-##### Responsibility boundaries
+##### Responsibility boundaries — User Info Manager
 
 - Does NOT affect the device identifier, which is pseudonymous and independent of whether a user is known.
 - Does NOT persist the user identifier, and does NOT retroactively attach it to records already queued.
 
-##### Related components (by ID)
+##### Related components (by ID) — User Info Manager
 
 - `cpt-frontx-telemetry-component-client` — user identification is delegated to it
 
@@ -333,24 +334,24 @@ Holds the application-supplied user identity, which has a different lifetime fro
 
 - [x] `p2` - **ID**: `cpt-frontx-telemetry-component-plugins-manager`
 
-##### Why this component exists
+##### Why this component exists — Plugins Manager
 
 Owns the registry and the single setup pass, which is what makes plugin ordering a stated rule with one enforcement point rather than an emergent property of call order.
 
-##### Responsibility scope
+##### Responsibility scope — Plugins Manager
 
 - Keys plugins by name, so a later registration of a name replaces the earlier one.
 - Filters falsy entries at registration, so conditional registration needs no branch at the call site.
 - Builds the plugin context — normalized configuration, event logger, session accessors, logger, hook registrar.
 - Runs every registered plugin's setup in one pass, triggered by client start.
 
-##### Responsibility boundaries
+##### Responsibility boundaries — Plugins Manager
 
 - Does NOT set up a plugin registered after the setup pass; it is stored and never set up. This ordering requirement is documented rather than enforced.
 - Does NOT reject a name that collides with a built-in; last write wins, which is what makes replacing a built-in possible and is why the built-in names are reserved by documentation.
 - Does NOT invoke hooks; it only registers them.
 
-##### Related components (by ID)
+##### Related components (by ID) — Plugins Manager
 
 - `cpt-frontx-telemetry-component-client` — registration is delegated to it, and its setup pass is triggered by start
 - `cpt-frontx-telemetry-component-session-manager` — its accessors are placed into the plugin context
@@ -361,11 +362,11 @@ Owns the registry and the single setup pass, which is what makes plugin ordering
 
 - [x] `p2` - **ID**: `cpt-frontx-telemetry-component-builtin-plugins`
 
-##### Why this component exists
+##### Why this component exists — Built-In Plugins
 
 Supplies the context that makes an event stream answerable — session, device, navigation, application identity, locale — as ordinary plugins, so the SDK's enrichment and a consumer's use the same surface.
 
-##### Responsibility scope
+##### Responsibility scope — Built-In Plugins
 
 - Session: stamps the current session onto records and emits an event when a session begins.
 - Device: derives browser, operating system and platform fields from the user agent, plus viewport and timezone.
@@ -373,13 +374,13 @@ Supplies the context that makes an event stream answerable — session, device, 
 - Application info: stamps application name and version, and prepends the application to the service call chain, warning when a hook-supplied chain does not contain its own service.
 - Locale: reads the application's locale source per record and normalizes it, falling back to the browser's reported language.
 
-##### Responsibility boundaries
+##### Responsibility boundaries — Built-In Plugins
 
 - Does NOT construct records directly except where emitting its own event, which goes through the events manager like any other.
 - Does NOT read configuration other than the normalized form in its context.
 - Locale does NOT capture the source's value at setup; it reads it on every record so a mid-session change is visible.
 
-##### Related components (by ID)
+##### Related components (by ID) — Built-In Plugins
 
 - `cpt-frontx-telemetry-component-plugins-manager` — registered and set up through it
 - `cpt-frontx-telemetry-component-events-manager` — enriches records through its hook, and logs its own events through it
@@ -389,11 +390,11 @@ Supplies the context that makes an event stream answerable — session, device, 
 
 - [x] `p2` - **ID**: `cpt-frontx-telemetry-component-autocapture`
 
-##### Why this component exists
+##### Why this component exists — Autocapture
 
 Records interaction without per-element instrumentation, which is the part of an event stream that is least likely to be instrumented by hand and most likely to be requested. It is also where all the safety machinery lives, because it is the only component that records data nobody wrote for this purpose.
 
-##### Responsibility scope
+##### Responsibility scope — Autocapture
 
 - Installs passive capture-phase document listeners for click, change and submit, and removes them on teardown using matching options.
 - Walks from the interaction target up through its ancestors, crossing shadow-root hosts.
@@ -405,14 +406,14 @@ Records interaction without per-element instrumentation, which is the part of an
 - Merges hook-contributed data beneath its own keys, strips reserved-prefix keys from a hook's data, and allows only the three attribution fields.
 - Carries a failing hook's error out of the walk and rethrows it after the event has been emitted.
 
-##### Responsibility boundaries
+##### Responsibility boundaries — Autocapture
 
 - Does NOT swallow errors. A consumer hook's failure is rethrown after emission; an internal defect propagates directly out of the listener.
 - Does NOT let a hook override its own captured fields; its keys are applied last.
 - Does NOT stitch service call chains together across hooks; a hook must supply its own complete chain below the application.
 - Does NOT guarantee that redaction is sufficient. It is a pattern-based safety net, and the authoritative controls are the subtree opt-out and hook veto.
 
-##### Related components (by ID)
+##### Related components (by ID) — Autocapture
 
 - `cpt-frontx-telemetry-component-plugins-manager` — registered and set up through it
 - `cpt-frontx-telemetry-component-events-manager` — emits captured events through it, and enriches through its hook

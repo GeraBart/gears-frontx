@@ -1,6 +1,7 @@
 ---
 status: accepted
 date: 2026-06-05
+description: "Decides on a generic plugin short-circuit for transport bypass and a realm-scoped, retainer-counted, library-agnostic shared fetch cache."
 ---
 
 # API Transport Bypass and Fetch Sharing

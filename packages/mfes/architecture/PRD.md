@@ -1,3 +1,7 @@
+---
+description: Product requirements for @gears-frontx/mfes, the runtime substrate that registers, loads, places, mediates, and validates composable microfrontends in a frontend application.
+---
+
 # PRD — Microfrontend (MFE) Runtime (`@gears-frontx/mfes`)
 
 

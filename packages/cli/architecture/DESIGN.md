@@ -2,6 +2,7 @@
 type: DESIGN
 system: frontx-cli
 status: draft
+description: Technical design of the template lifecycle CLI (@gears-frontx/cli) — runtime template resolution, pre-publish validation, assembly with conflict checking, provenance recording, and change-set upgrades.
 ---
 
 # Technical Design — Template Lifecycle CLI
@@ -256,23 +257,23 @@ Project Developers and the AI agents acting for them need to drive the full temp
 
 Internal component of `@gears-frontx/cli`.
 
-##### Why this component exists
+##### Why this component exists — CLI Template Resolver
 
 The CLI owns no template, so a single component must turn a versioned source-spec into resolved template content and resolve a preset's referenced templates transitively. Concentrating all resolution in one component is what lets every template application and assembly share one authoritative resolution path rather than each command carrying its own (CLI-2).
 
-##### Responsibility scope
+##### Responsibility scope — CLI Template Resolver
 
 - Owns template acquisition by versioned source-spec (install), local listing of installed templates, and local update of the installed template store without touching any repository ([Template Acquisition and Location](../../../architecture/ADR/0016-template-acquisition-and-location.md), [Source-Spec Syntax for Versioned Template References](../../../architecture/ADR/0017-source-spec-syntax.md)).
 - Owns transitive preset reference resolution, resolving the referenced templates a preset declares into the set to apply in one operation, with cycle detection ([Multi-Template Assembly and Preset Reference Resolution](../../../architecture/ADR/0020-composed-template-resolution.md)).
 - Reads the template manifest role to learn a template's identity, declared ownership boundaries, and referenced templates.
 
-##### Responsibility boundaries
+##### Responsibility boundaries — CLI Template Resolver
 
 - Bundles no template (CLI-1); is the one shared resolver across every application and assembly (CLI-2).
 - Resolves any template through the same path ([Whether the Platform Classifies Templates or Applies Any Template Uniformly](../../../architecture/ADR/0030-template-classification.md)).
 - Does not materialize files into a repository (assembler), check boundaries for conflict (conflict checker), record provenance (provenance recorder), validate a candidate template for publication (pre-publish validator), or apply upgrades (change-set engine).
 
-##### Related components (by ID)
+##### Related components (by ID) — CLI Template Resolver
 
 - `cpt-frontx-component-cli` — internal component of (composed by).
 - `cpt-frontx-component-cli-assembler` — provides the resolved set of templates to.
@@ -284,20 +285,20 @@ The CLI owns no template, so a single component must turn a versioned source-spe
 
 Internal component of `@gears-frontx/cli`.
 
-##### Why this component exists
+##### Why this component exists — CLI Pre-Publish Validator
 
 A template must be checked against the manifest publication contract before it is published, so a structurally malformed template is caught by its author rather than by a consumer. This component is that pre-publish conformance check.
 
-##### Responsibility scope
+##### Responsibility scope — CLI Pre-Publish Validator
 
 - Owns pre-publish template-structure validation against the template-manifest contract (`cpt-frontx-contract-template-manifest`), including that the template's declared ownership boundaries are well-formed and that the content those boundaries own is self-contained (no detected reference in registered, structurally parsed carriers resolving outside the template root), producing a structural pass/fail conformance result ([Template Manifest as the Published Conformance Contract](../../../architecture/ADR/0018-template-manifest-contract.md), [How a Template Declares the Boundaries of What It Owns](ADR/0031-template-ownership-boundary-declaration.md)).
 
-##### Responsibility boundaries
+##### Responsibility boundaries — CLI Pre-Publish Validator
 
 - Reads the manifest contract role only; the concrete manifest schema it checks against is owned by `cpt-frontx-feature-template-manifest`, per [Concrete Contract Schemas Left Unowned by Circular DESIGN-ADR Deferral](../../../architecture/ADR/0027-contract-schema-ownership.md).
 - Does not acquire, resolve, assemble, or upgrade.
 
-##### Related components (by ID)
+##### Related components (by ID) — CLI Pre-Publish Validator
 
 - `cpt-frontx-component-cli` — internal component of (composed by).
 - `cpt-frontx-component-cli-template-resolver` — shares template-manifest reading with.
@@ -308,23 +309,23 @@ A template must be checked against the manifest publication contract before it i
 
 Internal component of `@gears-frontx/cli`.
 
-##### Why this component exists
+##### Why this component exists — CLI Assembler
 
 The resolved set of templates must be materialized into a repository on disk — whether seeding a new repository or extending an existing one — assembling one or more templates, including a preset's referenced templates, in a single operation.
 
-##### Responsibility scope
+##### Responsibility scope — CLI Assembler
 
 - Owns assembly and materialization of the resolved template set into a repository, seeding a new repository (`cpt-frontx-fr-cli-seed-repository`) or adding into an existing one (`cpt-frontx-fr-cli-add-template-to-repository`), composing a preset's referenced templates in one operation ([Multi-Template Assembly and Preset Reference Resolution](../../../architecture/ADR/0020-composed-template-resolution.md), [Whether the Platform Classifies Templates or Applies Any Template Uniformly](../../../architecture/ADR/0030-template-classification.md)).
 - Stages the assembly's intended writes for the conflict checker and, only after the check passes, materializes them and composes any shared files per their declared merges.
 - Triggers per-applied-template provenance recording as the final step of an apply.
 
-##### Responsibility boundaries
+##### Responsibility boundaries — CLI Assembler
 
 - Does not acquire or resolve templates (template resolver) and does not own the provenance records' shape or write logic (provenance recorder).
 - Does not decide whether an assembly conflicts (conflict checker); it writes nothing until the pre-flight check passes.
 - Does not apply upgrades to an already-applied template (change-set engine).
 
-##### Related components (by ID)
+##### Related components (by ID) — CLI Assembler
 
 - `cpt-frontx-component-cli` — internal component of (composed by).
 - `cpt-frontx-component-cli-template-resolver` — consumes the resolved template set from.
@@ -337,21 +338,21 @@ The resolved set of templates must be materialized into a repository on disk —
 
 Internal component of `@gears-frontx/cli`.
 
-##### Why this component exists
+##### Why this component exists — CLI Conflict Checker
 
 Independently-authored templates write into one repository, so two can claim the same ground. This component detects a conflicting assembly before any file is written and prevents it, so a repository is never corrupted or silently clobbered by two templates fighting over the same ground.
 
-##### Responsibility scope
+##### Responsibility scope — CLI Conflict Checker
 
 - Owns the pre-flight intersection check over the staged assembly: it compares the declared ownership boundaries of every pair of applied templates with a staged claim on at least one side - the incoming assembly is judged against the recorded state, not the recorded boundaries against each other - and refuses the whole assembly before any write if two claim intersecting exclusive subtrees - compared by whole path segments, so a nested claim and a trailing-slash respelling both intersect while a shared string prefix does not - or the same shared-file region without a compatible declared merge, reporting the contesting templates and the contested ground and never silently merging ([Detecting and Preventing Conflicting Assembly Before Any Files Are Written](../../../architecture/ADR/0032-assembly-conflict-prevention.md), [How a Template Declares the Boundaries of What It Owns](ADR/0031-template-ownership-boundary-declaration.md)).
 - Owns the post-materialization boundary-honesty guard that verifies each template wrote only within its declared boundary (CLI-6).
 
-##### Responsibility boundaries
+##### Responsibility boundaries — CLI Conflict Checker
 
 - Reads the declared ownership boundaries from the manifest role only; the concrete boundary schema is owned by `cpt-frontx-feature-template-manifest`, per [Concrete Contract Schemas Left Unowned by Circular DESIGN-ADR Deferral](../../../architecture/ADR/0027-contract-schema-ownership.md).
 - Does not resolve or acquire templates (template resolver) and does not itself write files (assembler); it renders a pass/refuse verdict.
 
-##### Related components (by ID)
+##### Related components (by ID) — CLI Conflict Checker
 
 - `cpt-frontx-component-cli` — internal component of (composed by).
 - `cpt-frontx-component-cli-assembler` — checks the staged assembly for, and gates the write of.
@@ -362,20 +363,20 @@ Independently-authored templates write into one repository, so two can claim the
 
 Internal component of `@gears-frontx/cli`.
 
-##### Why this component exists
+##### Why this component exists — CLI Provenance Recorder
 
 A per-template upgrade needs a self-contained origin baseline that travels with the repository; each applied template must record which template and version it was applied from, and its upgrade must read that record to establish its diff baseline.
 
-##### Responsibility scope
+##### Responsibility scope — CLI Provenance Recorder
 
 - Owns writing one in-repository provenance record per applied template (`cpt-frontx-contract-project-provenance`) at apply time and reading and updating the matching record at that template's upgrade time as the diff baseline ([Per-Applied-Template Provenance for Independently Upgradeable Assembly](../../../architecture/ADR/0019-project-provenance-record.md)).
 
-##### Responsibility boundaries
+##### Responsibility boundaries — CLI Provenance Recorder
 
 - Owns the provenance records' role and their write-at-apply / read-and-update-at-upgrade lifecycle placement, one record per applied template with no single whole-repository origin (CLI-7); the concrete record schema and storage are owned by `cpt-frontx-feature-composed-provenance`, per [Concrete Contract Schemas Left Unowned by Circular DESIGN-ADR Deferral](../../../architecture/ADR/0027-contract-schema-ownership.md).
 - Does not compute or apply the upgrade diff (change-set engine) and does not resolve or assemble templates.
 
-##### Related components (by ID)
+##### Related components (by ID) — CLI Provenance Recorder
 
 - `cpt-frontx-component-cli` — internal component of (composed by).
 - `cpt-frontx-component-cli-assembler` — invoked by at apply time to record each applied template's origin.
@@ -387,21 +388,21 @@ A per-template upgrade needs a self-contained origin baseline that travels with 
 
 Internal component of `@gears-frontx/cli`.
 
-##### Why this component exists
+##### Why this component exists — CLI Change-Set & Upgrade Engine
 
 Upgrading an applied template to a newer version must be reviewable and safe rather than a silent, destructive rewrite, and must leave the other applied templates untouched. This component is the single authoritative engine that, for one applied template, computes a change set against that template's provenance record, gates it behind explicit review and approval, and applies it non-destructively — the mechanism the AI Tooling Framework orchestrates rather than reimplements.
 
-##### Responsibility scope
+##### Responsibility scope — CLI Change-Set & Upgrade Engine
 
 - Owns computing the change set for one applied template's version transition against that template's recorded provenance baseline, gating application behind explicit review and approval, and applying the approved set non-destructively and reversibly within that template's boundary, leaving the other applied templates unchanged ([The Per-Applied-Template Upgrade Mechanism](../../../architecture/ADR/0021-project-upgrade-mechanism.md)).
 - Is the one authoritative change-set engine in the ecosystem; the reviewed change equals the applied change (CLI-3, CLI-4).
 
-##### Responsibility boundaries
+##### Responsibility boundaries — CLI Change-Set & Upgrade Engine
 
 - Reads the provenance baseline from the provenance recorder; does not itself resolve or acquire templates (template resolver).
 - Contains no AI workflow logic; AI-driven review, change-impact, and downstream-effect analysis are layered above it by the AI Tooling kit's upgrade-orchestration component, which orchestrates and does not reimplement this engine (KIT-3).
 
-##### Related components (by ID)
+##### Related components (by ID) — CLI Change-Set & Upgrade Engine
 
 - `cpt-frontx-component-cli` — internal component of (composed by).
 - `cpt-frontx-component-cli-provenance-recorder` — reads the origin baseline from.

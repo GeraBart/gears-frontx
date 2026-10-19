@@ -1,3 +1,7 @@
+---
+description: "Product requirements of the FrontX ecosystem: the three-layer approach, shared actors and vocabulary, and requirements that bind every member equally."
+---
+
 # PRD - FrontX Ecosystem
 
 <!-- toc -->

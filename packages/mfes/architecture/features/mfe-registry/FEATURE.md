@@ -1,3 +1,7 @@
+---
+description: Specifies the abstract MfeRegistry facade built by a factory that owns microfrontend registration, load orchestration, handler resolution by base type, and router integration.
+---
+
 # Feature: MFE Registry & Handler Resolution
 
 
@@ -24,9 +28,9 @@
   - [Registry Facade Contract](#registry-facade-contract)
   - [Optional Router in the Factory Configuration](#optional-router-in-the-factory-configuration)
   - [Router Admission Before Durable Registration, Release at Cleanup](#router-admission-before-durable-registration-release-at-cleanup)
-  - [Handler Resolution by Declared Base Type](#handler-resolution-by-declared-base-type-1)
+  - [Handler Resolution by Declared Base Type — Definition of Done](#handler-resolution-by-declared-base-type--definition-of-done)
   - [Register–Validate–Mount Sequence Ownership](#registervalidatemount-sequence-ownership)
-  - [Non-Blocking Lifecycle Stage Triggering](#non-blocking-lifecycle-stage-triggering-1)
+  - [Non-Blocking Lifecycle Stage Triggering — Definition of Done](#non-blocking-lifecycle-stage-triggering--definition-of-done)
   - [Type Contracts](#type-contracts)
 - [6. Acceptance Criteria](#6-acceptance-criteria)
 
@@ -337,7 +341,7 @@ The system **MUST**, where a router is injected, register with it each domain an
 - Component: `cpt-frontx-component-mfe-runtime`
 - Sequence: `cpt-frontx-seq-mfe-register-validate-mount`
 
-### Handler Resolution by Declared Base Type
+### Handler Resolution by Declared Base Type — Definition of Done
 
 - [x] `p1` - **ID**: `cpt-frontx-dod-mfe-registry-handler-injection`
 
@@ -365,7 +369,7 @@ The system **MUST** own and orchestrate the complete register → type-validate 
 - Component: `cpt-frontx-component-mfe-runtime`
 - Sequence: `cpt-frontx-seq-mfe-register-validate-mount`
 
-### Non-Blocking Lifecycle Stage Triggering
+### Non-Blocking Lifecycle Stage Triggering — Definition of Done
 
 - [x] `p1` - **ID**: `cpt-frontx-dod-mfe-registry-lifecycle-stage-triggering`
 

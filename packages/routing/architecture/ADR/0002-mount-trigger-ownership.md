@@ -2,6 +2,7 @@
 status: proposed
 date: 2026-10-01
 decision-makers: German Bartenev
+description: Architecture decision that the routing package resolves at observer creation, reports every transition and writes through the back-projection helper, leaving occupancy changes to executed actions chains.
 ---
 
 # Navigation's Role In Post-Boot Mounting

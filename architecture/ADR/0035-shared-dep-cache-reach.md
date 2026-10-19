@@ -1,6 +1,7 @@
 ---
 status: accepted
 date: 2026-09-21
+description: "Decides that the shared-dependency source-text cache reaches across loaded copies through a dedicated, version-namespaced realm-global rendezvous."
 ---
 
 # How Far Should the Shared-Dependency Source-Text Cache Reach?

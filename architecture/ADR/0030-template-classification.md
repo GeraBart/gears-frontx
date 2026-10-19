@@ -1,6 +1,7 @@
 ---
 status: accepted
 date: 2026-07-16
+description: "Decides that the platform applies every template through one uniform mechanism without classifying templates by kind."
 ---
 
 # Whether the Platform Classifies Templates or Applies Any Template Uniformly

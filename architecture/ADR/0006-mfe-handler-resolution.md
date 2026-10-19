@@ -1,6 +1,7 @@
 ---
 status: accepted
 date: 2026-06-05
+description: "Decides that the registry resolves one MFE handler per entry by declared base type and priority, evaluated through the injected type-system provider."
 ---
 
 # MFE Handler Resolution

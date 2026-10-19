@@ -1,3 +1,7 @@
+---
+description: "Specifies the cross-cutting policy under which each FrontX artifact is published and versioned independently, with range-bounded coupling and registry-side deprecation."
+---
+
 # Feature: Ecosystem Distribution & Versioning Policy
 
 

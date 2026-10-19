@@ -1,6 +1,7 @@
 ---
 status: accepted
 date: 2026-06-04
+description: "Decides that project upgrades run through a single per-template change-set engine in the CLI, which AI tooling orchestrates and enriches."
 ---
 
 # The Per-Applied-Template Upgrade Mechanism

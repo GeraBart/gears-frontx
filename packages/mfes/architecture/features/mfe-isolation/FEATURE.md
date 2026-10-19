@@ -1,3 +1,7 @@
+---
+description: Specifies isolation of each loaded microfrontend in its own module graph behind an audited trust kernel that concentrates all dynamic-code primitives.
+---
+
 # Feature: MFE Runtime Isolation
 
 <!-- toc -->

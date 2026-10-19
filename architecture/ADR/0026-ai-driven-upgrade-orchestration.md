@@ -1,6 +1,7 @@
 ---
 status: accepted
 date: 2026-06-04
+description: "Decides that AI-driven upgrades orchestrate and enrich the single CLI change-set engine instead of computing a change set of their own."
 ---
 
 # AI-Driven Upgrade Orchestration over a Single CLI Change-Set Engine

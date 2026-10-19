@@ -1,6 +1,7 @@
 ---
 status: accepted
 date: 2026-06-05
+description: "Decides that domain-extension compatibility is checked at admission by subset-rule contract matching with a scoped infrastructure exemption."
 ---
 
 # Domain–Extension Compatibility

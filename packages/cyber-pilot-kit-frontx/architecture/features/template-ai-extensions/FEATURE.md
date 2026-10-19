@@ -1,3 +1,7 @@
+---
+description: Specifies the closed-set AI-extension bundle contract for templates and the scan that discovers and activates conforming extensions under explicit precedence.
+---
+
 # Feature: Template AI-Extension Contract & Discovery/Activation
 
 

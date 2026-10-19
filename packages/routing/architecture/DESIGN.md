@@ -2,6 +2,7 @@
 type: DESIGN
 system: frontx-routing
 status: draft
+description: Technical design of the routing package, comprising the agnostic Navigation Substrate, the Route Ownership Signal and the FrontX router that keep the shared URL and mounted extensions in agreement.
 ---
 
 # Technical Design — Routing
@@ -73,7 +74,7 @@ The navigation-substrate FEATURE states each of the following rules in full, exc
   /en
   ```
 
-#### Route Ownership Signal
+#### Route Ownership Signal — Architectural Vision
 
 Route Ownership Signal publishes, rather than enforces, the relationship between the entries a domain reads and which route owner each one names. It owns the entry-resolution primitive, which its observers run internally, and lets the FrontX router create one observer per domain — passing that domain's own registered-extensions source as a plain argument, never an injected port, together with that domain's own key — that reports every ownership-relevant transition at that domain as one *transition*: the ordered entry list currently read under that domain key, together with a diff against the previous resolution (added, removed, payload-changed, reordered) and the cause of the change (`initial`, `history`, `push`, or `replace`). It also provides one URL back-projection helper the FrontX router calls to write the entries each command of the runtime names: one `push` or `replace` of that domain's own entries that, in the same write, removes the entries under the nested domain keys the caller names (structural reset, `cpt-frontx-routing-adr-domain-occupancy-addressing-granularity`) and copies every other entry verbatim; its input is specified by `cpt-frontx-feature-routing-route-ownership-signal` (§1.5, URL back-projection — input). The push/replace choice for that call is always the caller's (§4, "A back-projection write and its chosen history verb"). Resolving a deep URL is therefore a wave through the domain tree, not one event: each domain's own observer resolves and reports independently the moment that domain comes to exist, and the signal holds no registry of domains and publishes no aggregated "the whole URL resolved" signal — it cannot, by construction, since the signal never sees the tree of domains. The FrontX router's own copy of the registrations is described in §3.1 (Router registrations). Mounting and unmounting themselves are the runtime's; the FrontX router asks for them only through the actions chains it sends for a user's change to the URL, and what each domain's entries show is decided by the runtime's commands, which the FrontX router writes, built on top of this signal (`cpt-frontx-routing-principle-publishes-not-orchestrates`, `cpt-frontx-adr-extension-routing-port`) — this package never orchestrates them, so it stays agnostic of whatever occupancy model the runtime uses.
 
@@ -89,7 +90,7 @@ The split between the FrontX router and the two components below is the whole of
 - **URL to mounts** — it turns each change in a domain's entries caused by a page load or a back/forward step into actions chains, without reading what is mounted; it clears the URL's entries once a page load's chains are sent, even if a send throws; the initial route stays captured until the first `push` command or back/forward step, and a domain, root or nested, whose observer starts while the initial route is kept resolves against it (§2.3, O6).
 - **Commands to URL** — it writes, through the back-projection helper, exactly the extensions each runtime command names for a domain, with the command's verb, naming the nested domain keys that leave with a dropped occupant.
 
-#### Navigation Substrate
+#### Navigation Substrate — Architectural Vision
 
 The Navigation Substrate is the framework-agnostic core: a single navigation history realm-shared by every runtime in the page — the shell's and every independently bundled microfrontend's — and reached only by FrontX itself, one real subscription to the browser's history fanned out to every listener, and the URL grammar codec (parse and serialize, `cpt-frontx-algo-routing-navigation-substrate-grammar-parse`, `cpt-frontx-algo-routing-navigation-substrate-grammar-serialize`) together with the name-validity and name-equality predicates every domain's own resolution and the FrontX router's registration-time checks build on. Entry resolution itself is not this component's own algorithm: it is Route Ownership Signal's own primitive (`cpt-frontx-algo-routing-route-ownership-signal-entry-resolution`), built on this codec and predicate rather than re-implementing either. That fan-out has two dispatch triggers rather than one: the browser's own `popstate` event, and the substrate's own `push`/`replace` call itself, which dispatches directly because neither call raises `popstate` on its own (`cpt-frontx-algo-routing-navigation-substrate-fanout-dispatch`). A `go` call is deliberately not a direct trigger — the browser raises `popstate` for it, so dispatching directly as well would deliver one navigation to every subscriber twice. Each dispatch round iterates a snapshot of the subscriber set taken when the round starts, re-checking each slot's own liveness immediately before invoking it, so a callback that unsubscribes mid-round is skipped rather than corrupting the iteration, and a callback that triggers a new navigation has that navigation dispatched as its own, later round rather than folded into the round already in progress (§4). A routing table is an opaque value to this core, exactly as an occupant's own parameter payload is opaque to every domain's own resolution — the substrate carries it but never inspects it. The substrate's own contract, `NavigationHistory` (`location`, `subscribe`, `push`, `replace`, `go`), is deliberately narrower than what any concrete engine's own history contract typically requires — the engine-provider port (`cpt-frontx-routing-fr-engine-provider-port`) states only what a provider **MUST** accept from the substrate and that it is responsible for producing a constructed router, which is then rendered for that occupant; it names no concrete engine, and this package derives nothing about how a provider bridges that gap.
 
@@ -272,17 +273,17 @@ Independently bundled units in the same realm need one navigation history to agr
 
 Concrete artifact: `@gears-frontx/routing` (core entry).
 
-##### Why this component exists
+##### Why this component exists — Route Ownership Signal
 
 The FrontX router needs to know, from the URL alone, which declared route owner each entry under a domain's own key belongs to and when that resolution changes — without this package holding any opinion about how mounting, unmounting, or occupancy cardinality actually work, and without a whole-URL registry this package would have to hold to answer that question for a nested domain. Route Ownership Signal is the component that resolves the entries per domain and publishes their changes as an observable transition, leaving mounting entirely to the FrontX router and the runtime.
 
-##### Responsibility scope
+##### Responsibility scope — Route Ownership Signal
 
 - Owns the entry-resolution primitive, built on the navigation substrate's codec and name-equality predicate without re-implementing either, and runs it inside its observers; the primitive is internal, not a public entry point.
 - Lets the FrontX router create one observer per domain, passing that domain's own registered-extensions source as a plain argument — never an injected port — together with that domain's own key; the observer resolves the entries currently carrying that domain key, and reports a transition (the ordered entry list, a diff — added, removed, payload-changed, reordered — and the cause of the change) on creation and on every subsequent ownership-relevant navigation at that domain.
 - Provides a URL back-projection helper the FrontX router calls to write into the URL the entries each command of the runtime names: a rewrite of that domain's own entries (verb chosen by the caller), removing in the same write every entry under the nested domain keys the caller names as leaving with a removed or replaced entry, and copying everything else verbatim.
 
-##### Responsibility boundaries
+##### Responsibility boundaries — Route Ownership Signal
 
 - Does not maintain a registry of route owners; the FrontX router supplies the current set of registered extensions, per domain, as a plain argument, not through an injected port.
 - Does not execute a mount or an unmount itself, and does not resolve a race between two mounts competing for the same placement; the FrontX router reaches mounts only through actions chains, and the runtime executes them and resolves races (§2.3, Obligations On The FrontX Router).
@@ -292,7 +293,7 @@ The FrontX router needs to know, from the URL alone, which declared route owner 
 - Holds no registry of domains, and publishes no signal asserting that a multi-domain address resolved end to end; each domain's own observer reports only that domain's own transition.
 - Requires nothing from the FrontX router beyond the plain-argument registered-extensions source, supplied at observer creation and read by the observer at each resolution, and no port at all; a domain the FrontX router never creates an observer for simply never participates in the signal, with no misconfigured state to detect or diagnose.
 
-##### Related components (by ID)
+##### Related components (by ID) — Route Ownership Signal
 
 - `cpt-frontx-component-routing-navigation-substrate` — supplies the history, the grammar codec, and the name predicates this component's entry resolution is built on and subscribes to.
 
@@ -302,11 +303,11 @@ The FrontX router needs to know, from the URL alone, which declared route owner 
 
 Concrete artifact: `@gears-frontx/routing` (core entry), the ready `router` instance.
 
-##### Why this component exists
+##### Why this component exists — FrontX Router
 
 Routing is FrontX's own responsibility: neither shell nor MFE code may have code for the router or any ability to affect it. The runtime may not depend on this package, so it declares an abstract router and calls it. This component is the concrete FrontX router that conforms to that abstract router, and it keeps the URL and the mounts in agreement for every routed domain, on top of the Navigation Substrate and the Route Ownership Signal (`cpt-frontx-adr-extension-routing-port`). Its behaviour is specified by `cpt-frontx-feature-routing-route-ownership-signal`.
 
-##### Responsibility scope
+##### Responsibility scope — FrontX Router
 
 - Admits the routed domains and extensions the runtime registers, keeping its own copy of the registrations, and frees what it admitted when the runtime releases it (§2.3, O1, O3a, O3b).
 - Starts observing a domain's part of the URL once the runtime reports that the domain's root has attached, and stops observing it when the domain is about to detach.
@@ -314,7 +315,7 @@ Routing is FrontX's own responsibility: neither shell nor MFE code may have code
 - Turns a user's change to the URL into `mount_ext` and `unmount_ext` actions chains, sent through the actions-chain executor the runtime hands it, and handles a page load's initial route (§2.3, O6).
 - Writes each command of the runtime into the URL through the back-projection helper, clearing the nested domains of a dropped host in the same write (§2.3, O5, O7).
 
-##### Responsibility boundaries
+##### Responsibility boundaries — FrontX Router
 
 - Imports nothing of the runtime and names no runtime type; it conforms to the runtime's abstract router structurally.
 - Hardcodes no type-system id or type: it takes the `mount_ext` and `unmount_ext` action type ids only from the type system the runtime hands it.
@@ -323,7 +324,7 @@ Routing is FrontX's own responsibility: neither shell nor MFE code may have code
 - Exists once per runtime: each evaluated copy of this package builds its own instance, and copies in one page share state only through version-namespaced realm-global slots private to this package.
 - Is shared within a runtime: one evaluated copy of `@gears-frontx/routing` exists per runtime, shared by the router the runtime's registry receives and the engine-provider package. Two copies in one runtime are a defect of the MFE's build and lie outside the private-subroute guarantee.
 
-##### Related components (by ID)
+##### Related components (by ID) — FrontX Router
 
 - `cpt-frontx-component-routing-navigation-substrate` — supplies the shared history and the name predicates its admission and its writes use.
 - `cpt-frontx-component-routing-route-ownership-signal` — supplies the observers it creates for each routed domain and the back-projection helper it writes through.

@@ -1,3 +1,7 @@
+---
+description: Specifies packaging of the AI tooling framework as a Constructor Studio kit with a declarative manifest, prefixed resource identifiers, and solution-agnostic base capabilities.
+---
+
 # Feature: AI Tooling Kit Packaging & Base Content
 
 

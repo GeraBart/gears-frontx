@@ -2,6 +2,7 @@
 status: proposed
 date: 2026-10-01
 decision-makers: German Bartenev, G S
+description: Architecture decision that an occupant's URL identity is the extension's own declared route, normalized to the grammar's name alphabet, so deep links survive redeployment.
 ---
 
 # Occupant Identity Stability

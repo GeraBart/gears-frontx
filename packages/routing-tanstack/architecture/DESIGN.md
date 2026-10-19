@@ -2,6 +2,7 @@
 type: DESIGN
 system: frontx-routing-tanstack
 status: draft
+description: Technical design of the routing-tanstack package, the default engine provider that binds the navigation substrate to TanStack Router through its Engine Provider, Extension Router and Navigation components.
 ---
 
 # Technical Design — Routing TanStack Provider
@@ -167,20 +168,20 @@ A router engine renders routes and matches search parameters, and engines evolve
 
 Concrete artifact: `ExtensionRouter` (package entry).
 
-##### Why this component exists
+##### Why this component exists — Extension Router
 
 FrontX builds and renders each runtime's one router from the route tree that runtime provides, so authors write nothing beyond a route tree.
 
-##### Responsibility scope
+##### Responsibility scope — Extension Router
 
 - Adapts the realm-shared history over the entry address `router.ownEntryAddress()` returns, builds the engine router from the route tree and that history, and renders it. It takes `{ routeTree }`.
 - Works over the calling runtime's own private subroute: an extension's own entry, or, in the shell runtime, which has no occupant value, the shell's subroute (the pathname).
 
-##### Responsibility boundaries
+##### Responsibility boundaries — Extension Router
 
 - Reads the entry address only from the ready `router` of `@gears-frontx/routing`; never derives or validates one.
 
-##### Related components (by ID)
+##### Related components (by ID) — Extension Router
 
 - `cpt-frontx-component-routing-engine-provider` — the component this one calls to adapt the history, build the router and render it.
 - `cpt-frontx-component-routing-router` — the ready router whose `ownEntryAddress()` read gives this component the entry address.
@@ -191,20 +192,20 @@ FrontX builds and renders each runtime's one router from the route tree that run
 
 Concrete artifact: `navigation()` (package entry).
 
-##### Why this component exists
+##### Why this component exists — Navigation
 
 Code outside React in any runtime, such as an action handler, needs read and write access to its own private subroute and to nothing else.
 
-##### Responsibility scope
+##### Responsibility scope — Navigation
 
 - Gives `navigate(path)`, `replace(path)` and `location()` over the calling runtime's own private subroute: an extension's own entry, or, in the shell runtime, the shell's subroute (the pathname).
 - Builds a fresh adapted history per call.
 
-##### Responsibility boundaries
+##### Responsibility boundaries — Navigation
 
 - Reads the entry address only from the ready `router` of `@gears-frontx/routing`; changes only the calling runtime's own private subroute.
 
-##### Related components (by ID)
+##### Related components (by ID) — Navigation
 
 - `cpt-frontx-component-routing-engine-provider` — the component this one calls to adapt the history.
 - `cpt-frontx-component-routing-router` — the ready router whose `ownEntryAddress()` read gives this component the entry address.

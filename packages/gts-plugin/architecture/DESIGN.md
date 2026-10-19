@@ -2,6 +2,7 @@
 type: DESIGN
 system: frontx-gts-plugin
 status: draft
+description: Technical design of @gears-frontx/gts-plugin, the default implementation of the MFE runtime's type-substrate port over the Global Type System (GTS) specification.
 ---
 
 # Technical Design — GTS Type-System Plugin

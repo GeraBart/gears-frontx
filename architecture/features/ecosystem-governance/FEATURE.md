@@ -1,3 +1,7 @@
+---
+description: "Specifies the root-owned machinery that enforces the layer-partition constraints: total workspace classification and the member-registration gate."
+---
+
 # Feature: Ecosystem Layer-Partition Governance
 
 

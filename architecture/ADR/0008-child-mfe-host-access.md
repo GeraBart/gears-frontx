@@ -1,6 +1,7 @@
 ---
 status: accepted
 date: 2026-06-05
+description: "Decides that a child MFE reaches its host only through a narrow capability bridge that delegates to the registry."
 ---
 
 # Child MFE Access to the Host

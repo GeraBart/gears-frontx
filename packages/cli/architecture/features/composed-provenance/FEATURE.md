@@ -1,3 +1,7 @@
+---
+description: Specifies recursive resolution of a preset's referenced templates into a composition set and the writing of one provenance record per applied template.
+---
+
 # Feature: Composed-Template Resolution & Project Provenance
 
 <!-- toc -->

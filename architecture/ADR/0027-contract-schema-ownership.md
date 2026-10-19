@@ -1,6 +1,7 @@
 ---
 status: accepted
 date: 2026-07-16
+description: "Decides contract ownership across artifacts: DESIGN owns the role, the owning FEATURE owns the concrete schema, and the ADR owns the rationale."
 ---
 
 # Concrete Contract Schemas Left Unowned by Circular DESIGN↔ADR Deferral

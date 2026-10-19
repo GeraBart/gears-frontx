@@ -1,3 +1,7 @@
+---
+description: Product requirements for the telemetry package, a browser SDK that collects product events, adds consistent context and sends batches to a deployment-chosen collector endpoint.
+---
+
 # PRD - Telemetry SDK
 
 <!-- toc -->

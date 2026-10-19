@@ -2,6 +2,7 @@
 status: proposed
 date: 2026-10-01
 decision-makers: German Bartenev
+description: Architecture decision that Occupant is a structural parameter contract the FrontX router builds and passes to Route Ownership Signal, keeping the routing package free of ecosystem imports.
 ---
 
 # Occupant Reference Boundary

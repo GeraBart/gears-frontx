@@ -1,6 +1,7 @@
 ---
 status: accepted
 date: 2026-06-05
+description: "Decides that host-MFE actions are dispatched by a mediator keyed by target and action type, with recursive chain execution and per-action timeouts."
 ---
 
 # Host–MFE Action Dispatch and Chaining

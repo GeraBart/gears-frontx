@@ -1,6 +1,7 @@
 ---
 status: accepted
 date: 2026-06-05
+description: "Decides that a project carries one in-project provenance record per applied template as its origin baseline for independent upgrades."
 ---
 
 # Per-Applied-Template Provenance for Independently Upgradeable Assembly
